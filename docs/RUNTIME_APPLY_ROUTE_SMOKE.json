@@ -1,0 +1,1 @@
+{"status":"ok","kind":"runtime_apply_route_smoke","message_en":"Runtime apply route smoke executed.","message_ru":"Smoke-проверка runtime apply route выполнена.","network_state":"modified","apply_attempt_ok":true,"policy_rule_ok":true,"rollback_ok":true,"notes":"Uses unshare user+net namespace automatically when available; falls back to host network path otherwise."}

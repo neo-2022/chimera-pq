@@ -1,0 +1,29 @@
+[package]
+name = "chimera-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chimera-capture = { path = "../chimera-capture" }
+chimera-carrier = { path = "../chimera-carrier" }
+chimera-carrier-quic = { path = "../chimera-carrier-quic" }
+chimera-carrier-tls = { path = "../chimera-carrier-tls" }
+chimera-config = { path = "../chimera-config" }
+chimera-core = { path = "../chimera-core" }
+chimera-dns = { path = "../chimera-dns" }
+chimera-mesh = { path = "../chimera-mesh" }
+chimera-policy = { path = "../chimera-policy" }
+chimera-session = { path = "../chimera-session" }
+serde_json = "1.0"
+ureq = "2.10"
+base64 = "0.22"
+ring = "0.17"
+
+[dev-dependencies]
+ed25519-dalek = "2.2"
+rand = "0.8"

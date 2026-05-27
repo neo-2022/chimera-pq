@@ -1,0 +1,1 @@
+{"status":"ok","kind":"runtime_apply_dns_smoke","message_en":"Runtime apply DNS smoke passed.","message_ru":"Smoke-проверка runtime apply DNS пройдена.","network_state":"modified","rollback_ok":true}

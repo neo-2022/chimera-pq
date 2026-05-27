@@ -1,0 +1,19 @@
+{
+  "ts": 1779435011,
+  "smoke": "upstream_resilience",
+  "best_endpoint": "91.124.19.180:22",
+  "best_latency_ms": "0",
+  "strategy": "balanced",
+  "pre": {
+    "health_ok": "unknown",
+    "degrade_fails": "unknown"
+  },
+  "post": {
+    "health_ok": "true",
+    "degrade_fails": "0",
+    "last_reason": "steady",
+    "last_endpoint": "unknown"
+  },
+  "event_count": 4,
+  "outcome": "pass"
+}

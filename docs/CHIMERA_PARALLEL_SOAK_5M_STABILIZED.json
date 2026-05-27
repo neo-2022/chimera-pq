@@ -1,0 +1,271 @@
+{
+  "kind": "chimera_parallel_soak_5m_stabilized",
+  "generated_at": "2026-05-21T20:29:02.765822+00:00",
+  "duration_sec": 300,
+  "interval_sec": 12,
+  "timeout_sec": 25,
+  "retries": 2,
+  "proxy": "socks5h://127.0.0.1:11080",
+  "summary": {
+    "targets": 21,
+    "samples_total": 467,
+    "ok_total": 406,
+    "fail_total": 61,
+    "success_rate_total": 0.8693790149892934
+  },
+  "targets": [
+    {
+      "target_key": "aistudio.google.com_",
+      "samples": 24,
+      "ok": 24,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.582981,
+      "reasons": {
+        "ok": 24
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/aistudio.google.com_.tsv"
+    },
+    {
+      "target_key": "archive.org",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.876857,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/archive.org.tsv"
+    },
+    {
+      "target_key": "chat.openai.com",
+      "samples": 20,
+      "ok": 0,
+      "fail": 20,
+      "success_rate": 0.0,
+      "latency_p50_sec": 0.944214,
+      "reasons": {
+        "http_403": 20
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/chat.openai.com.tsv"
+    },
+    {
+      "target_key": "cloudflare.com",
+      "samples": 22,
+      "ok": 22,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 1.3359619999999999,
+      "reasons": {
+        "ok": 22
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/cloudflare.com.tsv"
+    },
+    {
+      "target_key": "discord.com",
+      "samples": 24,
+      "ok": 24,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.5142825,
+      "reasons": {
+        "ok": 24
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/discord.com.tsv"
+    },
+    {
+      "target_key": "epicgames.com",
+      "samples": 19,
+      "ok": 0,
+      "fail": 19,
+      "success_rate": 0.0,
+      "latency_p50_sec": 1.141201,
+      "reasons": {
+        "http_403": 19
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/epicgames.com.tsv"
+    },
+    {
+      "target_key": "europa.eu",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.851781,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/europa.eu.tsv"
+    },
+    {
+      "target_key": "github.com",
+      "samples": 24,
+      "ok": 24,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.5777965,
+      "reasons": {
+        "ok": 24
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/github.com.tsv"
+    },
+    {
+      "target_key": "google.com",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.877836,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/google.com.tsv"
+    },
+    {
+      "target_key": "mozilla.org",
+      "samples": 22,
+      "ok": 22,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 1.228602,
+      "reasons": {
+        "ok": 22
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/mozilla.org.tsv"
+    },
+    {
+      "target_key": "netflix.com",
+      "samples": 18,
+      "ok": 18,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 2.488716,
+      "reasons": {
+        "ok": 18
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/netflix.com.tsv"
+    },
+    {
+      "target_key": "openai.com",
+      "samples": 22,
+      "ok": 0,
+      "fail": 22,
+      "success_rate": 0.0,
+      "latency_p50_sec": 0.4041715,
+      "reasons": {
+        "http_403": 22
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/openai.com.tsv"
+    },
+    {
+      "target_key": "reddit.com",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.843879,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/reddit.com.tsv"
+    },
+    {
+      "target_key": "spotify.com",
+      "samples": 22,
+      "ok": 22,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 1.493547,
+      "reasons": {
+        "ok": 22
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/spotify.com.tsv"
+    },
+    {
+      "target_key": "stackoverflow.com",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 1.015368,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/stackoverflow.com.tsv"
+    },
+    {
+      "target_key": "t.me",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.894278,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/t.me.tsv"
+    },
+    {
+      "target_key": "vk.com",
+      "samples": 20,
+      "ok": 20,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 1.4392025,
+      "reasons": {
+        "ok": 20
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/vk.com.tsv"
+    },
+    {
+      "target_key": "wikipedia.org",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.823577,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/wikipedia.org.tsv"
+    },
+    {
+      "target_key": "www.youtube.com",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.796973,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/www.youtube.com.tsv"
+    },
+    {
+      "target_key": "x.com",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.849469,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/x.com.tsv"
+    },
+    {
+      "target_key": "zoom.us",
+      "samples": 23,
+      "ok": 23,
+      "fail": 0,
+      "success_rate": 1.0,
+      "latency_p50_sec": 0.876108,
+      "reasons": {
+        "ok": 23
+      },
+      "log": "/tmp/chimera_parallel_soak_5m_stabilized/zoom.us.tsv"
+    }
+  ],
+  "network_state": "not_modified"
+}

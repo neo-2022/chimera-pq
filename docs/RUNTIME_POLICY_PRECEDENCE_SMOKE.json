@@ -1,0 +1,1 @@
+{"status":"ok","kind":"runtime_policy_precedence_smoke","message_en":"Runtime policy precedence smoke executed.","message_ru":"Smoke-проверка приоритета policy выполнена.","network_state":"not_modified","precedence_ok":true,"all_matches_ok":true,"dns_binding_ok":true,"network_state_ok":true}

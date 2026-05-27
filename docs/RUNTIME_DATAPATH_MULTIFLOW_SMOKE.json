@@ -1,0 +1,1 @@
+{"status":"ok","kind":"runtime_datapath_multiflow_smoke","message_en":"Runtime datapath multiflow smoke executed.","message_ru":"Smoke-проверка runtime datapath multiflow выполнена.","network_state":"not_modified","gateway_ok":true,"block_ok":true,"direct_ok":true}

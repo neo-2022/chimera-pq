@@ -1,0 +1,282 @@
+{
+  "kind": "chimera_browser_parallel_soak_5m",
+  "generated_at": "2026-05-21T20:21:30.894875+00:00",
+  "duration_sec": 300,
+  "interval_sec": 30,
+  "proxy": "socks5h://127.0.0.1:11080",
+  "engine": "firefox-headless-screenshot",
+  "summary": {
+    "targets": 21,
+    "samples_total": 147,
+    "ok_total": 109,
+    "fail_total": 38,
+    "success_rate_total": 0.7414965986394558
+  },
+  "targets": [
+    {
+      "target_key": "aistudio.google.com_",
+      "samples": 6,
+      "ok": 5,
+      "fail": 1,
+      "success_rate": 0.8333333333333334,
+      "avg_png_size_bytes": 346209.3333333333,
+      "reasons": {
+        "screenshot_ready": 5,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/aistudio.google.com_.tsv"
+    },
+    {
+      "target_key": "archive.org",
+      "samples": 7,
+      "ok": 7,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 30789.714285714286,
+      "reasons": {
+        "screenshot_ready": 7
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/archive.org.tsv"
+    },
+    {
+      "target_key": "chat.openai.com",
+      "samples": 8,
+      "ok": 8,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 57670.25,
+      "reasons": {
+        "screenshot_ready": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/chat.openai.com.tsv"
+    },
+    {
+      "target_key": "cloudflare.com",
+      "samples": 7,
+      "ok": 6,
+      "fail": 1,
+      "success_rate": 0.8571428571428571,
+      "avg_png_size_bytes": 112094.57142857143,
+      "reasons": {
+        "screenshot_ready": 6,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/cloudflare.com.tsv"
+    },
+    {
+      "target_key": "discord.com",
+      "samples": 8,
+      "ok": 8,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 401402.25,
+      "reasons": {
+        "screenshot_ready": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/discord.com.tsv"
+    },
+    {
+      "target_key": "epicgames.com",
+      "samples": 6,
+      "ok": 4,
+      "fail": 2,
+      "success_rate": 0.6666666666666666,
+      "avg_png_size_bytes": 470054.3333333333,
+      "reasons": {
+        "hard_timeout": 2,
+        "screenshot_ready": 4
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/epicgames.com.tsv"
+    },
+    {
+      "target_key": "europa.eu",
+      "samples": 8,
+      "ok": 0,
+      "fail": 8,
+      "success_rate": 0.0,
+      "avg_png_size_bytes": 0.0,
+      "reasons": {
+        "process_exit_no_png": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/europa.eu.tsv"
+    },
+    {
+      "target_key": "github.com",
+      "samples": 7,
+      "ok": 6,
+      "fail": 1,
+      "success_rate": 0.8571428571428571,
+      "avg_png_size_bytes": 41578.28571428572,
+      "reasons": {
+        "screenshot_ready": 6,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/github.com.tsv"
+    },
+    {
+      "target_key": "google.com",
+      "samples": 7,
+      "ok": 6,
+      "fail": 1,
+      "success_rate": 0.8571428571428571,
+      "avg_png_size_bytes": 103182.85714285714,
+      "reasons": {
+        "screenshot_ready": 6,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/google.com.tsv"
+    },
+    {
+      "target_key": "mozilla.org",
+      "samples": 6,
+      "ok": 4,
+      "fail": 2,
+      "success_rate": 0.6666666666666666,
+      "avg_png_size_bytes": 36444.666666666664,
+      "reasons": {
+        "hard_timeout": 2,
+        "screenshot_ready": 4
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/mozilla.org.tsv"
+    },
+    {
+      "target_key": "netflix.com",
+      "samples": 6,
+      "ok": 4,
+      "fail": 2,
+      "success_rate": 0.6666666666666666,
+      "avg_png_size_bytes": 651852.6666666666,
+      "reasons": {
+        "hard_timeout": 2,
+        "screenshot_ready": 4
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/netflix.com.tsv"
+    },
+    {
+      "target_key": "openai.com",
+      "samples": 8,
+      "ok": 8,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 61683.75,
+      "reasons": {
+        "screenshot_ready": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/openai.com.tsv"
+    },
+    {
+      "target_key": "reddit.com",
+      "samples": 7,
+      "ok": 0,
+      "fail": 7,
+      "success_rate": 0.0,
+      "avg_png_size_bytes": 0.0,
+      "reasons": {
+        "hard_timeout": 2,
+        "process_exit_no_png": 5
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/reddit.com.tsv"
+    },
+    {
+      "target_key": "spotify.com",
+      "samples": 6,
+      "ok": 5,
+      "fail": 1,
+      "success_rate": 0.8333333333333334,
+      "avg_png_size_bytes": 69816.0,
+      "reasons": {
+        "screenshot_ready": 5,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/spotify.com.tsv"
+    },
+    {
+      "target_key": "stackoverflow.com",
+      "samples": 6,
+      "ok": 5,
+      "fail": 1,
+      "success_rate": 0.8333333333333334,
+      "avg_png_size_bytes": 200135.83333333334,
+      "reasons": {
+        "screenshot_ready": 5,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/stackoverflow.com.tsv"
+    },
+    {
+      "target_key": "t.me",
+      "samples": 6,
+      "ok": 5,
+      "fail": 1,
+      "success_rate": 0.8333333333333334,
+      "avg_png_size_bytes": 147873.83333333334,
+      "reasons": {
+        "screenshot_ready": 5,
+        "hard_timeout": 1
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/t.me.tsv"
+    },
+    {
+      "target_key": "vk.com",
+      "samples": 5,
+      "ok": 3,
+      "fail": 2,
+      "success_rate": 0.6,
+      "avg_png_size_bytes": 3129.0,
+      "reasons": {
+        "screenshot_ready": 3,
+        "hard_timeout": 2
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/vk.com.tsv"
+    },
+    {
+      "target_key": "wikipedia.org",
+      "samples": 9,
+      "ok": 9,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 146349.22222222222,
+      "reasons": {
+        "screenshot_ready": 9
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/wikipedia.org.tsv"
+    },
+    {
+      "target_key": "www.youtube.com",
+      "samples": 8,
+      "ok": 8,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 15583.625,
+      "reasons": {
+        "screenshot_ready": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/www.youtube.com.tsv"
+    },
+    {
+      "target_key": "x.com",
+      "samples": 8,
+      "ok": 8,
+      "fail": 0,
+      "success_rate": 1.0,
+      "avg_png_size_bytes": 66428.0,
+      "reasons": {
+        "screenshot_ready": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/x.com.tsv"
+    },
+    {
+      "target_key": "zoom.us",
+      "samples": 8,
+      "ok": 0,
+      "fail": 8,
+      "success_rate": 0.0,
+      "avg_png_size_bytes": 0.0,
+      "reasons": {
+        "process_exit_no_png": 8
+      },
+      "log": "/tmp/chimera_browser_parallel_soak_5m/zoom.us.tsv"
+    }
+  ],
+  "network_state": "not_modified"
+}

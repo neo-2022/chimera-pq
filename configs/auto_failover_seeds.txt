@@ -1,0 +1,14 @@
+# CHIMERA split auto-failover seed domains.
+# Used by: scripts/chimera-control.sh (site-auto-bootstrap / site-auto-watch)
+#
+# Rules:
+# - one domain per line
+# - comments start with '#'
+# - leave empty if you want to rely only on adaptive DB + manual list + app routes
+
+www.youtube.com
+youtube.com
+chatgpt.com
+openai.com
+discord.com
+x.com

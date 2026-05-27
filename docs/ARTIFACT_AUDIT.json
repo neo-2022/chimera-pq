@@ -1,0 +1,1 @@
+{"status":"ok","kind":"artifact_audit","message_en":"Artifact safety check finished.","message_ru":"Проверка безопасности артефактов завершена.","doctor":true,"route_explain":true,"datapath":true,"rollback":true,"benchmark":true,"diag_export_redacted":true,"mesh_auto_adaptive_trace":true,"bilingual_message_fields":true,"mvp_spec_check":true,"network_state":"not_modified"}

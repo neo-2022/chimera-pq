@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-05-21T19:17:58.613019+00:00",
+  "summary": {
+    "pass": 8,
+    "fail": 1,
+    "timeout": 0
+  },
+  "cases": [
+    {
+      "case": "ops_gate_quiet",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/ops_gate_quiet.log"
+    },
+    {
+      "case": "real_world_probe_smoke",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/real_world_probe_smoke.log"
+    },
+    {
+      "case": "real_world_probe_schema",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/real_world_probe_schema.log"
+    },
+    {
+      "case": "e2e_gate",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/e2e_gate.log"
+    },
+    {
+      "case": "e2e_gate_guard",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/e2e_gate_guard.log"
+    },
+    {
+      "case": "ready_check",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/ready_check.log"
+    },
+    {
+      "case": "status_summary",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/status_summary.log"
+    },
+    {
+      "case": "profile_smoke",
+      "status": "pass",
+      "rc": 0,
+      "log": "/tmp/chimera_commission_bounded/profile_smoke.log"
+    },
+    {
+      "case": "real_mesh_side_a_connectivity_to_node_b",
+      "status": "fail",
+      "rc": 1,
+      "log": "/tmp/chimera_commission_bounded/profile_smoke.log"
+    }
+  ],
+  "blockers": [
+    "side_a uses placeholder peer endpoint 198.51.100.22:443/8443 in staged profile run, causing connectivity_probe_failed",
+    "full two-side real mesh proof requires synchronized real endpoints/artifacts from both sides in one cycle"
+  ]
+}

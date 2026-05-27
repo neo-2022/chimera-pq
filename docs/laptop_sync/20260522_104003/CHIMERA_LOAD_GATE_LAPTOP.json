@@ -1,0 +1,23 @@
+{
+  "kind": "chimera_load_gate_laptop",
+  "status": "pass",
+  "reason": "load_gate_ok",
+  "thresholds": {
+    "min_success_rate": 0.95,
+    "min_total_requests": 100,
+    "max_age_sec": 300
+  },
+  "measured": {
+    "artifact": "/home/art/chimera-pq/docs/load/CHIMERA_LOAD_30S_LAPTOP_20260522_103852.json",
+    "artifact_age_sec": 0,
+    "min_success_rate": 0.9841269841269841,
+    "max_success_rate": 1.0,
+    "total_ok": 246,
+    "total_fail": 1,
+    "total_requests": 247
+  },
+  "checks": {
+    "success_rate_pass": true,
+    "volume_pass": true
+  }
+}

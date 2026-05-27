@@ -1,0 +1,14 @@
+# Domains that must always go through CHIMERA gateway (manual override).
+# One domain per line, comments start with '#'.
+aistudio.google.com
+youtube.com
+com
+google.com
+threads.net
+discord.gg
+googleusercontent.com
+chat.openai.com
+openai.com
+france24.com
+coinbase.com
+kick.com

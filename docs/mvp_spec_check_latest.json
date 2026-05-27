@@ -1,0 +1,1 @@
+{"status":"ok","kind":"mvp_spec_check","m0_workspace":true,"m1_local_tunnel":true,"m2_crypto_session":true,"m3_carrier_validation":true,"m4_routing_determinism":true,"m5_doctor_and_config":true,"m6_hardening":true,"network_state":"not_modified"}

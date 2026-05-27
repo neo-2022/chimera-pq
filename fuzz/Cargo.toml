@@ -1,0 +1,36 @@
+[package]
+name = "chimera-fuzz"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+chimera-config = { path = "../crates/chimera-config" }
+chimera-session = { path = "../crates/chimera-session" }
+
+[[bin]]
+name = "config_parser"
+path = "fuzz_targets/config_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame_decoder"
+path = "fuzz_targets/frame_decoder.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "handshake_decoder"
+path = "fuzz_targets/handshake_decoder.rs"
+test = false
+doc = false
+bench = false

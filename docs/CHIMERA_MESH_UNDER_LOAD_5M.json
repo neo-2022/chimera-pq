@@ -1,0 +1,272 @@
+{
+  "kind": "chimera_mesh_under_load_5m",
+  "generated_at": "2026-05-21T20:44:47.637927+00:00",
+  "duration_sec": 300,
+  "summary": {
+    "cycles_total": 23,
+    "side_a_pass": 23,
+    "side_b_pass": 23,
+    "ready_pass": 23,
+    "all_ready_true": 23,
+    "side_a_pass_rate": 1.0,
+    "side_b_pass_rate": 1.0,
+    "ready_pass_rate": 1.0,
+    "all_ready_true_rate": 1.0
+  },
+  "cycles": [
+    {
+      "ts": "2026-05-21T20:39:19Z",
+      "cycle": 1,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:39:32Z",
+      "cycle": 2,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:39:45Z",
+      "cycle": 3,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:39:58Z",
+      "cycle": 4,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:40:12Z",
+      "cycle": 5,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:40:25Z",
+      "cycle": 6,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:40:38Z",
+      "cycle": 7,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:40:51Z",
+      "cycle": 8,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:41:04Z",
+      "cycle": 9,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:41:17Z",
+      "cycle": 10,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:41:30Z",
+      "cycle": 11,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:41:44Z",
+      "cycle": 12,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:41:57Z",
+      "cycle": 13,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:42:10Z",
+      "cycle": 14,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:42:23Z",
+      "cycle": 15,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:42:36Z",
+      "cycle": 16,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:42:49Z",
+      "cycle": 17,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:43:03Z",
+      "cycle": 18,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:43:16Z",
+      "cycle": 19,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:43:29Z",
+      "cycle": 20,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:43:42Z",
+      "cycle": 21,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:43:55Z",
+      "cycle": 22,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    },
+    {
+      "ts": "2026-05-21T20:44:08Z",
+      "cycle": 23,
+      "rc_side_a": 0,
+      "rc_side_b": 0,
+      "rc_ready": 0,
+      "all_ready": true,
+      "vps_ready": true,
+      "laptop_ready": true,
+      "blockers": "[]"
+    }
+  ],
+  "network_state": "not_modified"
+}

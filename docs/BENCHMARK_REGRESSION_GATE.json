@@ -1,0 +1,1 @@
+{"status":"ok","kind":"benchmark_regression_gate","message_en":"Benchmark regression gate passed.","message_ru":"Гейт регрессии производительности пройден.","attempt":1,"max_attempts":2,"baseline_file":"docs/benchmark_baseline.json","output_file":"docs/benchmark_latest.json"}

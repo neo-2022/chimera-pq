@@ -1,0 +1,1 @@
+{"status":"ok","kind":"runtime_resolv_conf_validation_smoke","message_en":"Runtime resolv.conf path validation smoke executed.","message_ru":"Smoke-проверка валидации пути resolv.conf выполнена.","network_state":"not_modified","apply_rejected":true,"state_not_created":true}

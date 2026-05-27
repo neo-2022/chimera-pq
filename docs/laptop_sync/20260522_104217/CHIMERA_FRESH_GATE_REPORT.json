@@ -1,0 +1,18 @@
+{
+  "kind": "chimera_fresh_gate_report",
+  "status": "pass",
+  "reason": "all_fresh_gates_passed",
+  "generated_at_utc": "2026-05-22T07:44:41Z",
+  "artifacts": {
+    "path_proof": "/home/art/chimera-pq/docs/CHIMERA_PATH_PROOF.json",
+    "channel_audit": "/home/art/chimera-pq/docs/CHIMERA_CHANNEL_AUDIT.json",
+    "e2e_gate": "/home/art/chimera-pq/docs/CHIMERA_E2E_CHANNEL_GATE.json",
+    "load_gate": "/home/art/chimera-pq/docs/CHIMERA_LOAD_GATE_LAPTOP.json"
+  },
+  "checks": {
+    "path_proof_status": "pass",
+    "channel_audit_status": "pass",
+    "e2e_gate_status": "pass",
+    "load_gate_status": "pass"
+  }
+}

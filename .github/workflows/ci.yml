@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  rust:
+    name: Rust + Ship Readiness Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Cargo Check
+        run: cargo check --workspace
+
+      - name: Cargo Test
+        run: cargo test --workspace
+
+      - name: Cargo Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Cargo Deny
+        run: cargo deny check
+
+      - name: Hardening Smoke
+        run: cargo run -p chimera-lab -- hardening-smoke
+
+      - name: MVP Spec Check
+        run: cargo run -p chimera-lab -- mvp-spec-check --json --out docs/mvp_spec_check_latest.json
+
+      - name: Ship Readiness Full Gate
+        run: just ship-readiness
+
+      - name: Upload MVP/Ship Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chimera-pq-mvp-ship-reports
+          if-no-files-found: warn
+          path: |
+            docs/MVP_VERIFY.json
+            docs/MVP_SNAPSHOT.json
+            docs/RELEASE_READINESS_REPORT.json
+            docs/RELEASE_READINESS_REPORT.md
+            docs/MVP_SPEC_COVERAGE.md
+            docs/M5_ARTIFACTS_REPORT.md
+            docs/M6_ARTIFACTS_REPORT.md
+            docs/REPORT_PACK.json
+            docs/REPORT_PACK.md
+            docs/ARTIFACT_AUDIT.json
+            docs/GO_NO_GO.md
+            docs/SECOND_MACHINE_REPORT.md
+            docs/SHIP_READINESS_REPORT.json
+            docs/SHIP_READINESS_REPORT.md
+            docs/V1_MVP_BASELINE_MANIFEST.json
+            docs/V1_MVP_BASELINE.sha256

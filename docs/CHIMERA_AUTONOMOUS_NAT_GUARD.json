@@ -1,0 +1,1 @@
+{"kind":"chimera_autonomous_nat_guard","status":"fail","reason":"autonomy_guard_failed","started_at":"2026-05-23T05:51:21Z","finished_at":"2026-05-23T05:51:43Z","network_state":"not_modified","signals":{"listener_up":false,"path_status":"fail","path_reason":"chimera_path_failed:proxy_listener_not_found","upstream_candidates_total":0,"upstream_adaptation_possible":"false"}}

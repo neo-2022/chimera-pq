@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_self() {
+  local src="${BASH_SOURCE[0]}"
+  while [[ -L "$src" ]]; do
+    local dir
+    dir="$(cd "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd "$(dirname "$src")" && pwd
+}
+
+SCRIPT_DIR="$(resolve_self)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONTROL="$ROOT_DIR/scripts/chimera-control.sh"
+INSTALLER="$ROOT_DIR/scripts/install_desktop_control.sh"
+AUTO_UPDATE_ENABLED="${CHIMERA_AUTO_UPDATE_ENABLED:-1}"
+UPDATE_BOOTSTRAP_URL="${CHIMERA_UPDATE_BOOTSTRAP_URL:-https://raw.githubusercontent.com/neo-2022/chimera/main/chimera.sh}"
+RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  chimera-sh -install
+  chimera-sh -start
+  chimera-sh -stop
+  chimera-sh -restart
+  chimera-sh -status
+  chimera-sh -version
+  chimera-sh -doctor
+  chimera-sh -logs
+  chimera-sh -uninstall
+  chimera-sh -help
+EOF
+}
+
+require_file() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "error: required file not found: $path" >&2
+    exit 1
+  fi
+}
+
+ensure_runtime_files() {
+  local missing=0
+  [[ -f "$CONTROL" ]] || missing=1
+  [[ -f "$INSTALLER" ]] || missing=1
+  [[ "$missing" -eq 0 ]] && return 0
+
+  # Best effort self-heal for stale local launcher links.
+  if [[ -n "${HOME:-}" ]]; then
+    local legacy_root="${HOME}/.local"
+    local legacy_control="${legacy_root}/scripts/chimera-control.sh"
+    local legacy_installer="${legacy_root}/scripts/install_desktop_control.sh"
+    if [[ -f "$legacy_control" && -f "$legacy_installer" ]]; then
+      ROOT_DIR="$legacy_root"
+      CONTROL="$legacy_control"
+      INSTALLER="$legacy_installer"
+      RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
+      missing=0
+    fi
+  fi
+
+  if [[ "$missing" -ne 0 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+version_to_sortable() {
+  local v="${1:-0.0.0}"
+  v="${v#v}"
+  awk -F. '
+    {
+      major=$1+0; minor=$2+0; patch=$3+0;
+      printf "%06d%06d%06d\n", major, minor, patch;
+    }' <<<"$v"
+}
+
+is_remote_newer() {
+  local local_v="${1:-0.0.0}"
+  local remote_v="${2:-0.0.0}"
+  local local_key remote_key
+  local_key="$(version_to_sortable "$local_v")"
+  remote_key="$(version_to_sortable "$remote_v")"
+  [[ "$remote_key" > "$local_key" ]]
+}
+
+read_local_runtime_version() {
+  if [[ -f "$RUNTIME_VERSION_FILE" ]]; then
+    tr -d '[:space:]' < "$RUNTIME_VERSION_FILE"
+    return 0
+  fi
+  echo "0.0.0"
+}
+
+auto_update_if_needed() {
+  [[ "$AUTO_UPDATE_ENABLED" == "1" ]] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  command -v bash >/dev/null 2>&1 || return 0
+
+  local tmp_script=""
+  tmp_script="$(mktemp)"
+
+  if ! curl -fsSL "${UPDATE_BOOTSTRAP_URL}?ts=$(date +%s)" -o "$tmp_script" 2>/dev/null; then
+    rm -f "$tmp_script"
+    return 0
+  fi
+
+  local remote_version local_version
+  remote_version="$(sed -n 's/^VERSION=\"\\([0-9][0-9.]*\\)\"/\\1/p' "$tmp_script" | head -n1)"
+  if [[ -z "$remote_version" ]]; then
+    rm -f "$tmp_script"
+    return 0
+  fi
+  local_version="$(read_local_runtime_version)"
+
+  if is_remote_newer "$local_version" "$remote_version"; then
+    echo "chimera_update=available current=$local_version latest=$remote_version action=install"
+    bash "$tmp_script" -install
+    rm -f "$tmp_script"
+    return 0
+  fi
+  rm -f "$tmp_script"
+}
+
+main() {
+  local cmd="${1:-}"
+  if [[ "$cmd" != "-install" && "$cmd" != "-help" && "$cmd" != "--help" && "$cmd" != "help" && -n "$cmd" ]]; then
+    auto_update_if_needed || true
+  fi
+  case "$cmd" in
+    -install)
+      require_file "$INSTALLER"
+      exec "$INSTALLER"
+      ;;
+    -start)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" start
+      ;;
+    -stop)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" stop
+      ;;
+    -restart)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" restart
+      ;;
+    -status)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" status
+      ;;
+    -doctor)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" doctor
+      ;;
+    -logs)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" logs
+      ;;
+    -version)
+      local current="unknown"
+      if [[ -f "$RUNTIME_VERSION_FILE" ]]; then
+        current="$(tr -d '[:space:]' < "$RUNTIME_VERSION_FILE")"
+      fi
+      echo "chimera-runtime ${current}"
+      ;;
+    -uninstall)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      exec "$CONTROL" uninstall
+      ;;
+    -help|--help|help|"")
+      usage
+      ;;
+    *)
+      echo "error: unknown option: $cmd" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

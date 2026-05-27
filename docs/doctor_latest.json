@@ -1,0 +1,1 @@
+{"status":"ok","kind":"doctor","message_en":"Doctor check is ready.","message_ru":"Проверка doctor готова.","secrets":"<redacted>","capture_mode":"tun","carrier_profile":"tls-tcp","carrier_addr":"203.0.113.10:443","session_age_sec":120,"packets":1,"rekey_required":false,"rekey_reason":"none","network_state":"not_modified"}

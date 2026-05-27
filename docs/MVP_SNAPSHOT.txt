@@ -1,0 +1,4 @@
+MVP snapshot: ok
+Release ready: true
+Artifact audit: true
+Network state: not modified

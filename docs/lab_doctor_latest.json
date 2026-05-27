@@ -1,0 +1,1 @@
+{"status":"ok","kind":"lab_doctor","message_en":"Lab doctor check is ready.","message_ru":"Проверка lab doctor готова.","client_config_ok":true,"gateway_config_ok":true,"client_carrier_ok":true,"gateway_carrier_ok":true,"net_sim_ok":true,"net_sim_dropped":18,"net_sim_reconnect_events":1,"network_state":"not_modified"}

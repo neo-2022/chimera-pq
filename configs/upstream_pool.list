@@ -1,0 +1,12 @@
+# CHIMERA upstream egress pool (autobootstrap input)
+# One endpoint per line:
+#   host:port
+#   or transport@host:port
+#
+# Runtime credentials are read from:
+#   CHIMERA_UPSTREAM_POOL_USER
+#   CHIMERA_UPSTREAM_POOL_PASS
+#
+# Example:
+# edge-a.example.net:22
+# ssh443@edge-b.example.net:443

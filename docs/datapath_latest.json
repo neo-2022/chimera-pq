@@ -1,0 +1,1 @@
+{"status":"ok","kind":"datapath_report","message_en":"Datapath report is ready.","message_ru":"Отчет datapath готов.","gateway_explain":"matched rule 'example-gateway'","block_explain":"matched rule 'blocked-exact'","direct_explain":"matched rule 'default-direct'","network_state":"not_modified"}

@@ -1,0 +1,48 @@
+{
+  "kind": "v1_mvp_baseline_manifest",
+  "created_at": "2026-05-23",
+  "scope": "CHIMERA-PQ MVP M5/M6 baseline artifacts",
+  "network_state": "not_modified",
+  "artifacts": [
+    {
+      "path": "docs/MVP_VERIFY.json",
+      "size_bytes": 550,
+      "sha256": "6c89b0c427a3639c459eff579985383f1927b6493728a9317c8228a0526151b5"
+    }
+    ,{
+      "path": "docs/RELEASE_READINESS_REPORT.json",
+      "size_bytes": 1253,
+      "sha256": "c9b312f6582ddd2789d2ccc283e374b69a0396ba5e640919a99e94429a5dc9ca"
+    }
+    ,{
+      "path": "docs/benchmark_latest.json",
+      "size_bytes": 548,
+      "sha256": "d4e56443adf3191511bca56ec52d8fef6f2342b5678113cc4ec91f4a1182f681"
+    }
+    ,{
+      "path": "docs/benchmark_baseline.json",
+      "size_bytes": 548,
+      "sha256": "d4e56443adf3191511bca56ec52d8fef6f2342b5678113cc4ec91f4a1182f681"
+    }
+    ,{
+      "path": "docs/BENCHMARK_REGRESSION_GATE.json",
+      "size_bytes": 315,
+      "sha256": "251985b4709a825171b7a7c0c8b7743e39331c03234a4049b595a22873068c4b"
+    }
+    ,{
+      "path": "docs/MVP_SNAPSHOT.json",
+      "size_bytes": 967,
+      "sha256": "1e85cc7418923fef3889c69164beef460e6fbd818461213b909e4a4b3c8d8bfb"
+    }
+    ,{
+      "path": "docs/REPORT_PACK.json",
+      "size_bytes": 1049,
+      "sha256": "e75e750d5483f75cd0cd87d072174152a2499b330043d9cd03346130f2922003"
+    }
+    ,{
+      "path": "docs/ARTIFACT_AUDIT.json",
+      "size_bytes": 413,
+      "sha256": "a38a01ffa33cb2a92a4992ed2aa6c7de846ebe84c7fe0fbb3c4f37ad5cba5c35"
+    }
+  ]
+}

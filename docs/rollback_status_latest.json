@@ -1,0 +1,1 @@
+{"status":"ok","kind":"rollback","message_en":"Rollback action completed.","message_ru":"Действие rollback завершено.","action":"status","state_existed":true,"state_file":"docs/runtime_state_latest.json","network_state":"not_modified","tun_applied":false,"route_applied":false,"dns_applied":false}

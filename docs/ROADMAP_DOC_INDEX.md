@@ -1,0 +1,85 @@
+# CHIMERA-PQ Docs Index
+
+Generated: 2026-05-22 17:44:15 MSK
+
+Scope: all *.md/*.txt under docs/
+
+## Files
+- `ADR/0001-mvp-scope.md` — ADR 0001: MVP Scope First
+- `ADR/0002-full-cef-track-gates.md` — ADR 0002: Full CEF Track Gates
+- `ADR/ADR_MESH_AUTO_CONNECT_ENDPOINT_PLAN_2026-05-21.md` — ADR: Mesh Auto-Connect Endpoint Plan Explain Contract
+- `ADR/ADR_MESH_CLI_CONNECT_PLAN_OPERATOR_ACTION_2026-05-21.md` — ADR: Mesh CLI Operator Action for Connect-Plan Exhaustion
+- `ADR/ADR_MESH_CLI_CONNECT_RECOVERY_NEEDED_FLAG_2026-05-21.md` — ADR: Mesh CLI `connect_recovery_needed` Recovery Flag (2026-05-21)
+- `ADR/ADR_MESH_CLI_OPTIONS_PARSE_CONTRACT_2026-05-21.md` — ADR: Mesh CLI `options_parse` Contract Hardening
+- `ADR/ADR_MESH_CLI_RECOVERY_CROSS_ENVELOPE_CONTRACT_2026-05-21.md` — ADR: Mesh CLI Recovery Cross-Envelope Contract Invariants
+- `ADR/ADR_MESH_CLI_RECOVERY_JSON_FIELDS_2026-05-21.md` — ADR: Mesh CLI First-Class Recovery JSON Fields
+- `ADR/ADR_MESH_CLI_RECOVERY_SCHEMA_MARKER_2026-05-21.md` — ADR: Mesh CLI Recovery Schema Marker and Field-Set Checksum
+- `ADR/ADR_MESH_CLI_RETRY_BUDGET_ESCALATION_2026-05-21.md` — ADR: Mesh CLI Retry-Budget Escalation from Runtime Explain
+- `ADR/ADR_MESH_SHIP_PIPELINE_CONTRACT_SYNC_2026-05-21.md` — ADR: Mesh Ship-Pipeline Contract Sync (2026-05-21)
+- `ADR/README.md` — ADR Process (Mesh/MVP)
+- `ARCHITECTURE.md` — Architecture
+- `CEF_GAP_MAP_2026-05-18.md` — CHIMERA Full CEF Gap Map (2026-05-18)
+- `CEF_PHASE1_GATES.md` — CEF Phase-1 Gates
+- `CEF_TRACK_REPORT.md` — CEF Track Report
+- `CHIMERA_BIDIRECTIONAL_E2E_REPORT_2026-05-22_15-48-38.md` — CHIMERA Bidirectional E2E Report
+- `CHIMERA_BIDIRECTIONAL_E2E_SMOKE_2026-05-22_16-09-31.md` — CHIMERA Bidirectional E2E Smoke
+- `CHIMERA_BIDIRECTIONAL_E2E_SMOKE_2026-05-22_16-10-58.md` — CHIMERA Bidirectional E2E Smoke
+- `CHIMERA_BIDIRECTIONAL_E2E_SMOKE_2026-05-22_16-12-24.md` — CHIMERA Bidirectional E2E Smoke
+- `CHIMERA_FRESH_GATE_REPORT.md` — CHIMERA Fresh Gate Report
+- `CHIMERA_LOAD_GATE_LAPTOP.md` — CHIMERA Load Gate (Laptop)
+- `CHIMERA_MESH_LOAD_REPORT_2026-05-22.md` — CHIMERA Mesh Load Report (2026-05-22)
+- `CHIMERA_REMOTE_CYCLE_SMOKE_REPORT_2026-05-22_15-41-21.md` — CHIMERA Remote Cycle Smoke Report
+- `EXECUTION_MODE_NO_TIMELINES.md` — CHIMERA-PQ Execution Mode: No Timelines
+- `FINAL_M5_M6_REPORT.md` — FINAL M5/M6 Report
+- `GO_NO_GO.md` — GO/NO-GO Decision
+- `LAPTOP_FRESH_GATE_SUMMARY_2026-05-22.md` — Laptop Fresh Gate Summary (2026-05-22)
+- `M5_ARTIFACTS_REPORT.md` — M5 Artifacts Report
+- `M6_ARTIFACTS_REPORT.md` — M6 Artifacts Report
+- `MESH_DECISION_LOG.md` — MESH Decision Log
+- `MESH_FIRST_LAUNCH_EXECUTION_GATE.md` — MESH First Launch Execution Gate
+- `MESH_NODES_JSON_CONTRACT.md` — Mesh Nodes JSON Contract
+- `MESH_SESSION_HANDOFF_2026-05-19_19-36-50.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_02-02-22.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_17-57-09.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-19-03.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-21-30.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-23-50.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-26-16.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-29-21.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-32-37.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-34-34.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-38-07.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-40-27.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-45-54.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-47-28.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-51-12.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-54-12.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-55-35.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-57-22.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_20-59-27.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-20_21-01-43.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-22_14-18-24.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-22_16-53-43.md` — CHIMERA Mesh Session Handoff
+- `MESH_SESSION_HANDOFF_2026-05-22_17-13-38.md` — CHIMERA Mesh Session Handoff
+- `MVP.md` — MVP
+- `MVP_HANDOFF_CHECKLIST.md` — MVP Handoff Checklist (Linux)
+- `MVP_SNAPSHOT.txt` — MVP snapshot: ok
+- `MVP_SPEC_COVERAGE.md` — CHIMERA-PQ MVP Spec Coverage
+- `MVP_SPEC_DEEP_AUDIT_2026-05-18.md` — CHIMERA-PQ MVP Deep Audit (2026-05-18)
+- `MVP_VERIFY.txt` — Результат проверки MVP: ok
+- `OPERATIONS.md` — Operations
+- `POST_MVP_PRODUCT_ROADMAP.md` — CHIMERA-PQ Post-MVP Product Roadmap
+- `PRIVACY.md` — Privacy
+- `PROBE_ACCESS.md` — Probe Access (Runtime)
+- `QA_VALIDATION_ACCEPTANCE_PLAN.md` — CHIMERA-PQ QA Validation & Acceptance Plan (MVP)
+- `REALITY_AUDIT_2026-05-18.md` — CHIMERA Reality Audit (2026-05-18)
+- `RELEASE_READINESS_REPORT.md` — Release Readiness Report
+- `RELEASE_READINESS_REPORT_RU.md` — Отчет Готовности Релиза
+- `REPORT_PACK.md` — Report Pack
+- `ROADMAP_DOC_INDEX.md` — CHIMERA-PQ Docs Index
+- `ROUTING.md` — Routing
+- `SECOND_MACHINE_REPORT.md` — Second Environment Verification Report
+- `SECURITY.md` — Security
+- `SHIP_READINESS_REPORT.md` — Ship Readiness Report
+- `THREAT_MODEL.md` — Threat Model
+- `TROUBLESHOOTING.md` — Troubleshooting (MVP Handoff/Ship)

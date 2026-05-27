@@ -1,0 +1,38 @@
+[workspace]
+members = [
+    "crates/chimera-core",
+    "crates/chimera-config",
+    "crates/chimera-crypto",
+    "crates/chimera-policy",
+    "crates/chimera-dns",
+    "crates/chimera-session",
+    "crates/chimera-carrier",
+    "crates/chimera-carrier-tls",
+    "crates/chimera-carrier-quic",
+    "crates/chimera-capture",
+    "crates/chimera-client",
+    "crates/chimera-cli",
+    "crates/chimera-gateway",
+    "crates/chimera-lab",
+    "crates/chimera-dht",
+    "crates/chimera-dps",
+    "crates/chimera-mesh",
+    "crates/chimera-relay",
+    "crates/chimera-emergency",
+    "crates/chimera-roaming",
+    "crates/chimera-reputation",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+rust-version = "1.95"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

@@ -1,0 +1,10 @@
+[advisories]
+version = 2
+db-path = "/tmp/chimera-advisory-dbs"
+
+[licenses]
+version = 2
+allow = ["Apache-2.0", "MIT", "BSD-3-Clause", "Unicode-3.0"]
+
+[bans]
+multiple-versions = "warn"

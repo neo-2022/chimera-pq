@@ -1,0 +1,29 @@
+[package]
+name = "chimera-lab"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chimera-carrier = { path = "../chimera-carrier" }
+chimera-carrier-quic = { path = "../chimera-carrier-quic" }
+chimera-carrier-tls = { path = "../chimera-carrier-tls" }
+chimera-session = { path = "../chimera-session" }
+chimera-client = { path = "../chimera-client" }
+chimera-gateway = { path = "../chimera-gateway" }
+chimera-config = { path = "../chimera-config" }
+chimera-policy = { path = "../chimera-policy" }
+chimera-dns = { path = "../chimera-dns" }
+chimera-emergency = { path = "../chimera-emergency" }
+chimera-roaming = { path = "../chimera-roaming" }
+chimera-reputation = { path = "../chimera-reputation" }
+chimera-mesh = { path = "../chimera-mesh" }
+chimera-dht = { path = "../chimera-dht" }
+chimera-dps = { path = "../chimera-dps" }
+chimera-relay = { path = "../chimera-relay" }
+serde_json = "1"
+serde = "1"

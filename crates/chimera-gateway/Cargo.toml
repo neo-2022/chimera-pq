@@ -1,0 +1,17 @@
+[package]
+name = "chimera-gateway"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chimera-carrier-quic = { path = "../chimera-carrier-quic" }
+chimera-carrier-tls = { path = "../chimera-carrier-tls" }
+chimera-config = { path = "../chimera-config" }
+chimera-core = { path = "../chimera-core" }
+chimera-crypto = { path = "../chimera-crypto" }
+chimera-session = { path = "../chimera-session" }

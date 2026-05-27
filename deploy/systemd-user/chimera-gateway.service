@@ -1,0 +1,16 @@
+[Unit]
+Description=CHIMERA Gateway (user service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=__CHIMERA_ROOT__
+ExecStart=/usr/bin/env bash -lc './scripts/chimera-runner.sh gateway doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json'
+ExecStop=/usr/bin/env bash -lc 'true'
+StandardOutput=append:__CHIMERA_ROOT__/docs/chimera_gateway.service.log
+StandardError=append:__CHIMERA_ROOT__/docs/chimera_gateway.service.log
+
+[Install]
+WantedBy=default.target

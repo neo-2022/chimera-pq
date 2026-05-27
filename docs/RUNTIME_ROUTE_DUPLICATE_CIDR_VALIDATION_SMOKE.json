@@ -1,0 +1,1 @@
+{"status":"ok","kind":"runtime_route_duplicate_cidr_validation_smoke","message_en":"Runtime duplicate CIDR validation smoke executed.","message_ru":"Smoke-проверка валидации дубликатов CIDR выполнена.","network_state":"not_modified","apply_rejected":true,"state_not_created":true}

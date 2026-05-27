@@ -1,0 +1,10 @@
+youtube.com
+googlevideo.com
+ytimg.com
+gstatic.com
+instagram.com
+facebook.com
+x.com
+twitter.com
+reddit.com
+wikipedia.org
