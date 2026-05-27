@@ -6,8 +6,9 @@ SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 UPSTREAM_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env"
-SOCKS_PORT_MIN="${SOCKS_PORT_MIN:-12080}"
-SOCKS_PORT_MAX="${SOCKS_PORT_MAX:-12180}"
+PEER_EGRESS_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
+PEER_EGRESS_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state"
+TRANSPARENT_RUNTIME_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -17,23 +18,6 @@ need_cmd() {
 }
 
 need_cmd bash
-
-is_port_busy() {
-  local port="${1:-}"
-  [[ -z "$port" ]] && return 1
-  ss -ltn "( sport = :$port )" 2>/dev/null | grep -q LISTEN
-}
-
-choose_free_port() {
-  local p
-  for ((p=SOCKS_PORT_MIN; p<=SOCKS_PORT_MAX; p++)); do
-    if ! is_port_busy "$p"; then
-      echo "$p"
-      return 0
-    fi
-  done
-  return 1
-}
 
 upsert_env_kv() {
   local file="${1:?file_required}"
@@ -48,48 +32,37 @@ upsert_env_kv() {
   fi
 }
 
-installer_gate_unify_socks_unit() {
+generate_runtime_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 24
+    return 0
+  fi
+  if command -v od >/dev/null 2>&1; then
+    od -An -tx1 -N24 /dev/urandom | tr -d ' \n'
+    return 0
+  fi
+  head -c 24 /dev/urandom | base64 | tr -d '=+/\n'
+}
+
+installer_gate_prepare_upstream_env() {
   mkdir -p "$(dirname "$UPSTREAM_ENV_FILE")"
   if [[ ! -f "$UPSTREAM_ENV_FILE" && -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
     cp "$ROOT_DIR/configs/upstream_proxy.env.example" "$UPSTREAM_ENV_FILE"
   fi
+}
 
-  # shellcheck disable=SC1090
-  source "$UPSTREAM_ENV_FILE" 2>/dev/null || true
-  local selected_port="${CHIMERA_SOCKS_PORT:-12080}"
-  if [[ ! "$selected_port" =~ ^[0-9]+$ ]]; then
-    selected_port="12080"
+run_chimera_cli() {
+  local bin="$ROOT_DIR/bin/chimera-cli"
+  if [[ -x "$bin" ]]; then
+    "$bin" "$@"
+    return $?
   fi
-  if is_port_busy "$selected_port"; then
-    local auto_port
-    auto_port="$(choose_free_port || true)"
-    if [[ -n "$auto_port" ]]; then
-      selected_port="$auto_port"
-    fi
+  if [[ -x "$ROOT_DIR/scripts/chimera-runner.sh" ]]; then
+    "$ROOT_DIR/scripts/chimera-runner.sh" cli "$@"
+    return $?
   fi
-  upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_SOCKS_PORT" "$selected_port"
-
-  # Unify legacy CHIMERA SOCKS service to config-driven port selection.
-  local legacy_unit="$SYSTEMD_USER_DIR/chimera-socks-tunnel.service"
-  if [[ -f "$legacy_unit" ]]; then
-    cat > "$legacy_unit" <<'EOF'
-[Unit]
-Description=CHIMERA SOCKS tunnel to VPS
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-EnvironmentFile=%h/.config/chimera/upstream_proxy.env
-ExecStart=/usr/bin/env bash -lc 'if [[ -r "$HOME/.ssh/id_ed25519" ]]; then exec ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -N -D 127.0.0.1:${CHIMERA_SOCKS_PORT:-12080} -p ${CHIMERA_UPSTREAM_PORT:-22} ${CHIMERA_UPSTREAM_USER}@${CHIMERA_UPSTREAM_HOST}; fi; exec sshpass -p "$CHIMERA_UPSTREAM_PASS" ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -N -D 127.0.0.1:${CHIMERA_SOCKS_PORT:-12080} -p ${CHIMERA_UPSTREAM_PORT:-22} ${CHIMERA_UPSTREAM_USER}@${CHIMERA_UPSTREAM_HOST}'
-Restart=always
-RestartSec=2
-
-[Install]
-WantedBy=default.target
-EOF
-    chmod 0644 "$legacy_unit"
-  fi
+  echo "error: missing chimera-cli runtime binary" >&2
+  return 1
 }
 
 run_install_permissions_preflight() {
@@ -149,20 +122,49 @@ auto_fix_runtime_permissions() {
 configure_client_target() {
   local client_conf="$ROOT_DIR/configs/client.conf"
   local candidate="${CHIMERA_VPS_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}"
+  local -a mesh_nodes_args=()
   local current_addr=""
   if [[ -f "$client_conf" ]]; then
-    current_addr="$(awk -F'= ' '$1=="carrier.addr" {print $2; exit}' "$client_conf" 2>/dev/null || true)"
-  fi
-  if [[ -z "$candidate" && -t 0 ]]; then
-    printf 'CHIMERA VPS endpoint (host:port): ' >&2
-    IFS= read -r candidate || true
+    current_addr="$(awk -F'=' '
+      $1 ~ /^[[:space:]]*carrier\.addr[[:space:]]*$/ {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2);
+        print $2;
+        exit
+      }
+    ' "$client_conf" 2>/dev/null || true)"
   fi
   if [[ -z "$candidate" ]]; then
-    if [[ -z "$current_addr" || "$current_addr" == 203.0.113.10:443 || "$current_addr" == 127.0.0.1:443 ]]; then
-      echo "client_config_carrier_addr=skipped reason=missing_endpoint"
+    if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
+      # shellcheck disable=SC1090
+      source "$UPSTREAM_ENV_FILE"
+    fi
+    if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" ]]; then
+      mesh_nodes_args+=(--discovery-url "$CHIMERA_MESH_NODES_DISCOVERY_URL")
+    fi
+    if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
+      mesh_nodes_args+=(--discovery-pubkey "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY")
+    fi
+    mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
+    if run_chimera_cli mesh nodes select "${mesh_nodes_args[@]}"; then
+      candidate="$(run_chimera_cli mesh nodes selected-endpoint "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+    fi
+    if [[ -z "$candidate" ]]; then
+      local best_node_id=""
+      best_node_id="$(run_chimera_cli mesh nodes best "${mesh_nodes_args[@]}" 2>/dev/null | sed -n 's/^node_id=\([^[:space:]]*\).*/\1/p' | head -n1 | tr -d '[:space:]' || true)"
+      if [[ -n "$best_node_id" ]]; then
+        run_chimera_cli mesh nodes select --id "$best_node_id" "${mesh_nodes_args[@]}" >/dev/null 2>&1 || true
+        candidate="$(run_chimera_cli mesh nodes selected-endpoint "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+      fi
+    fi
+  fi
+  if [[ -z "$candidate" ]]; then
+    if [[ -n "$current_addr" && "$current_addr" != 203.0.113.10:443 && "$current_addr" != 127.0.0.1:443 ]]; then
+      candidate="$current_addr"
+    else
+      CONFIGURED_CLIENT_ENDPOINT=""
+      echo "client_config_carrier_addr=none mode=gateway_only"
       return 0
     fi
-    return 0
   fi
   if [[ "$candidate" != *:* ]]; then
     echo "error: invalid CHIMERA VPS endpoint: $candidate" >&2
@@ -189,19 +191,108 @@ configure_client_target() {
   echo "client_config_carrier_addr=$candidate"
 }
 
+configure_peer_egress_env() {
+  local mode="${1:?mode_required}"
+  local server="${2:-}"
+  local invite_token="${3:-}"
+  local peer_listen="${4:-0.0.0.0:0}"
+  local local_listen="${5:-127.0.0.1:18135}"
+  local pool="${CHIMERA_PEER_EGRESS_POOL:-8}"
+  local connections="${CHIMERA_PEER_EGRESS_CONNECTIONS:-8}"
+  local aead="${CHIMERA_PEER_EGRESS_AEAD:-aes256gcm}"
+  if [[ ! "$local_listen" == *:* ]]; then
+    local_listen="127.0.0.1:${local_listen}"
+  fi
+  if [[ ! "$peer_listen" == *:* ]]; then
+    peer_listen="0.0.0.0:${peer_listen}"
+  fi
+  if [[ -z "$invite_token" ]]; then
+    invite_token="${CHIMERA_PEER_EGRESS_TOKEN:-}"
+  fi
+  if [[ -z "$invite_token" ]]; then
+    invite_token="$(generate_runtime_token)"
+  fi
+  if [[ "$mode" == "vps" && -z "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]]; then
+    peer_listen="0.0.0.0:0"
+  fi
+  mkdir -p "$(dirname "$PEER_EGRESS_ENV_FILE")"
+  mkdir -p "$(dirname "$PEER_EGRESS_STATE_FILE")"
+  {
+    printf 'CHIMERA_PEER_EGRESS_MODE=%s\n' "$mode"
+    printf 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=%s\n' "$local_listen"
+    printf 'CHIMERA_PEER_EGRESS_PEER_LISTEN=%s\n' "$peer_listen"
+    printf 'CHIMERA_PEER_EGRESS_STATE_FILE=%s\n' "$PEER_EGRESS_STATE_FILE"
+    printf 'CHIMERA_MESH_PEER_EGRESS_STATE_PATH=%s\n' "$PEER_EGRESS_STATE_FILE"
+    if [[ -n "$server" ]]; then
+      printf 'CHIMERA_PEER_EGRESS_SERVER=%s\n' "$server"
+    fi
+    printf 'CHIMERA_PEER_EGRESS_TOKEN=%s\n' "$invite_token"
+    printf 'CHIMERA_PEER_EGRESS_POOL=%s\n' "$pool"
+    printf 'CHIMERA_PEER_EGRESS_CONNECTIONS=%s\n' "$connections"
+    printf 'CHIMERA_PEER_EGRESS_AEAD=%s\n' "$aead"
+  } >"$PEER_EGRESS_ENV_FILE"
+  chmod 600 "$PEER_EGRESS_ENV_FILE"
+  echo "peer_egress_mode=$mode"
+  echo "peer_egress_local_listen=$local_listen"
+  echo "peer_egress_peer_listen=$peer_listen"
+  echo "peer_egress_state_file=$PEER_EGRESS_STATE_FILE"
+  if [[ -n "$server" ]]; then
+    echo "peer_egress_server=$server"
+  fi
+  echo "peer_egress_token_set=true"
+}
+
+configure_transparent_runtime_env() {
+  local exempt_uid
+  exempt_uid="$(id -u)"
+  local listen="${CHIMERA_TRANSPARENT_TCP_LISTEN:-127.0.0.1:18134}"
+  local gateway_local="${CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL:-127.0.0.1:18135}"
+  mkdir -p "$(dirname "$TRANSPARENT_RUNTIME_ENV_FILE")"
+  {
+    printf 'CHIMERA_TRANSPARENT_BIN=%s\n' "${CHIMERA_TRANSPARENT_BIN:-$ROOT_DIR/bin/chimera-transparent-tcp}"
+    printf 'CHIMERA_TRANSPARENT_TCP_LISTEN=%s\n' "$listen"
+    printf 'CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL=%s\n' "$gateway_local"
+    printf 'CHIMERA_TRANSPARENT_TCP_DIRECT_MODE=%s\n' "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-auto}"
+    printf 'CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS:-1200}"
+    printf 'CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS:-1800}"
+    printf 'CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS:-500}"
+    printf 'CHIMERA_REDIRECT_TABLE=%s\n' "${CHIMERA_REDIRECT_TABLE:-chimera_redirect}"
+    printf 'CHIMERA_REDIRECT_CHAIN=%s\n' "${CHIMERA_REDIRECT_CHAIN:-output}"
+    printf 'CHIMERA_REDIRECT_EXEMPT_UID=%s\n' "${CHIMERA_REDIRECT_EXEMPT_UID:-$exempt_uid}"
+    printf 'CHIMERA_TRANSPARENT_RUNTIME_UID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-65534}"
+    printf 'CHIMERA_TRANSPARENT_RUNTIME_GID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-65534}"
+  } >"$TRANSPARENT_RUNTIME_ENV_FILE"
+  chmod 600 "$TRANSPARENT_RUNTIME_ENV_FILE"
+  echo "transparent_runtime_listen=$listen"
+  echo "transparent_runtime_gateway_local=$gateway_local"
+}
+
 SYSTEMD_USER_READY=0
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
   SYSTEMD_USER_READY=1
 fi
 
 mkdir -p "$SYSTEMD_USER_DIR" "$APPLICATIONS_DIR"
-installer_gate_unify_socks_unit
+installer_gate_prepare_upstream_env
 auto_fix_runtime_permissions
 run_install_permissions_preflight
 if [[ ! -f "$ROOT_DIR/configs/client.conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
   cp "$ROOT_DIR/configs/client.example.conf" "$ROOT_DIR/configs/client.conf"
 fi
 configure_client_target
+if [[ -n "${CONFIGURED_CLIENT_ENDPOINT:-}" ]]; then
+  selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+  configure_peer_egress_env "laptop" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "127.0.0.1:8443"
+else
+  selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+  configure_peer_egress_env "vps" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+fi
+configure_transparent_runtime_env
+if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$PEER_EGRESS_ENV_FILE"
+  upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN" "${CHIMERA_PEER_EGRESS_TOKEN:-}"
+fi
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \
     "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >"$SYSTEMD_USER_DIR/chimera-gateway.service"
@@ -219,8 +310,7 @@ chmod +x \
   "$ROOT_DIR/scripts/chimera.sh" \
   "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" \
   "$ROOT_DIR/scripts/chimera-control-tray.sh" \
-  "$ROOT_DIR/scripts/chimera-control-launcher.sh" \
-  "$ROOT_DIR/scripts/chimera-socks-watchdog.sh"
+  "$ROOT_DIR/scripts/chimera-control-launcher.sh"
 
 if [[ -n "${CHIMERA_RELEASE_VERSION:-}" ]]; then
   printf '%s\n' "$CHIMERA_RELEASE_VERSION" > "$ROOT_DIR/.chimera_release_version"
@@ -232,9 +322,6 @@ ln -sfn "$ROOT_DIR/scripts/chimera.sh" "$LOCAL_BIN_DIR/chimera.sh"
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   systemctl --user daemon-reload
-  if [[ -f "$SYSTEMD_USER_DIR/chimera-socks-tunnel.service" ]]; then
-    systemctl --user try-restart chimera-socks-tunnel.service >/dev/null 2>&1 || true
-  fi
 fi
 
 if [[ -x "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" ]]; then

@@ -45,6 +45,7 @@ struct Options {
     mode: Mode,
     local_listen: String,
     peer_listen: String,
+    state_file: Option<String>,
     server: String,
     token: String,
     pool: usize,
@@ -91,6 +92,7 @@ impl Options {
         let mut mode: Option<Mode> = None;
         let mut local_listen = env_value("CHIMERA_PEER_EGRESS_LOCAL_LISTEN");
         let mut peer_listen = env_value("CHIMERA_PEER_EGRESS_PEER_LISTEN");
+        let mut state_file = env_value("CHIMERA_PEER_EGRESS_STATE_FILE");
         let mut server = env_value("CHIMERA_PEER_EGRESS_SERVER");
         let mut token = env_value("CHIMERA_PEER_EGRESS_TOKEN").unwrap_or_default();
         let mut pool = env_value("CHIMERA_PEER_EGRESS_POOL")
@@ -143,6 +145,7 @@ impl Options {
                 }
                 "--local-listen" => local_listen = Some(value.clone()),
                 "--peer-listen" => peer_listen = Some(value.clone()),
+                "--state-file" => state_file = Some(value.clone()),
                 "--server" => server = Some(value.clone()),
                 "--token" => token = value.clone(),
                 "--pool" => pool = parse_pool(value)?,
@@ -224,6 +227,7 @@ impl Options {
             mode,
             local_listen,
             peer_listen,
+            state_file,
             server,
             token,
             pool,
@@ -342,6 +346,24 @@ fn run_vps(options: Options) -> Result<(), String> {
         .map_err(|error| format!("bind peer listener failed: {error}"))?;
     let local_listener = TcpListener::bind(&options.local_listen)
         .map_err(|error| format!("bind local listener failed: {error}"))?;
+    let resolved_peer_listen = peer_listener
+        .local_addr()
+        .map_err(|error| format!("resolve peer listener addr failed: {error}"))?
+        .to_string();
+    let resolved_local_listen = local_listener
+        .local_addr()
+        .map_err(|error| format!("resolve local listener addr failed: {error}"))?
+        .to_string();
+    if let Some(state_file) = &options.state_file {
+        if let Err(error) = write_resolved_state_file(
+            state_file,
+            &options.mode,
+            &resolved_local_listen,
+            &resolved_peer_listen,
+        ) {
+            eprintln!("event=peer_state_write_failed reason={error}");
+        }
+    }
     let pool = Arc::new(PeerPool::default());
     let token = options.token.clone();
     let aead = options.aead;
@@ -368,8 +390,11 @@ fn run_vps(options: Options) -> Result<(), String> {
         }
     });
     println!(
-        "chimera_peer_egress=vps_ready local={} peer={}",
-        options.local_listen, options.peer_listen
+        "chimera_peer_egress=vps_ready local={} peer={} resolved_local={} resolved_peer={}",
+        options.local_listen,
+        options.peer_listen,
+        resolved_local_listen,
+        resolved_peer_listen
     );
     for incoming in local_listener.incoming() {
         let Ok(local) = incoming else {
@@ -1082,6 +1107,7 @@ fn run_bench(options: Options) -> Result<(), String> {
         mode: Mode::Laptop,
         local_listen: String::new(),
         peer_listen: String::new(),
+        state_file: None,
         server: peer_addr.to_string(),
         token,
         pool: options.pool,
@@ -1242,6 +1268,35 @@ fn run_download_probe(options: Options) -> Result<(), String> {
         options.min_throughput_mib_s,
         "chimera_peer_egress_download_probe",
     )
+}
+
+fn write_resolved_state_file(
+    state_file: &str,
+    mode: &Mode,
+    resolved_local_listen: &str,
+    resolved_peer_listen: &str,
+) -> Result<(), String> {
+    let contents = format!(
+        "mode={}\nresolved_local_listen={}\nresolved_peer_listen={}\n",
+        mode_name(mode),
+        resolved_local_listen,
+        resolved_peer_listen
+    );
+    std::fs::write(state_file, contents)
+        .map_err(|error| format!("write state file failed: {error}"))?;
+    Ok(())
+}
+
+fn mode_name(mode: &Mode) -> &'static str {
+    match mode {
+        Mode::Vps => "vps",
+        Mode::Laptop => "laptop",
+        Mode::Bench => "bench",
+        Mode::Echo => "echo",
+        Mode::Probe => "probe",
+        Mode::DownloadEcho => "download-echo",
+        Mode::DownloadProbe => "download-probe",
+    }
 }
 
 fn run_download_probe_parallel(

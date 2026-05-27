@@ -50,6 +50,9 @@ RUNTIME_BOOTSTRAP_SCRIPT="${RUNTIME_BOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_
 SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box}"
 CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
 PEER_EGRESS_ENV_FILE="${PEER_EGRESS_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env}"
+PEER_EGRESS_STATE_FILE="${PEER_EGRESS_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state}"
+MESH_DISCOVERY_OUT_FILE="${MESH_DISCOVERY_OUT_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/mesh_nodes.discovery.json}"
+MESH_DISCOVERY_PUBKEY_OUT_FILE="${MESH_DISCOVERY_PUBKEY_OUT_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/mesh_nodes.discovery.pubkey}"
 TRANSPARENT_RUNTIME_ENV_FILE="${TRANSPARENT_RUNTIME_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env}"
 SPLIT_TRANSPARENT_ENABLED="${SPLIT_TRANSPARENT_ENABLED:-1}"
 SPLIT_TRANSPARENT_TUN_NAME="${SPLIT_TRANSPARENT_TUN_NAME:-chimera-tun}"
@@ -121,6 +124,59 @@ pidfile_running() {
   pid="$(tr -d '[:space:]' <"$pidfile" 2>/dev/null || true)"
   [[ -n "$pid" ]] || return 1
   kill -0 "$pid" >/dev/null 2>&1
+}
+
+peer_egress_pid_path() {
+  printf '%s' "${PEER_EGRESS_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-peer-egress.pid}"
+}
+
+transparent_runtime_pid_path() {
+  printf '%s' "${TRANSPARENT_RUNTIME_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-transparent-runtime.pid}"
+}
+
+peer_egress_state_path() {
+  printf '%s' "${PEER_EGRESS_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state}"
+}
+
+mesh_discovery_out_path() {
+  printf '%s' "${MESH_DISCOVERY_OUT_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/mesh_nodes.discovery.json}"
+}
+
+mesh_discovery_pubkey_out_path() {
+  printf '%s' "${MESH_DISCOVERY_PUBKEY_OUT_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/mesh_nodes.discovery.pubkey}"
+}
+
+publish_mesh_discovery_snapshot() {
+  local state_path
+  state_path="$(peer_egress_state_path)"
+  [[ -f "$state_path" ]] || return 0
+  local discovery_out
+  discovery_out="$(mesh_discovery_out_path)"
+  local pubkey_out
+  pubkey_out="$(mesh_discovery_pubkey_out_path)"
+  local self_node_id=""
+  if [[ -f "$STATE_FILE" ]]; then
+    self_node_id="$(awk -F= '/^mesh_node[[:space:]]*=/{print $2; exit}' "$STATE_FILE" 2>/dev/null || true)"
+    if [[ -z "$self_node_id" ]]; then
+      self_node_id="$(awk -F= '/^selected_node[[:space:]]*=/{print $2; exit}' "$STATE_FILE" 2>/dev/null || true)"
+    fi
+  fi
+  if [[ -z "$self_node_id" && -f "$UPSTREAM_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$UPSTREAM_ENV_FILE"
+    self_node_id="${CHIMERA_MESH_SELF_NODE_ID:-${CHIMERA_UPSTREAM_NODE_ID:-}}"
+  fi
+  self_node_id="${self_node_id:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)}"
+  if wait_for_file "$state_path" 5; then
+    CHIMERA_MESH_PEER_EGRESS_STATE_PATH="$state_path" \
+    CHIMERA_MESH_SELF_NODE_ID="$self_node_id" \
+    "$CHIMERA_RUNNER" cli mesh nodes advertise \
+      --state-file "$state_path" \
+      --out "$discovery_out" \
+      --pubkey-out "$pubkey_out" >/dev/null 2>&1 || return 1
+    echo "discovery_snapshot_out=$discovery_out"
+    echo "discovery_snapshot_pubkey=$pubkey_out"
+  fi
 }
 
 ensure_upstream_env_bootstrapped() {
@@ -367,6 +423,18 @@ start_runner_background() {
   local pid=$!
   printf '%s\n' "$pid" >"$pid_file"
   echo "${name}_status=started pid=$pid"
+}
+
+wait_for_file() {
+  local file="${1:?file_required}"
+  local timeout_sec="${2:-5}"
+  local i=0
+  while (( i < timeout_sec * 10 )); do
+    [[ -s "$file" ]] && return 0
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
 }
 
 stop_runner_background() {
@@ -972,10 +1040,10 @@ runtime_state_is_up() {
     return $?
   fi
   if client_config_ready; then
-    pidfile_running "$PEER_EGRESS_PID_FILE" && pidfile_running "$TRANSPARENT_RUNTIME_PID_FILE"
+    pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)"
     return $?
   fi
-  if pidfile_running "$PEER_EGRESS_PID_FILE"; then
+  if pidfile_running "$(peer_egress_pid_path)"; then
     return 0
   fi
   [[ -f "$STATE_FILE" ]] || return 1
@@ -1018,9 +1086,9 @@ read_runtime_service_state() {
   if systemd_user_ready; then
     systemctl --user is-active "$unit" 2>/dev/null || true
   else
-    if [[ "$unit" == "chimera-gateway.service" ]] && pidfile_running "$PEER_EGRESS_PID_FILE"; then
+    if [[ "$unit" == "chimera-gateway.service" ]] && pidfile_running "$(peer_egress_pid_path)"; then
       echo "active"
-    elif [[ "$unit" == "chimera-client.service" ]] && pidfile_running "$TRANSPARENT_RUNTIME_PID_FILE"; then
+    elif [[ "$unit" == "chimera-client.service" ]] && pidfile_running "$(transparent_runtime_pid_path)"; then
       echo "active"
     else
       echo "unknown"
@@ -1551,11 +1619,12 @@ start_runtime() {
   local gateway_status="skipped"
   local client_status="skipped"
   if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
-    start_runner_background "peer_egress" "$PEER_EGRESS_PID_FILE" "$GATEWAY_LOG" "$PEER_EGRESS_ENV_FILE" "peer-egress" >/dev/null 2>&1 || true
+    start_runner_background "peer_egress" "$(peer_egress_pid_path)" "$GATEWAY_LOG" "$PEER_EGRESS_ENV_FILE" "peer-egress" >/dev/null 2>&1 || true
     gateway_status="started"
+    publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
   fi
   if client_config_ready && [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
-    start_runner_background "transparent_runtime" "$TRANSPARENT_RUNTIME_PID_FILE" "$CLIENT_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
+    start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$CLIENT_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
     client_status="started"
     run_chimera_cli up \
       --config "$CLIENT_CONFIG_FILE" \
@@ -1582,8 +1651,8 @@ stop_runtime() {
     echo "stop_status=ok mode=systemd_user"
     return 0
   fi
-  stop_runner_background "transparent_runtime" "$TRANSPARENT_RUNTIME_PID_FILE" >/dev/null 2>&1 || true
-  stop_runner_background "peer_egress" "$PEER_EGRESS_PID_FILE" >/dev/null 2>&1 || true
+  stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
+  stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
   run_chimera_cli down \
     --config "$CLIENT_CONFIG_FILE" \
     --state-file "$STATE_FILE" \
@@ -1610,6 +1679,7 @@ runtime_status() {
   echo "runtime_root=$ROOT_DIR"
   echo "gateway_service_state=$gateway_state"
   echo "client_service_state=$client_state"
+  echo "peer_egress_state_file=$(peer_egress_state_path)"
   echo "chimera_proxy_url=$proxy_url"
   echo "chimera_proxy_listener=$proxy_listener"
   echo "$watch_status"
@@ -1625,13 +1695,13 @@ runtime_status() {
       fi
     else
       if client_config_ready; then
-        if pidfile_running "$PEER_EGRESS_PID_FILE" && pidfile_running "$TRANSPARENT_RUNTIME_PID_FILE"; then
+        if pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)"; then
           echo "transparent_runtime=running"
         else
           echo "transparent_runtime=stopped"
         fi
       else
-        if pidfile_running "$PEER_EGRESS_PID_FILE"; then
+        if pidfile_running "$(peer_egress_pid_path)"; then
           echo "transparent_runtime=running"
         else
           echo "transparent_runtime=stopped"
@@ -1655,6 +1725,14 @@ runtime_status() {
       /^mesh_node[[:space:]]*=/ { print "mesh_node=" $2 }
       /^autoconnect[[:space:]]*=/ { print "autoconnect=" $2 }
     ' "$STATE_FILE" 2>/dev/null || true
+  fi
+  if [[ -f "$(peer_egress_state_path)" ]]; then
+    echo "peer_egress_state=$(peer_egress_state_path)"
+    awk -F= '
+      /^resolved_local_listen[[:space:]]*=/ { print "peer_egress_resolved_local_listen=" $2 }
+      /^resolved_peer_listen[[:space:]]*=/ { print "peer_egress_resolved_peer_listen=" $2 }
+      /^mode[[:space:]]*=/ { print "peer_egress_mode=" $2 }
+    ' "$(peer_egress_state_path)" 2>/dev/null || true
   fi
 }
 
@@ -1728,7 +1806,8 @@ uninstall_runtime() {
   if systemd_user_ready; then
     systemctl --user disable --now chimera-gateway.service chimera-client.service >/dev/null 2>&1 || true
   fi
-  rm -f "$STATE_FILE" "$GATEWAY_LOG" "$CLIENT_LOG" "$LAST_ENDPOINT_FILE" "$UPSTREAM_HEALTH_STATE_FILE" "$SITE_AUTOWATCH_PID_FILE" "$PEER_EGRESS_PID_FILE" "$TRANSPARENT_RUNTIME_PID_FILE"
+  rm -f "$STATE_FILE" "$GATEWAY_LOG" "$CLIENT_LOG" "$LAST_ENDPOINT_FILE" "$UPSTREAM_HEALTH_STATE_FILE" "$SITE_AUTOWATCH_PID_FILE" "$(peer_egress_pid_path)" "$(transparent_runtime_pid_path)"
+  rm -f "$(peer_egress_state_path)"
   rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env" "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"
   rm -f "$SERVICE_ROUTE_OVERRIDES_FILE"
   rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/site_adaptive_routes.db"

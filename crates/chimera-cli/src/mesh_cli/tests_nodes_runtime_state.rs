@@ -225,6 +225,49 @@ fn nodes_state_view_json_snapshot_stable() {
 }
 
 #[test]
+fn nodes_advertise_writes_signed_discovery_snapshot() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_snapshot_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_snapshot_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_snapshot_{}.keypair",
+        random_u64()
+    ));
+    let endpoint = "198.51.100.77:54321";
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-1".to_string(),
+        "--endpoint".to_string(),
+        endpoint.to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    let pubkey = fs::read_to_string(&pubkey_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains("\"node_id\":\"node-eu-1\""));
+    assert!(body.contains(endpoint));
+    assert!(body.contains("\"contract_version\":1"));
+    assert!(!pubkey.trim().is_empty());
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+}
+
+#[test]
 fn nodes_json_error_snapshot_stable() {
     let json = render_nodes_json_error(
         "mesh_nodes_probe_all",
