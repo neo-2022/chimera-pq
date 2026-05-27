@@ -168,6 +168,29 @@ mode:
    - `CHIMERA_SINGBOX_SHA256`
 
 This keeps install/start one-command for end users and removes manual
+
+## Mesh Node Selection Flow
+
+Mesh node discovery is not baked into installation. On a fresh install the
+available node list is loaded from the upstream/bootstrap source at runtime.
+
+Operator flow:
+
+1. Start CHIMERA normally.
+2. Open `chimera mesh nodes select`.
+3. Choose one node from the loaded list manually on the first run.
+4. After that CHIMERA persists `current`, `pinned`, and `autoconnect`.
+5. Per-resource route selection and automatic fallback are handled by
+   `site_auto_watch` and the adaptive split-routing path, not by changing the
+   user-selected mesh node.
+
+Important:
+
+- install does not generate a baked node inventory;
+- first selection is user-visible and manual;
+- subsequent route changes are automatic and hidden from the user when
+  runtime conditions change;
+- the selected mesh node stays pinned until the user changes it manually.
 third-party installation from required flow.
 
 ## End-to-End Channel Gate

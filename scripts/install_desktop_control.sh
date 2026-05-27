@@ -81,7 +81,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/chimera/upstream_proxy.env
-ExecStart=/usr/bin/env bash -lc 'exec sshpass -p "$CHIMERA_UPSTREAM_PASS" ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -N -D 127.0.0.1:${CHIMERA_SOCKS_PORT:-12080} -p ${CHIMERA_UPSTREAM_PORT:-22} ${CHIMERA_UPSTREAM_USER}@${CHIMERA_UPSTREAM_HOST}'
+ExecStart=/usr/bin/env bash -lc 'if [[ -r "$HOME/.ssh/id_ed25519" ]]; then exec ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -N -D 127.0.0.1:${CHIMERA_SOCKS_PORT:-12080} -p ${CHIMERA_UPSTREAM_PORT:-22} ${CHIMERA_UPSTREAM_USER}@${CHIMERA_UPSTREAM_HOST}; fi; exec sshpass -p "$CHIMERA_UPSTREAM_PASS" ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -N -D 127.0.0.1:${CHIMERA_SOCKS_PORT:-12080} -p ${CHIMERA_UPSTREAM_PORT:-22} ${CHIMERA_UPSTREAM_USER}@${CHIMERA_UPSTREAM_HOST}'
 Restart=always
 RestartSec=2
 
@@ -189,30 +189,6 @@ configure_client_target() {
   echo "client_config_carrier_addr=$candidate"
 }
 
-configure_mesh_nodes_inventory() {
-  local endpoint="${CONFIGURED_CLIENT_ENDPOINT:-}"
-  local mesh_nodes_conf="$ROOT_DIR/configs/mesh_nodes.conf"
-  if [[ -z "$endpoint" ]]; then
-    echo "mesh_nodes_inventory=skipped reason=missing_endpoint"
-    return 0
-  fi
-  cat > "$mesh_nodes_conf" <<EOF
-# CHIMERA mesh node inventory (generated)
-
-mesh.nodes.ids = vps
-mesh.nodes.current = none
-mesh.nodes.pinned = none
-mesh.nodes.autoconnect = true
-
-mesh.node.vps.endpoint = ${endpoint}
-mesh.node.vps.country_code = ZZ
-mesh.node.vps.country_name = VPS
-mesh.node.vps.status = healthy
-mesh.node.vps.observation_count = 1
-EOF
-  echo "mesh_nodes_inventory=ok endpoint=$endpoint"
-}
-
 SYSTEMD_USER_READY=0
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
   SYSTEMD_USER_READY=1
@@ -226,7 +202,6 @@ if [[ ! -f "$ROOT_DIR/configs/client.conf" && -f "$ROOT_DIR/configs/client.examp
   cp "$ROOT_DIR/configs/client.example.conf" "$ROOT_DIR/configs/client.conf"
 fi
 configure_client_target
-configure_mesh_nodes_inventory
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \
     "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >"$SYSTEMD_USER_DIR/chimera-gateway.service"

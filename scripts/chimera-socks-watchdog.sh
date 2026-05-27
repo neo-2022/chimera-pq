@@ -17,6 +17,7 @@ HEALTH_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/upstream_health_state
 WATCHDOG_INTERVAL_SEC="${CHIMERA_WATCHDOG_INTERVAL_SEC:-5}"
 WATCHDOG_INTERVAL_DEGRADED_SEC="${CHIMERA_WATCHDOG_INTERVAL_DEGRADED_SEC:-1}"
 FAILOVER_SILENT="${CHIMERA_FAILOVER_SILENT:-1}"
+UPSTREAM_SSH_KEY_FILE="${CHIMERA_UPSTREAM_SSH_KEY_FILE:-$HOME/.ssh/id_ed25519}"
 last_transport="unknown"
 
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -244,7 +245,17 @@ launch_for_endpoint() {
     *) return 1 ;;
   esac
   last_transport="${transport:-ssh}"
-  SSHPASS="$CHIMERA_UPSTREAM_PASS" nohup sshpass -e ssh \
+  local ssh_cmd=()
+  if [[ -r "$UPSTREAM_SSH_KEY_FILE" ]]; then
+    ssh_cmd=(ssh -i "$UPSTREAM_SSH_KEY_FILE" -o BatchMode=yes)
+  elif [[ -n "${CHIMERA_UPSTREAM_PASS:-}" ]]; then
+    ssh_cmd=(sshpass -e ssh)
+    export SSHPASS="$CHIMERA_UPSTREAM_PASS"
+  else
+    echo "$(date '+%F %T') failover skip reason=no_ssh_key_or_password" >>"$LOG_FILE"
+    return 1
+  fi
+  nohup "${ssh_cmd[@]}" \
     -o StrictHostKeyChecking=no \
     -o ExitOnForwardFailure=yes \
     -o ServerAliveInterval=30 \

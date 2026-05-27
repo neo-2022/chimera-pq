@@ -28,6 +28,7 @@ WATCHDOG_SCRIPT="$ROOT_DIR/scripts/chimera-socks-watchdog.sh"
 UPSTREAM_AUTOBOOTSTRAP_SCRIPT="${UPSTREAM_AUTOBOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_upstream_autobootstrap.sh}"
 AUTOFIX_TIMEOUT="${CHIMERA_AUTOFIX_MAX_TIME:-25}"
 WATCHDOG_PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/chimera-socks-watchdog.pid"
+UPSTREAM_SSH_KEY_FILE="${CHIMERA_UPSTREAM_SSH_KEY_FILE:-$HOME/.ssh/id_ed25519}"
 SOCKS_TUNNEL_PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/chimera-socks-tunnel.pid"
 CHIMERA_ALLOW_PGREP_KILL="${CHIMERA_ALLOW_PGREP_KILL:-0}"
 AUTO_RESTART_CHROMIUM="${CHIMERA_AUTO_RESTART_CHROMIUM:-0}"
@@ -55,9 +56,6 @@ CHIMERA_RUNNER="${CHIMERA_RUNNER:-$ROOT_DIR/scripts/chimera-runner.sh}"
 RUNTIME_BOOTSTRAP_SCRIPT="${RUNTIME_BOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh}"
 SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box}"
 CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
-if [[ -z "${CHIMERA_MESH_NODES_CONFIG:-}" && -f "$ROOT_DIR/configs/mesh_nodes.conf" ]]; then
-  export CHIMERA_MESH_NODES_CONFIG="$ROOT_DIR/configs/mesh_nodes.conf"
-fi
 SPLIT_TRANSPARENT_ENABLED="${SPLIT_TRANSPARENT_ENABLED:-1}"
 SPLIT_TRANSPARENT_TUN_NAME="${SPLIT_TRANSPARENT_TUN_NAME:-chimera-tun}"
 SPLIT_TRANSPARENT_TUN_ADDR="${SPLIT_TRANSPARENT_TUN_ADDR:-172.19.0.1/30}"
@@ -924,7 +922,17 @@ launch_socks_tunnel_for_endpoint() {
       return 1
       ;;
   esac
-  SSHPASS="$CHIMERA_UPSTREAM_PASS" nohup sshpass -e ssh \
+  local ssh_cmd=()
+  if [[ -r "$UPSTREAM_SSH_KEY_FILE" ]]; then
+    ssh_cmd=(ssh -i "$UPSTREAM_SSH_KEY_FILE" -o BatchMode=yes)
+  elif [[ -n "${CHIMERA_UPSTREAM_PASS:-}" ]]; then
+    ssh_cmd=(sshpass -e ssh)
+    export SSHPASS="$CHIMERA_UPSTREAM_PASS"
+  else
+    echo "upstream_skip reason=no_ssh_key_or_password"
+    return 1
+  fi
+  nohup "${ssh_cmd[@]}" \
     -o StrictHostKeyChecking=no \
     -o ExitOnForwardFailure=yes \
     -o ServerAliveInterval=30 \
@@ -2093,7 +2101,7 @@ start_socks_tunnel() {
   fi
   # shellcheck disable=SC1090
   source "$UPSTREAM_ENV_FILE"
-  if [[ -z "${CHIMERA_UPSTREAM_USER:-}" || -z "${CHIMERA_UPSTREAM_HOST:-}" || -z "${CHIMERA_UPSTREAM_PASS:-}" ]]; then
+  if [[ -z "${CHIMERA_UPSTREAM_USER:-}" || -z "${CHIMERA_UPSTREAM_HOST:-}" ]] || { [[ -z "${CHIMERA_UPSTREAM_PASS:-}" ]] && [[ ! -r "$UPSTREAM_SSH_KEY_FILE" ]]; }; then
     return 0
   fi
   local detected_port=""
@@ -2109,9 +2117,6 @@ start_socks_tunnel() {
       return 0
     fi
     pkill -f "ssh .* -D $SOCKS_HOST:$SOCKS_PORT .*@.*" 2>/dev/null || true
-  fi
-  if ! command -v sshpass >/dev/null 2>&1; then
-    return 0
   fi
   ensure_socks_port_isolated
   local endpoint
@@ -2142,12 +2147,8 @@ failover_upstream_gate_ok() {
     # shellcheck disable=SC1090
     source "$UPSTREAM_ENV_FILE"
   fi
-  if [[ -z "${CHIMERA_UPSTREAM_USER:-}" || -z "${CHIMERA_UPSTREAM_HOST:-}" || -z "${CHIMERA_UPSTREAM_PASS:-}" ]]; then
+  if [[ -z "${CHIMERA_UPSTREAM_USER:-}" || -z "${CHIMERA_UPSTREAM_HOST:-}" ]] || { [[ -z "${CHIMERA_UPSTREAM_PASS:-}" ]] && [[ ! -r "$UPSTREAM_SSH_KEY_FILE" ]]; }; then
     echo "failover_gate=blocked reason=upstream_env_missing path=$UPSTREAM_ENV_FILE"
-    return 1
-  fi
-  if ! command -v sshpass >/dev/null 2>&1; then
-    echo "failover_gate=blocked reason=sshpass_missing"
     return 1
   fi
   echo "failover_gate=ok source=upstream_env host=${CHIMERA_UPSTREAM_HOST} port=${CHIMERA_UPSTREAM_PORT:-22}"
