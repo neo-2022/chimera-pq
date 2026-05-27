@@ -328,7 +328,7 @@ require_cmd() {
 }
 
 ensure_base_path() {
-  export PATH="$HOME/.cargo/bin:$PATH"
+  export PATH="$HOME/.local/bin:$PATH"
 }
 
 run_chimera_cli() {
@@ -337,26 +337,17 @@ run_chimera_cli() {
     return $?
   fi
   if [[ -x "$CHIMERA_CLI_BIN" ]]; then
-    if "$CHIMERA_CLI_BIN" "$@"; then
-      return 0
-    fi
-    if command -v cargo >/dev/null 2>&1; then
-      (
-        cd "$ROOT_DIR"
-        cargo run -q -p chimera-cli -- "$@"
-      )
-      return $?
-    fi
-    return 1
+    "$CHIMERA_CLI_BIN" "$@"
+    return $?
   fi
-  if command -v cargo >/dev/null 2>&1; then
+  if [[ "${CHIMERA_ALLOW_CARGO_FALLBACK:-0}" == "1" ]] && command -v cargo >/dev/null 2>&1; then
     (
       cd "$ROOT_DIR"
       cargo run -q -p chimera-cli -- "$@"
     )
     return $?
   fi
-  echo "error: chimera-cli binary is missing and cargo is unavailable" >&2
+  echo "error: chimera-cli binary is missing and cargo fallback is disabled" >&2
   return 1
 }
 
@@ -366,26 +357,17 @@ run_chimera_gateway() {
     return $?
   fi
   if [[ -x "$CHIMERA_GATEWAY_BIN" ]]; then
-    if "$CHIMERA_GATEWAY_BIN" "$@"; then
-      return 0
-    fi
-    if command -v cargo >/dev/null 2>&1; then
-      (
-        cd "$ROOT_DIR"
-        cargo run -q -p chimera-gateway -- "$@"
-      )
-      return $?
-    fi
-    return 1
+    "$CHIMERA_GATEWAY_BIN" "$@"
+    return $?
   fi
-  if command -v cargo >/dev/null 2>&1; then
+  if [[ "${CHIMERA_ALLOW_CARGO_FALLBACK:-0}" == "1" ]] && command -v cargo >/dev/null 2>&1; then
     (
       cd "$ROOT_DIR"
       cargo run -q -p chimera-gateway -- "$@"
     )
     return $?
   fi
-  echo "error: chimera-gateway binary is missing and cargo is unavailable" >&2
+  echo "error: chimera-gateway binary is missing and cargo fallback is disabled" >&2
   return 1
 }
 

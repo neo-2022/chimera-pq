@@ -26,7 +26,7 @@ yad --notification \
       \"Stop CHIMERA\") \"\$CONTROL\" stop ;;
       \"Restart CHIMERA\") \"\$CONTROL\" restart ;;
       \"Status\") \"\$CONTROL\" status | yad --text-info --title=\"CHIMERA Status\" --width=900 --height=600 ;;
-      \"Doctor\") cd \"\$ROOT_DIR\" && cargo run -p chimera-cli -- doctor --config configs/client.example.conf --json --out docs/doctor_latest.json ; yad --info --text=\"Doctor completed: docs/doctor_latest.json\" ;;
+      \"Doctor\") \"\$ROOT_DIR/scripts/chimera-control.sh\" doctor ; yad --info --text=\"Doctor completed\" ;;
       \"Logs\") \"\$CONTROL\" logs | yad --text-info --title=\"CHIMERA Logs\" --width=900 --height=600 ;;
       \"Mode: Full\") \"\$CONTROL\" route-mode full | yad --text-info --title=\"CHIMERA Mode\" --width=700 --height=300 ;;
       \"Mode: Split\") \"\$CONTROL\" route-mode split | yad --text-info --title=\"CHIMERA Mode\" --width=700 --height=300 ;;

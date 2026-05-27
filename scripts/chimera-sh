@@ -98,14 +98,47 @@ read_local_runtime_version() {
 }
 
 auto_update_if_needed() {
+  local -a original_args=("$@")
   [[ "$AUTO_UPDATE_ENABLED" == "1" ]] || return 0
-  command -v curl >/dev/null 2>&1 || return 0
   command -v bash >/dev/null 2>&1 || return 0
+
+  download_url_to_file() {
+    local url="${1:?url_required}"
+    local dest="${2:?dest_required}"
+    if command -v python3 >/dev/null 2>&1; then
+      env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+        python3 - "$url" "$dest" <<'PY'
+import sys
+import urllib.request
+
+url, dest = sys.argv[1], sys.argv[2]
+with urllib.request.urlopen(url, timeout=30) as resp, open(dest, "wb") as out:
+    while True:
+        chunk = resp.read(1024 * 1024)
+        if not chunk:
+            break
+        out.write(chunk)
+PY
+      return 0
+    fi
+    if command -v curl >/dev/null 2>&1; then
+      env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+        curl -fsSL "$url" -o "$dest"
+      return $?
+    fi
+    if command -v wget >/dev/null 2>&1; then
+      env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+        wget -qO "$dest" "$url"
+      return $?
+    fi
+    echo "error: missing downloader: python3, curl, or wget" >&2
+    return 1
+  }
 
   local tmp_script=""
   tmp_script="$(mktemp)"
 
-  if ! curl -fsSL "${UPDATE_BOOTSTRAP_URL}?ts=$(date +%s)" -o "$tmp_script" 2>/dev/null; then
+  if ! download_url_to_file "${UPDATE_BOOTSTRAP_URL}?ts=$(date +%s)" "$tmp_script" 2>/dev/null; then
     rm -f "$tmp_script"
     return 0
   fi
@@ -122,7 +155,7 @@ auto_update_if_needed() {
     echo "chimera_update=available current=$local_version latest=$remote_version action=install"
     bash "$tmp_script" -install
     rm -f "$tmp_script"
-    return 0
+    exec "$0" "${original_args[@]}"
   fi
   rm -f "$tmp_script"
 }
@@ -130,7 +163,7 @@ auto_update_if_needed() {
 main() {
   local cmd="${1:-}"
   if [[ "$cmd" != "-install" && "$cmd" != "-help" && "$cmd" != "--help" && "$cmd" != "help" && -n "$cmd" ]]; then
-    auto_update_if_needed || true
+    auto_update_if_needed "$@" || true
   fi
   case "$cmd" in
     -install)

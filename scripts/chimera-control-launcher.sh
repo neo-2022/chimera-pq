@@ -131,7 +131,7 @@ run_action() {
     "Stop CHIMERA"|stop) "$CONTROL" stop ;;
     "Restart CHIMERA"|restart) "$CONTROL" restart ;;
     "Status"|status) "$CONTROL" status | show_text "CHIMERA Status" ;;
-    "Doctor"|doctor) (cd "$ROOT_DIR" && cargo run -p chimera-cli -- doctor --config configs/client.example.conf --json --out docs/doctor_latest.json) | show_text "CHIMERA Doctor" ;;
+    "Doctor"|doctor) "$CONTROL" doctor | show_text "CHIMERA Doctor" ;;
     "Logs"|logs) "$CONTROL" logs | show_text "CHIMERA Logs" ;;
     "Mode: Full"|mode_full) "$CONTROL" route-mode full | show_text "CHIMERA Mode" ;;
     "Mode: Split"|mode_split) "$CONTROL" route-mode split | show_text "CHIMERA Mode" ;;

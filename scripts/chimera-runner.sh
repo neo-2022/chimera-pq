@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ALLOW_BUILD_FALLBACK="${CHIMERA_ALLOW_BUILD_FALLBACK:-1}"
+ALLOW_BUILD_FALLBACK="${CHIMERA_ALLOW_BUILD_FALLBACK:-0}"
 
 usage() {
   cat <<'EOF'

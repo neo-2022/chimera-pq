@@ -16,6 +16,39 @@ need_cmd() {
   }
 }
 
+download_url_to_file() {
+  local url="${1:?url_required}"
+  local dest="${2:?dest_required}"
+  if command -v python3 >/dev/null 2>&1; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      python3 - "$url" "$dest" <<'PY'
+import sys
+import urllib.request
+
+url, dest = sys.argv[1], sys.argv[2]
+with urllib.request.urlopen(url, timeout=30) as resp, open(dest, "wb") as out:
+    while True:
+        chunk = resp.read(1024 * 1024)
+        if not chunk:
+            break
+        out.write(chunk)
+PY
+    return 0
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      curl -fL "$url" -o "$dest"
+    return $?
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      wget -qO "$dest" "$url"
+    return $?
+  fi
+  echo "bootstrap_error=missing_downloader" >&2
+  return 1
+}
+
 detect_arch() {
   local arch
   arch="$(uname -m)"
@@ -44,7 +77,6 @@ resolve_default_url() {
 }
 
 install_runtime_singbox() {
-  need_cmd curl
   need_cmd tar
   local arch url tmp tgz extracted
   arch="$(detect_arch)"
@@ -53,7 +85,7 @@ install_runtime_singbox() {
   tgz="$tmp/sing-box.tar.gz"
 
   mkdir -p "$SINGBOX_RUNTIME_DIR"
-  curl -fL "$url" -o "$tgz"
+  download_url_to_file "$url" "$tgz"
 
   if [[ -n "$SINGBOX_SHA256" ]]; then
     need_cmd sha256sum
@@ -113,4 +145,3 @@ case "$cmd" in
     exit 2
     ;;
 esac
-

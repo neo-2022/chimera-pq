@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PATH="$HOME/.cargo/bin:$PATH"
-ROOT_DIR="$HOME/chimera-pq"
+resolve_self() {
+  local src="${BASH_SOURCE[0]}"
+  while [[ -L "$src" ]]; do
+    local dir
+    dir="$(cd "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd "$(dirname "$src")" && pwd
+}
+
+SCRIPT_DIR="$(resolve_self)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONTROL="$ROOT_DIR/scripts/chimera-control.sh"
 TRAY="$ROOT_DIR/scripts/chimera-control-tray.sh"
 LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
@@ -60,7 +71,8 @@ chimera_cli() {
     "$ROOT_DIR/bin/chimera-cli" "$@"
     return
   fi
-  (cd "$ROOT_DIR" && cargo run -q -p chimera-cli -- "$@")
+  echo "error: chimera-cli binary is missing" >&2
+  return 1
 }
 
 collect_node_rows() {
@@ -73,7 +85,7 @@ collect_node_rows() {
 }
 
 run_nodes_terminal() {
-  local cmd='export PATH="$HOME/.cargo/bin:$PATH"; cd "$HOME/chimera-pq" && cargo run -q -p chimera-cli -- --lang ru nodes; chimera() { cargo run -q -p chimera-cli -- --lang ru "$@"; }; export -f chimera; echo; echo "Введите: chimera connect <node_id>"; echo "Для выхода из терминала: exit"; echo; exec bash -i'
+  local cmd='cd "'"$ROOT_DIR"'" && if [ -x ./bin/chimera-cli ]; then ./bin/chimera-cli --lang ru nodes; else echo "error: chimera-cli binary is missing" >&2; fi; echo; echo "Для выхода из терминала: exit"; echo; exec bash -i'
   if command -v x-terminal-emulator >/dev/null 2>&1; then
     x-terminal-emulator -e bash -lc "$cmd" >/dev/null 2>&1 &
     return 0
@@ -125,7 +137,7 @@ case "$action" in
     "$CONTROL" status 2>&1 | show_text "CHIMERA Status"
     ;;
   "Doctor"|doctor)
-    (cd "$ROOT_DIR" && cargo run -p chimera-cli -- doctor --config configs/client.example.conf --json --out docs/doctor_latest.json) 2>&1 | show_text "CHIMERA Doctor"
+    "$CONTROL" doctor 2>&1 | show_text "CHIMERA Doctor"
     ;;
   "Logs"|logs)
     "$CONTROL" logs 2>&1 | show_text "CHIMERA Logs"
