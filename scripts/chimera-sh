@@ -20,6 +20,7 @@ AUTO_UPDATE_ENABLED="${CHIMERA_AUTO_UPDATE_ENABLED:-1}"
 UPDATE_BOOTSTRAP_URL="${CHIMERA_UPDATE_BOOTSTRAP_URL:-https://raw.githubusercontent.com/neo-2022/chimera/main/chimera.sh}"
 RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
 RUNTIME_BUNDLE_SHA_FILE="$ROOT_DIR/.chimera_release_bundle.sha256"
+INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
 
 usage() {
   cat <<'EOF'
@@ -62,6 +63,7 @@ ensure_runtime_files() {
       INSTALLER="$legacy_installer"
       RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
       RUNTIME_BUNDLE_SHA_FILE="$ROOT_DIR/.chimera_release_bundle.sha256"
+      INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
       missing=0
     fi
   fi
@@ -105,6 +107,23 @@ read_local_runtime_bundle_sha() {
     return 0
   fi
   echo ""
+}
+
+read_local_install_role() {
+  if [[ -f "$INSTALL_NODE_ROLE_FILE" ]]; then
+    tr -d '[:space:]' < "$INSTALL_NODE_ROLE_FILE"
+    return 0
+  fi
+  local env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
+  if [[ -f "$env_file" ]]; then
+    local env_mode=""
+    env_mode="$(awk -F= '/^CHIMERA_PEER_EGRESS_MODE=/{print $2; exit}' "$env_file" 2>/dev/null | tr -d '[:space:]')"
+    case "$env_mode" in
+      vps) echo "server"; return 0 ;;
+      laptop|client) echo "client"; return 0 ;;
+    esac
+  fi
+  echo "${CHIMERA_INSTALL_NODE_ROLE:-client}"
 }
 
 parse_release_metadata() {
@@ -192,7 +211,9 @@ auto_update_if_needed() {
 
   if [[ "$local_version" != "$remote_version" || "$local_sha" != "$remote_sha" ]]; then
     echo "chimera_update=available current_version=$local_version latest_version=$remote_version current_sha=${local_sha:-none} latest_sha=$remote_sha action=install"
-    bash "$tmp_script" -install
+    local install_role
+    install_role="$(read_local_install_role)"
+    CHIMERA_INSTALL_NODE_ROLE="$install_role" bash "$tmp_script" -install
     rm -f "$tmp_script"
     exec "$0" "${original_args[@]}"
   fi

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_NODE_ROLE="${CHIMERA_INSTALL_NODE_ROLE:-client}"
+INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
@@ -123,7 +124,7 @@ auto_fix_runtime_permissions() {
 configure_client_target() {
   if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
     CONFIGURED_CLIENT_ENDPOINT=""
-    echo "client_config_carrier_addr=none mode=gateway_only"
+    echo "peer_config_carrier_addr=none mode=peer_only"
     return 0
   fi
   local client_conf="$ROOT_DIR/configs/client.conf"
@@ -155,7 +156,7 @@ configure_client_target() {
   fi
   if [[ -z "$candidate" ]]; then
     CONFIGURED_CLIENT_ENDPOINT=""
-    echo "client_config_carrier_addr=none mode=gateway_only"
+    echo "peer_config_carrier_addr=none mode=peer_only"
     return 0
   fi
   if [[ "$candidate" != *:* ]]; then
@@ -180,7 +181,7 @@ configure_client_target() {
   fi
   printf '%s\n' "$candidate" > "$ROOT_DIR/configs/chimera_runtime_endpoint.txt"
   CONFIGURED_CLIENT_ENDPOINT="$candidate"
-  echo "client_config_carrier_addr=$candidate"
+  echo "peer_config_carrier_addr=$candidate"
 }
 
 configure_peer_egress_env() {
@@ -312,6 +313,8 @@ fi
 if [[ -n "${CHIMERA_RELEASE_BUNDLE_SHA256:-}" ]]; then
   printf '%s\n' "$CHIMERA_RELEASE_BUNDLE_SHA256" > "$ROOT_DIR/.chimera_release_bundle.sha256"
 fi
+
+printf '%s\n' "$INSTALL_NODE_ROLE" > "$INSTALL_NODE_ROLE_FILE"
 
 mkdir -p "$LOCAL_BIN_DIR"
 ln -sfn "$ROOT_DIR/scripts/chimera-sh" "$LOCAL_BIN_DIR/chimera-sh"
