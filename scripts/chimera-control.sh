@@ -2640,7 +2640,7 @@ case "$cmd" in
     if [[ "$SITE_AUTOWATCH_ENABLED" == "1" ]]; then
       site_auto_watch_start
     fi
-    if [[ "$SPLIT_TRANSPARENT_ENABLED" == "1" ]]; then
+    if [[ "$SPLIT_TRANSPARENT_ENABLED" == "1" && "$client_expected" == "1" ]]; then
       if ! ensure_split_transparent_running; then
         if [[ "$CHIMERA_STRICT_FAILOVER_GATE" == "1" ]]; then
           echo "error: split transparent/failover gate failed; refusing partial runtime start" >&2
@@ -2648,6 +2648,8 @@ case "$cmd" in
         fi
       fi
       start_split_transparent_watchdog || true
+    elif [[ "$SPLIT_TRANSPARENT_ENABLED" == "1" ]]; then
+      echo "split_transparent=skipped reason=missing_endpoint"
     fi
     restart_chromium_with_pac
     restart_browser_with_split_proxy
@@ -2703,7 +2705,7 @@ case "$cmd" in
     apply_route_mode
     auto_sync_desktop_proxy_port
     force_desktop_proxy_none
-    if [[ "$SPLIT_TRANSPARENT_ENABLED" == "1" ]]; then
+    if [[ "$SPLIT_TRANSPARENT_ENABLED" == "1" && "$client_expected" == "1" ]]; then
       if ! ensure_split_transparent_running; then
         if [[ "$CHIMERA_STRICT_FAILOVER_GATE" == "1" ]]; then
           echo "error: split transparent/failover gate failed; refusing partial runtime restart" >&2
@@ -2711,6 +2713,8 @@ case "$cmd" in
         fi
       fi
       start_split_transparent_watchdog || true
+    elif [[ "$SPLIT_TRANSPARENT_ENABLED" == "1" ]]; then
+      echo "split_transparent=skipped reason=missing_endpoint"
     fi
     restart_browser_with_split_proxy
     ;;
