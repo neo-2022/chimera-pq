@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INSTALL_NODE_ROLE="${CHIMERA_INSTALL_NODE_ROLE:-client}"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
@@ -120,19 +121,14 @@ auto_fix_runtime_permissions() {
 }
 
 configure_client_target() {
+  if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
+    CONFIGURED_CLIENT_ENDPOINT=""
+    echo "client_config_carrier_addr=none mode=gateway_only"
+    return 0
+  fi
   local client_conf="$ROOT_DIR/configs/client.conf"
   local candidate="${CHIMERA_VPS_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}"
   local -a mesh_nodes_args=()
-  local current_addr=""
-  if [[ -f "$client_conf" ]]; then
-    current_addr="$(awk -F'=' '
-      $1 ~ /^[[:space:]]*carrier\.addr[[:space:]]*$/ {
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2);
-        print $2;
-        exit
-      }
-    ' "$client_conf" 2>/dev/null || true)"
-  fi
   if [[ -z "$candidate" ]]; then
     if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
       # shellcheck disable=SC1090
@@ -158,13 +154,9 @@ configure_client_target() {
     fi
   fi
   if [[ -z "$candidate" ]]; then
-    if [[ -n "$current_addr" && "$current_addr" != 203.0.113.10:443 && "$current_addr" != 127.0.0.1:443 ]]; then
-      candidate="$current_addr"
-    else
-      CONFIGURED_CLIENT_ENDPOINT=""
-      echo "client_config_carrier_addr=none mode=gateway_only"
-      return 0
-    fi
+    CONFIGURED_CLIENT_ENDPOINT=""
+    echo "client_config_carrier_addr=none mode=gateway_only"
+    return 0
   fi
   if [[ "$candidate" != *:* ]]; then
     echo "error: invalid CHIMERA VPS endpoint: $candidate" >&2
@@ -259,8 +251,9 @@ configure_transparent_runtime_env() {
     printf 'CHIMERA_REDIRECT_TABLE=%s\n' "${CHIMERA_REDIRECT_TABLE:-chimera_redirect}"
     printf 'CHIMERA_REDIRECT_CHAIN=%s\n' "${CHIMERA_REDIRECT_CHAIN:-output}"
     printf 'CHIMERA_REDIRECT_EXEMPT_UID=%s\n' "${CHIMERA_REDIRECT_EXEMPT_UID:-$exempt_uid}"
-    printf 'CHIMERA_TRANSPARENT_RUNTIME_UID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-65534}"
-    printf 'CHIMERA_TRANSPARENT_RUNTIME_GID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-65534}"
+    printf 'CHIMERA_TRANSPARENT_RUNTIME_UID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-0}"
+    printf 'CHIMERA_TRANSPARENT_RUNTIME_GID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-0}"
+    printf 'CHIMERA_RUNNER_USE_SUDO=%s\n' "${CHIMERA_RUNNER_USE_SUDO:-1}"
   } >"$TRANSPARENT_RUNTIME_ENV_FILE"
   chmod 600 "$TRANSPARENT_RUNTIME_ENV_FILE"
   echo "transparent_runtime_listen=$listen"
@@ -276,11 +269,11 @@ mkdir -p "$SYSTEMD_USER_DIR" "$APPLICATIONS_DIR"
 installer_gate_prepare_upstream_env
 auto_fix_runtime_permissions
 run_install_permissions_preflight
-if [[ ! -f "$ROOT_DIR/configs/client.conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
-  cp "$ROOT_DIR/configs/client.example.conf" "$ROOT_DIR/configs/client.conf"
-fi
 configure_client_target
-if [[ -n "${CONFIGURED_CLIENT_ENDPOINT:-}" ]]; then
+if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
+  selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+  configure_peer_egress_env "vps" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+elif [[ -n "${CONFIGURED_CLIENT_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
   configure_peer_egress_env "laptop" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "127.0.0.1:8443"
 else
@@ -314,6 +307,10 @@ chmod +x \
 
 if [[ -n "${CHIMERA_RELEASE_VERSION:-}" ]]; then
   printf '%s\n' "$CHIMERA_RELEASE_VERSION" > "$ROOT_DIR/.chimera_release_version"
+fi
+
+if [[ -n "${CHIMERA_RELEASE_BUNDLE_SHA256:-}" ]]; then
+  printf '%s\n' "$CHIMERA_RELEASE_BUNDLE_SHA256" > "$ROOT_DIR/.chimera_release_bundle.sha256"
 fi
 
 mkdir -p "$LOCAL_BIN_DIR"
