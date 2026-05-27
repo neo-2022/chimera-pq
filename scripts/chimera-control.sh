@@ -340,6 +340,17 @@ client_config_path() {
   echo "$ROOT_DIR/configs/client.example.conf"
 }
 
+client_config_ready() {
+  local config_path addr
+  config_path="$(client_config_path)"
+  [[ -f "$config_path" ]] || return 1
+  addr="$(awk -F'= ' '$1=="carrier.addr" {print $2; exit}' "$config_path" 2>/dev/null || true)"
+  case "$addr" in
+    ""|203.0.113.10:443|127.0.0.1:443) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 run_chimera_cli() {
   if [[ -x "$CHIMERA_RUNNER" ]]; then
     "$CHIMERA_RUNNER" cli "$@"
@@ -395,10 +406,15 @@ systemd_chimera_units_present() {
 }
 
 systemd_units_active_ok() {
+  local client_expected="${1:-1}"
   local gateway_state client_state
   gateway_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
   client_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
-  [[ "$gateway_state" == "active" && "$client_state" == "active" ]]
+  if [[ "$client_expected" == "1" ]]; then
+    [[ "$gateway_state" == "active" && "$client_state" == "active" ]]
+  else
+    [[ "$gateway_state" == "active" ]]
+  fi
 }
 
 desktop_proxy_supported() {
@@ -2562,16 +2578,36 @@ case "$cmd" in
     ensure_safe_local_host_guard
     ensure_base_path
     ensure_vpn_coexist_guard
+    client_expected="1"
+    if ! client_config_ready; then
+      client_expected="0"
+    fi
     if systemd_user_ready && systemd_chimera_units_present; then
       systemctl --user daemon-reload
-      systemctl --user enable chimera-gateway.service chimera-client.service
-      if ! systemctl --user restart chimera-gateway.service chimera-client.service; then
-        sleep 1
-        systemctl --user start chimera-gateway.service chimera-client.service || true
+      systemctl --user enable chimera-gateway.service
+      if [[ "$client_expected" == "1" ]]; then
+        systemctl --user enable chimera-client.service
+      else
+        systemctl --user disable --now chimera-client.service >/dev/null 2>&1 || true
       fi
-      if ! systemd_units_active_ok; then
+      if [[ "$client_expected" == "1" ]]; then
+        if ! systemctl --user restart chimera-gateway.service chimera-client.service; then
+          sleep 1
+          systemctl --user start chimera-gateway.service chimera-client.service || true
+        fi
+      else
+        if ! systemctl --user restart chimera-gateway.service; then
+          sleep 1
+          systemctl --user start chimera-gateway.service || true
+        fi
+      fi
+      if ! systemd_units_active_ok "$client_expected"; then
         echo "error: chimera user services failed to become active" >&2
-        systemctl --user --no-pager --full status chimera-gateway.service chimera-client.service || true
+        if [[ "$client_expected" == "1" ]]; then
+          systemctl --user --no-pager --full status chimera-gateway.service chimera-client.service || true
+        else
+          systemctl --user --no-pager --full status chimera-gateway.service || true
+        fi
         exit 1
       fi
     else
@@ -2581,7 +2617,11 @@ case "$cmd" in
           echo "chimera-control: systemd user detected, but CHIMERA units are missing; using direct-binary mode"
         fi
         run_chimera_gateway doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json
-        run_chimera_cli up --config "$(client_config_path)" --state-file docs/runtime_state_latest.json
+        if [[ "$client_expected" == "1" ]]; then
+          run_chimera_cli up --config "$(client_config_path)" --state-file docs/runtime_state_latest.json
+        else
+          echo "client_config_carrier_addr=skipped reason=missing_endpoint"
+        fi
       )
     fi
     if [[ -x "$AUTOFIX_SCRIPT" ]]; then
@@ -2632,9 +2672,18 @@ case "$cmd" in
     ensure_safe_local_host_guard
     ensure_base_path
     ensure_vpn_coexist_guard
+    client_expected="1"
+    if ! client_config_ready; then
+      client_expected="0"
+    fi
     if systemd_user_ready && systemd_chimera_units_present; then
       systemctl --user daemon-reload
-      systemctl --user restart chimera-gateway.service chimera-client.service
+      if [[ "$client_expected" == "1" ]]; then
+        systemctl --user restart chimera-gateway.service chimera-client.service
+      else
+        systemctl --user disable --now chimera-client.service >/dev/null 2>&1 || true
+        systemctl --user restart chimera-gateway.service
+      fi
     else
       (
         cd "$ROOT_DIR"
@@ -2643,7 +2692,11 @@ case "$cmd" in
         fi
         run_chimera_cli down --config "$(client_config_path)" --state-file docs/runtime_state_latest.json || true
         run_chimera_gateway doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json
-        run_chimera_cli up --config "$(client_config_path)" --state-file docs/runtime_state_latest.json
+        if [[ "$client_expected" == "1" ]]; then
+          run_chimera_cli up --config "$(client_config_path)" --state-file docs/runtime_state_latest.json
+        else
+          echo "client_config_carrier_addr=skipped reason=missing_endpoint"
+        fi
       )
     fi
     start_socks_tunnel
@@ -2664,7 +2717,11 @@ case "$cmd" in
   status)
     ensure_base_path
     if systemd_user_ready; then
-      systemctl --user --no-pager --full status chimera-gateway.service chimera-client.service || true
+      if client_config_ready; then
+        systemctl --user --no-pager --full status chimera-gateway.service chimera-client.service || true
+      else
+        systemctl --user --no-pager --full status chimera-gateway.service || true
+      fi
     else
       echo "systemd_user=unavailable (direct-binary mode)"
     fi
@@ -2673,8 +2730,10 @@ case "$cmd" in
       echo "Runtime state file: $STATE_FILE"
       ls -l "$STATE_FILE"
     else
-      echo
-      echo "Runtime state file is missing: $STATE_FILE"
+      if client_config_ready; then
+        echo
+        echo "Runtime state file is missing: $STATE_FILE"
+      fi
     fi
     ;;
   doctor)
