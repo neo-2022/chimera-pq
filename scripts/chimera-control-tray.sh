@@ -19,6 +19,7 @@ yad --notification \
       \"Start CHIMERA\" \"Stop CHIMERA\" \"Restart CHIMERA\" \"Status\" \"Doctor\" \"Logs\" \
       \"Mode: Full\" \"Mode: Split\" \"Mode: Off\" \
       \"Split List: Allow\" \"Split List: Deny\" \
+      \"Mesh: Select Node...\" \"Mesh: Nodes\" \"Mesh: Best Node\" \
       \"Sites: List\" \"Quit\" \
       --height=260 --width=300 --separator=\"\" --single-click --no-headers 2>/dev/null || true);
     case \"\$choice\" in
@@ -33,6 +34,9 @@ yad --notification \
       \"Mode: Off\") \"\$CONTROL\" route-mode off | yad --text-info --title=\"CHIMERA Mode\" --width=700 --height=300 ;;
       \"Split List: Allow\") \"\$CONTROL\" split-list-mode allow | yad --text-info --title=\"CHIMERA Split List Mode\" --width=700 --height=300 ;;
       \"Split List: Deny\") \"\$CONTROL\" split-list-mode deny | yad --text-info --title=\"CHIMERA Split List Mode\" --width=700 --height=300 ;;
+      \"Mesh: Select Node...\") \"\$CONTROL\" mesh nodes select | yad --text-info --title=\"CHIMERA Mesh Selection\" --width=900 --height=600 ;;
+      \"Mesh: Nodes\") \"\$CONTROL\" mesh nodes list | yad --text-info --title=\"CHIMERA Mesh Nodes\" --width=900 --height=600 ;;
+      \"Mesh: Best Node\") \"\$CONTROL\" mesh nodes best | yad --text-info --title=\"CHIMERA Best Node\" --width=700 --height=300 ;;
       \"Sites: List\") \"\$CONTROL\" site-list | yad --text-info --title=\"CHIMERA Sites\" --width=700 --height=400 ;;
       *) exit 0 ;;
     esac

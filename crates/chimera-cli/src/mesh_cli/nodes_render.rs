@@ -51,10 +51,10 @@ pub(crate) fn render_nodes_list(
     out.push_str(&format!("Всего узлов: {total}\n"));
     out.push('\n');
     out.push_str("Следующая команда:\n");
-    out.push_str("  chimera connect <node_id>\n");
+    out.push_str("  chimera mesh nodes select\n");
     if !first_node_id.is_empty() {
         out.push_str("Пример:\n");
-        out.push_str(&format!("  chimera connect {}\n", first_node_id));
+        out.push_str(&format!("  chimera mesh nodes connect {}\n", first_node_id));
     }
     out
 }

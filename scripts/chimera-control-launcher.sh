@@ -31,6 +31,7 @@ choose_action_gui() {
       "Start CHIMERA" "Stop CHIMERA" "Restart CHIMERA" "Status" "Doctor" "Logs" \
       "Mode: Full" "Mode: Split" "Mode: Off" \
       "Split List: Allow" "Split List: Deny" \
+      "Mesh: Select Node..." "Mesh: Nodes" "Mesh: Best Node" \
       "Sites: List" "Sites: Add..." "Sites: Remove..." \
       "Apps: Running" "Services: Running" \
       "Quit" \
@@ -51,6 +52,9 @@ choose_action_gui() {
       mode_off "Mode: Off" \
       split_allow "Split List: Allow" \
       split_deny "Split List: Deny" \
+      mesh_select "Mesh: Select Node..." \
+      mesh_nodes "Mesh: Nodes" \
+      mesh_best "Mesh: Best Node" \
       site_list "Sites: List" \
       site_add "Sites: Add..." \
       site_remove "Sites: Remove..." \
@@ -65,6 +69,7 @@ choose_action_gui() {
       "Start CHIMERA" "Stop CHIMERA" "Restart CHIMERA" "Status" "Doctor" "Logs" \
       "Mode: Full" "Mode: Split" "Mode: Off" \
       "Split List: Allow" "Split List: Deny" \
+      "Mesh: Select Node..." "Mesh: Nodes" "Mesh: Best Node" \
       "Sites: List" "Sites: Add..." "Sites: Remove..." \
       "Apps: Running" "Services: Running" \
       "Quit" \
@@ -138,6 +143,9 @@ run_action() {
     "Mode: Off"|mode_off) "$CONTROL" route-mode off | show_text "CHIMERA Mode" ;;
     "Split List: Allow"|split_allow) "$CONTROL" split-list-mode allow | show_text "CHIMERA Split List Mode" ;;
     "Split List: Deny"|split_deny) "$CONTROL" split-list-mode deny | show_text "CHIMERA Split List Mode" ;;
+    "Mesh: Select Node..."|mesh_select) "$CONTROL" mesh nodes select | show_text "CHIMERA Mesh Selection" ;;
+    "Mesh: Nodes"|mesh_nodes) "$CONTROL" mesh nodes list | show_text "CHIMERA Mesh Nodes" ;;
+    "Mesh: Best Node"|mesh_best) "$CONTROL" mesh nodes best | show_text "CHIMERA Best Node" ;;
     "Sites: List"|site_list) "$CONTROL" site-list | show_text "CHIMERA Sites" ;;
     "Apps: Running"|apps_running) "$CONTROL" apps-running | show_text "Running Apps" ;;
     "Services: Running"|services_running) "$CONTROL" services-running | show_text "Running Services" ;;

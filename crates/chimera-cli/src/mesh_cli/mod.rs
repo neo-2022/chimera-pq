@@ -82,6 +82,8 @@ mod tests_nodes_reenroll;
 #[cfg(test)]
 mod tests_nodes_runtime_state;
 #[cfg(test)]
+mod tests_nodes_selection;
+#[cfg(test)]
 mod tests_options_helpers;
 #[cfg(test)]
 mod tests_options_parse;
@@ -122,6 +124,7 @@ use route_explain_output::build_mesh_route_explain_output;
 use route_explain_types::MeshRouteExplainRender;
 
 mod nodes_cmd;
+mod nodes_selection;
 
 pub(crate) fn mesh_command(usage: &str, subcommand: Option<&str>, args: &[String]) -> i32 {
     let Some(subcommand) = subcommand else {

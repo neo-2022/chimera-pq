@@ -306,6 +306,8 @@ Commands:
   apps-running  Show running applications (process names)
   services-running
                 Show running user services
+  mesh <args...>
+                Pass through to chimera-cli mesh <args...>
   app-route-add <app_id> <command>
                 Add/update app route entry in config
   app-route-add-running <process_name...>
@@ -2964,6 +2966,10 @@ case "$cmd" in
   service-proxy-disable)
     shift || true
     service_proxy_disable "$@"
+    ;;
+  mesh)
+    shift || true
+    run_chimera_cli mesh "$@"
     ;;
   verify-service)
     shift || true

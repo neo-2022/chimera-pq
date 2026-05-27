@@ -20,6 +20,7 @@ use super::nodes_inventory::{
     MeshNodesInventory, default_runtime_state_path, extract_flag_value, load_mesh_nodes_inventory,
 };
 use super::nodes_render::{render_best, render_nodes_list};
+use super::nodes_selection::{choose_node_id, resolve_node_id_selector};
 
 pub(crate) fn mesh_nodes_command(args: &[String]) -> i32 {
     let Some(subcommand) = args.first().map(String::as_str) else {
@@ -55,6 +56,7 @@ pub(crate) fn mesh_nodes_command(args: &[String]) -> i32 {
         }
         "explain" => explain_node(rest, &inventory.nodes, &policy),
         "connect" => connect_node(rest, &inventory, &policy),
+        "select" => select_node(rest, &inventory, &policy),
         "pin" => pin_node(rest, &inventory, &policy),
         "unpin" => unpin_node(rest, &inventory, &policy),
         "autoconnect" => autoconnect(rest, &inventory, &policy),
@@ -73,7 +75,7 @@ pub(crate) fn mesh_nodes_command(args: &[String]) -> i32 {
 }
 
 fn usage() -> &'static str {
-    "usage: chimera mesh nodes <list|best|explain|connect|pin|unpin|autoconnect|auto-unblock|guard-listen|state|re-enroll|re-enroll-prepare|re-enroll-submit|probe> [--config path] [--self-node-id <id>] [--runtime-state <file>] [--namespace <name>] [--json] [--proof-token <token>] [--proof-token-classic <token>] [--proof-token-pq <token>] [--proof-key-id <id>] [--proof-pq-key-id <id>] [--bind <host:port>] [--once] [--discovery-url http(s)://...] [--probe-timeout-ms n] [--node <id@endpoint@country_code@country_name@status@latency_ms@jitter_ms@loss_pct@success5m@success1h@failures@observations>] [--country DE,NL] [--status healthy,checking] [--available-only] [--search text] [--id node_id] [--new-node-id <id>] [--request <file>] [--out <file>] [--key-out <file>] [--register <file>] [--key <file>] [--state-out <file>] [--activation-out <file>]"
+    "usage: chimera mesh nodes <list|best|explain|connect|select|pin|unpin|autoconnect|auto-unblock|guard-listen|state|re-enroll|re-enroll-prepare|re-enroll-submit|probe> [--config path] [--self-node-id <id>] [--runtime-state <file>] [--namespace <name>] [--json] [--proof-token <token>] [--proof-token-classic <token>] [--proof-token-pq <token>] [--proof-key-id <id>] [--proof-pq-key-id <id>] [--bind <host:port>] [--once] [--discovery-url http(s)://...] [--probe-timeout-ms n] [--node <id@endpoint@country_code@country_name@status@latency_ms@jitter_ms@loss_pct@success5m@success1h@failures@observations>] [--country DE,NL] [--status healthy,checking] [--available-only] [--search text] [--id node_id] [--new-node-id <id>] [--request <file>] [--out <file>] [--key-out <file>] [--register <file>] [--key <file>] [--state-out <file>] [--activation-out <file>]"
 }
 
 fn explain_node(
@@ -105,6 +107,9 @@ fn connect_node(args: &[String], inventory: &MeshNodesInventory, policy: &MeshNo
         Ok(id) => id,
         Err(error) => {
             eprintln!("mesh nodes connect error: {error}");
+            eprintln!(
+                "mesh nodes connect hint: use 'chimera mesh nodes select' for interactive choice"
+            );
             return 2;
         }
     };
@@ -131,9 +136,49 @@ fn connect_node(args: &[String], inventory: &MeshNodesInventory, policy: &MeshNo
         0
     } else {
         eprintln!("Подключение не выполнено: {}", decision.reason);
-        eprintln!("Проверьте список узлов: chimera nodes");
+        eprintln!("Проверьте список узлов: chimera mesh nodes list");
         2
     }
+}
+
+fn select_node(args: &[String], inventory: &MeshNodesInventory, policy: &MeshNodesPolicy) -> i32 {
+    if let Some(reason) = inventory.restricted_reason.as_deref() {
+        eprintln!("mesh nodes select error: restricted mode ({reason})");
+        return 2;
+    }
+    let id = match choose_node_id(args, inventory) {
+        Ok(id) => id,
+        Err(error) => {
+            eprintln!("mesh nodes select error: {error}");
+            return 2;
+        }
+    };
+    let mut runtime = match build_runtime_from_inventory(inventory, policy, "select") {
+        Ok(runtime) => runtime,
+        Err(code) => return code,
+    };
+    let decision = runtime.manual_connect(&inventory.nodes, &MeshNodeId::new(&id), 0);
+    if !decision.allowed {
+        eprintln!("mesh nodes select error: {}", decision.reason);
+        return 2;
+    }
+    let pin_decision = runtime.pin(MeshNodeId::new(&id));
+    if !pin_decision.allowed {
+        eprintln!("mesh nodes select error: {}", pin_decision.reason);
+        return 2;
+    }
+    runtime.set_autoconnect(true);
+    if let Err(error) = persist_runtime_state(args, &runtime) {
+        eprintln!("mesh nodes select error: persist runtime state failed: {error}");
+        return 1;
+    }
+    println!("Выбран узел: {id}");
+    println!("Подключение: выполнено");
+    println!("Закрепление: выполнено");
+    println!("Автоподключение: включено");
+    println!("Режим: mesh peer");
+    println!("next: chimera mesh nodes state");
+    0
 }
 
 fn pin_node(args: &[String], inventory: &MeshNodesInventory, policy: &MeshNodesPolicy) -> i32 {
@@ -1258,37 +1303,6 @@ fn state_cmd(args: &[String], inventory: &MeshNodesInventory) -> i32 {
     }
 }
 
-fn resolve_node_id_selector(
-    args: &[String],
-    inventory: &MeshNodesInventory,
-) -> Result<String, String> {
-    if let Some(id) = extract_flag_value(args, "--id") {
-        return Ok(id.to_string());
-    }
-    let selector = args
-        .iter()
-        .find(|value| !value.starts_with('-'))
-        .ok_or_else(|| "--id <node_id> or positional <index|node_id> is required".to_string())?;
-    if let Ok(index) = selector.parse::<usize>() {
-        if index == 0 {
-            return Err("index must start from 1".to_string());
-        }
-        let filter = parse_filter(args)?;
-        let ordered = group_mesh_nodes_by_country(&inventory.nodes, &filter)
-            .into_iter()
-            .flat_map(|group| group.nodes.into_iter())
-            .collect::<Vec<_>>();
-        let Some(node) = ordered.get(index - 1) else {
-            return Err(format!(
-                "index {index} is out of range (available: 1..={})",
-                ordered.len()
-            ));
-        };
-        return Ok(node.node_id.0.clone());
-    }
-    Ok(selector.to_string())
-}
-
 fn print_list_next_step_hint() {
     // List output already contains a clean "Следующая команда" block with examples.
 }
@@ -1302,7 +1316,7 @@ fn print_pin_next_step_hint() {
 }
 
 fn print_state_next_step_hint() {
-    println!("next: chimera nodes                      # list available nodes");
+    println!("next: chimera mesh nodes select          # choose and connect a node");
 }
 
 pub(crate) fn render_nodes_json_error(
