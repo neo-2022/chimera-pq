@@ -55,6 +55,9 @@ CHIMERA_RUNNER="${CHIMERA_RUNNER:-$ROOT_DIR/scripts/chimera-runner.sh}"
 RUNTIME_BOOTSTRAP_SCRIPT="${RUNTIME_BOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh}"
 SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box}"
 CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
+if [[ -z "${CHIMERA_MESH_NODES_CONFIG:-}" && -f "$ROOT_DIR/configs/mesh_nodes.conf" ]]; then
+  export CHIMERA_MESH_NODES_CONFIG="$ROOT_DIR/configs/mesh_nodes.conf"
+fi
 SPLIT_TRANSPARENT_ENABLED="${SPLIT_TRANSPARENT_ENABLED:-1}"
 SPLIT_TRANSPARENT_TUN_NAME="${SPLIT_TRANSPARENT_TUN_NAME:-chimera-tun}"
 SPLIT_TRANSPARENT_TUN_ADDR="${SPLIT_TRANSPARENT_TUN_ADDR:-172.19.0.1/30}"
