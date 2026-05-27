@@ -54,6 +54,7 @@ CHIMERA_GATEWAY_BIN="${CHIMERA_GATEWAY_BIN:-$ROOT_DIR/bin/chimera-gateway}"
 CHIMERA_RUNNER="${CHIMERA_RUNNER:-$ROOT_DIR/scripts/chimera-runner.sh}"
 RUNTIME_BOOTSTRAP_SCRIPT="${RUNTIME_BOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh}"
 SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box}"
+CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
 SPLIT_TRANSPARENT_ENABLED="${SPLIT_TRANSPARENT_ENABLED:-1}"
 SPLIT_TRANSPARENT_TUN_NAME="${SPLIT_TRANSPARENT_TUN_NAME:-chimera-tun}"
 SPLIT_TRANSPARENT_TUN_ADDR="${SPLIT_TRANSPARENT_TUN_ADDR:-172.19.0.1/30}"
@@ -329,6 +330,14 @@ require_cmd() {
 
 ensure_base_path() {
   export PATH="$HOME/.local/bin:$PATH"
+}
+
+client_config_path() {
+  if [[ -f "$CLIENT_CONFIG_FILE" ]]; then
+    echo "$CLIENT_CONFIG_FILE"
+    return 0
+  fi
+  echo "$ROOT_DIR/configs/client.example.conf"
 }
 
 run_chimera_cli() {
@@ -2572,7 +2581,7 @@ case "$cmd" in
           echo "chimera-control: systemd user detected, but CHIMERA units are missing; using direct-binary mode"
         fi
         run_chimera_gateway doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json
-        run_chimera_cli up --state-file docs/runtime_state_latest.json
+        run_chimera_cli up --config "$(client_config_path)" --state-file docs/runtime_state_latest.json
       )
     fi
     if [[ -x "$AUTOFIX_SCRIPT" ]]; then
@@ -2611,7 +2620,7 @@ case "$cmd" in
     else
       (
         cd "$ROOT_DIR"
-        run_chimera_cli down --state-file docs/runtime_state_latest.json || true
+        run_chimera_cli down --config "$(client_config_path)" --state-file docs/runtime_state_latest.json || true
       )
     fi
     site_auto_watch_stop
@@ -2632,9 +2641,9 @@ case "$cmd" in
         if systemd_user_ready && ! systemd_chimera_units_present; then
           echo "chimera-control: systemd user detected, but CHIMERA units are missing; using direct-binary mode"
         fi
-        run_chimera_cli down --state-file docs/runtime_state_latest.json || true
+        run_chimera_cli down --config "$(client_config_path)" --state-file docs/runtime_state_latest.json || true
         run_chimera_gateway doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json
-        run_chimera_cli up --state-file docs/runtime_state_latest.json
+        run_chimera_cli up --config "$(client_config_path)" --state-file docs/runtime_state_latest.json
       )
     fi
     start_socks_tunnel

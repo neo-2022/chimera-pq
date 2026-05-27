@@ -146,6 +146,47 @@ auto_fix_runtime_permissions() {
   install_pkg_if_missing nft nftables
 }
 
+configure_client_target() {
+  local client_conf="$ROOT_DIR/configs/client.conf"
+  local candidate="${CHIMERA_VPS_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}"
+  local current_addr=""
+  if [[ -f "$client_conf" ]]; then
+    current_addr="$(awk -F'= ' '$1=="carrier.addr" {print $2; exit}' "$client_conf" 2>/dev/null || true)"
+  fi
+  if [[ -z "$candidate" && -t 0 ]]; then
+    printf 'CHIMERA VPS endpoint (host:port): ' >&2
+    IFS= read -r candidate || true
+  fi
+  if [[ -z "$candidate" ]]; then
+    if [[ -z "$current_addr" || "$current_addr" == 203.0.113.10:443 || "$current_addr" == 127.0.0.1:443 ]]; then
+      echo "error: CHIMERA_VPS_ENDPOINT is required for the client config. Re-run install with CHIMERA_VPS_ENDPOINT=host:port or provide it at the prompt." >&2
+      exit 2
+    fi
+    return 0
+  fi
+  if [[ "$candidate" != *:* ]]; then
+    echo "error: invalid CHIMERA VPS endpoint: $candidate" >&2
+    exit 2
+  fi
+  local host_part="${candidate%:*}"
+  local port_part="${candidate##*:}"
+  if [[ -z "$host_part" || ! "$port_part" =~ ^[0-9]+$ || "$port_part" -lt 1 || "$port_part" -gt 65535 ]]; then
+    echo "error: invalid CHIMERA VPS endpoint: $candidate" >&2
+    exit 2
+  fi
+  if [[ ! -f "$client_conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
+    cp "$ROOT_DIR/configs/client.example.conf" "$client_conf"
+  fi
+  if [[ -f "$client_conf" ]]; then
+    if grep -q '^carrier.addr =' "$client_conf"; then
+      sed -i "s#^carrier.addr = .*#carrier.addr = ${candidate}#" "$client_conf"
+    else
+      printf '\ncarrier.addr = %s\n' "$candidate" >> "$client_conf"
+    fi
+  fi
+  echo "client_config_carrier_addr=$candidate"
+}
+
 SYSTEMD_USER_READY=0
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
   SYSTEMD_USER_READY=1
@@ -155,6 +196,10 @@ mkdir -p "$SYSTEMD_USER_DIR" "$APPLICATIONS_DIR"
 installer_gate_unify_socks_unit
 auto_fix_runtime_permissions
 run_install_permissions_preflight
+if [[ ! -f "$ROOT_DIR/configs/client.conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
+  cp "$ROOT_DIR/configs/client.example.conf" "$ROOT_DIR/configs/client.conf"
+fi
+configure_client_target
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \
     "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >"$SYSTEMD_USER_DIR/chimera-gateway.service"

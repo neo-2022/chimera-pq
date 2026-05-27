@@ -7,8 +7,8 @@ Requires=chimera-gateway.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=__CHIMERA_ROOT__
-ExecStart=/usr/bin/env bash -lc './scripts/chimera-runner.sh cli up --state-file docs/runtime_state_latest.json'
-ExecStop=/usr/bin/env bash -lc './scripts/chimera-runner.sh cli down --state-file docs/runtime_state_latest.json'
+ExecStart=/usr/bin/env bash -lc './scripts/chimera-runner.sh cli up --config configs/client.conf --state-file docs/runtime_state_latest.json'
+ExecStop=/usr/bin/env bash -lc './scripts/chimera-runner.sh cli down --config configs/client.conf --state-file docs/runtime_state_latest.json'
 StandardOutput=append:__CHIMERA_ROOT__/docs/chimera_client.service.log
 StandardError=append:__CHIMERA_ROOT__/docs/chimera_client.service.log
 
