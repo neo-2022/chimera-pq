@@ -27,9 +27,7 @@ fn main() {
     let (lang, command_index) = match parse_language_flag(&args) {
         Some(Some(value)) => value,
         Some(None) => {
-            eprintln!(
-                "Ошибка языка. Используйте: --lang en или --lang ru."
-            );
+            eprintln!("Ошибка языка. Используйте: --lang en или --lang ru.");
             std::process::exit(2);
         }
         None => (Language::Ru, 1),
@@ -254,7 +252,9 @@ fn run_gateway_runtime(lang: Language, config: &GatewayConfig) -> Result<(), Str
                 println!("Runtime: in-memory carrier selected, network listener is not required.")
             }
             Language::Ru => {
-                println!("Режим выполнения: выбран in-memory канал, сетевой слушатель не требуется.")
+                println!(
+                    "Режим выполнения: выбран in-memory канал, сетевой слушатель не требуется."
+                )
             }
         }
         return Ok(());

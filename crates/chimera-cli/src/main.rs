@@ -245,9 +245,7 @@ fn main() {
     let (lang, lang_source, command_index) = match parse_language_flag(&args) {
         Some(parsed) => parsed,
         None => {
-            eprintln!(
-                "Ошибка языка. Используйте: --lang en или --lang ru."
-            );
+            eprintln!("Ошибка языка. Используйте: --lang en или --lang ru.");
             std::process::exit(2);
         }
     };
@@ -443,9 +441,11 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
         if let Some(domain) = suggested_domain.as_deref() {
             let flow_key = flow_key_for(domain, Protocol::Tcp, 443);
             let mark_blocked = !direct_ok && proxy_ok;
-            if let Err(error) =
-                update_failover_override_key(RUNTIME_FAILOVER_OVERRIDES_PATH, &flow_key, mark_blocked)
-            {
+            if let Err(error) = update_failover_override_key(
+                RUNTIME_FAILOVER_OVERRIDES_PATH,
+                &flow_key,
+                mark_blocked,
+            ) {
                 target_error = format!("failover_override_update_error:{error}");
             }
         }
@@ -1140,7 +1140,10 @@ fn route_command(
         if load_failover_override_keys(RUNTIME_FAILOVER_OVERRIDES_PATH).contains(&flow_key) {
             engine.report_direct_blocked(&flow_key);
         }
-        let decision = engine.evaluate(&flow_key, outbound_to_datapath_route(trace.decision.outbound));
+        let decision = engine.evaluate(
+            &flow_key,
+            outbound_to_datapath_route(trace.decision.outbound),
+        );
         runtime_outbound = datapath_route_to_outbound(decision.route);
         runtime_reason = if config_flags.2 {
             format!("{}; invisible_mode_required=true", decision.reason)
@@ -1205,7 +1208,9 @@ fn nodes_short_command(lang: Language, args: &[String]) -> i32 {
 
 fn connect_short_command(lang: Language, args: &[String]) -> i32 {
     if args.is_empty() {
-        eprintln!("использование: chimera connect <index|node_id> [--country DE,NL] [--status healthy]");
+        eprintln!(
+            "использование: chimera connect <index|node_id> [--country DE,NL] [--status healthy]"
+        );
         return 2;
     }
     let mut nodes_args = Vec::with_capacity(args.len() + 1);
@@ -1216,7 +1221,9 @@ fn connect_short_command(lang: Language, args: &[String]) -> i32 {
 
 fn pin_short_command(lang: Language, args: &[String]) -> i32 {
     if args.is_empty() {
-        eprintln!("использование: chimera pin <index|node_id> [--country DE,NL] [--status healthy]");
+        eprintln!(
+            "использование: chimera pin <index|node_id> [--country DE,NL] [--status healthy]"
+        );
         return 2;
     }
     let mut nodes_args = Vec::with_capacity(args.len() + 1);

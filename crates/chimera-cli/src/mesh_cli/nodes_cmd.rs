@@ -1428,15 +1428,15 @@ fn persist_runtime_state(args: &[String], runtime: &MeshNodeRuntime) -> Result<(
 fn resolve_runtime_state_out_path(args: &[String]) -> Option<String> {
     Some(
         extract_flag_value(args, "--runtime-state")
-        .map(str::to_string)
-        .or_else(|| {
-            let config_path = extract_flag_value(args, "--config")?;
-            let text = std::fs::read_to_string(config_path).ok()?;
-            let raw = chimera_config::RawConfig::parse(&text).ok()?;
-            raw.get("mesh.nodes.runtime_state_path").map(str::to_string)
-        })
-        .or_else(|| std::env::var("CHIMERA_MESH_NODES_RUNTIME_STATE_PATH").ok())
-        .unwrap_or_else(default_runtime_state_path),
+            .map(str::to_string)
+            .or_else(|| {
+                let config_path = extract_flag_value(args, "--config")?;
+                let text = std::fs::read_to_string(config_path).ok()?;
+                let raw = chimera_config::RawConfig::parse(&text).ok()?;
+                raw.get("mesh.nodes.runtime_state_path").map(str::to_string)
+            })
+            .or_else(|| std::env::var("CHIMERA_MESH_NODES_RUNTIME_STATE_PATH").ok())
+            .unwrap_or_else(default_runtime_state_path),
     )
 }
 

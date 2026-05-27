@@ -23,7 +23,8 @@ pub(crate) fn render_nodes_list(
             "\nСтрана: {}\nУзлов: {}\n",
             group.country_name,
             group.nodes.len()
-        ));        out.push_str("----------------------------------------\n");
+        ));
+        out.push_str("----------------------------------------\n");
         for node in group.nodes {
             if first_node_id.is_empty() {
                 first_node_id = node.node_id.0.clone();
