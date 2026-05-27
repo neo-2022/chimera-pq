@@ -55,7 +55,7 @@ laptop_json="$(
   CHIMERA_UPSTREAM_PASS="$3"
   CHIMERA_UPSTREAM_PORT="$4"
   CHIMERA_UPSTREAM_TRANSPORTS_CSV="$5"
-  cd /home/art/chimera-pq
+  cd "$HOME/.local/share/chimera-pq"
   mkdir -p ~/.config/chimera
   cat > ~/.config/chimera/upstream_proxy.env <<EOF
 CHIMERA_UPSTREAM_USER=${CHIMERA_UPSTREAM_USER}
@@ -87,7 +87,7 @@ vps_json="$(
   CHIMERA_UPSTREAM_TRANSPORTS_CSV="$5"
   apt-get update -y >/tmp/ch_bi_apt_upd.log 2>&1 || true
   apt-get install -y sshpass >/tmp/ch_bi_apt_inst.log 2>&1 || true
-  cd /root/.local/share/chimera-pq
+  cd "$HOME/.local/share/chimera-pq"
   mkdir -p ~/.config/chimera
   cat > ~/.config/chimera/upstream_proxy.env <<EOF
 CHIMERA_UPSTREAM_USER=${CHIMERA_UPSTREAM_USER}

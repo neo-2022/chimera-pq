@@ -208,6 +208,7 @@ if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   chmod 0644 "$SYSTEMD_USER_DIR/chimera-gateway.service" "$SYSTEMD_USER_DIR/chimera-client.service"
 fi
 install -m 0644 "$ROOT_DIR/deploy/desktop/chimera-control-gui.desktop" "$APPLICATIONS_DIR/chimera-control-gui.desktop"
+sed -i "s|__CHIMERA_ROOT__|$ROOT_DIR|g" "$APPLICATIONS_DIR/chimera-control-gui.desktop"
 rm -f "$APPLICATIONS_DIR/chimera-control.desktop"
 
 chmod +x \

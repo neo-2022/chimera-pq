@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-source_root="${CHIMERA_ADVISORY_SOURCE_ROOT:-/home/art/.cargo/advisory-dbs}"
+source_root="${CHIMERA_ADVISORY_SOURCE_ROOT:-$HOME/.cargo/advisory-dbs}"
 target_root="${CHIMERA_ADVISORY_TARGET_ROOT:-/tmp/chimera-advisory-dbs}"
 
 if cargo deny check; then

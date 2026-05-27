@@ -517,13 +517,11 @@ is_protected_port() {
 
 ensure_safe_local_host_guard() {
   [[ "$CHIMERA_SAFE_HOST_LOCK" == "1" ]] || return 0
-  local h
-  h="$(hostname 2>/dev/null || true)"
-  if [[ "$h" == "artPC" ]] && [[ "$CHIMERA_ALLOW_LOCAL_NETWORK_MUTATION" != "1" ]]; then
+  if [[ "$CHIMERA_ALLOW_LOCAL_NETWORK_MUTATION" != "1" ]]; then
     # Adaptive safe-profile: do not block command, just prevent risky global mutations.
     SPLIT_TRANSPARENT_ENABLED="0"
     CHIMERA_SYSTEM_INTEGRATION="0"
-    echo "chimera_local_safety_profile=active host=$h action=disable_system_mutation"
+    echo "chimera_local_safety_profile=active action=disable_system_mutation"
   fi
 }
 
