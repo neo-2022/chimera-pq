@@ -1,9 +1,8 @@
-/target/
+target/
 /bin/
 .agents/
 .codex/
 .amai/
-.git/
 state/
 438562manifest_tmp
 *.log
