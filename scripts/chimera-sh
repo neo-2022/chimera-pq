@@ -23,7 +23,7 @@ RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
 usage() {
   cat <<'EOF'
 Usage:
-  chimera-sh -install
+  chimera-sh -install [--vps-endpoint host:port]
   chimera-sh -start
   chimera-sh -stop
   chimera-sh -restart
@@ -157,7 +157,7 @@ main() {
   case "$cmd" in
     -install)
       require_file "$INSTALLER"
-      exec "$INSTALLER"
+      exec "$INSTALLER" "${@:2}"
       ;;
     -start)
       ensure_runtime_files || {

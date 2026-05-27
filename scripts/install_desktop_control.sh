@@ -159,7 +159,7 @@ configure_client_target() {
   fi
   if [[ -z "$candidate" ]]; then
     if [[ -z "$current_addr" || "$current_addr" == 203.0.113.10:443 || "$current_addr" == 127.0.0.1:443 ]]; then
-      echo "error: CHIMERA_VPS_ENDPOINT is required for the client config. Re-run install with CHIMERA_VPS_ENDPOINT=host:port or provide it at the prompt." >&2
+      echo "error: CHIMERA_VPS_ENDPOINT is required for the client config. Re-run install with --vps-endpoint host:port, CHIMERA_VPS_ENDPOINT=host:port, or provide it at the prompt." >&2
       exit 2
     fi
     return 0
