@@ -12,6 +12,7 @@ members = [
     "crates/chimera-capture",
     "crates/chimera-client",
     "crates/chimera-cli",
+    "crates/chimera-bootstrap",
     "crates/chimera-gateway",
     "crates/chimera-lab",
     "crates/chimera-dht",

@@ -19,21 +19,10 @@ need_cmd() {
 download_url_to_file() {
   local url="${1:?url_required}"
   local dest="${2:?dest_required}"
-  if command -v python3 >/dev/null 2>&1; then
-    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      python3 - "$url" "$dest" <<'PY'
-import sys
-import urllib.request
-
-url, dest = sys.argv[1], sys.argv[2]
-with urllib.request.urlopen(url, timeout=30) as resp, open(dest, "wb") as out:
-    while True:
-        chunk = resp.read(1024 * 1024)
-        if not chunk:
-            break
-        out.write(chunk)
-PY
-    return 0
+  local bootstrap_bin="${CHIMERA_BOOTSTRAP_BIN:-${ROOT_DIR}/bin/chimera-bootstrap}"
+  if [[ -x "$bootstrap_bin" ]]; then
+    "$bootstrap_bin" download --url "$url" --output "$dest"
+    return $?
   fi
   if command -v curl >/dev/null 2>&1; then
     env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
@@ -45,7 +34,7 @@ PY
       wget -qO "$dest" "$url"
     return $?
   fi
-  echo "bootstrap_error=missing_downloader" >&2
+  echo "bootstrap_error=missing_downloader_rust_helper" >&2
   return 1
 }
 
