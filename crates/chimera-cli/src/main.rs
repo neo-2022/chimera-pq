@@ -80,6 +80,8 @@ struct RouteExplainOptions {
 }
 
 const RUNTIME_FAILOVER_OVERRIDES_PATH: &str = "configs/failover_overrides.txt";
+const DEFAULT_CARRIER_ADDR: &str = "127.0.0.1:443";
+const DEFAULT_CARRIER_SERVER_NAME: &str = "gateway.example.org";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UpDownOptions {
@@ -2128,8 +2130,8 @@ fn parse_status_options(args: &[String]) -> Result<StatusOptions, ()> {
         capture_preference: CapturePreference::Auto,
         tun_supported: true,
         carrier_profile: CarrierProfile::InMemory,
-        carrier_addr: "127.0.0.1:443".to_string(),
-        carrier_server_name: "gateway.example.org".to_string(),
+        carrier_addr: DEFAULT_CARRIER_ADDR.to_string(),
+        carrier_server_name: DEFAULT_CARRIER_SERVER_NAME.to_string(),
     };
     if args.is_empty() {
         return Ok(options);
@@ -2377,8 +2379,8 @@ fn diag_export_command(lang: Language, args: &[String]) -> i32 {
         capture_preference: CapturePreference::Auto,
         tun_supported: true,
         carrier_profile: CarrierProfile::InMemory,
-        carrier_addr: "127.0.0.1:443".to_string(),
-        carrier_server_name: "gateway.example.org".to_string(),
+        carrier_addr: DEFAULT_CARRIER_ADDR.to_string(),
+        carrier_server_name: DEFAULT_CARRIER_SERVER_NAME.to_string(),
     };
     status_options = match apply_status_config_overrides(status_options) {
         Ok(options) => options,
@@ -3204,8 +3206,8 @@ fn build_up_runtime_state(options: &UpDownOptions) -> Result<UpRuntimeState, Str
         capture_preference: CapturePreference::Auto,
         tun_supported: true,
         carrier_profile: CarrierProfile::InMemory,
-        carrier_addr: "127.0.0.1:443".to_string(),
-        carrier_server_name: "gateway.example.org".to_string(),
+        carrier_addr: DEFAULT_CARRIER_ADDR.to_string(),
+        carrier_server_name: DEFAULT_CARRIER_SERVER_NAME.to_string(),
     };
     status = apply_status_config_overrides(status)?;
     let capture_plan = status_capture_plan(&status);
@@ -4194,8 +4196,8 @@ mod tests {
                 capture_preference: CapturePreference::Auto,
                 tun_supported: true,
                 carrier_profile: CarrierProfile::InMemory,
-                carrier_addr: "127.0.0.1:443".to_string(),
-                carrier_server_name: "gateway.example.org".to_string()
+                carrier_addr: crate::DEFAULT_CARRIER_ADDR.to_string(),
+                carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string()
             }
         );
     }
@@ -4316,8 +4318,8 @@ mod tests {
             capture_preference: CapturePreference::Auto,
             tun_supported: true,
             carrier_profile: CarrierProfile::InMemory,
-            carrier_addr: "127.0.0.1:443".to_string(),
-            carrier_server_name: "gateway.example.org".to_string(),
+            carrier_addr: crate::DEFAULT_CARRIER_ADDR.to_string(),
+            carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string(),
         };
         let rendered = render_status_rekey_block(
             Language::En,
@@ -4352,8 +4354,8 @@ mod tests {
             capture_preference: CapturePreference::Auto,
             tun_supported: true,
             carrier_profile: CarrierProfile::InMemory,
-            carrier_addr: "127.0.0.1:443".to_string(),
-            carrier_server_name: "gateway.example.org".to_string(),
+            carrier_addr: crate::DEFAULT_CARRIER_ADDR.to_string(),
+            carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string(),
         };
         let rendered = render_status_rekey_block(
             Language::Ru,
@@ -4630,7 +4632,7 @@ mod tests {
             tun_supported: true,
             carrier_profile: CarrierProfile::Tls,
             carrier_addr: "203.0.113.10:443".to_string(),
-            carrier_server_name: "gateway.example.org".to_string(),
+            carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string(),
         };
         let plan = crate::status_capture_plan(&options);
         let rendered = render_health_block(Language::Ru, &options, &plan);
@@ -5498,7 +5500,13 @@ yt = exact:www.youtube.com => direct\n";
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_runtime_state_test.json");
         let path_text = path.to_string_lossy().to_string();
-        let up_args = vec!["--state-file".to_string(), path_text.clone()];
+        let config_path = test_client_config_path();
+        let up_args = vec![
+            "--state-file".to_string(),
+            path_text.clone(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+        ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&path_text).exists());
 
@@ -5514,7 +5522,13 @@ yt = exact:www.youtube.com => direct\n";
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_runtime_state_rollback_test.json");
         let path_text = path.to_string_lossy().to_string();
-        let up_args = vec!["--state-file".to_string(), path_text.clone()];
+        let config_path = test_client_config_path();
+        let up_args = vec![
+            "--state-file".to_string(),
+            path_text.clone(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+        ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&path_text).exists());
 
@@ -5539,7 +5553,13 @@ yt = exact:www.youtube.com => direct\n";
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_runtime_state_recover_test.json");
         let path_text = path.to_string_lossy().to_string();
-        let up_args = vec!["--state-file".to_string(), path_text.clone()];
+        let config_path = test_client_config_path();
+        let up_args = vec![
+            "--state-file".to_string(),
+            path_text.clone(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+        ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&path_text).exists());
 
@@ -5558,7 +5578,13 @@ yt = exact:www.youtube.com => direct\n";
         let mut state_path = std::env::temp_dir();
         state_path.push("chimera_cli_runtime_state_json_test.json");
         let state_text = state_path.to_string_lossy().to_string();
-        let up_args = vec!["--state-file".to_string(), state_text.clone()];
+        let config_path = test_client_config_path();
+        let up_args = vec![
+            "--state-file".to_string(),
+            state_text.clone(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+        ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&state_text).exists());
 
@@ -5597,7 +5623,10 @@ yt = exact:www.youtube.com => direct\n";
         let mut state_path = std::env::temp_dir();
         state_path.push("chimera_cli_rollback_status_modified_state.json");
         let state_text = state_path.to_string_lossy().to_string();
-        let state_json = "{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"127.0.0.1:443\",\"carrier_server_name\":\"gateway.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"/tmp/chimera_resolv_test.conf\",\"dns_backup_path\":\"/tmp/chimera_resolv_test.conf.chimera.bak\"}\n";
+        let state_json = format!(
+            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"gateway.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"/tmp/chimera_resolv_test.conf\",\"dns_backup_path\":\"/tmp/chimera_resolv_test.conf.chimera.bak\"}}\n",
+            test_client_carrier_addr()
+        );
         let write_result = std::fs::write(&state_text, state_json);
         assert!(write_result.is_ok());
 
@@ -5636,9 +5665,10 @@ yt = exact:www.youtube.com => direct\n";
         let mut state_path = std::env::temp_dir();
         state_path.push("chimera_cli_rollback_clean_prestate.json");
         let state_text = state_path.to_string_lossy().to_string();
+        let carrier_addr = test_client_carrier_addr();
         let state_json = format!(
-            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"127.0.0.1:443\",\"carrier_server_name\":\"gateway.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
-            resolv_text, backup_path
+            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"gateway.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
+            carrier_addr, resolv_text, backup_path
         );
         let write_state = std::fs::write(&state_text, state_json);
         assert!(write_state.is_ok());
@@ -5678,8 +5708,8 @@ yt = exact:www.youtube.com => direct\n";
             capture_preference: CapturePreference::Auto,
             tun_supported: true,
             carrier_profile: CarrierProfile::InMemory,
-            carrier_addr: "127.0.0.1:443".to_string(),
-            carrier_server_name: "gateway.example.org".to_string(),
+            carrier_addr: crate::DEFAULT_CARRIER_ADDR.to_string(),
+            carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string(),
         };
         let plan = crate::status_capture_plan(&status);
         let json = render_diag_export_json(&status, &plan, Some(RekeyReason::PacketLimitExceeded));
@@ -5702,8 +5732,8 @@ yt = exact:www.youtube.com => direct\n";
             capture_preference: CapturePreference::Tun,
             tun_supported: true,
             carrier_profile: CarrierProfile::InMemory,
-            carrier_addr: "127.0.0.1:443".to_string(),
-            carrier_server_name: "gateway.example.org".to_string(),
+            carrier_addr: crate::DEFAULT_CARRIER_ADDR.to_string(),
+            carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string(),
         };
         let plan = crate::status_capture_plan(&status);
         let json = render_doctor_json(&status, &plan, Some(RekeyReason::SessionAgeExceeded));
@@ -6144,5 +6174,28 @@ yt = exact:www.youtube.com => direct\n";
             Language::En
         );
         assert_eq!(detect_language_from_lang_value(None), Language::En);
+    }
+
+    fn test_client_config_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("configs")
+            .join("client.example.conf")
+    }
+
+    fn test_client_carrier_addr() -> String {
+        let text = std::fs::read_to_string(test_client_config_path())
+            .unwrap_or_else(|err| unreachable!("read client.example.conf failed: {err}"));
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some(value) = line.strip_prefix("carrier.addr = ") {
+                let value = value.trim();
+                if !value.is_empty() {
+                    return value.to_string();
+                }
+            }
+        }
+        unreachable!("carrier.addr not found in client.example.conf")
     }
 }
