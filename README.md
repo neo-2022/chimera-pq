@@ -1,6 +1,9 @@
-# CHIMERA-PQ VPN
+# CHIMERA-PQ WEAVE
 
-Linux-first MVP workspace for CHIMERA-PQ VPN.
+WEAVE means Web of Encrypted Adaptive Virtual Edges: a private fabric network
+that weaves devices, peer nodes, relays, mesh links, and gateways together.
+
+Linux-first MVP workspace for CHIMERA-PQ WEAVE.
 
 Start with the parent workspace documents:
 
@@ -314,7 +317,7 @@ English:
 
 1. Check build: `cargo check --workspace`
 2. Run tests: `cargo test --workspace`
-3. Quick local VPN smoke: `cargo run -p chimera-cli -- lab-smoke`
+3. Quick local WEAVE smoke: `cargo run -p chimera-cli -- lab-smoke`
 4. Full MVP verification: `cargo run -p chimera-cli -- mvp-check`
 5. Full hardening check: `cargo run -p chimera-cli -- hardening-smoke`
 6. Russian output example: `cargo run -p chimera-cli -- --lang ru mvp-verify --text --out docs/MVP_VERIFY.txt`
@@ -323,7 +326,7 @@ English:
 
 1. Проверка сборки: `cargo check --workspace`
 2. Запуск тестов: `cargo test --workspace`
-3. Быстрая локальная проверка VPN: `cargo run -p chimera-cli -- lab-smoke`
+3. Быстрая локальная проверка WEAVE: `cargo run -p chimera-cli -- lab-smoke`
 4. Полная проверка MVP: `cargo run -p chimera-cli -- mvp-check`
 5. Полная проверка надежности: `cargo run -p chimera-cli -- hardening-smoke`
 6. Пример вывода на русском: `cargo run -p chimera-cli -- --lang ru mvp-verify --text --out docs/MVP_VERIFY.txt`

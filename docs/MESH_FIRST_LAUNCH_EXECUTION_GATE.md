@@ -67,7 +67,7 @@ Goal of this runbook:
 
 Notes:
 - this preflight does not modify OS routes/DNS/firewall (`network_state=not_modified`);
-- run commands from repo root: `/home/art/Archives/VPN/chimera-pq`.
+- run commands from repo root: `/home/art/Archives/WEAVE/chimera-pq`.
 
 ### 1) Prepare peer specs
 

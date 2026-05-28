@@ -57,14 +57,14 @@ installer_gate_prepare_upstream_env() {
     discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
     discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
     discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
-    if [[ -n "$discovery_url" ]] && ! grep -q '^CHIMERA_MESH_NODES_DISCOVERY_URL=' "$UPSTREAM_ENV_FILE"; then
-      printf '\nCHIMERA_MESH_NODES_DISCOVERY_URL=%s\n' "$discovery_url" >> "$UPSTREAM_ENV_FILE"
+    if [[ -n "$discovery_url" ]]; then
+      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
     fi
-    if [[ -n "$discovery_pubkey" ]] && ! grep -q '^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=' "$UPSTREAM_ENV_FILE"; then
-      printf 'CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=%s\n' "$discovery_pubkey" >> "$UPSTREAM_ENV_FILE"
+    if [[ -n "$discovery_pubkey" ]]; then
+      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
     fi
-    if [[ -n "$discovery_probe_timeout" ]] && ! grep -q '^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=' "$UPSTREAM_ENV_FILE"; then
-      printf 'CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=%s\n' "$discovery_probe_timeout" >> "$UPSTREAM_ENV_FILE"
+    if [[ -n "$discovery_probe_timeout" ]]; then
+      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
     fi
   fi
 }

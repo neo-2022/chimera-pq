@@ -111,7 +111,7 @@ Selfcheck:
 ## CHIMERA Channel Audit
 
 Use channel audit when you must prove traffic separation with selected
-apps/services (and possible parallel VPNs on the same host).
+apps/services (and possible parallel WEAVEs on the same host).
 
 1. Run audit:
    `just chimera-channel-audit`
@@ -123,15 +123,15 @@ Report includes:
 - CHIMERA proxy listener status;
 - direct vs CHIMERA path proof status and observed public IP split;
 - selective routing inventory (`app_routes_count`, `service_routes_count`);
-- system default-path class (`regular_interface` or `vpn_or_tunnel`).
+- system default-path class (`regular_interface` or `tunnel_path`).
 
-Parallel VPN isolation:
+Parallel WEAVE isolation:
 
-- CHIMERA must not hijack already-used local VPN ports.
-- On `chimera-control start`, CHIMERA checks its preferred SOCKS port.
-- If busy, CHIMERA auto-picks a free local port from `12080..12180`.
-- Selected port is persisted to `~/.config/chimera/upstream_proxy.env` as
-  `CHIMERA_SOCKS_PORT` and reused by watchdog/runtime.
+- CHIMERA must not hijack already-used local WEAVE ports.
+- CHIMERA runtime uses the transparent TUN path and does not require a
+  user-facing proxy-port selection.
+- Selected upstream settings are persisted to `~/.config/chimera/upstream_proxy.env`
+  for transport bootstrap and reused by runtime.
 
 Selfcheck:
 
@@ -173,10 +173,12 @@ This keeps install/start one-command for end users and removes manual
 
 Mesh node discovery is not baked into installation. On a fresh install the
 available node list is loaded from the upstream/bootstrap source at runtime.
+If no endpoint is configured yet, the first start/install path opens node
+selection and then resolves the chosen node endpoint automatically.
 
 Operator flow:
 
-1. Start CHIMERA normally.
+1. Start CHIMERA normally or let install open the selection prompt.
 2. Open `chimera mesh nodes select`.
 3. Choose one node from the loaded list manually on the first run.
 4. After that CHIMERA persists `current`, `pinned`, and `autoconnect`.
@@ -402,7 +404,7 @@ Self-check commands:
 3. `scripts/chimera-control.sh route-status`
 4. `scripts/chimera-control.sh run-app curl_example`
 
-## Installer Gate (Parallel VPN Safety)
+## Installer Gate (Parallel WEAVE Safety)
 
 Run installer gate before release/install validation:
 
@@ -410,9 +412,6 @@ Run installer gate before release/install validation:
 
 Gate guarantees:
 
-- installer keeps CHIMERA in a separate SOCKS contour (`CHIMERA_SOCKS_PORT`);
-- if preferred port is busy, installer selects a free port in `12080..12180`;
-- legacy `chimera-socks-tunnel.service` is rewritten to use
-  `${CHIMERA_SOCKS_PORT:-12080}` instead of hardcoded `11080`;
-- control/watchdog consume the same selected port from
-  `~/.config/chimera/upstream_proxy.env`.
+- installer keeps CHIMERA in the transparent runtime contour;
+- installer bootstraps upstream settings from `~/.config/chimera/upstream_proxy.env`;
+- control/runtime consume the same upstream bootstrap state from that file.

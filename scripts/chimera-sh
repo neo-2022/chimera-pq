@@ -138,7 +138,7 @@ parse_release_metadata() {
 remote_archive_sha256() {
   local archive_url="${1:?archive_url_required}"
   local checksum_url tmp_checksum expected
-  checksum_url="${archive_url%.tar.gz}.sha256"
+  checksum_url="${archive_url}.sha256"
   if [[ "$checksum_url" == *"raw.githubusercontent.com"* ]] && [[ "$checksum_url" != *"?"* ]]; then
     checksum_url="${checksum_url}?ts=$(date +%s)"
   fi

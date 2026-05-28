@@ -12,6 +12,8 @@ Usage:
 Targets:
   cli       run chimera-cli with args
   gateway   run chimera-gateway with args
+  peer-egress run chimera-peer-egress with args
+  transparent-runtime run chimera-transparent-runtime with args
 EOF
 }
 
@@ -49,6 +51,17 @@ case "$target" in
     ;;
   gateway)
     run_with_fallback "$ROOT_DIR/bin/chimera-gateway" "chimera-gateway" "$@"
+    ;;
+  peer-egress)
+    peer_egress_mode="${CHIMERA_PEER_EGRESS_MODE:-}"
+    if [[ -z "$peer_egress_mode" ]]; then
+      echo "error: missing CHIMERA_PEER_EGRESS_MODE" >&2
+      exit 1
+    fi
+    run_with_fallback "$ROOT_DIR/bin/chimera-peer-egress" "chimera-carrier" --mode "$peer_egress_mode" "$@"
+    ;;
+  transparent-runtime)
+    run_with_fallback "$ROOT_DIR/bin/chimera-transparent-runtime" "chimera-capture" "$@"
     ;;
   -h|--help|help|"")
     usage

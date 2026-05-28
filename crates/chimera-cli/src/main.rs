@@ -130,8 +130,8 @@ const DOCTOR_USAGE_EN: &str = "usage: chimera [--lang en|ru] doctor [--config <c
 const DOCTOR_USAGE_RU: &str = "использование: chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]";
 const ROUTE_USAGE_EN: &str = "usage: chimera [--lang en|ru] route explain [domain] [--domain <domain>] [--policy <policy_file>] [--ip <ipv4|ipv6>] [--proto <tcp|udp|icmp>] [--port <n>] [--dns-bind-domain <domain>] [--dns-bind-ip <ipv4|ipv6>] [--show-all-matches] [--json] [--out <file>]";
 const ROUTE_USAGE_RU: &str = "использование: chimera [--lang en|ru] route explain [домен] [--domain <домен>] [--policy <файл_policy>] [--ip <ipv4|ipv6>] [--proto <tcp|udp|icmp>] [--port <число>] [--dns-bind-domain <домен>] [--dns-bind-ip <ipv4|ipv6>] [--show-all-matches] [--json] [--out <файл>]";
-const MESH_USAGE_EN: &str = "usage: chimera [--lang en|ru] mesh <nodes|route-explain|connect-probe|launch-preflight|launch-preflight-verify> ...";
-const MESH_USAGE_RU: &str = "использование: chimera [--lang en|ru] mesh <nodes|route-explain|connect-probe|launch-preflight|launch-preflight-verify> ...";
+const MESH_USAGE_EN: &str = "usage: chimera [--lang en|ru] mesh <nodes|contracts|route-explain|connect-probe|launch-preflight|launch-preflight-verify> ...";
+const MESH_USAGE_RU: &str = "использование: chimera [--lang en|ru] mesh <nodes|contracts|route-explain|connect-probe|launch-preflight|launch-preflight-verify> ...";
 const DIAG_REKEY_USAGE_EN: &str =
     "usage: chimera [--lang en|ru] diag rekey <age_sec> <packets_sent>";
 const DIAG_REKEY_USAGE_RU: &str =
@@ -362,6 +362,7 @@ fn parse_language_flag(args: &[String]) -> Option<(Language, LanguageSource, usi
     }
 }
 
+#[cfg(test)]
 fn detect_language_from_lang_value(lang: Option<&str>) -> Language {
     match lang {
         Some(value) if value.to_ascii_lowercase().starts_with("ru") => Language::Ru,
@@ -1579,7 +1580,7 @@ fn policy_warnings(lang: Language, summary: &PolicySummary) -> Vec<&'static str>
                 warnings.push("No default rule. Unknown traffic will use implicit direct route.");
             }
             if summary.gateway_outbound_rules == 0 {
-                warnings.push("No gateway action rules. VPN path may never be selected.");
+                warnings.push("No gateway action rules. WEAVE path may never be selected.");
             }
         }
         Language::Ru => {
@@ -1590,7 +1591,7 @@ fn policy_warnings(lang: Language, summary: &PolicySummary) -> Vec<&'static str>
             }
             if summary.gateway_outbound_rules == 0 {
                 warnings.push(
-                    "Нет правил с действием gateway. VPN-маршрут может никогда не выбираться.",
+                    "Нет правил с действием gateway. WEAVE-маршрут может никогда не выбираться.",
                 );
             }
         }
@@ -1705,7 +1706,7 @@ fn render_route_explain_block(
 fn outbound_label_en(outbound: chimera_policy::OutboundMode) -> &'static str {
     match outbound {
         chimera_policy::OutboundMode::Direct => "direct connection",
-        chimera_policy::OutboundMode::Gateway => "through VPN gateway",
+        chimera_policy::OutboundMode::Gateway => "through WEAVE gateway",
         chimera_policy::OutboundMode::Block => "blocked by policy",
         chimera_policy::OutboundMode::LocalProxy => "through local proxy",
     }
@@ -1714,7 +1715,7 @@ fn outbound_label_en(outbound: chimera_policy::OutboundMode) -> &'static str {
 fn outbound_label_ru(outbound: chimera_policy::OutboundMode) -> &'static str {
     match outbound {
         chimera_policy::OutboundMode::Direct => "напрямую",
-        chimera_policy::OutboundMode::Gateway => "через VPN-шлюз",
+        chimera_policy::OutboundMode::Gateway => "через WEAVE-шлюз",
         chimera_policy::OutboundMode::Block => "заблокировано правилом",
         chimera_policy::OutboundMode::LocalProxy => "через локальный прокси",
     }
@@ -4413,7 +4414,7 @@ mod tests {
         );
         assert!(rendered.contains("Site: api.example.org"));
         assert!(rendered.contains("Rule used: example-gateway"));
-        assert!(rendered.contains("How we send: through VPN gateway"));
+        assert!(rendered.contains("How we send: through WEAVE gateway"));
         assert!(rendered.contains("Rules checked: 2"));
         assert!(rendered.contains("Rules matched: 2"));
     }
@@ -4489,7 +4490,7 @@ mod tests {
         );
         assert!(rendered.contains("Сайт: api.example.org"));
         assert!(rendered.contains("Сработало правило: example-gateway"));
-        assert!(rendered.contains("Как отправляем: через VPN-шлюз"));
+        assert!(rendered.contains("Как отправляем: через WEAVE-шлюз"));
     }
 
     #[test]

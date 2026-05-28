@@ -63,7 +63,7 @@ impl CarrierEndpoint {
             if ip.is_loopback() {
                 return true;
             }
-            return local_ips.iter().any(|local| *local == ip);
+            return local_ips.contains(&ip);
         }
         false
     }

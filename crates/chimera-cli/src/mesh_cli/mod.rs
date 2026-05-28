@@ -7,6 +7,7 @@ use chimera_mesh::{
 
 mod connect_probe_cmd;
 mod connect_probe_flow;
+mod contracts_cmd;
 mod launch_preflight_cmd;
 mod launch_preflight_verify_cmd;
 mod nodes_inventory;
@@ -133,6 +134,7 @@ pub(crate) fn mesh_command(usage: &str, subcommand: Option<&str>, args: &[String
     };
     match subcommand {
         "nodes" => nodes_cmd::mesh_nodes_command(args),
+        "contracts" => contracts_cmd::mesh_contracts_command(usage, args),
         "route-explain" => mesh_route_explain_command(usage, args),
         "connect-probe" => connect_probe_cmd::mesh_connect_probe_command(usage, args),
         "launch-preflight" => launch_preflight_cmd::mesh_launch_preflight_command(usage, args),

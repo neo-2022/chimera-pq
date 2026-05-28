@@ -193,6 +193,7 @@ impl MeshNodeCountry {
 pub struct MeshNode {
     pub node_id: MeshNodeId,
     pub endpoint: String,
+    pub invite_token: Option<String>,
     pub country: MeshNodeCountry,
     pub status: MeshNodeStatus,
     pub latency_ms: Option<f64>,
@@ -210,6 +211,9 @@ impl MeshNode {
     pub fn validate(&self) -> Result<(), String> {
         self.node_id.validate()?;
         validate_endpoint_config_value(&self.endpoint)?;
+        if let Some(invite_token) = self.invite_token.as_deref() {
+            validate_non_empty_label(invite_token, "mesh node invite_token")?;
+        }
         self.country.validate()?;
         validate_optional_non_negative("latency_ms", self.latency_ms)?;
         validate_optional_non_negative("jitter_ms", self.jitter_ms)?;

@@ -2,8 +2,8 @@
 
 ## Scope
 
-- Primary source: `/home/art/Archives/VPN/CHIMERA.pdf`
-- Current implementation root: `/home/art/Archives/VPN/chimera-pq`
+- Primary source: `/home/art/Archives/WEAVE/CHIMERA.pdf`
+- Current implementation root: `/home/art/Archives/WEAVE/chimera-pq`
 - Purpose: separate **MVP/Lab PASS** from **Full CEF closure**
 
 ## Truth Boundary

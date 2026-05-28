@@ -3,6 +3,7 @@ members = [
     "crates/chimera-core",
     "crates/chimera-config",
     "crates/chimera-crypto",
+    "crates/chimera-contracts",
     "crates/chimera-policy",
     "crates/chimera-dns",
     "crates/chimera-session",

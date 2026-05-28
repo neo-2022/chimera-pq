@@ -2,7 +2,7 @@
 
 ## Decision
 
-Build CHIMERA-PQ VPN MVP before CHIMERA-NOVA CEF features.
+Build CHIMERA-PQ WEAVE MVP before CHIMERA-NOVA CEF features.
 
 ## Consequences
 

@@ -1,8 +1,8 @@
 # FINAL M5/M6 Report
 
 Date: 2026-05-18
-Project: CHIMERA-PQ VPN MVP
-Scope: M5 (Practical VPN Usability) and M6 (Hardening Gate)
+Project: CHIMERA-PQ WEAVE MVP
+Scope: M5 (Practical WEAVE Usability) and M6 (Hardening Gate)
 
 ## Final Status
 
@@ -16,7 +16,7 @@ Scope: M5 (Practical VPN Usability) and M6 (Hardening Gate)
 
 ## What Was Completed
 
-### M5 (Practical VPN Usability)
+### M5 (Practical WEAVE Usability)
 
 - Client/gateway/lab doctor checks are passing and produce JSON artifacts.
 - Route explain artifact is generated and validated.

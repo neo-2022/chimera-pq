@@ -48,10 +48,10 @@
 - `probe --all` remains not bound to the health probe backend.
 - `connect/pin/autoconnect` are still command-local decisions, not persistent runtime state.
 - `chimera-pq` is still not a registered Amai project code; Amai continuity is recorded under project code `amai`.
-- Git status cannot be reported because `/home/art/Archives/VPN/chimera-pq` and `/home/art/Archives/VPN` are not git repositories in this workspace.
+- Git status cannot be reported because `/home/art/Archives/WEAVE/chimera-pq` and `/home/art/Archives/WEAVE` are not git repositories in this workspace.
 
 ## Safety
-- No OS routes, DNS, firewall, system proxy, Happ, MYVPN, router, or VPS settings were changed.
+- No OS routes, DNS, firewall, system proxy, Happ, MYWEAVE, router, or VPS settings were changed.
 - Config inventory listing/best/explain remains read-only.
 
 ## Next Step

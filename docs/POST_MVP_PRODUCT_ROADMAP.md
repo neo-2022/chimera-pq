@@ -17,7 +17,7 @@ MVP stages:
 3. M2 Secure session and crypto policy
 4. M3 First real carrier
 5. M4 Capture and routing
-6. M5 Practical VPN usability
+6. M5 Practical WEAVE usability
 7. M6 Hardening gate
 
 ### 0.2 Post-MVP Stages (this roadmap)
@@ -52,13 +52,73 @@ Roadmap structure is based on:
 - full current docs inventory listed in `ROADMAP_DOC_INDEX.md`
   (generated from all `docs/*.md` and `docs/*.txt` files).
 
+## 0.5 Build Order for the Future Platform
+
+This is the explicit implementation order for the post-MVP WEAVE platform.
+Later layers must not be built before the lower layers they depend on.
+
+1. WEAVE core runtime contracts
+   - node identity
+   - signed discovery
+   - runtime state
+   - selection/pin/autoconnect
+   - safe rollback and diagnostics
+
+2. Public mesh catalog
+   - signed node registry
+   - sharded discovery feed
+   - country/region grouping
+   - freshness, TTL, anti-replay, and replica fallback
+
+3. Public publish controller
+   - what a user explicitly marks as public
+   - publish approval, revoke, quarantine, and audit
+   - owner-only control over the public screen
+
+4. Miniapp runtime
+   - app manifest
+   - app metadata
+   - publish state
+   - visibility modes: private / public / unlisted
+   - one-click publication and one-click hide/remove
+
+5. GUI shell
+   - simple first-run onboarding
+   - node selection by country
+   - miniapp publish UI
+   - plain-language controls for the least technical user
+
+6. Commerce layer
+   - product manifest
+   - order intent
+   - payment intent
+   - receipt, refund, dispute, and merchant policy
+
+7. Crypto payment rail
+   - wallet profile
+   - crypto asset policy
+   - invoice/payment routing
+   - signed receipts and audit trail
+
+8. Moderation and safety policy
+   - category rules
+   - blocked content policy
+   - publisher reputation
+   - quarantine and revoke operations
+   - operator controls for public surface only
+
+Current next build step:
+- bind the shared manifest/index contracts into catalog discovery and publish
+  persistence so later GUI and miniapp layers consume one stable protocol
+  instead of inventing their own data model.
+
 ## 1. Scope Boundary
 
 This document captures product-surface goals requested by the user and keeps
-them explicitly out of current CHIMERA-PQ VPN MVP execution gates.
+them explicitly out of current CHIMERA-PQ WEAVE MVP execution gates.
 
 MVP remains defined by `CHIMERA-PQ_MVP_SPEC.md`:
-- Linux-first VPN core
+- Linux-first WEAVE core
 - secure tunnel + carrier + policy routing + DNS binding
 - diagnostics/explain/tests/rollback safety
 
@@ -111,7 +171,7 @@ Availability goal:
 Monetization is accepted as post-MVP product track with strict separation:
 
 - ads are allowed only in UI/application layer surfaces;
-- ads are forbidden in VPN tunnel, policy, routing, capture, crypto, and
+- ads are forbidden in WEAVE tunnel, policy, routing, capture, crypto, and
   datapath logic;
 - ad components must not receive raw destination logs, packet payloads, keys,
   or sensitive runtime secrets;

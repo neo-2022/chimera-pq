@@ -10,7 +10,7 @@ Checks:
 - load_gate: pass
 
 Artifacts:
-- /home/art/Archives/VPN/chimera-pq/docs/CHIMERA_PATH_PROOF.json
-- /home/art/Archives/VPN/chimera-pq/docs/CHIMERA_CHANNEL_AUDIT.json
-- /home/art/Archives/VPN/chimera-pq/docs/CHIMERA_E2E_CHANNEL_GATE.json
-- /home/art/Archives/VPN/chimera-pq/docs/CHIMERA_LOAD_GATE_LAPTOP.json
+- /home/art/Archives/WEAVE/chimera-pq/docs/CHIMERA_PATH_PROOF.json
+- /home/art/Archives/WEAVE/chimera-pq/docs/CHIMERA_CHANNEL_AUDIT.json
+- /home/art/Archives/WEAVE/chimera-pq/docs/CHIMERA_E2E_CHANNEL_GATE.json
+- /home/art/Archives/WEAVE/chimera-pq/docs/CHIMERA_LOAD_GATE_LAPTOP.json

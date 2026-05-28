@@ -1,7 +1,7 @@
 # GO/NO-GO Decision
 
 Date: 2026-05-18
-Scope: CHIMERA-PQ VPN MVP (M5/M6 completion gate)
+Scope: CHIMERA-PQ WEAVE MVP (M5/M6 completion gate)
 
 ## Decision
 

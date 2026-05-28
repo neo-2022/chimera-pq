@@ -12,7 +12,7 @@ fi
 export ROOT_DIR CONTROL
 
 yad --notification \
-  --image=network-vpn \
+  --image=network-transmit-receive \
   --text="CHIMERA Control" \
   --command="bash -lc '
     choice=\$(yad --list --title=\"CHIMERA Control\" --column=\"Action\" \

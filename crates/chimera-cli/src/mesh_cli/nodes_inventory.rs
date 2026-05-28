@@ -618,6 +618,7 @@ fn load_runtime_state(args: &[String]) -> Result<MeshRuntimeState, String> {
 fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, String> {
     let node_id = json_string(record, &["node_id", "id"])?;
     let endpoint = json_string(record, &["endpoint"])?;
+    let invite_token = json_optional_string(record, &["invite_token"]);
     let country_code =
         json_string_default(record, &["country_code"], MeshNodeCountry::UNKNOWN_CODE);
     let country_name =
@@ -656,6 +657,7 @@ fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, S
         &success_rate_1h,
         &consecutive_failures,
         &observation_count,
+        invite_token.as_deref(),
         &explain_reason,
     )
 }
@@ -760,12 +762,14 @@ fn parse_cli_node(raw: &str) -> Result<MeshNode, String> {
         parts[9],
         parts[10],
         parts[11],
+        None,
         "cli_node_record",
     )
 }
 
 fn parse_config_node(raw: &RawConfig, id: &str) -> Result<MeshNode, String> {
     let prefix = format!("mesh.node.{id}.");
+    let invite_token = raw.get(&format!("{prefix}invite_token"));
     build_node(
         id,
         required(raw, &format!("{prefix}endpoint"))?,
@@ -794,6 +798,7 @@ fn parse_config_node(raw: &RawConfig, id: &str) -> Result<MeshNode, String> {
             .unwrap_or("0"),
         raw.get(&format!("{prefix}observation_count"))
             .unwrap_or("0"),
+        invite_token,
         raw.get(&format!("{prefix}explain_reason"))
             .unwrap_or("config_node_record"),
     )
@@ -819,6 +824,7 @@ fn build_node(
     success_rate_1h: &str,
     consecutive_failures: &str,
     observation_count: &str,
+    invite_token: Option<&str>,
     explain_reason: &str,
 ) -> Result<MeshNode, String> {
     let country_code = country_code_raw.to_ascii_uppercase();
@@ -843,6 +849,10 @@ fn build_node(
     let node = MeshNode {
         node_id: MeshNodeId::new(id),
         endpoint: endpoint.to_string(),
+        invite_token: invite_token
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
         country,
         status: MeshNodeStatus::parse(status)?,
         latency_ms: parse_optional_f64(latency_ms)?,
@@ -933,6 +943,7 @@ fn is_allowed_node_field(field: &str) -> bool {
             | "success_rate_1h"
             | "consecutive_failures"
             | "observation_count"
+            | "invite_token"
             | "explain_reason"
     )
 }
@@ -1015,6 +1026,7 @@ fn load_upstream_bootstrap_nodes() -> Result<Vec<MeshNode>, String> {
             "99",
             "0",
             "1",
+            None,
             "upstream_bootstrap",
         )?;
         out.push(node);

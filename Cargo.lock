@@ -202,6 +202,7 @@ dependencies = [
  "chimera-carrier-quic",
  "chimera-carrier-tls",
  "chimera-config",
+ "chimera-contracts",
  "chimera-core",
  "chimera-dns",
  "chimera-mesh",
@@ -228,6 +229,14 @@ name = "chimera-config"
 version = "0.1.0"
 dependencies = [
  "chimera-core",
+]
+
+[[package]]
+name = "chimera-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

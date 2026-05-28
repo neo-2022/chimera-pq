@@ -1,14 +1,13 @@
 [Unit]
-Description=CHIMERA Client (user service)
+Description=CHIMERA Transparent Runtime (user service)
 After=chimera-gateway.service
 Requires=chimera-gateway.service
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=simple
 WorkingDirectory=__CHIMERA_ROOT__
-ExecStart=/usr/bin/env bash -lc './scripts/chimera-runner.sh cli up --config configs/client.conf --state-file docs/runtime_state_latest.json'
-ExecStop=/usr/bin/env bash -lc './scripts/chimera-runner.sh cli down --config configs/client.conf --state-file docs/runtime_state_latest.json'
+ExecStart=/usr/bin/env bash -lc 'set -euo pipefail; env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"; if [[ ! -f "$env_file" ]]; then echo "error: missing transparent-runtime env: $env_file" >&2; exit 1; fi; set -a; source "$env_file"; exec ./scripts/chimera-runner.sh transparent-runtime'
+ExecStop=/usr/bin/env bash -lc 'true'
 StandardOutput=append:__CHIMERA_ROOT__/docs/chimera_client.service.log
 StandardError=append:__CHIMERA_ROOT__/docs/chimera_client.service.log
 

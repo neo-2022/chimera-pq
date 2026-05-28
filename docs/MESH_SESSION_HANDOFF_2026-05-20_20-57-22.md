@@ -4,7 +4,7 @@
 - Timestamp: 2026-05-20 local session
 
 ## Active Objective
-- Continue CHIMERA-PQ VPN MVP mesh diagnostics/explainability work.
+- Continue CHIMERA-PQ WEAVE MVP mesh diagnostics/explainability work.
 - Keep scope limited to MVP CLI diagnostics and route explanation.
 - Preserve anti-monolith structure and avoid network/OS mutation.
 
@@ -39,7 +39,7 @@
 - Domain split preserved; no root test monolith files.
 
 ## Safety / Scope (fact)
-- OS routes, DNS, firewall, Happ, MYVPN, router and VPS were not modified.
+- OS routes, DNS, firewall, Happ, MYWEAVE, router and VPS were not modified.
 - CLI smoke stayed in route-explain JSON mode and reported `network_state=not_modified`.
 - Shell emitted sandbox `Failed to create stream fd` warnings, but all validation commands exited with code 0.
 

@@ -4,7 +4,7 @@
 - Timestamp: 2026-05-20 local session
 
 ## Active Objective
-- Continue CHIMERA-PQ VPN MVP mesh diagnostics/explainability work.
+- Continue CHIMERA-PQ WEAVE MVP mesh diagnostics/explainability work.
 - Keep scope in MVP CLI route-explain contracts and safe operator guidance.
 - Preserve anti-monolith structure.
 
@@ -30,8 +30,8 @@
 - `bash scripts/anti_monolith_guard.sh` — PASS
 
 ## Safety / Scope (fact)
-- No OS route/DNS/firewall/system VPN changes.
-- No changes to Happ/MYVPN/router/VPS.
+- No OS route/DNS/firewall/system WEAVE changes.
+- No changes to Happ/MYWEAVE/router/VPS.
 - Work limited to source/tests in `chimera-pq`.
 
 ## Next Step (planned)

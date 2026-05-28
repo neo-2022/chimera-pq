@@ -1,13 +1,12 @@
 [Unit]
-Description=CHIMERA Gateway (user service)
+Description=CHIMERA Peer Egress (user service)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=simple
 WorkingDirectory=__CHIMERA_ROOT__
-ExecStart=/usr/bin/env bash -lc './scripts/chimera-runner.sh gateway doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json'
+ExecStart=/usr/bin/env bash -lc 'set -euo pipefail; env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"; if [[ ! -f "$env_file" ]]; then echo "error: missing peer-egress env: $env_file" >&2; exit 1; fi; set -a; source "$env_file"; exec ./scripts/chimera-runner.sh peer-egress'
 ExecStop=/usr/bin/env bash -lc 'true'
 StandardOutput=append:__CHIMERA_ROOT__/docs/chimera_gateway.service.log
 StandardError=append:__CHIMERA_ROOT__/docs/chimera_gateway.service.log

@@ -2,7 +2,7 @@
 
 - status: pass
 - reason: load_gate_ok
-- artifact: /home/art/Archives/VPN/chimera-pq/docs/load/CHIMERA_LOAD_300S_LAPTOP_20260522_103042.json
+- artifact: /home/art/Archives/WEAVE/chimera-pq/docs/load/CHIMERA_LOAD_300S_LAPTOP_20260522_103042.json
 
 Thresholds:
 - min_success_rate: 0.95

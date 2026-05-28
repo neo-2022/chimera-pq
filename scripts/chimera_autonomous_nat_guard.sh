@@ -18,7 +18,7 @@ proxy_status="$("$CONTROL" proxy-status 2>/dev/null || true)"
 route_status="$("$CONTROL" route-status 2>/dev/null || true)"
 
 listener_up="false"
-if printf '%s\n' "$proxy_status" | grep -q 'socks_tunnel=running'; then
+if printf '%s\n' "$proxy_status" | grep -q '^chimera_proxy_listener=up$'; then
   listener_up="true"
 fi
 

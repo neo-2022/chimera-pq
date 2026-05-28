@@ -4,7 +4,7 @@
 - Timestamp: 2026-05-20 local session
 
 ## Active Objective
-- Continue CHIMERA-PQ VPN MVP mesh diagnostics/explainability work.
+- Continue CHIMERA-PQ WEAVE MVP mesh diagnostics/explainability work.
 - Keep scope limited to MVP CLI diagnostics and route explanation.
 - Preserve anti-monolith structure and avoid network/OS mutation.
 
@@ -45,7 +45,7 @@
 - Guard-confirmed root files remain under configured limits.
 
 ## Safety / Scope (fact)
-- OS routes, DNS, firewall, Happ, MYVPN, router and VPS were not modified.
+- OS routes, DNS, firewall, Happ, MYWEAVE, router and VPS were not modified.
 - CLI smoke stayed in explain mode and reported `network_state=not_modified`.
 
 ## Next Step (planned)

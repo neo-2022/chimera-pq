@@ -20,28 +20,6 @@ read_kv() {
   awk -F'=' -v k="$key" '$1==k{print $2; exit}' "$file"
 }
 
-current_socks_port() {
-  local p=""
-  p="$("$CONTROL" proxy-status 2>/dev/null | awk '
-    /^socks_tunnel=running /{
-      split($2, hp, ":");
-      print hp[length(hp)];
-      exit
-    }')"
-  if [[ "$p" =~ ^[0-9]+$ ]]; then
-    printf '%s' "$p"
-    return 0
-  fi
-  if [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env" ]]; then
-    p="$(awk -F= '$1=="CHIMERA_SOCKS_PORT"{print $2; exit}' "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env" 2>/dev/null || true)"
-    if [[ "$p" =~ ^[0-9]+$ ]]; then
-      printf '%s' "$p"
-      return 0
-    fi
-  fi
-  printf '12080'
-}
-
 mkdir -p "$(dirname "$OUT_FILE")"
 
 # Ensure channel is up.
@@ -58,11 +36,6 @@ strategy="$(awk -F'=' '/^upstream_strategy=/{print $2; exit}' "$TMP_LOG")"
 
 pre_health_ok="$(awk -F'=' '/^upstream_health_ok=/{print $2; exit}' "$TMP_LOG")"
 pre_degrade_fails="$(awk -F'=' '/^upstream_degrade_fails=/{print $2; exit}' "$TMP_LOG")"
-
-# Force a selection cycle by dropping local SOCKS tunnel.
-runtime_socks_port="$(current_socks_port)"
-pkill -f "ssh .* -D 127.0.0.1:${runtime_socks_port}" >/dev/null 2>&1 || true
-sleep 8
 
 "$CONTROL" proxy-status >"$TMP_LOG"
 "$CONTROL" upstream-audit 20 >>"$TMP_LOG"

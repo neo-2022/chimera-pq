@@ -52,14 +52,11 @@ detect_runtime_proxy_url() {
 }
 
 default_proxy_candidates_csv() {
-  local socks_port="${CHIMERA_SOCKS_PORT:-}"
-  if [[ -z "$socks_port" ]] && [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env" ]]; then
-    socks_port="$(awk -F= '$1=="CHIMERA_SOCKS_PORT"{print $2; exit}' "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env" 2>/dev/null || true)"
+  if [[ -n "${CHIMERA_PROXY_URL:-}" ]]; then
+    printf '%s,http://127.0.0.1:18080' "$CHIMERA_PROXY_URL"
+  else
+    printf 'http://127.0.0.1:18080'
   fi
-  if [[ ! "$socks_port" =~ ^[0-9]+$ ]]; then
-    socks_port="12080"
-  fi
-  printf 'socks5h://127.0.0.1:%s,http://127.0.0.1:18080' "$socks_port"
 }
 
 has_listener_for() {

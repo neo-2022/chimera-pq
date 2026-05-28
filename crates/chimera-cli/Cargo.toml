@@ -15,6 +15,7 @@ chimera-carrier-quic = { path = "../chimera-carrier-quic" }
 chimera-carrier-tls = { path = "../chimera-carrier-tls" }
 chimera-config = { path = "../chimera-config" }
 chimera-core = { path = "../chimera-core" }
+chimera-contracts = { path = "../chimera-contracts" }
 chimera-dns = { path = "../chimera-dns" }
 chimera-mesh = { path = "../chimera-mesh" }
 chimera-policy = { path = "../chimera-policy" }

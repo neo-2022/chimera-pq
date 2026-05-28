@@ -29,6 +29,7 @@ fn test_node(
     MeshNode {
         node_id: MeshNodeId::new(id),
         endpoint: format!("{id}.test:443"),
+        invite_token: None,
         country,
         status,
         latency_ms: Some(50.0),

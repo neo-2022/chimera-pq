@@ -1,6 +1,6 @@
 # Laptop Fresh Gate Summary (2026-05-22)
 
-Source sync dir: `/home/art/Archives/VPN/chimera-pq/docs/laptop_sync/20260522_104003`
+Source sync dir: `/home/art/Archives/WEAVE/chimera-pq/docs/laptop_sync/20260522_104003`
 
 Overall:
 - fresh_gate_status: pass
@@ -27,4 +27,4 @@ Runtime proofs:
 - e2e_gate: status=pass, reason=channel_audit_and_selected_routes_ok
 
 Raw load sample file:
-- /home/art/Archives/VPN/chimera-pq/docs/laptop_sync/20260522_104003/CHIMERA_LOAD_30S_LAPTOP_20260522_103852.json
+- /home/art/Archives/WEAVE/chimera-pq/docs/laptop_sync/20260522_104003/CHIMERA_LOAD_30S_LAPTOP_20260522_103852.json

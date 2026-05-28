@@ -7,13 +7,10 @@ fail() {
   exit 1
 }
 
-rg -n "CHIMERA_SOCKS_PORT|installer_gate_unify_socks_unit|chimera-socks-tunnel.service" \
-  "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_port_unify_logic"
+rg -n "installer_gate_prepare_upstream_env|transparent runtime|transparent runtime" \
+  "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transparent_bootstrap"
 
-grep -F -- '-D 127.0.0.1:${CHIMERA_SOCKS_PORT:-12080}' \
-  "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "legacy_unit_not_parametrized"
-
-rg -n "CHIMERA_SOCKS_PORT" "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_socks_port_env"
-rg -n "CHIMERA_SOCKS_PORT" "$ROOT_DIR/scripts/chimera-socks-watchdog.sh" >/dev/null || fail "watchdog_missing_socks_port_env"
+rg -n "proxy-status|transparent_runtime|split-transparent" \
+  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_transparent_runtime"
 
 echo "installer_gate=pass"

@@ -70,7 +70,7 @@ classify_default_iface() {
     return
   fi
   case "$iface" in
-    tun*|wg*|ppp*|tailscale*|zt*|utun*|vpn*)
+    tun*|wg*|ppp*|tailscale*|zt*|utun*|tunnel*)
       echo "vpn_or_tunnel"
       ;;
     *)

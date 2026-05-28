@@ -1,4 +1,5 @@
 use super::nodes_cmd::mesh_nodes_command;
+use super::nodes_cmd::selected_node_endpoint;
 use super::nodes_inventory::load_mesh_nodes_inventory;
 use super::nodes_selection::{build_selection_entries, render_selection_prompt};
 use std::fs;
@@ -95,6 +96,23 @@ fn nodes_selection_prompt_marks_best_node() {
     assert!(prompt.contains("Доступные узлы CHIMERA"));
     assert!(prompt.contains("Enter для лучшего узла"));
     assert!(entries.iter().any(|entry| entry.is_best));
+}
+
+#[test]
+fn selected_endpoint_prefers_current_then_pinned() {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind listener failed: {err}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read addr failed: {err}"));
+    let endpoint = addr.to_string();
+    let text = format!(
+        "mesh.nodes.ids = de,nl\nmesh.nodes.current = nl\nmesh.nodes.pinned = de\nmesh.nodes.autoconnect = true\nmesh.node.de.endpoint = 127.0.0.1:1111\nmesh.node.de.country_code = DE\nmesh.node.de.country_name = Germany\nmesh.node.de.status = healthy\nmesh.node.de.observation_count = 10\nmesh.node.nl.endpoint = {}\nmesh.node.nl.country_code = NL\nmesh.node.nl.country_name = Netherlands\nmesh.node.nl.status = healthy\nmesh.node.nl.observation_count = 10\n",
+        endpoint
+    );
+    let inventory = super::nodes_inventory::parse_inventory_config_text(&text)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(selected_node_endpoint(&inventory), Some(endpoint.as_str()));
 }
 
 fn random_u64() -> u64 {
