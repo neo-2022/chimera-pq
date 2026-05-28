@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod peer_egress;
+
 use std::collections::VecDeque;
 use std::net::IpAddr;
 

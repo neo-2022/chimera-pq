@@ -26,6 +26,7 @@ enum DirectMode {
 struct Options {
     listen: String,
     gateway_local: String,
+    gateway_fallback: Option<String>,
     direct_mode: DirectMode,
     direct_timeout_ms: u64,
     first_response_timeout_ms: u64,
@@ -37,6 +38,7 @@ impl Options {
     fn parse(args: &[String]) -> Result<Self, String> {
         let mut listen = env_value("CHIMERA_TRANSPARENT_TCP_LISTEN");
         let mut gateway_local = env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL");
+        let mut gateway_fallback = env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_FALLBACK");
         let mut direct_mode = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE")
             .map(|value| parse_direct_mode(&value))
             .transpose()?
@@ -66,6 +68,7 @@ impl Options {
             match flag {
                 "--listen" => listen = Some(value.clone()),
                 "--gateway-local" => gateway_local = Some(value.clone()),
+                "--gateway-fallback" => gateway_fallback = Some(value.clone()),
                 "--direct-mode" => direct_mode = parse_direct_mode(value)?,
                 "--direct-timeout-ms" => {
                     direct_timeout_ms = parse_positive_u64(value, "direct-timeout-ms")?;
@@ -89,6 +92,7 @@ impl Options {
                 gateway_local,
                 "missing --gateway-local or CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL",
             )?,
+            gateway_fallback,
             direct_mode,
             direct_timeout_ms,
             first_response_timeout_ms,
@@ -133,15 +137,13 @@ fn run(options: Options) -> Result<(), String> {
 
 fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String> {
     tune_tcp(&client)?;
-    let destination = match options.static_destination.as_deref() {
-        Some(destination) => parse_socket_addr(destination)?,
-        None => original_destination(&client)?,
-    };
-    eprintln!("event=transparent_flow_accepted destination={destination}");
     let initial = read_initial_bytes(&mut client, options.initial_read_timeout_ms)?;
+    let destination = resolve_destination(&client, &initial, options)?;
+    eprintln!("event=transparent_flow_accepted destination={destination}");
     if options.direct_mode == DirectMode::Disabled {
-        let gateway = connect_gateway(
+        let gateway = connect_gateway_with_fallback(
             &options.gateway_local,
+            options.gateway_fallback.as_deref(),
             &destination,
             &initial,
             options.direct_timeout_ms,
@@ -158,8 +160,9 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
         }
         Err(error) => {
             eprintln!("event=transparent_direct_failed reason={error}");
-            let gateway = connect_gateway(
+            let gateway = connect_gateway_with_fallback(
                 &options.gateway_local,
+                options.gateway_fallback.as_deref(),
                 &destination,
                 &initial,
                 options.direct_timeout_ms,
@@ -167,6 +170,27 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
             eprintln!("event=transparent_route_selected route=gateway destination={destination}");
             relay_plain(client, gateway)
         }
+    }
+}
+
+fn connect_gateway_with_fallback(
+    gateway_local: &str,
+    gateway_fallback: Option<&str>,
+    destination: &SocketAddr,
+    initial: &[u8],
+    timeout_ms: u64,
+) -> Result<TcpStream, String> {
+    match connect_gateway(gateway_local, destination, initial, timeout_ms) {
+        Ok(stream) => Ok(stream),
+        Err(err) => match gateway_fallback {
+            Some(fallback) => {
+                eprintln!(
+                    "event=gateway_fallback_trying fallback={fallback} reason=\"{err}\""
+                );
+                connect_gateway(fallback, destination, initial, timeout_ms)
+            }
+            None => Err(err),
+        },
     }
 }
 
@@ -311,6 +335,78 @@ fn original_destination(stream: &TcpStream) -> Result<SocketAddr, String> {
     Ok(SocketAddr::V4(SocketAddrV4::new(ip, port)))
 }
 
+fn resolve_destination(
+    client: &TcpStream,
+    initial: &[u8],
+    options: &Options,
+) -> Result<SocketAddr, String> {
+    match options.static_destination.as_deref() {
+        Some(dest) => parse_socket_addr(dest),
+        None => {
+            if let Some(addr) = parse_proxy_destination(initial) {
+                Ok(addr)
+            } else {
+                original_destination(client)
+            }
+        }
+    }
+}
+
+fn parse_proxy_destination(initial: &[u8]) -> Option<SocketAddr> {
+    let text = std::str::from_utf8(initial).ok()?;
+    if let Some(rest) = text.strip_prefix("CONNECT ") {
+        let host_port = rest.split_whitespace().next()?;
+        let (host, port) = host_port.rsplit_once(':')?;
+        let port: u16 = port.parse().ok()?;
+        let addr = resolve_host_to_v4(host, port)?;
+        return Some(addr);
+    }
+    if let Some(rest) = text.strip_prefix("GET http://") {
+        let host_part = rest.splitn(2, '/').next()?;
+        let (host, resolved_port) = if let Some((h, p)) = host_part.rsplit_once(':') {
+            (h, p.parse::<u16>().ok().unwrap_or(80))
+        } else {
+            (host_part, 80u16)
+        };
+        let addr = resolve_host_to_v4(host, resolved_port)?;
+        return Some(addr);
+    }
+    if let Some(rest) = text.strip_prefix("POST http://") {
+        let host_part = rest.splitn(2, '/').next()?;
+        let (host, resolved_port) = if let Some((h, p)) = host_part.rsplit_once(':') {
+            (h, p.parse::<u16>().ok().unwrap_or(80))
+        } else {
+            (host_part, 80u16)
+        };
+        let addr = resolve_host_to_v4(host, resolved_port)?;
+        return Some(addr);
+    }
+    if initial.first() == Some(&5) && initial.len() >= 4 {
+        let addr_type = initial[3];
+        if addr_type == 1 && initial.len() >= 10 {
+            let ip = Ipv4Addr::new(initial[4], initial[5], initial[6], initial[7]);
+            let port = u16::from_be_bytes([initial[8], initial[9]]);
+            if !ip.is_loopback() && !ip.is_private() {
+                return Some(SocketAddr::V4(SocketAddrV4::new(ip, port)));
+            }
+        }
+    }
+    None
+}
+
+fn resolve_host_to_v4(host: &str, port: u16) -> Option<SocketAddr> {
+    let host = host.trim_end_matches('.');
+    if let Ok(ip) = host.parse::<Ipv4Addr>() {
+        return Some(SocketAddr::V4(SocketAddrV4::new(ip, port)));
+    }
+    std::net::ToSocketAddrs::to_socket_addrs(&(host, port))
+        .ok()?
+        .find_map(|addr| match addr {
+            SocketAddr::V4(v4) => Some(SocketAddr::V4(v4)),
+            _ => None,
+        })
+}
+
 fn connect_tcp(target: &str, timeout_ms: u64) -> Result<TcpStream, String> {
     let timeout = Duration::from_millis(timeout_ms);
     let addrs: Vec<SocketAddr> = target
@@ -437,6 +533,23 @@ mod tests {
         assert_eq!(parsed.first_response_timeout_ms, 200);
         assert_eq!(parsed.initial_read_timeout_ms, 50);
         assert_eq!(parsed.static_destination, Some("127.0.0.1:2".to_string()));
+        assert_eq!(parsed.gateway_fallback, None);
+    }
+
+    #[test]
+    fn options_parse_gateway_fallback() {
+        let args = vec![
+            "--listen".to_string(),
+            "127.0.0.1:0".to_string(),
+            "--gateway-local".to_string(),
+            "127.0.0.1:1".to_string(),
+            "--gateway-fallback".to_string(),
+            "127.0.0.1:3".to_string(),
+        ];
+        let parsed = Options::parse(&args).unwrap_or_else(|error| {
+            unreachable!("options should parse: {error}");
+        });
+        assert_eq!(parsed.gateway_fallback, Some("127.0.0.1:3".to_string()));
     }
 
     #[test]
@@ -486,6 +599,7 @@ mod tests {
         let options = Options {
             listen: transparent_addr.to_string(),
             gateway_local: gateway_addr.to_string(),
+            gateway_fallback: None,
             direct_mode: DirectMode::Auto,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,
@@ -559,6 +673,7 @@ mod tests {
         let options = Options {
             listen: transparent_addr.to_string(),
             gateway_local: gateway_addr.to_string(),
+            gateway_fallback: None,
             direct_mode: DirectMode::Auto,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,
@@ -631,6 +746,7 @@ mod tests {
         let options = Options {
             listen: transparent_addr.to_string(),
             gateway_local: gateway_addr.to_string(),
+            gateway_fallback: None,
             direct_mode: DirectMode::Disabled,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,
@@ -656,5 +772,79 @@ mod tests {
         });
         assert_eq!(&reply, b"forced-gw:hello");
         drop(direct_target);
+    }
+
+    #[test]
+    fn transparent_tcp_uses_gateway_fallback_when_gateway_local_is_down() {
+        let gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("fallback gateway listener should bind: {error}");
+        });
+        let gateway_addr = gateway.local_addr().unwrap_or_else(|error| {
+            unreachable!("fallback gateway addr should be available: {error}");
+        });
+        thread::spawn(move || {
+            let Ok((mut stream, _)) = gateway.accept() else {
+                return;
+            };
+            let mut magic = [0_u8; super::LOCAL_MAGIC.len()];
+            if stream.read_exact(&mut magic).is_err() || magic != super::LOCAL_MAGIC {
+                return;
+            }
+            if read_line_limited(&mut stream, 128).is_err() {
+                return;
+            }
+            if stream.write_all(b"OK\n").is_err() {
+                return;
+            }
+            let mut buf = [0_u8; 16];
+            let Ok(n) = stream.read(&mut buf) else {
+                return;
+            };
+            let _ = stream.write_all(b"fallback-works:");
+            let _ = stream.write_all(&buf[..n]);
+        });
+
+        let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transparent listener should bind: {error}");
+        });
+        let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
+            unreachable!("transparent addr should be available: {error}");
+        });
+        let closed_gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("closed gateway listener should bind: {error}");
+        });
+        let closed_gateway_addr = closed_gateway.local_addr().unwrap_or_else(|error| {
+            unreachable!("closed gateway addr should be available: {error}");
+        });
+        drop(closed_gateway);
+
+        let options = Options {
+            listen: transparent_addr.to_string(),
+            gateway_local: closed_gateway_addr.to_string(),
+            gateway_fallback: Some(gateway_addr.to_string()),
+            direct_mode: DirectMode::Disabled,
+            direct_timeout_ms: 500,
+            first_response_timeout_ms: 500,
+            initial_read_timeout_ms: 500,
+            static_destination: Some("127.0.0.1:80".to_string()),
+        };
+        thread::spawn(move || {
+            let Ok((client, _)) = transparent.accept() else {
+                return;
+            };
+            let _ = handle_client(client, &options);
+        });
+
+        let mut client = TcpStream::connect(transparent_addr).unwrap_or_else(|error| {
+            unreachable!("client should connect to transparent listener: {error}");
+        });
+        client.write_all(b"hello").unwrap_or_else(|error| {
+            unreachable!("client write should work: {error}");
+        });
+        let mut reply = [0_u8; 20];
+        client.read_exact(&mut reply).unwrap_or_else(|error| {
+            unreachable!("client read should work: {error}");
+        });
+        assert_eq!(&reply[..], b"fallback-works:hello");
     }
 }
