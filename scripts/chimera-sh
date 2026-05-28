@@ -158,6 +158,13 @@ auto_update_if_needed() {
   [[ "$AUTO_UPDATE_ENABLED" == "1" ]] || return 0
   command -v bash >/dev/null 2>&1 || return 0
 
+  local local_version local_sha
+  local_version="$(read_local_runtime_version)"
+  local_sha="$(read_local_runtime_bundle_sha)"
+  if [[ -z "$local_version" || "$local_version" == "0.0.0" ]]; then
+    return 0
+  fi
+
   download_url_to_file() {
     local url="${1:?url_required}"
     local dest="${2:?dest_required}"
@@ -185,7 +192,7 @@ auto_update_if_needed() {
 
   if ! download_url_to_file "${UPDATE_BOOTSTRAP_URL}?ts=$(date +%s)" "$tmp_script" 2>/dev/null; then
     rm -f "$tmp_script"
-    return 1
+    return 0
   fi
 
   local remote_version remote_archive_url local_version local_sha remote_sha
