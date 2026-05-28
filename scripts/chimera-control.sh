@@ -218,6 +218,22 @@ ensure_upstream_env_bootstrapped() {
     UPSTREAM_ENV_FILE="$UPSTREAM_ENV_FILE" \
     "$UPSTREAM_AUTOBOOTSTRAP_SCRIPT" >/dev/null 2>&1 || true
   fi
+
+  if [[ -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
+    local discovery_url discovery_pubkey discovery_probe_timeout
+    discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
+    discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
+    discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
+    if [[ -n "$discovery_url" ]] && [[ -f "$UPSTREAM_ENV_FILE" ]] && ! grep -q '^CHIMERA_MESH_NODES_DISCOVERY_URL=' "$UPSTREAM_ENV_FILE"; then
+      printf '\nCHIMERA_MESH_NODES_DISCOVERY_URL=%s\n' "$discovery_url" >> "$UPSTREAM_ENV_FILE"
+    fi
+    if [[ -n "$discovery_pubkey" ]] && [[ -f "$UPSTREAM_ENV_FILE" ]] && ! grep -q '^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=' "$UPSTREAM_ENV_FILE"; then
+      printf 'CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=%s\n' "$discovery_pubkey" >> "$UPSTREAM_ENV_FILE"
+    fi
+    if [[ -n "$discovery_probe_timeout" ]] && [[ -f "$UPSTREAM_ENV_FILE" ]] && ! grep -q '^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=' "$UPSTREAM_ENV_FILE"; then
+      printf 'CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=%s\n' "$discovery_probe_timeout" >> "$UPSTREAM_ENV_FILE"
+    fi
+  fi
 }
 
 usage() {
@@ -394,6 +410,10 @@ start_runner_background() {
   local log_file="${3:?log_file_required}"
   local env_file="${4:?env_file_required}"
   local target="${5:?target_required}"
+  local use_sudo="0"
+  if [[ -f "$env_file" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$env_file"; then
+    use_sudo="1"
+  fi
 
   if pidfile_running "$pid_file"; then
     local pid
@@ -405,20 +425,37 @@ start_runner_background() {
   ensure_parent_dir "$pid_file"
   ensure_parent_dir "$log_file"
 
-  nohup bash -lc '
-    set -euo pipefail
-    env_file="$1"
-    runner="$2"
-    target="$3"
-    if [[ ! -f "$env_file" ]]; then
-      echo "error: missing env file: $env_file" >&2
-      exit 1
-    fi
-    set -a
-    # shellcheck disable=SC1090
-    source "$env_file"
-    exec "$runner" "$target"
-  ' _ "$env_file" "$CHIMERA_RUNNER" "$target" >>"$log_file" 2>&1 &
+  if [[ "$use_sudo" == "1" ]]; then
+    nohup sudo -n bash -lc '
+      set -euo pipefail
+      env_file="$1"
+      runner="$2"
+      target="$3"
+      if [[ ! -f "$env_file" ]]; then
+        echo "error: missing env file: $env_file" >&2
+        exit 1
+      fi
+      set -a
+      # shellcheck disable=SC1090
+      source "$env_file"
+      exec "$runner" "$target"
+    ' _ "$env_file" "$CHIMERA_RUNNER" "$target" >>"$log_file" 2>&1 &
+  else
+    nohup bash -lc '
+      set -euo pipefail
+      env_file="$1"
+      runner="$2"
+      target="$3"
+      if [[ ! -f "$env_file" ]]; then
+        echo "error: missing env file: $env_file" >&2
+        exit 1
+      fi
+      set -a
+      # shellcheck disable=SC1090
+      source "$env_file"
+      exec "$runner" "$target"
+    ' _ "$env_file" "$CHIMERA_RUNNER" "$target" >>"$log_file" 2>&1 &
+  fi
 
   local pid=$!
   printf '%s\n' "$pid" >"$pid_file"
