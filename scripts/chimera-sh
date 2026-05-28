@@ -201,6 +201,10 @@ auto_update_if_needed() {
     return 1
   fi
   local_version="$(read_local_runtime_version)"
+  if [[ -z "$local_version" || "$local_version" == "0.0.0" ]]; then
+    rm -f "$tmp_script"
+    return 0
+  fi
 
   local_sha="$(read_local_runtime_bundle_sha)"
   remote_sha="$(remote_archive_sha256 "$remote_archive_url" || true)"
