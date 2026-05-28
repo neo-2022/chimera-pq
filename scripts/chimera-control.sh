@@ -1661,14 +1661,32 @@ start_runtime() {
     publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
   fi
   if client_config_ready && [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
-    start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$CLIENT_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
     client_status="started"
-    run_chimera_cli up \
-      --config "$CLIENT_CONFIG_FILE" \
-      --state-file "$STATE_FILE" \
-      --apply-tun true \
-      --apply-route true \
-      --apply-dns true >/dev/null 2>&1 || true
+    if [[ -f "$PEER_EGRESS_ENV_FILE" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$PEER_EGRESS_ENV_FILE"; then
+      sudo -n bash -lc '
+        set -euo pipefail
+        env_file="$1"
+        shift
+        if [[ -f "$env_file" ]]; then
+          set -a
+          # shellcheck disable=SC1090
+          source "$env_file"
+        fi
+        exec "$@"
+      ' _ "$PEER_EGRESS_ENV_FILE" "$CHIMERA_RUNNER" cli up \
+        --config "$CLIENT_CONFIG_FILE" \
+        --state-file "$STATE_FILE" \
+        --apply-tun true \
+        --apply-route true \
+        --apply-dns true >/dev/null 2>&1 || true
+    else
+      run_chimera_cli up \
+        --config "$CLIENT_CONFIG_FILE" \
+        --state-file "$STATE_FILE" \
+        --apply-tun true \
+        --apply-route true \
+        --apply-dns true >/dev/null 2>&1 || true
+    fi
     site_auto_watch_start >/dev/null 2>&1 || true
   else
     site_auto_watch_stop >/dev/null 2>&1 || true
@@ -1690,12 +1708,31 @@ stop_runtime() {
   fi
   stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
   stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
-  run_chimera_cli down \
-    --config "$CLIENT_CONFIG_FILE" \
-    --state-file "$STATE_FILE" \
-    --apply-tun true \
-    --apply-route true \
-    --apply-dns true >/dev/null 2>&1 || true
+  if [[ -f "$PEER_EGRESS_ENV_FILE" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$PEER_EGRESS_ENV_FILE"; then
+    sudo -n bash -lc '
+      set -euo pipefail
+      env_file="$1"
+      shift
+      if [[ -f "$env_file" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$env_file"
+      fi
+      exec "$@"
+    ' _ "$PEER_EGRESS_ENV_FILE" "$CHIMERA_RUNNER" cli down \
+      --config "$CLIENT_CONFIG_FILE" \
+      --state-file "$STATE_FILE" \
+      --apply-tun true \
+      --apply-route true \
+      --apply-dns true >/dev/null 2>&1 || true
+  else
+    run_chimera_cli down \
+      --config "$CLIENT_CONFIG_FILE" \
+      --state-file "$STATE_FILE" \
+      --apply-tun true \
+      --apply-route true \
+      --apply-dns true >/dev/null 2>&1 || true
+  fi
   echo "stop_status=ok mode=direct"
 }
 
