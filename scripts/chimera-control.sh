@@ -1661,6 +1661,7 @@ start_runtime() {
     publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
   fi
   if client_config_ready && [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+    start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$CLIENT_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
     client_status="started"
     if [[ -f "$PEER_EGRESS_ENV_FILE" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$PEER_EGRESS_ENV_FILE"; then
       sudo -n bash -lc '
