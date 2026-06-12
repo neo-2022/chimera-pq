@@ -101,7 +101,7 @@ pub(crate) fn check_datapath_artifact(path: &str) -> bool {
     };
     content.contains("\"status\":\"ok\"")
         && content.contains("\"kind\":\"datapath_report\"")
-        && content.contains("\"gateway_explain\":\"")
+        && content.contains("\"transit_explain\":\"")
         && content.contains("\"block_explain\":\"")
         && content.contains("\"direct_explain\":\"")
         && content.contains("\"network_state\":\"not_modified\"")

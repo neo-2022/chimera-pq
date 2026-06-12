@@ -12,11 +12,11 @@ CHIMERA_PROTECTED_PORTS_CSV="${CHIMERA_PROTECTED_PORTS_CSV:-11080,22180}"
 CHIMERA_SAFE_HOST_LOCK="${CHIMERA_SAFE_HOST_LOCK:-1}"
 CHIMERA_ALLOW_LOCAL_NETWORK_MUTATION="${CHIMERA_ALLOW_LOCAL_NETWORK_MUTATION:-0}"
 POLICY_FILE="${POLICY_FILE:-$ROOT_DIR/configs/policy.runtime.conf}"
+MANUAL_TRANSIT_DOMAINS_FILE="${MANUAL_TRANSIT_DOMAINS_FILE:-$ROOT_DIR/configs/manual_transit_domains.txt}"
 MANUAL_GATEWAY_DOMAINS_FILE="${MANUAL_GATEWAY_DOMAINS_FILE:-$ROOT_DIR/configs/manual_gateway_domains.txt}"
 ADAPTIVE_DOMAINS_FILE="${ADAPTIVE_DOMAINS_FILE:-$ROOT_DIR/configs/adaptive_domains.txt}"
 APP_ROUTES_FILE="${APP_ROUTES_FILE:-$ROOT_DIR/configs/chimera-app-routes.conf}"
 SERVICE_ROUTE_OVERRIDES_FILE="${SERVICE_ROUTE_OVERRIDES_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/service_route_overrides.conf}"
-PAC_FILE="${PAC_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/chimera-proxy.pac}"
 ROUTE_MODE_FILE="${ROUTE_MODE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/route_mode}"
 SPLIT_LIST_MODE_FILE="${SPLIT_LIST_MODE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/split_list_mode}"
 AUTOFIX_SCRIPT="$ROOT_DIR/scripts/chimera-autofix.sh"
@@ -25,7 +25,6 @@ AUTOFIX_TIMEOUT="${CHIMERA_AUTOFIX_MAX_TIME:-25}"
 UPSTREAM_SSH_KEY_FILE="${CHIMERA_UPSTREAM_SSH_KEY_FILE:-$HOME/.ssh/id_ed25519}"
 CHIMERA_ALLOW_PGREP_KILL="${CHIMERA_ALLOW_PGREP_KILL:-0}"
 AUTO_RESTART_CHROMIUM="${CHIMERA_AUTO_RESTART_CHROMIUM:-0}"
-PROXY_AUTOSYNC="${CHIMERA_PROXY_AUTOSYNC:-1}"
 CHIMERA_SYSTEM_INTEGRATION="${CHIMERA_SYSTEM_INTEGRATION:-0}"
 UPSTREAM_STRATEGY="${CHIMERA_UPSTREAM_STRATEGY:-balanced}"
 UPSTREAM_STICKY_SEC="${CHIMERA_UPSTREAM_STICKY_SEC:-120}"
@@ -39,7 +38,7 @@ SITE_AUTOWATCH_ENABLED="${SITE_AUTOWATCH_ENABLED:-1}"
 SITE_AUTO_DISCOVERY_ENABLED="${SITE_AUTO_DISCOVERY_ENABLED:-1}"
 SITE_AUTO_DISCOVERY_LOOKBACK_SEC="${SITE_AUTO_DISCOVERY_LOOKBACK_SEC:-120}"
 SITE_DISCOVERY_DOMAINS_FILE="${SITE_DISCOVERY_DOMAINS_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/discovered_domains.txt}"
-SITE_FAILOVER_PROXY_THRESHOLD="${SITE_FAILOVER_PROXY_THRESHOLD:-1}"
+SITE_FAILOVER_DATAPATH_THRESHOLD="${SITE_FAILOVER_DATAPATH_THRESHOLD:-1}"
 SITE_FAILBACK_DIRECT_THRESHOLD="${SITE_FAILBACK_DIRECT_THRESHOLD:-3}"
 SITE_ADAPTIVE_ENTRY_TTL_SEC="${SITE_ADAPTIVE_ENTRY_TTL_SEC:-86400}"
 AUTOFIX_LOG_FILE="${AUTOFIX_LOG_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/autofix.log}"
@@ -67,7 +66,6 @@ SPLIT_TRANSPARENT_DNS_STRATEGY="${SPLIT_TRANSPARENT_DNS_STRATEGY:-prefer_ipv4}"
 SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera-split-watchdog.pid}"
 CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}"
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
-CHIMERA_FORCE_PROXY_NONE="${CHIMERA_FORCE_PROXY_NONE:-0}"
 CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER="${CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER:-1}"
 CHIMERA_STRICT_FAILOVER_GATE="${CHIMERA_STRICT_FAILOVER_GATE:-1}"
 NFT_BIN="${NFT_BIN:-}"
@@ -241,13 +239,14 @@ usage() {
 Usage: chimera-control.sh <command>
 
 Commands:
-  start          Start CHIMERA gateway+client services (systemd --user)
-  stop           Stop CHIMERA gateway+client services
+  start          Start CHIMERA node services (systemd --user)
+  stop           Stop CHIMERA node services
   restart        Restart CHIMERA services
   status         Show status for CHIMERA services and runtime state
-  doctor         Run client doctor check
-  logs           Tail gateway+client logs
-  proxy-status   Show transparent runtime and route status
+  doctor         Run node doctor check
+  logs           Tail node logs
+  datapath-status
+                Show transparent runtime and route status
   app-routes-status  Show parsed app/service routing config
   route-status       Show split routing runtime status
   run-app <app_id> [args...]
@@ -256,9 +255,9 @@ Commands:
                 Verify app run under the transparent runtime
   verify-cmd <command...>
                 Verify any command/binary under the transparent runtime
-  service-proxy-enable [service...]
+  service-route-enable [service...]
                 Retired legacy command; transparent runtime is the default
-  service-proxy-disable [service...]
+  service-route-disable [service...]
                 Retired legacy command; transparent runtime is the default
   verify-service <service...>
                 Retired legacy command; transparent runtime is the default
@@ -306,8 +305,8 @@ Commands:
                 Add/update app route entry in config
   app-route-add-running <process_name...>
                 Add running processes as app routes automatically
-  service-proxy-enable-running [service...]
-                Enable CHIMERA proxy for running user services
+  service-route-enable-running [service...]
+                Enable CHIMERA route override for running user services
   uninstall      Full uninstall + OS/network settings cleanup (best-effort, idempotent)
   ui-mode        Show or set UI mode override: auto|tray|dialog|cli
 
@@ -362,14 +361,7 @@ run_chimera_cli() {
     "$CHIMERA_CLI_BIN" "$@"
     return $?
   fi
-  if [[ "${CHIMERA_ALLOW_CARGO_FALLBACK:-0}" == "1" ]] && command -v cargo >/dev/null 2>&1; then
-    (
-      cd "$ROOT_DIR"
-      cargo run -q -p chimera-cli -- "$@"
-    )
-    return $?
-  fi
-  echo "error: chimera-cli binary is missing and cargo fallback is disabled" >&2
+  echo "error: shipped chimera-cli binary is missing: $CHIMERA_CLI_BIN" >&2
   return 1
 }
 
@@ -382,14 +374,7 @@ run_chimera_gateway() {
     "$CHIMERA_GATEWAY_BIN" "$@"
     return $?
   fi
-  if [[ "${CHIMERA_ALLOW_CARGO_FALLBACK:-0}" == "1" ]] && command -v cargo >/dev/null 2>&1; then
-    (
-      cd "$ROOT_DIR"
-      cargo run -q -p chimera-gateway -- "$@"
-    )
-    return $?
-  fi
-  echo "error: chimera-gateway binary is missing and cargo fallback is disabled" >&2
+  echo "error: shipped chimera-gateway binary is missing: $CHIMERA_GATEWAY_BIN" >&2
   return 1
 }
 
@@ -637,9 +622,7 @@ ensure_vpn_coexist_guard() {
     CHIMERA_SYSTEM_INTEGRATION="0"
     if [[ "$CHIMERA_COEXIST_TRANSPARENT_CAPTURE" == "1" ]]; then
       SPLIT_TRANSPARENT_ENABLED="1"
-      PROXY_AUTOSYNC="0"
-      CHIMERA_FORCE_PROXY_NONE="1"
-      echo "chimera_coexist_guard=active action=disable_desktop_proxy_only reason=foreign_vpn_contours_detected"
+      echo "chimera_coexist_guard=active action=keep_transparent_datapath_only reason=foreign_vpn_contours_detected"
       echo "chimera_coexist_transparent_capture=enabled mode=kernel_tun_split"
     else
       SPLIT_TRANSPARENT_ENABLED="0"
@@ -1044,26 +1027,6 @@ merge_unique_domain_sources() {
   rm -f "$tmp"
 }
 
-resolve_proxy_url() {
-  if [[ -n "${CHIMERA_PROXY_URL:-}" ]]; then
-    printf '%s' "$CHIMERA_PROXY_URL"
-    return 0
-  fi
-  if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$UPSTREAM_ENV_FILE"
-    if [[ -n "${CHIMERA_PROXY_URL:-}" ]]; then
-      printf '%s' "$CHIMERA_PROXY_URL"
-      return 0
-    fi
-    if [[ -n "${CHIMERA_REAL_WORLD_PROXY_URL:-}" ]]; then
-      printf '%s' "$CHIMERA_REAL_WORLD_PROXY_URL"
-      return 0
-    fi
-  fi
-  printf 'http://127.0.0.1:18080'
-}
-
 runtime_state_is_up() {
   if systemd_user_ready; then
     local gateway_state client_state
@@ -1085,37 +1048,6 @@ runtime_state_is_up() {
   fi
   [[ -f "$STATE_FILE" ]] || return 1
   grep -q '"status"[[:space:]]*:[[:space:]]*"up"' "$STATE_FILE" 2>/dev/null
-}
-
-proxy_url_hostport() {
-  local url="${1:-}"
-  local rest="${url#*://}"
-  rest="${rest#*@}"
-  rest="${rest%%/*}"
-  printf '%s' "$rest"
-}
-
-listener_state_for_proxy() {
-  local proxy_url="${1:-}"
-  local hostport
-  hostport="$(proxy_url_hostport "$proxy_url")"
-  local host="${hostport%:*}"
-  local port="${hostport##*:}"
-  if [[ -n "$host" && -n "$port" && "$hostport" != "$proxy_url" ]]; then
-    if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Fxq "127.0.0.1:${port}"; then
-      echo "up"
-      return 0
-    fi
-    if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Fxq "[::1]:${port}"; then
-      echo "up"
-      return 0
-    fi
-    if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Fxq "*:${port}"; then
-      echo "up"
-      return 0
-    fi
-  fi
-  echo "down"
 }
 
 read_runtime_service_state() {
@@ -1223,7 +1155,7 @@ site_auto_discover_run() {
   tmp="$(mktemp)"
   : >"$tmp"
   local file
-  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_GATEWAY_DOMAINS_FILE" "$ADAPTIVE_DOMAINS_FILE"; do
+  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_TRANSIT_DOMAINS_FILE" "$MANUAL_GATEWAY_DOMAINS_FILE" "$ADAPTIVE_DOMAINS_FILE"; do
     if [[ -f "$file" ]]; then
       while IFS= read -r line; do
         line="$(trim_ascii_line "$line")"
@@ -1264,7 +1196,7 @@ site_auto_bootstrap_run() {
   tmp="$(mktemp)"
   : >"$tmp"
   local file
-  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_GATEWAY_DOMAINS_FILE" "$SITE_DISCOVERY_DOMAINS_FILE"; do
+  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_TRANSIT_DOMAINS_FILE" "$MANUAL_GATEWAY_DOMAINS_FILE" "$SITE_DISCOVERY_DOMAINS_FILE"; do
     if [[ -f "$file" ]]; then
       while IFS= read -r line; do
         line="$(trim_ascii_line "$line")"
@@ -1307,9 +1239,11 @@ site_auto_status() {
   echo "site_adaptive_db_file=$SITE_ADAPTIVE_DB_FILE"
   echo "site_discovery_file=$SITE_DISCOVERY_DOMAINS_FILE"
   echo "adaptive_domains_file=$ADAPTIVE_DOMAINS_FILE"
-  echo "manual_gateway_domains_file=$MANUAL_GATEWAY_DOMAINS_FILE"
+  echo "manual_transit_domains_file=$MANUAL_TRANSIT_DOMAINS_FILE"
+  echo "legacy_manual_gateway_domains_file=$MANUAL_GATEWAY_DOMAINS_FILE"
   echo "adaptive_domains_count=$(count_noncomment_lines "$ADAPTIVE_DOMAINS_FILE")"
-  echo "manual_gateway_domains_count=$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
+  echo "manual_transit_domains_count=$(count_noncomment_lines "$MANUAL_TRANSIT_DOMAINS_FILE")"
+  echo "legacy_manual_gateway_domains_count=$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
   echo "discovered_domains_count=$(count_noncomment_lines "$SITE_DISCOVERY_DOMAINS_FILE")"
 }
 
@@ -1323,11 +1257,17 @@ count_noncomment_lines() {
 }
 
 site_list() {
-  echo "manual_gateway_domains_file=$MANUAL_GATEWAY_DOMAINS_FILE"
+  echo "manual_transit_domains_file=$MANUAL_TRANSIT_DOMAINS_FILE"
+  echo "legacy_manual_gateway_domains_file=$MANUAL_GATEWAY_DOMAINS_FILE"
   echo "adaptive_domains_file=$ADAPTIVE_DOMAINS_FILE"
-  echo "manual_gateway_domains_count=$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
+  echo "manual_transit_domains_count=$(count_noncomment_lines "$MANUAL_TRANSIT_DOMAINS_FILE")"
+  echo "legacy_manual_gateway_domains_count=$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
   echo "adaptive_domains_count=$(count_noncomment_lines "$ADAPTIVE_DOMAINS_FILE")"
-  echo "manual_gateway_domains:"
+  echo "manual_transit_domains:"
+  if [[ -f "$MANUAL_TRANSIT_DOMAINS_FILE" ]]; then
+    awk 'NF && $0 !~ /^[[:space:]]*#/' "$MANUAL_TRANSIT_DOMAINS_FILE"
+  fi
+  echo "legacy_manual_gateway_domains:"
   if [[ -f "$MANUAL_GATEWAY_DOMAINS_FILE" ]]; then
     awk 'NF && $0 !~ /^[[:space:]]*#/' "$MANUAL_GATEWAY_DOMAINS_FILE"
   fi
@@ -1343,7 +1283,7 @@ site_add() {
   for domain in "$@"; do
     domain="$(normalize_domain_token "$domain")"
     [[ -z "$domain" ]] && continue
-    append_unique_line "$MANUAL_GATEWAY_DOMAINS_FILE" "$domain"
+    append_unique_line "$MANUAL_TRANSIT_DOMAINS_FILE" "$domain"
     added=$((added + 1))
   done
   site_auto_bootstrap_run >/dev/null 2>&1 || true
@@ -1356,6 +1296,7 @@ site_remove() {
   for domain in "$@"; do
     domain="$(normalize_domain_token "$domain")"
     [[ -z "$domain" ]] && continue
+    remove_exact_line "$MANUAL_TRANSIT_DOMAINS_FILE" "$domain"
     remove_exact_line "$MANUAL_GATEWAY_DOMAINS_FILE" "$domain"
     removed=$((removed + 1))
   done
@@ -1486,7 +1427,7 @@ resolve_service_ids_for_args() {
   done
 }
 
-service_proxy_enable() {
+service_route_enable() {
   local ids=("$@")
   if [[ "${#ids[@]}" -eq 0 ]]; then
     mapfile -t ids < <(list_config_ids "service:")
@@ -1498,10 +1439,10 @@ service_proxy_enable() {
     [[ -n "$id" ]] || continue
     set_service_route_override "$id" "enabled"
   done
-  echo "service_proxy_enable_status=ok count=${#ids[@]}"
+  echo "service_route_enable_status=ok count=${#ids[@]}"
 }
 
-service_proxy_disable() {
+service_route_disable() {
   local ids=("$@")
   if [[ "${#ids[@]}" -eq 0 ]]; then
     mapfile -t ids < <(list_config_ids "service:")
@@ -1513,18 +1454,18 @@ service_proxy_disable() {
     [[ -n "$id" ]] || continue
     delete_service_route_override "$id"
   done
-  echo "service_proxy_disable_status=ok count=${#ids[@]}"
+  echo "service_route_disable_status=ok count=${#ids[@]}"
 }
 
-service_proxy_enable_running() {
+service_route_enable_running() {
   if systemd_user_ready; then
     mapfile -t running < <(systemctl --user list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service$//')
     if [[ "${#running[@]}" -gt 0 ]]; then
-      service_proxy_enable "${running[@]}"
+      service_route_enable "${running[@]}"
       return 0
     fi
   fi
-  service_proxy_enable "$@"
+  service_route_enable "$@"
 }
 
 verify_service() {
@@ -1613,9 +1554,9 @@ logs_tail() {
   if ! [[ "$lines" =~ ^[0-9]+$ ]]; then
     lines=200
   fi
-  echo "=== gateway log: $GATEWAY_LOG ==="
+  echo "=== node log: $GATEWAY_LOG ==="
   tail -n "$lines" "$GATEWAY_LOG" 2>/dev/null || true
-  echo "=== client log: $CLIENT_LOG ==="
+  echo "=== transparent-runtime log: $CLIENT_LOG ==="
   tail -n "$lines" "$CLIENT_LOG" 2>/dev/null || true
   echo "=== autofix log: $AUTOFIX_LOG_FILE ==="
   tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null || true
@@ -1644,11 +1585,11 @@ start_runtime() {
     if client_config_ready; then
       systemctl --user start chimera-client.service >/dev/null 2>&1 || true
       site_auto_watch_start >/dev/null 2>&1 || true
-      echo "start_status=ok mode=systemd_user client=started"
+      echo "start_status=ok mode=systemd_user node=started"
     else
       systemctl --user stop chimera-client.service >/dev/null 2>&1 || true
       site_auto_watch_stop >/dev/null 2>&1 || true
-      echo "start_status=ok mode=systemd_user client=skipped reason=no_endpoint"
+      echo "start_status=ok mode=systemd_user node=skipped reason=no_endpoint"
     fi
     return 0
   fi
@@ -1693,9 +1634,9 @@ start_runtime() {
     site_auto_watch_stop >/dev/null 2>&1 || true
   fi
   if client_config_ready; then
-    echo "start_status=ok mode=direct gateway=$gateway_status client=$client_status"
+    echo "start_status=ok mode=direct node=$gateway_status transparent_runtime=$client_status"
   else
-    echo "start_status=ok mode=direct gateway=$gateway_status client=skipped reason=no_endpoint"
+    echo "start_status=ok mode=direct node=$gateway_status transparent_runtime=skipped reason=no_endpoint"
   fi
 }
 
@@ -1743,20 +1684,16 @@ restart_runtime() {
 }
 
 runtime_status() {
-  local gateway_state client_state proxy_url proxy_listener route_mode split_mode watch_status
+  local gateway_state client_state route_mode split_mode watch_status
   gateway_state="$(read_runtime_service_state chimera-gateway.service)"
   client_state="$(read_runtime_service_state chimera-client.service)"
-  proxy_url="$(resolve_proxy_url)"
-  proxy_listener="$(listener_state_for_proxy "$proxy_url")"
   route_mode="$(read_route_mode)"
   split_mode="$(read_split_list_mode)"
   watch_status="$(site_auto_watch_status)"
   echo "runtime_root=$ROOT_DIR"
-  echo "gateway_service_state=$gateway_state"
-  echo "client_service_state=$client_state"
+  echo "node_service_state=$gateway_state"
+  echo "transparent_runtime_service_state=$client_state"
   echo "peer_egress_state_file=$(peer_egress_state_path)"
-  echo "chimera_proxy_url=$proxy_url"
-  echo "chimera_proxy_listener=$proxy_listener"
   echo "$watch_status"
   if runtime_state_is_up; then
     echo "transparent_runtime=running"
@@ -1811,25 +1748,23 @@ runtime_status() {
   fi
 }
 
-proxy_status() {
+datapath_status() {
   runtime_status
 }
 
 route_status() {
-  local proxy_url proxy_listener app_routes_count service_routes_count manual_count adaptive_count
-  proxy_url="$(resolve_proxy_url)"
-  proxy_listener="$(listener_state_for_proxy "$proxy_url")"
+  local app_routes_count service_routes_count manual_count adaptive_count
   app_routes_count="$(count_config_prefix "$APP_ROUTES_FILE" "app:")"
   service_routes_count="$(count_config_prefix "$APP_ROUTES_FILE" "service:")"
-  manual_count="$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
+  manual_count="$(count_noncomment_lines "$MANUAL_TRANSIT_DOMAINS_FILE")"
   adaptive_count="$(count_noncomment_lines "$ADAPTIVE_DOMAINS_FILE")"
-  echo "chimera_proxy_url=$proxy_url"
-  echo "chimera_proxy_listener=$proxy_listener"
+  echo "datapath_mode=transparent"
+  echo "runtime_state_status=$(runtime_state_is_up && echo up || echo unknown)"
   echo "route_mode=$(read_route_mode)"
   echo "split_list_mode=$(read_split_list_mode)"
   echo "app_routes_count=$app_routes_count"
   echo "service_routes_count=$service_routes_count"
-  echo "manual_gateway_domains_count=$manual_count"
+  echo "manual_transit_domains_count=$manual_count"
   echo "adaptive_domains_count=$adaptive_count"
   if [[ -f "$SERVICE_ROUTE_OVERRIDES_FILE" ]]; then
     awk -F= '/^service_route_override\[/{print}' "$SERVICE_ROUTE_OVERRIDES_FILE"
@@ -1837,7 +1772,7 @@ route_status() {
 }
 
 split_transparent_status() {
-  proxy_status
+  datapath_status
 }
 
 split_transparent_dispatch() {
@@ -1911,8 +1846,8 @@ main() {
       shift || true
       logs_tail "${1:-200}"
       ;;
-    proxy-status)
-      proxy_status
+    datapath-status)
+      datapath_status
       ;;
     app-routes-status)
       app_routes_status
@@ -1935,13 +1870,13 @@ main() {
       [[ $# -ge 1 ]] || { echo "error: verify-cmd requires a command" >&2; exit 2; }
       verify_cmd "$@"
       ;;
-    service-proxy-enable)
+    service-route-enable)
       shift || true
-      service_proxy_enable "$@"
+      service_route_enable "$@"
       ;;
-    service-proxy-disable)
+    service-route-disable)
       shift || true
-      service_proxy_disable "$@"
+      service_route_disable "$@"
       ;;
     verify-service)
       shift || true
@@ -2074,9 +2009,9 @@ main() {
     services-running)
       services_running
       ;;
-    service-proxy-enable-running)
+    service-route-enable-running)
       shift || true
-      service_proxy_enable_running "$@"
+      service_route_enable_running "$@"
       ;;
     ui-mode)
       shift || true

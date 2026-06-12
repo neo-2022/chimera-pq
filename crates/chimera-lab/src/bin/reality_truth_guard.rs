@@ -61,54 +61,41 @@ fn main() {
         &probe,
         "direct_probe_ok",
     );
-    eq_bool_cross(&reality, "runtime_probe_proxy_ok", &probe, "proxy_probe_ok");
     eq_bool_cross(
         &reality,
-        "runtime_probe_proxy_selected_from_candidates",
+        "runtime_probe_datapath_attempted",
         &probe,
-        "proxy_selected_from_candidates",
+        "datapath_probe_attempted",
+    );
+    eq_bool_cross(
+        &reality,
+        "runtime_probe_datapath_ok",
+        &probe,
+        "datapath_probe_ok",
     );
     eq_str_cross(
         &reality,
-        "runtime_probe_proxy_error",
+        "runtime_probe_datapath_error",
         &probe,
-        "proxy_probe_error",
-    );
-    eq_str_cross(
-        &reality,
-        "runtime_probe_proxy_candidates",
-        &probe,
-        "proxy_candidates",
+        "datapath_probe_error",
     );
     eq_bool_cross(
         &reality,
-        "runtime_probe_proxy_listener_detected",
+        "runtime_probe_skipped_no_curl",
         &probe,
-        "proxy_listener_detected",
-    );
-    eq_bool_cross(
-        &reality,
-        "runtime_probe_proxy_probe_attempted",
-        &probe,
-        "proxy_probe_attempted",
-    );
-    eq_bool_cross(
-        &reality,
-        "runtime_probe_skipped_no_proxy_listener",
-        &probe,
-        "skipped_no_proxy_listener",
+        "skipped_no_curl",
     );
     eq_i64_cross(
         &reality,
-        "runtime_probe_blocked_targets_total",
+        "runtime_probe_datapath_targets_total",
         &probe,
-        "proxy_blocked_targets_total",
+        "datapath_targets_total",
     );
     eq_i64_cross(
         &reality,
-        "runtime_probe_blocked_targets_ok",
+        "runtime_probe_datapath_targets_ok",
         &probe,
-        "proxy_blocked_targets_ok",
+        "datapath_targets_ok",
     );
 
     eq_bool_cross(
@@ -119,59 +106,47 @@ fn main() {
     );
     eq_bool_cross(
         &ship,
-        "runtime_real_world_proxy_listener_detected",
+        "runtime_real_world_datapath_probe_attempted",
         &reality,
-        "runtime_probe_proxy_listener_detected",
+        "runtime_probe_datapath_attempted",
     );
     eq_bool_cross(
         &ship,
-        "runtime_real_world_proxy_probe_attempted",
+        "runtime_real_world_datapath_probe_ok",
         &reality,
-        "runtime_probe_proxy_probe_attempted",
-    );
-    eq_bool_cross(
-        &ship,
-        "runtime_real_world_proxy_probe_ok",
-        &reality,
-        "runtime_probe_proxy_ok",
-    );
-    eq_bool_cross(
-        &ship,
-        "runtime_real_world_proxy_selected_from_candidates",
-        &reality,
-        "runtime_probe_proxy_selected_from_candidates",
+        "runtime_probe_datapath_ok",
     );
     eq_str_cross(
         &ship,
-        "runtime_real_world_proxy_probe_error",
+        "runtime_real_world_datapath_probe_error",
         &reality,
-        "runtime_probe_proxy_error",
-    );
-    eq_str_cross(
-        &ship,
-        "runtime_real_world_proxy_candidates",
-        &reality,
-        "runtime_probe_proxy_candidates",
+        "runtime_probe_datapath_error",
     );
     eq_i64_cross(
         &ship,
-        "runtime_real_world_proxy_blocked_targets_total",
+        "runtime_real_world_datapath_targets_total",
         &reality,
-        "runtime_probe_blocked_targets_total",
+        "runtime_probe_datapath_targets_total",
     );
     eq_i64_cross(
         &ship,
-        "runtime_real_world_proxy_blocked_targets_ok",
+        "runtime_real_world_datapath_targets_ok",
         &reality,
-        "runtime_probe_blocked_targets_ok",
+        "runtime_probe_datapath_targets_ok",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_datapath_targets_failed",
+        &reality,
+        "runtime_probe_datapath_targets_failed",
     );
     eq_bool_cross(
         &ship,
-        "runtime_real_world_skipped_no_proxy_listener",
+        "runtime_real_world_skipped_no_curl",
         &reality,
-        "runtime_probe_skipped_no_proxy_listener",
+        "runtime_probe_skipped_no_curl",
     );
-    if let Err(msg) = validate_proxy_logic(&ship) {
+    if let Err(msg) = validate_datapath_logic(&ship) {
         fail(&msg);
     }
 
@@ -250,62 +225,49 @@ fn eq_str_cross(
     }
 }
 
-fn validate_proxy_logic(ship: &serde_json::Map<String, Value>) -> Result<(), String> {
-    let proxy_attempted = get_bool(ship, "runtime_real_world_proxy_probe_attempted");
-    let proxy_listener = get_bool(ship, "runtime_real_world_proxy_listener_detected");
-    let proxy_ok = get_bool(ship, "runtime_real_world_proxy_probe_ok");
-    let proxy_selected = get_bool(ship, "runtime_real_world_proxy_selected_from_candidates");
-    let proxy_candidates = ship
-        .get("runtime_real_world_proxy_candidates")
+fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), String> {
+    let attempted = get_bool(ship, "runtime_real_world_datapath_probe_attempted");
+    let ok_flag = get_bool(ship, "runtime_real_world_datapath_probe_ok");
+    let skipped_no_curl = get_bool(ship, "runtime_real_world_skipped_no_curl");
+    let error = ship
+        .get("runtime_real_world_datapath_probe_error")
         .and_then(Value::as_str)
         .unwrap_or("");
-    let proxy_error = ship
-        .get("runtime_real_world_proxy_probe_error")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let proxy_total = get_i64(ship, "runtime_real_world_proxy_blocked_targets_total");
-    let proxy_ok_count = get_i64(ship, "runtime_real_world_proxy_blocked_targets_ok");
-    let proxy_failed = get_i64(ship, "runtime_real_world_proxy_blocked_targets_failed");
+    let total = get_i64(ship, "runtime_real_world_datapath_targets_total");
+    let ok = get_i64(ship, "runtime_real_world_datapath_targets_ok");
+    let failed = get_i64(ship, "runtime_real_world_datapath_targets_failed");
     if ![
         "none",
-        "proxy_listener_not_found",
-        "proxy_connect_or_upstream_failed",
+        "curl_not_found",
+        "datapath_target_failed",
         "unknown",
     ]
-    .contains(&proxy_error)
+    .contains(&error)
     {
-        return Err("reality truth guard: proxy error value is invalid".to_string());
+        return Err("reality truth guard: datapath error value is invalid".to_string());
     }
-    if proxy_ok_count + proxy_failed != proxy_total {
-        return Err("reality truth guard: proxy totals mismatch".to_string());
+    if ok + failed != total {
+        return Err("reality truth guard: datapath totals mismatch".to_string());
     }
-    if proxy_attempted && !proxy_listener {
-        return Err("reality truth guard: proxy attempted without listener".to_string());
+    if skipped_no_curl && attempted {
+        return Err("reality truth guard: no curl but datapath attempted".to_string());
     }
-    if !proxy_attempted && proxy_error != "proxy_listener_not_found" {
+    if !skipped_no_curl && !attempted {
         return Err(
-            "reality truth guard: proxy not attempted must be listener_not_found".to_string(),
+            "reality truth guard: datapath must be attempted when curl is available".to_string(),
         );
     }
-    if proxy_attempted && proxy_error == "proxy_listener_not_found" {
-        return Err("reality truth guard: proxy attempted with listener_not_found".to_string());
+    if attempted && total <= 0 {
+        return Err("reality truth guard: datapath attempted with empty target totals".to_string());
     }
-    if proxy_ok && proxy_failed != 0 {
-        return Err("reality truth guard: proxy ok with failed targets".to_string());
+    if !attempted && total != 0 {
+        return Err("reality truth guard: datapath not attempted with non-zero totals".to_string());
     }
-    if proxy_attempted && proxy_total <= 0 {
-        return Err("reality truth guard: proxy attempted with empty target totals".to_string());
+    if ok_flag && failed != 0 {
+        return Err("reality truth guard: datapath ok with failed targets".to_string());
     }
-    if !proxy_attempted && proxy_total != 0 {
-        return Err("reality truth guard: proxy not attempted with non-zero totals".to_string());
-    }
-    if proxy_selected && !proxy_attempted {
-        return Err(
-            "reality truth guard: proxy selected_from_candidates requires attempted".to_string(),
-        );
-    }
-    if proxy_candidates.trim().is_empty() {
-        return Err("reality truth guard: proxy candidates is empty".to_string());
+    if attempted && error == "curl_not_found" {
+        return Err("reality truth guard: datapath attempted with curl_not_found".to_string());
     }
     Ok(())
 }
@@ -317,61 +279,56 @@ fn fail(msg: &str) -> ! {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_proxy_logic;
+    use super::validate_datapath_logic;
     use serde_json::{Map, Value, json};
 
     fn base_ship() -> Map<String, Value> {
         let mut m = Map::new();
         m.insert(
-            "runtime_real_world_proxy_probe_attempted".to_string(),
+            "runtime_real_world_datapath_probe_attempted".to_string(),
             json!(true),
         );
         m.insert(
-            "runtime_real_world_proxy_listener_detected".to_string(),
+            "runtime_real_world_datapath_probe_ok".to_string(),
             json!(true),
         );
-        m.insert("runtime_real_world_proxy_probe_ok".to_string(), json!(true));
         m.insert(
-            "runtime_real_world_proxy_selected_from_candidates".to_string(),
-            json!(false),
-        );
-        m.insert(
-            "runtime_real_world_proxy_candidates".to_string(),
-            json!("socks5h://127.0.0.1:11080,http://127.0.0.1:1080"),
-        );
-        m.insert(
-            "runtime_real_world_proxy_probe_error".to_string(),
+            "runtime_real_world_datapath_probe_error".to_string(),
             json!("none"),
         );
         m.insert(
-            "runtime_real_world_proxy_blocked_targets_total".to_string(),
+            "runtime_real_world_datapath_targets_total".to_string(),
             json!(1),
         );
         m.insert(
-            "runtime_real_world_proxy_blocked_targets_ok".to_string(),
+            "runtime_real_world_datapath_targets_ok".to_string(),
             json!(1),
         );
         m.insert(
-            "runtime_real_world_proxy_blocked_targets_failed".to_string(),
+            "runtime_real_world_datapath_targets_failed".to_string(),
             json!(0),
+        );
+        m.insert(
+            "runtime_real_world_skipped_no_curl".to_string(),
+            json!(false),
         );
         m
     }
 
     #[test]
-    fn accepts_valid_proxy_logic() {
+    fn accepts_valid_datapath_logic() {
         let payload = base_ship();
-        assert!(validate_proxy_logic(&payload).is_ok());
+        assert!(validate_datapath_logic(&payload).is_ok());
     }
 
     #[test]
-    fn rejects_invalid_proxy_error() {
+    fn rejects_invalid_datapath_error() {
         let mut payload = base_ship();
         payload.insert(
-            "runtime_real_world_proxy_probe_error".to_string(),
+            "runtime_real_world_datapath_probe_error".to_string(),
             json!("bad"),
         );
-        let res = validate_proxy_logic(&payload);
+        let res = validate_datapath_logic(&payload);
         assert!(res.is_err());
         assert!(
             res.err()
@@ -380,17 +337,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_attempted_without_listener() {
+    fn rejects_attempted_with_empty_totals() {
         let mut payload = base_ship();
         payload.insert(
-            "runtime_real_world_proxy_listener_detected".to_string(),
-            json!(false),
+            "runtime_real_world_datapath_targets_total".to_string(),
+            json!(0),
         );
-        let res = validate_proxy_logic(&payload);
+        payload.insert(
+            "runtime_real_world_datapath_targets_ok".to_string(),
+            json!(0),
+        );
+        let res = validate_datapath_logic(&payload);
         assert!(res.is_err());
-        assert!(
-            res.err()
-                .is_some_and(|e| e.contains("attempted without listener"))
-        );
+        assert!(res.err().is_some_and(|e| e.contains("empty target totals")));
     }
 }

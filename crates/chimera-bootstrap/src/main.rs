@@ -66,7 +66,7 @@ fn take_optional_usize(
     flag: &str,
 ) -> Result<Option<usize>> {
     let mut collected = Vec::new();
-    while let Some(item) = args.next() {
+    for item in args.by_ref() {
         collected.push(item);
     }
     if collected.is_empty() {

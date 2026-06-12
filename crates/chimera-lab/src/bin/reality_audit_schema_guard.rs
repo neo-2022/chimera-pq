@@ -33,16 +33,13 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "md_claim_partial_not_closed",
         "runtime_probe_file_ok",
         "runtime_probe_direct_ok",
-        "runtime_probe_proxy_ok",
-        "runtime_probe_proxy_listener_detected",
-        "runtime_probe_proxy_probe_attempted",
-        "runtime_probe_proxy_selected_from_candidates",
-        "runtime_probe_proxy_error",
-        "runtime_probe_proxy_candidates",
-        "runtime_probe_skipped_no_proxy_listener",
-        "runtime_probe_blocked_targets_total",
-        "runtime_probe_blocked_targets_ok",
-        "runtime_probe_blocked_targets_failed",
+        "runtime_probe_datapath_ok",
+        "runtime_probe_datapath_attempted",
+        "runtime_probe_datapath_error",
+        "runtime_probe_skipped_no_curl",
+        "runtime_probe_datapath_targets_total",
+        "runtime_probe_datapath_targets_ok",
+        "runtime_probe_datapath_targets_failed",
         "runtime_route_file_ok",
         "runtime_route_apply_ok",
         "runtime_route_rollback_ok",
@@ -74,11 +71,9 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "md_claim_partial_not_closed",
         "runtime_probe_file_ok",
         "runtime_probe_direct_ok",
-        "runtime_probe_proxy_ok",
-        "runtime_probe_proxy_listener_detected",
-        "runtime_probe_proxy_probe_attempted",
-        "runtime_probe_proxy_selected_from_candidates",
-        "runtime_probe_skipped_no_proxy_listener",
+        "runtime_probe_datapath_ok",
+        "runtime_probe_datapath_attempted",
+        "runtime_probe_skipped_no_curl",
         "runtime_route_file_ok",
         "runtime_route_apply_ok",
         "runtime_route_rollback_ok",
@@ -92,76 +87,62 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
             return Err("reality audit field not bool".to_string());
         }
     }
-    let total = get_i64(data, "runtime_probe_blocked_targets_total");
-    let ok = get_i64(data, "runtime_probe_blocked_targets_ok");
-    let failed = get_i64(data, "runtime_probe_blocked_targets_failed");
+    let total = get_i64(data, "runtime_probe_datapath_targets_total");
+    let ok = get_i64(data, "runtime_probe_datapath_targets_ok");
+    let failed = get_i64(data, "runtime_probe_datapath_targets_failed");
     if total < 0 || ok < 0 || failed < 0 {
         return Err("reality audit field not non-negative int".to_string());
     }
     if ok > total {
-        return Err("runtime_probe_blocked_targets_ok exceeds total".to_string());
+        return Err("runtime_probe_datapath_targets_ok exceeds total".to_string());
     }
     if failed > total {
-        return Err("runtime_probe_blocked_targets_failed exceeds total".to_string());
+        return Err("runtime_probe_datapath_targets_failed exceeds total".to_string());
     }
     if ok + failed != total {
-        return Err("runtime_probe_blocked_targets totals mismatch".to_string());
+        return Err("runtime_probe_datapath_targets totals mismatch".to_string());
     }
-    let proxy_error = get_str(data, "runtime_probe_proxy_error");
+    let datapath_error = get_str(data, "runtime_probe_datapath_error");
     if ![
         "none",
-        "proxy_listener_not_found",
-        "proxy_connect_or_upstream_failed",
+        "curl_not_found",
+        "datapath_target_failed",
         "unknown",
     ]
-    .contains(&proxy_error)
+    .contains(&datapath_error)
     {
-        return Err("runtime_probe_proxy_error invalid".to_string());
+        return Err("runtime_probe_datapath_error invalid".to_string());
     }
-    if get_str(data, "runtime_probe_proxy_candidates")
-        .trim()
-        .is_empty()
-    {
-        return Err("runtime_probe_proxy_candidates is empty".to_string());
+    let datapath_attempted = get_bool(data, "runtime_probe_datapath_attempted");
+    let datapath_ok = get_bool(data, "runtime_probe_datapath_ok");
+    let skipped_no_curl = get_bool(data, "runtime_probe_skipped_no_curl");
+    if skipped_no_curl && datapath_attempted {
+        return Err("runtime_probe no curl but datapath attempted".to_string());
     }
-    let proxy_attempted = get_bool(data, "runtime_probe_proxy_probe_attempted");
-    let proxy_listener = get_bool(data, "runtime_probe_proxy_listener_detected");
-    let proxy_ok = get_bool(data, "runtime_probe_proxy_ok");
-    let proxy_selected = get_bool(data, "runtime_probe_proxy_selected_from_candidates");
-    let skipped_no_proxy_listener = get_bool(data, "runtime_probe_skipped_no_proxy_listener");
-    if proxy_attempted && !proxy_listener {
-        return Err("runtime_probe proxy attempted without listener".to_string());
+    if !skipped_no_curl && !datapath_attempted {
+        return Err("runtime_probe datapath must be attempted when curl is available".to_string());
     }
-    if proxy_listener && skipped_no_proxy_listener {
-        return Err(
-            "runtime_probe listener detected but skipped_no_proxy_listener=true".to_string(),
-        );
+    if datapath_attempted && datapath_error == "curl_not_found" {
+        return Err("runtime_probe datapath attempted with curl_not_found".to_string());
     }
-    if !proxy_attempted && !skipped_no_proxy_listener {
-        return Err(
-            "runtime_probe not attempted must set skipped_no_proxy_listener=true".to_string(),
-        );
+    if datapath_ok && failed != 0 {
+        return Err("runtime_probe datapath ok requires failed=0".to_string());
     }
-    if proxy_attempted && skipped_no_proxy_listener {
-        return Err("runtime_probe attempted must set skipped_no_proxy_listener=false".to_string());
+    if datapath_attempted && total <= 0 {
+        return Err("runtime_probe datapath attempted with empty target totals".to_string());
     }
-    if !proxy_attempted && proxy_error != "proxy_listener_not_found" {
-        return Err("runtime_probe proxy not attempted must be listener_not_found".to_string());
+    if !datapath_attempted && total != 0 {
+        return Err("runtime_probe datapath not attempted with non-zero totals".to_string());
     }
-    if proxy_attempted && proxy_error == "proxy_listener_not_found" {
-        return Err("runtime_probe proxy attempted with listener_not_found".to_string());
-    }
-    if proxy_ok && ok != total {
-        return Err("runtime_probe proxy ok requires ok==total".to_string());
-    }
-    if proxy_selected && !proxy_attempted {
-        return Err("runtime_probe selected_from_candidates requires attempted".to_string());
+    if datapath_error == "none" && !datapath_ok {
+        return Err("runtime_probe datapath failed without error marker".to_string());
     }
 
     let runtime_probe_path_ok = get_bool(data, "runtime_probe_direct_ok")
-        && (get_bool(data, "runtime_probe_proxy_ok")
-            || get_bool(data, "runtime_probe_skipped_no_proxy_listener"))
-        && (!get_bool(data, "runtime_probe_proxy_probe_attempted") || total == 0 || ok >= 1);
+        && datapath_ok
+        && datapath_attempted
+        && total > 0
+        && failed == 0;
 
     let runtime_evidence_expected = runtime_probe_path_ok
         && get_bool(data, "runtime_route_apply_ok")
@@ -241,34 +222,16 @@ mod tests {
         m.insert("md_claim_partial_not_closed".to_string(), json!(true));
         m.insert("runtime_probe_file_ok".to_string(), json!(true));
         m.insert("runtime_probe_direct_ok".to_string(), json!(true));
-        m.insert("runtime_probe_proxy_ok".to_string(), json!(false));
+        m.insert("runtime_probe_datapath_ok".to_string(), json!(true));
+        m.insert("runtime_probe_datapath_attempted".to_string(), json!(true));
+        m.insert("runtime_probe_datapath_error".to_string(), json!("none"));
+        m.insert("runtime_probe_skipped_no_curl".to_string(), json!(false));
+        m.insert("runtime_probe_datapath_targets_total".to_string(), json!(2));
+        m.insert("runtime_probe_datapath_targets_ok".to_string(), json!(2));
         m.insert(
-            "runtime_probe_proxy_listener_detected".to_string(),
-            json!(false),
+            "runtime_probe_datapath_targets_failed".to_string(),
+            json!(0),
         );
-        m.insert(
-            "runtime_probe_proxy_probe_attempted".to_string(),
-            json!(false),
-        );
-        m.insert(
-            "runtime_probe_proxy_selected_from_candidates".to_string(),
-            json!(false),
-        );
-        m.insert(
-            "runtime_probe_proxy_error".to_string(),
-            json!("proxy_listener_not_found"),
-        );
-        m.insert(
-            "runtime_probe_proxy_candidates".to_string(),
-            json!("socks5h://127.0.0.1:11080,http://127.0.0.1:1080"),
-        );
-        m.insert(
-            "runtime_probe_skipped_no_proxy_listener".to_string(),
-            json!(true),
-        );
-        m.insert("runtime_probe_blocked_targets_total".to_string(), json!(0));
-        m.insert("runtime_probe_blocked_targets_ok".to_string(), json!(0));
-        m.insert("runtime_probe_blocked_targets_failed".to_string(), json!(0));
         m.insert("runtime_route_file_ok".to_string(), json!(true));
         m.insert("runtime_route_apply_ok".to_string(), json!(true));
         m.insert("runtime_route_rollback_ok".to_string(), json!(true));
@@ -288,38 +251,26 @@ mod tests {
     }
 
     #[test]
-    fn rejects_attempted_without_listener() {
+    fn rejects_not_attempted_when_curl_available() {
         let mut payload = base();
-        payload.insert(
-            "runtime_probe_proxy_probe_attempted".to_string(),
-            json!(true),
-        );
-        payload.insert(
-            "runtime_probe_proxy_listener_detected".to_string(),
-            json!(false),
-        );
-        payload.insert("runtime_probe_blocked_targets_total".to_string(), json!(1));
-        payload.insert("runtime_probe_blocked_targets_ok".to_string(), json!(1));
-        payload.insert("runtime_probe_proxy_ok".to_string(), json!(true));
-        payload.insert("runtime_probe_proxy_error".to_string(), json!("none"));
-        payload.insert(
-            "runtime_probe_skipped_no_proxy_listener".to_string(),
-            json!(false),
-        );
+        payload.insert("runtime_probe_datapath_attempted".to_string(), json!(false));
+        payload.insert("runtime_probe_datapath_ok".to_string(), json!(false));
+        payload.insert("runtime_probe_datapath_targets_total".to_string(), json!(0));
+        payload.insert("runtime_probe_datapath_targets_ok".to_string(), json!(0));
+        let res = validate_reality_audit(&payload);
+        assert!(res.is_err());
+        assert!(res.err().is_some_and(|e| e.contains("must be attempted")));
+    }
+
+    #[test]
+    fn rejects_bad_datapath_error() {
+        let mut payload = base();
+        payload.insert("runtime_probe_datapath_error".to_string(), json!("bad"));
         let res = validate_reality_audit(&payload);
         assert!(res.is_err());
         assert!(
             res.err()
-                .is_some_and(|e| e.contains("attempted without listener"))
+                .is_some_and(|e| e.contains("datapath_error invalid"))
         );
-    }
-
-    #[test]
-    fn rejects_bad_proxy_error() {
-        let mut payload = base();
-        payload.insert("runtime_probe_proxy_error".to_string(), json!("bad"));
-        let res = validate_reality_audit(&payload);
-        assert!(res.is_err());
-        assert!(res.err().is_some_and(|e| e.contains("proxy_error invalid")));
     }
 }

@@ -1,4 +1,5 @@
-# Domains that must always go through CHIMERA gateway (manual override).
+# Legacy alias for manual_transit_domains.txt.
+# New WEAVE configuration should use peer transit wording.
 # One domain per line, comments start with '#'.
 aistudio.google.com
 youtube.com

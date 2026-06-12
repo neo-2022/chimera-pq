@@ -13,6 +13,7 @@ pub const TCP_BUFFER_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
+    Node,
     Vps,
     Laptop,
     Bench,
@@ -166,6 +167,7 @@ impl Options {
             match flag {
                 "--mode" => {
                     mode = Some(match value.as_str() {
+                        "node" | "weave-node" => Mode::Node,
                         "vps" => Mode::Vps,
                         "laptop" => Mode::Laptop,
                         "bench" => Mode::Bench,
@@ -175,7 +177,7 @@ impl Options {
                         "download-probe" => Mode::DownloadProbe,
                         _ => {
                             return Err(
-                                "mode must be vps, laptop, bench, echo, probe, download-echo, or download-probe".to_string()
+                                "mode must be node, vps, laptop, bench, echo, probe, download-echo, or download-probe".to_string()
                             );
                         }
                     });
@@ -214,6 +216,17 @@ impl Options {
         }
         let mode = mode.ok_or_else(|| "missing --mode".to_string())?;
         let (local_listen, peer_listen, server) = match mode {
+            Mode::Node => (
+                required_value(
+                    local_listen,
+                    "node mode requires --local-listen or CHIMERA_PEER_EGRESS_LOCAL_LISTEN",
+                )?,
+                required_value(
+                    peer_listen,
+                    "node mode requires --peer-listen or CHIMERA_PEER_EGRESS_PEER_LISTEN",
+                )?,
+                server.unwrap_or_default(),
+            ),
             Mode::Vps => (
                 required_value(
                     local_listen,
@@ -284,6 +297,7 @@ impl Options {
 
 pub fn mode_name(mode: &Mode) -> &'static str {
     match mode {
+        Mode::Node => "node",
         Mode::Vps => "vps",
         Mode::Laptop => "laptop",
         Mode::Bench => "bench",
@@ -378,6 +392,65 @@ mod tests {
         });
         assert_eq!(parsed.mode, Mode::Laptop);
         assert_eq!(parsed.pool, 8);
+    }
+
+    #[test]
+    fn parse_node_options_requires_ingress_listeners_and_keeps_peer_optional() -> Result<(), String>
+    {
+        let args = vec![
+            "--mode".to_string(),
+            "node".to_string(),
+            "--local-listen".to_string(),
+            "127.0.0.1:18135".to_string(),
+            "--peer-listen".to_string(),
+            "0.0.0.0:8443".to_string(),
+            "--token".to_string(),
+            "abc".to_string(),
+        ];
+        let parsed = Options::parse(&args)?;
+        assert_eq!(parsed.mode, Mode::Node);
+        assert_eq!(parsed.local_listen, "127.0.0.1:18135");
+        assert_eq!(parsed.peer_listen, "0.0.0.0:8443");
+        assert_eq!(parsed.server, "");
+        assert_eq!(mode_name(&parsed.mode), "node");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_node_options_accepts_outbound_peer_endpoint() -> Result<(), String> {
+        let args = vec![
+            "--mode".to_string(),
+            "weave-node".to_string(),
+            "--local-listen".to_string(),
+            "127.0.0.1:18135".to_string(),
+            "--peer-listen".to_string(),
+            "0.0.0.0:8443".to_string(),
+            "--server".to_string(),
+            "peer.example.invalid:8443".to_string(),
+            "--token".to_string(),
+            "abc".to_string(),
+        ];
+        let parsed = Options::parse(&args)?;
+        assert_eq!(parsed.mode, Mode::Node);
+        assert_eq!(parsed.server, "peer.example.invalid:8443");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_node_rejects_missing_peer_ingress_listener() {
+        let args = vec![
+            "--mode".to_string(),
+            "node".to_string(),
+            "--local-listen".to_string(),
+            "127.0.0.1:18135".to_string(),
+            "--token".to_string(),
+            "abc".to_string(),
+        ];
+        let error = match Options::parse(&args) {
+            Ok(_) => "node options without peer ingress listener should fail".to_string(),
+            Err(error) => error,
+        };
+        assert!(error.contains("peer-listen"));
     }
 
     #[test]

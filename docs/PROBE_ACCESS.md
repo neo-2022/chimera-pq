@@ -1,7 +1,7 @@
 # Probe Access (Runtime)
 
 `chimera probe access` checks site reachability and produces route recommendation
-(`direct`, `gateway`, `unreachable`) for one or many targets.
+(`direct` or `transit`) for one or many targets.
 
 ## Single Target
 
@@ -38,6 +38,8 @@ Behavior:
 
 - updates existing `exact:<domain>` rule if present;
 - otherwise appends a new exact-domain rule;
+- writes unreachable direct targets as `transit`, so WEAVE can carry them through
+  a peer transit path instead of relying on proxy fallback;
 - verifies resulting policy decision for that domain;
 - writes policy atomically (temp file + rename).
 

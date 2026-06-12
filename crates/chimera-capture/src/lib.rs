@@ -10,7 +10,7 @@ use std::path::Path;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureMode {
     Tun,
-    LocalProxy,
+    FailClosed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +22,7 @@ pub struct CapturePlan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DatapathRoute {
     Direct,
-    Gateway,
+    Transit,
     Block,
 }
 
@@ -59,7 +59,7 @@ impl DirectFailureSignal {
 pub struct DirectPathObservation {
     pub flow_key: String,
     pub direct_ok: bool,
-    pub gateway_ok: bool,
+    pub transit_ok: bool,
     pub failure_signal: Option<DirectFailureSignal>,
 }
 
@@ -103,13 +103,13 @@ impl TransparentFailoverEngine {
         }
         if !self.config.split_tunnel_default {
             return DatapathDecision {
-                route: DatapathRoute::Gateway,
-                reason: "full-tunnel mode".to_string(),
+                route: DatapathRoute::Transit,
+                reason: "full-tunnel transit mode".to_string(),
             };
         }
         if self.overrides.contains_key(flow_key) {
             return DatapathDecision {
-                route: DatapathRoute::Gateway,
+                route: DatapathRoute::Transit,
                 reason: "auto-failover override is active".to_string(),
             };
         }
@@ -143,21 +143,21 @@ impl TransparentFailoverEngine {
                 reason: "direct path recovered".to_string(),
             };
         }
-        if observation.gateway_ok {
+        if observation.transit_ok {
             let signal = observation
                 .failure_signal
                 .map(DirectFailureSignal::as_str)
                 .unwrap_or("unknown_failure");
             self.report_direct_blocked(&observation.flow_key);
             return DatapathDecision {
-                route: DatapathRoute::Gateway,
-                reason: format!("direct path degraded; signal={signal}; gateway verified"),
+                route: DatapathRoute::Transit,
+                reason: format!("direct path degraded; signal={signal}; transit path verified"),
             };
         }
         DatapathDecision {
             route: DatapathRoute::Direct,
             reason:
-                "direct path failed but gateway not verified; keep direct to avoid false hijack"
+                "direct path failed but transit path not verified; keep direct to avoid false hijack"
                     .to_string(),
         }
     }
@@ -185,8 +185,9 @@ pub fn plan_capture_mode(tun_supported: bool) -> CapturePlan {
         }
     } else {
         CapturePlan {
-            mode: CaptureMode::LocalProxy,
-            reason: "TUN is unavailable, fallback to local proxy mode".to_string(),
+            mode: CaptureMode::FailClosed,
+            reason: "TUN is unavailable; fail closed because proxy capture is forbidden"
+                .to_string(),
         }
     }
 }
@@ -202,7 +203,9 @@ pub fn detect_tun_support() -> bool {
 pub fn parse_capture_mode(value: &str) -> ChimeraResult<CaptureMode> {
     match value.to_ascii_lowercase().as_str() {
         "tun" => Ok(CaptureMode::Tun),
-        "local-proxy" => Ok(CaptureMode::LocalProxy),
+        "local-proxy" => Err(ChimeraError::InvalidConfig(
+            "capture mode 'local-proxy' is forbidden; use transparent TUN datapath".to_string(),
+        )),
         _ => Err(ChimeraError::InvalidConfig(format!(
             "unknown capture mode '{value}'"
         ))),
@@ -216,37 +219,52 @@ mod tests {
         TransparentFailoverConfig, TransparentFailoverEngine, detect_tun_support,
         parse_capture_mode, plan_capture_mode,
     };
+    use chimera_core::ChimeraResult;
 
-    #[test]
-    fn tun_is_selected_when_supported() {
-        let plan = plan_capture_mode(true);
-        assert_eq!(plan.mode, CaptureMode::Tun);
-    }
-
-    #[test]
-    fn local_proxy_fallback_is_selected_when_tun_is_unavailable() {
-        let plan = plan_capture_mode(false);
-        assert_eq!(plan.mode, CaptureMode::LocalProxy);
-    }
-
-    #[test]
-    fn parse_rejects_unknown_mode() {
-        assert!(parse_capture_mode("bad").is_err());
-    }
-
-    #[test]
-    fn detect_tun_support_does_not_panic() {
-        let _ = detect_tun_support();
-    }
-
-    #[test]
-    fn failover_switches_only_blocked_flow_to_gateway() {
-        let mut engine = TransparentFailoverEngine::new(TransparentFailoverConfig {
+    fn test_engine(failover_ttl_ticks: u32) -> ChimeraResult<TransparentFailoverEngine> {
+        TransparentFailoverEngine::new(TransparentFailoverConfig {
             split_tunnel_default: true,
             auto_failover: true,
-            failover_ttl_ticks: 3,
+            failover_ttl_ticks,
         })
-        .expect("config must be valid");
+    }
+
+    #[test]
+    fn tun_is_selected_when_supported() -> ChimeraResult<()> {
+        let plan = plan_capture_mode(true);
+        assert_eq!(plan.mode, CaptureMode::Tun);
+        Ok(())
+    }
+
+    #[test]
+    fn fail_closed_is_selected_when_tun_is_unavailable() -> ChimeraResult<()> {
+        let plan = plan_capture_mode(false);
+        assert_eq!(plan.mode, CaptureMode::FailClosed);
+        assert!(plan.reason.contains("fail closed"));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_rejects_unknown_mode() -> ChimeraResult<()> {
+        assert!(parse_capture_mode("bad").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_rejects_local_proxy_mode() -> ChimeraResult<()> {
+        assert!(parse_capture_mode("local-proxy").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn detect_tun_support_does_not_panic() -> ChimeraResult<()> {
+        let _ = detect_tun_support();
+        Ok(())
+    }
+
+    #[test]
+    fn failover_switches_only_blocked_flow_to_transit() -> ChimeraResult<()> {
+        let mut engine = test_engine(3)?;
 
         let blocked = "blocked.example.invalid:443/tcp";
         let normal = "ordinary.example.invalid:443/tcp";
@@ -258,48 +276,40 @@ mod tests {
         engine.report_direct_blocked(blocked);
         assert_eq!(
             engine.evaluate(blocked, DatapathRoute::Direct).route,
-            DatapathRoute::Gateway
+            DatapathRoute::Transit
         );
         assert_eq!(
             engine.evaluate(normal, DatapathRoute::Direct).route,
             DatapathRoute::Direct
         );
+        Ok(())
     }
 
     #[test]
-    fn failover_override_expires_by_ttl() {
-        let mut engine = TransparentFailoverEngine::new(TransparentFailoverConfig {
-            split_tunnel_default: true,
-            auto_failover: true,
-            failover_ttl_ticks: 2,
-        })
-        .expect("config must be valid");
+    fn failover_override_expires_by_ttl() -> ChimeraResult<()> {
+        let mut engine = test_engine(2)?;
         let key = "blocked.example.invalid:443/tcp";
         engine.report_direct_blocked(key);
         assert_eq!(
             engine.evaluate(key, DatapathRoute::Direct).route,
-            DatapathRoute::Gateway
+            DatapathRoute::Transit
         );
         engine.tick();
         assert_eq!(
             engine.evaluate(key, DatapathRoute::Direct).route,
-            DatapathRoute::Gateway
+            DatapathRoute::Transit
         );
         engine.tick();
         assert_eq!(
             engine.evaluate(key, DatapathRoute::Direct).route,
             DatapathRoute::Direct
         );
+        Ok(())
     }
 
     #[test]
-    fn explicit_policy_route_has_priority_over_failover() {
-        let mut engine = TransparentFailoverEngine::new(TransparentFailoverConfig {
-            split_tunnel_default: true,
-            auto_failover: true,
-            failover_ttl_ticks: 2,
-        })
-        .expect("config must be valid");
+    fn explicit_policy_route_has_priority_over_failover() -> ChimeraResult<()> {
+        let mut engine = test_engine(2)?;
         let key = "any:53/udp";
         engine.report_direct_blocked(key);
 
@@ -308,25 +318,21 @@ mod tests {
             DatapathRoute::Block
         );
         assert_eq!(
-            engine.evaluate(key, DatapathRoute::Gateway).route,
-            DatapathRoute::Gateway
+            engine.evaluate(key, DatapathRoute::Transit).route,
+            DatapathRoute::Transit
         );
+        Ok(())
     }
 
     #[test]
-    fn observation_switches_to_gateway_only_when_gateway_verified() {
-        let mut engine = TransparentFailoverEngine::new(TransparentFailoverConfig {
-            split_tunnel_default: true,
-            auto_failover: true,
-            failover_ttl_ticks: 3,
-        })
-        .expect("config must be valid");
+    fn observation_switches_to_transit_only_when_transit_verified() -> ChimeraResult<()> {
+        let mut engine = test_engine(3)?;
         let key = "resource.example.invalid:443/tcp";
 
         let unverified = engine.observe_direct_path(&DirectPathObservation {
             flow_key: key.to_string(),
             direct_ok: false,
-            gateway_ok: false,
+            transit_ok: false,
             failure_signal: Some(DirectFailureSignal::Timeout),
         });
         assert_eq!(unverified.route, DatapathRoute::Direct);
@@ -334,35 +340,31 @@ mod tests {
         let verified = engine.observe_direct_path(&DirectPathObservation {
             flow_key: key.to_string(),
             direct_ok: false,
-            gateway_ok: true,
+            transit_ok: true,
             failure_signal: Some(DirectFailureSignal::ConnectionReset),
         });
-        assert_eq!(verified.route, DatapathRoute::Gateway);
+        assert_eq!(verified.route, DatapathRoute::Transit);
         assert_eq!(
             engine.evaluate(key, DatapathRoute::Direct).route,
-            DatapathRoute::Gateway
+            DatapathRoute::Transit
         );
+        Ok(())
     }
 
     #[test]
-    fn observation_direct_recovery_clears_failover() {
-        let mut engine = TransparentFailoverEngine::new(TransparentFailoverConfig {
-            split_tunnel_default: true,
-            auto_failover: true,
-            failover_ttl_ticks: 3,
-        })
-        .expect("config must be valid");
+    fn observation_direct_recovery_clears_failover() -> ChimeraResult<()> {
+        let mut engine = test_engine(3)?;
         let key = "recovering.example.invalid:443/tcp";
         engine.report_direct_blocked(key);
         assert_eq!(
             engine.evaluate(key, DatapathRoute::Direct).route,
-            DatapathRoute::Gateway
+            DatapathRoute::Transit
         );
 
         let recovered = engine.observe_direct_path(&DirectPathObservation {
             flow_key: key.to_string(),
             direct_ok: true,
-            gateway_ok: false,
+            transit_ok: false,
             failure_signal: None,
         });
         assert_eq!(recovered.route, DatapathRoute::Direct);
@@ -370,5 +372,6 @@ mod tests {
             engine.evaluate(key, DatapathRoute::Direct).route,
             DatapathRoute::Direct
         );
+        Ok(())
     }
 }

@@ -11,6 +11,7 @@ mod policy;
 mod policy_parse;
 mod preemptive;
 mod runtime;
+mod weave_contract;
 
 pub use model::{
     MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
@@ -40,6 +41,10 @@ pub use policy::{
 pub use runtime::{
     MeshConnectAttempt, MeshConnectProbeReport, MeshPeerTableEnforcementReport, MeshRuntime,
     MeshRuntimeStatusReport, evaluate_join_mode,
+};
+pub use weave_contract::{
+    REQUIRED_WEAVE_NODE_CAPABILITIES, WeaveNodeCapability, WeaveNodeContract,
+    WeaveSealedTransitFrame, forward_weave_transit_frame, validate_weave_sealed_transit_frame,
 };
 
 #[cfg(test)]

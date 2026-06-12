@@ -27,17 +27,13 @@ fn main() {
     let runtime_forced_file_ok = forced.is_some();
 
     let runtime_probe_direct_ok = probe_bool(&probe, "direct_probe_ok");
-    let runtime_probe_proxy_ok = probe_bool(&probe, "proxy_probe_ok");
-    let runtime_probe_proxy_listener_detected = probe_bool(&probe, "proxy_listener_detected");
-    let runtime_probe_proxy_probe_attempted = probe_bool(&probe, "proxy_probe_attempted");
-    let runtime_probe_proxy_selected_from_candidates =
-        probe_bool(&probe, "proxy_selected_from_candidates");
-    let runtime_probe_proxy_error = probe_str(&probe, "proxy_probe_error");
-    let runtime_probe_proxy_candidates = probe_str(&probe, "proxy_candidates");
-    let runtime_probe_skipped_no_proxy_listener = probe_bool(&probe, "skipped_no_proxy_listener");
-    let runtime_probe_blocked_targets_total = probe_i64(&probe, "proxy_blocked_targets_total");
-    let runtime_probe_blocked_targets_ok = probe_i64(&probe, "proxy_blocked_targets_ok");
-    let runtime_probe_blocked_targets_failed = probe_i64(&probe, "proxy_blocked_targets_failed");
+    let runtime_probe_datapath_ok = probe_bool(&probe, "datapath_probe_ok");
+    let runtime_probe_datapath_attempted = probe_bool(&probe, "datapath_probe_attempted");
+    let runtime_probe_datapath_error = probe_str(&probe, "datapath_probe_error");
+    let runtime_probe_skipped_no_curl = probe_bool(&probe, "skipped_no_curl");
+    let runtime_probe_datapath_targets_total = probe_i64(&probe, "datapath_targets_total");
+    let runtime_probe_datapath_targets_ok = probe_i64(&probe, "datapath_targets_ok");
+    let runtime_probe_datapath_targets_failed = probe_i64(&probe, "datapath_targets_failed");
 
     let runtime_route_apply_ok = route.as_ref().is_some_and(|r| {
         r.get("status").and_then(Value::as_str) == Some("ok")
@@ -61,10 +57,10 @@ fn main() {
         .unwrap_or(false);
 
     let runtime_probe_path_ok = runtime_probe_direct_ok
-        && (runtime_probe_proxy_ok || runtime_probe_skipped_no_proxy_listener)
-        && (!runtime_probe_proxy_probe_attempted
-            || runtime_probe_blocked_targets_total == 0
-            || runtime_probe_blocked_targets_ok >= 1);
+        && runtime_probe_datapath_ok
+        && runtime_probe_datapath_attempted
+        && runtime_probe_datapath_targets_total > 0
+        && runtime_probe_datapath_targets_failed == 0;
     let runtime_evidence_closed = runtime_probe_path_ok
         && runtime_route_apply_ok
         && runtime_route_rollback_ok
@@ -85,16 +81,13 @@ fn main() {
       "md_claim_partial_not_closed":md_claim_partial,
       "runtime_probe_file_ok":runtime_probe_file_ok,
       "runtime_probe_direct_ok":runtime_probe_direct_ok,
-      "runtime_probe_proxy_ok":runtime_probe_proxy_ok,
-      "runtime_probe_proxy_listener_detected":runtime_probe_proxy_listener_detected,
-      "runtime_probe_proxy_probe_attempted":runtime_probe_proxy_probe_attempted,
-      "runtime_probe_proxy_selected_from_candidates":runtime_probe_proxy_selected_from_candidates,
-      "runtime_probe_proxy_error":runtime_probe_proxy_error,
-      "runtime_probe_proxy_candidates":runtime_probe_proxy_candidates,
-      "runtime_probe_skipped_no_proxy_listener":runtime_probe_skipped_no_proxy_listener,
-      "runtime_probe_blocked_targets_total":runtime_probe_blocked_targets_total,
-      "runtime_probe_blocked_targets_ok":runtime_probe_blocked_targets_ok,
-      "runtime_probe_blocked_targets_failed":runtime_probe_blocked_targets_failed,
+      "runtime_probe_datapath_ok":runtime_probe_datapath_ok,
+      "runtime_probe_datapath_attempted":runtime_probe_datapath_attempted,
+      "runtime_probe_datapath_error":runtime_probe_datapath_error,
+      "runtime_probe_skipped_no_curl":runtime_probe_skipped_no_curl,
+      "runtime_probe_datapath_targets_total":runtime_probe_datapath_targets_total,
+      "runtime_probe_datapath_targets_ok":runtime_probe_datapath_targets_ok,
+      "runtime_probe_datapath_targets_failed":runtime_probe_datapath_targets_failed,
       "runtime_route_file_ok":runtime_route_file_ok,
       "runtime_route_apply_ok":runtime_route_apply_ok,
       "runtime_route_rollback_ok":runtime_route_rollback_ok,

@@ -102,10 +102,11 @@ chimera-path-proof-selfcheck:
       bash scripts/chimera-path-proof.sh /tmp/chimera_path_proof_selfcheck.json > "$tmp_out" 2>/dev/null || true ; \
       rg -q '"kind":"chimera_path_proof"' "$tmp_out" ; \
       rm -f "$tmp_out"
-    rg -Fq '"listener":{' /tmp/chimera_path_proof_selfcheck.json
-    rg -Fq '"observed_public_ip":{' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"mode":"transparent_datapath"' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"direct_baseline":{' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"datapath":{' /tmp/chimera_path_proof_selfcheck.json
     rg -Fq '"results":[' /tmp/chimera_path_proof_selfcheck.json
-    rg -Fq '"totals":{' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"network_state":"not_modified"' /tmp/chimera_path_proof_selfcheck.json
     rm -f /tmp/chimera_path_proof_selfcheck.json
 
 chimera-channel-audit:
@@ -117,6 +118,7 @@ chimera-channel-audit-selfcheck:
     rg -q '"kind":"chimera_channel_audit"' scripts/chimera_channel_audit.sh
     rg -q '"network_state":"not_modified"' scripts/chimera_channel_audit.sh
     rg -q '"chimera"' scripts/chimera_channel_audit.sh
+    rg -q '"transparent_runtime"' scripts/chimera_channel_audit.sh
     rg -q '"path_proof"' scripts/chimera_channel_audit.sh
     rg -q '"selective_routing"' scripts/chimera_channel_audit.sh
     rg -q '"system_default_path"' scripts/chimera_channel_audit.sh
@@ -126,7 +128,7 @@ chimera-app-routes-selfcheck:
     rg -q '^app:' configs/chimera-app-routes.example.conf
     rg -q '^service:' configs/chimera-app-routes.example.conf
     APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh app-routes-status | rg -q '^app_routes_count='
-    APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh route-status | rg -q '^chimera_proxy_url='
+    APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh route-status | rg -q '^datapath_mode=transparent$'
 
 chimera-runtime-verify:
     test -x scripts/chimera_runtime_verification.sh
@@ -138,14 +140,11 @@ chimera-e2e-channel-gate:
 chimera-e2e-channel-gate-selfcheck:
     test -x scripts/chimera_e2e_channel_gate.sh
     bash -n scripts/chimera_e2e_channel_gate.sh
-    tmp_out=$(mktemp) ; \
-      bash scripts/chimera_e2e_channel_gate.sh /tmp/chimera_e2e_channel_gate_selfcheck.json > "$tmp_out" 2>/dev/null || true ; \
-      rg -q '"kind":"chimera_e2e_channel_gate"' "$tmp_out" ; \
-      rm -f "$tmp_out"
-    rg -Fq '"path_proof":{' /tmp/chimera_e2e_channel_gate_selfcheck.json
-    rg -Fq '"channel_audit":{' /tmp/chimera_e2e_channel_gate_selfcheck.json
-    rg -Fq '"selected_route_checks":{' /tmp/chimera_e2e_channel_gate_selfcheck.json
-    rm -f /tmp/chimera_e2e_channel_gate_selfcheck.json
+    rg -q '"kind":"chimera_e2e_channel_gate"' scripts/chimera_e2e_channel_gate.sh
+    rg -q '"path_proof":{' scripts/chimera_e2e_channel_gate.sh
+    rg -q '"channel_audit":{' scripts/chimera_e2e_channel_gate.sh
+    rg -q '"selected_route_checks":{' scripts/chimera_e2e_channel_gate.sh
+    rg -q 'service-route-enable' scripts/chimera_e2e_channel_gate.sh
 
 chimera-e2e-channel-gate-guard:
     test -x scripts/chimera_e2e_channel_gate_guard.sh
@@ -343,12 +342,9 @@ rust-no-hardcode-guard-selfcheck:
     rg -q 'python execution found in justfile' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python command found in docs/README' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -Fq 'resolve_non_empty_setting("CHIMERA_REAL_WORLD_DIRECT_URL"' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
-    rg -Fq 'resolve_non_empty_setting("CHIMERA_REAL_WORLD_BLOCKED_TARGETS"' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
-    rg -Fq 'resolve_non_empty_setting("CHIMERA_REAL_WORLD_PROXY_URL"' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
-    rg -q 'CHIMERA_REAL_WORLD_PROXY_CANDIDATES' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -Fq 'resolve_non_empty_setting("CHIMERA_REAL_WORLD_DATAPATH_TARGETS"' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'CHIMERA_REAL_WORLD_DIRECT_TIMEOUT_SEC' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
-    rg -q 'CHIMERA_REAL_WORLD_PROXY_TIMEOUT_SEC' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
-    rg -q 'CHIMERA_REAL_WORLD_CONNECT_TIMEOUT_MS' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'CHIMERA_REAL_WORLD_DATAPATH_TIMEOUT_SEC' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'baked runtime target found in runtime_real_world_probe.rs' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'baked URL/proxy endpoint found in runtime Rust bins' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'ws://' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
@@ -375,39 +371,27 @@ runtime-real-world-probe-smoke-selfcheck:
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'runtime_real_world_probe_smoke' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn resolve_non_empty_setting' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q '^fn format_blocked_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q '^fn format_datapath_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn is_supported_probe_url' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q '^fn is_supported_proxy_url' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn extract_authority' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'let authority = extract_authority\(rest\);' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'authority_has_non_empty_host\(authority\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'let auth = extract_authority\(rest\);' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'parse_blocked_targets_dedups_case_insensitive_and_trims' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'format_blocked_targets_csv_preserves_normalized_order' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'parse_datapath_targets_dedups_case_insensitive_and_trims' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'format_datapath_targets_csv_preserves_normalized_order' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'resolve_non_empty_setting_trims_and_rejects_empty' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'with_query = format!\("\{\}://\{\}", "socks5h", "127.0.0.1:11080\?via=1"\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'with_fragment = format!\("\{\}://\{\}", "socks5h", "127.0.0.1:11080#v1"\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'with_path_and_auth = format!\("\{\}://\{\}", "socks5h", "user:pass@localhost:1080/proxy"\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'extract_authority_stops_on_path_query_and_fragment' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'supported_probe_url_requires_http_or_https' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -Fq 'let ws_target = format!("{}://{}", "ws", "example.invalid");' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -Fq 'let wss_target = format!("{}://{}", "wss", "example.invalid");' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'supported_proxy_url_requires_scheme_and_authority' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'invalid_spaced_authority' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'proxy_blocked_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'datapath_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'direct_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'proxy_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'connect_timeout_ms' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'datapath_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn parse_u64_setting_with_min' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q '^fn parse_proxy_candidates_csv' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q '^fn build_proxy_candidates' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'Command::new\("ss"\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
-    rg -q 'arg\("-ltnH"\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
-    rg -q '^fn normalize_proxy_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
-    rg -q 'normalize_proxy_probe_error_allows_only_known_values' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
-    rg -q '^fn normalize_blocked_target_totals' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
-    rg -q 'normalize_blocked_target_totals_clamps_negative_and_overflow' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q '^fn normalize_datapath_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'normalize_datapath_probe_error_allows_only_known_values' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q '^fn normalize_datapath_target_totals' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'normalize_datapath_target_totals_clamps_negative_and_overflow' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
 
 runtime-real-world-probe-schema-guard:
     bash scripts/runtime_real_world_probe_schema_guard.sh docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json
@@ -420,29 +404,25 @@ runtime-real-world-probe-schema-guard-selfcheck:
     rg -q 'probe keys mismatch' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'probe string is empty:' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'probe direct_url must use http/https' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'proxy blocked totals mismatch' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'datapath target totals mismatch' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'direct_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'proxy_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'connect_timeout_ms' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'blocked_targets csv is not normalized' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'blocked_targets contains non-http/https url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'proxy probe not attempted must have empty target rows' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q '^fn normalize_blocked_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'datapath_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'datapath_targets csv is not normalized' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'datapath_targets contains non-http/https url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'datapath probe not attempted must have empty target rows' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q '^fn normalize_datapath_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q '^fn is_supported_probe_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q '^fn is_supported_proxy_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q '^fn extract_authority' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'let authority = extract_authority\(rest\);' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'authority_has_non_empty_host\(authority\)' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'validate_probe_rejects_non_normalized_blocked_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_non_normalized_datapath_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'validate_probe_rejects_not_attempted_with_non_empty_rows' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'extract_authority_stops_on_path_query_and_fragment' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'validate_probe_rejects_empty_required_strings' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'validate_probe_rejects_non_http_direct_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'ws://blocked1.example' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'wss://blocked1.example' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'validate_probe_rejects_non_http_blocked_target_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'validate_probe_rejects_proxy_url_with_empty_authority' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'supported_proxy_url_requires_non_blank_non_spaced_authority' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'ws://target1.example' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'wss://target1.example' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_non_http_datapath_target_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'https://bad host' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'runtime real-world probe schema guard: PASS' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
 
@@ -491,10 +471,10 @@ reality-audit-refresh-selfcheck:
     rg -q 'cargo run -q -p chimera-lab --bin reality_audit_refresh --' scripts/reality_audit_refresh.sh
     test -f crates/chimera-lab/src/bin/reality_audit_refresh.rs
     rg -q 'real_world_datapath_closed' crates/chimera-lab/src/bin/reality_audit_refresh.rs
-    rg -q 'runtime_probe_blocked_targets_total' crates/chimera-lab/src/bin/reality_audit_refresh.rs
-    rg -q 'runtime_probe_skipped_no_proxy_listener' crates/chimera-lab/src/bin/reality_audit_refresh.rs
-    rg -q 'runtime_probe_blocked_targets_failed' crates/chimera-lab/src/bin/reality_audit_refresh.rs
-    rg -q 'runtime_probe_proxy_error' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_datapath_targets_total' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_datapath_attempted' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_datapath_targets_failed' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_datapath_error' crates/chimera-lab/src/bin/reality_audit_refresh.rs
     rg -q 'runtime_probe_path_ok' crates/chimera-lab/src/bin/reality_audit_refresh.rs
 
 reality-audit-schema-guard:
@@ -508,15 +488,15 @@ reality-audit-schema-guard-selfcheck:
     rg -q 'reality audit schema guard: PASS' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_evidence_closed mismatch' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'real_world_datapath_closed mismatch' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe_blocked_targets totals mismatch' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe_proxy_error invalid' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe proxy attempted without listener' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe listener detected but skipped_no_proxy_listener=true' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe not attempted must set skipped_no_proxy_listener=true' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe attempted must set skipped_no_proxy_listener=false' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe proxy not attempted must be listener_not_found' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe proxy attempted with listener_not_found' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe proxy ok requires ok==total' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe_datapath_targets totals mismatch' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe_datapath_error invalid' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe no curl but datapath attempted' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath ok requires failed=0' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath attempted with empty target totals' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath not attempted with non-zero totals' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath failed without error marker' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
 
 reality-ship-sync-guard:
     bash scripts/reality_ship_sync_guard.sh \
@@ -533,15 +513,15 @@ reality-ship-sync-guard-selfcheck:
     rg -q 'bool mismatch' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'int mismatch' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'str mismatch' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'runtime_probe_blocked_targets_failed' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy attempted without listener' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy not attempted must be listener_not_found' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy attempted with listener_not_found' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy ok with failed targets' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy attempted with empty target totals' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy not attempted with non-zero totals' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy error value is invalid' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'proxy totals mismatch' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'runtime_probe_datapath_targets_failed' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath ok with failed targets' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath attempted with empty totals' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath not attempted with non-zero totals' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath error value is invalid' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath totals mismatch' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
 
 runtime-apply-route-smoke-selfcheck:
     test -x scripts/runtime_apply_route_smoke.sh
@@ -621,10 +601,10 @@ runtime-datapath-multiflow-smoke-selfcheck:
     test -x scripts/runtime_datapath_multiflow_smoke.sh
     bash -n scripts/runtime_datapath_multiflow_smoke.sh
     rg -q 'chimera-lab -- datapath-report --json' scripts/runtime_datapath_multiflow_smoke.sh
-    rg -q '"gateway_explain":"matched rule' scripts/runtime_datapath_multiflow_smoke.sh
+    rg -q '"transit_explain":"matched rule' scripts/runtime_datapath_multiflow_smoke.sh
     rg -q '"block_explain":"matched rule' scripts/runtime_datapath_multiflow_smoke.sh
     rg -q '"direct_explain":"matched rule' scripts/runtime_datapath_multiflow_smoke.sh
-    rg -q 'gateway_ok' scripts/runtime_datapath_multiflow_smoke.sh
+    rg -q 'transit_ok' scripts/runtime_datapath_multiflow_smoke.sh
     rg -q 'block_ok' scripts/runtime_datapath_multiflow_smoke.sh
     rg -q 'direct_ok' scripts/runtime_datapath_multiflow_smoke.sh
 
@@ -632,7 +612,7 @@ runtime-policy-precedence-smoke-selfcheck:
     test -x scripts/runtime_policy_precedence_smoke.sh
     bash -n scripts/runtime_policy_precedence_smoke.sh
     rg -q 'exact-direct = exact:video.example.org => direct' scripts/runtime_policy_precedence_smoke.sh
-    rg -q 'suffix-gateway = suffix:example.org => gateway' scripts/runtime_policy_precedence_smoke.sh
+    rg -q 'suffix-transit = suffix:example.org => transit' scripts/runtime_policy_precedence_smoke.sh
     rg -q -- '--show-all-matches' scripts/runtime_policy_precedence_smoke.sh
     rg -q -- '--dns-bind-domain blocked.example.org' scripts/runtime_policy_precedence_smoke.sh
     rg -q -- '--dns-bind-ip 203.0.113.77' scripts/runtime_policy_precedence_smoke.sh
@@ -710,8 +690,8 @@ ship-readiness-selfcheck:
     rg -q 'cargo-deny guard: PASS' scripts/cargo_deny_guard.sh
     rg -q 'runtime_real_world_probe_env' scripts/ship_readiness.sh
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
-    rg -q 'runtime_real_world_proxy_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
-    rg -q 'runtime_real_world_proxy_blocked_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_datapath_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_datapath_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'GENERATED_AT_UTC=' scripts/ship_readiness.sh
     rg -Fq '"generated_at":"${GENERATED_AT_UTC}"' scripts/ship_readiness.sh
     rg -Fq 'Generated at (UTC): \`${GENERATED_AT_UTC}\`' scripts/ship_readiness.sh
@@ -1421,7 +1401,7 @@ json-message-contract-check:
     rg -q '"message_en":"' docs/datapath_latest.json
     rg -q '"message_ru":"' docs/datapath_latest.json
     rg -q '"kind":"datapath_report"' docs/datapath_latest.json
-    rg -q '"gateway_explain":"' docs/datapath_latest.json
+    rg -q '"transit_explain":"' docs/datapath_latest.json
     rg -q '"block_explain":"' docs/datapath_latest.json
     rg -q '"direct_explain":"' docs/datapath_latest.json
     rg -q '"message_en":"' docs/route_explain_latest.json
@@ -1485,7 +1465,7 @@ json-message-contract-check:
     rg -q '"status":"ok"' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"kind":"runtime_datapath_multiflow_smoke"' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"network_state":"not_modified"' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
-    rg -q '"gateway_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
+    rg -q '"transit_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"block_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"direct_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json
@@ -1700,13 +1680,11 @@ ship-report-contract-check:
     rg -q '"runtime_policy_precedence_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_forced_stop_rollback_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_proxy_listener_detected":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_proxy_probe_attempted":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_proxy_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_proxy_probe_error":"(none|proxy_listener_not_found|proxy_connect_or_upstream_failed|unknown)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_datapath_probe_attempted":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_datapath_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_datapath_probe_error":"(none|curl_not_found|datapath_target_failed|unknown)"' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_direct_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_skipped_no_curl":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_skipped_no_proxy_listener":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"artifacts_fresh":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"baseline_freeze":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"cleanroom_handoff_check":true' docs/SHIP_READINESS_REPORT.json
@@ -1813,7 +1791,7 @@ ship-report-contract-check:
     rg -q '"status":"ok"' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"kind":"runtime_datapath_multiflow_smoke"' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"network_state":"not_modified"' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
-    rg -q '"gateway_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
+    rg -q '"transit_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"block_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"direct_ok":true' docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json
@@ -1839,16 +1817,14 @@ ship-report-contract-check:
     rg -q 'Mesh auto adaptive trace:' docs/SHIP_READINESS_REPORT.md
     rg -q 'CEF phase1 smoke:' docs/REPORT_PACK.md
     rg -q 'Truth boundary:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy listener detected:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy probe attempted:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy probe ok:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy probe error:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy blocked targets total:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy blocked targets ok:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world proxy blocked targets failed:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath probe attempted:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath probe ok:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath probe error:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath targets total:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath targets ok:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath targets failed:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world direct probe ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world skipped no curl:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime real-world skipped no proxy listener:' docs/SHIP_READINESS_REPORT.md
     rg -q 'MVP готов только к расширенным лабораторным тестам' docs/RELEASE_READINESS_REPORT_RU.md
     rg -q 'не означает закрытие real-world datapath' docs/RELEASE_READINESS_REPORT_RU.md
     rg -q 'CEF phase1 smoke:' docs/RELEASE_READINESS_REPORT_RU.md
@@ -1865,15 +1841,11 @@ ship-readiness-json-guard-selfcheck:
     rg -q 'missing truth_boundary' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'invalid CEF line order' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'runtime real-world totals mismatch' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy probe attempted with empty totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy probe not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy probe ok with failed targets' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy attempted without listener' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'listener detected but skipped_no_proxy_listener=true' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy not attempted must set skipped_no_proxy_listener=true' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy attempted must set skipped_no_proxy_listener=false' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy not attempted must be listener_not_found' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'proxy attempted with listener_not_found' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath probe attempted with empty totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath probe not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath probe ok with failed targets' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
 
 ship-readiness-freshness-guard:
     bash scripts/ship_readiness_freshness_guard.sh docs/SHIP_READINESS_REPORT.json 1800
@@ -1906,14 +1878,14 @@ ship-nonregression-guard-selfcheck:
     rg -q 'ship nonregression guard: PASS' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'truth_boundary mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'release_ok mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy attempted without listener' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy not attempted must be listener_not_found' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy attempted with listener_not_found' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy ok with failed targets' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy attempted with empty target totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy error value is invalid' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'proxy totals mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath ok with failed targets' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath attempted with empty target totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath error value is invalid' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath totals mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
 
 reality-truth-guard:
     bash scripts/reality_truth_guard.sh \
@@ -1936,14 +1908,14 @@ reality-truth-guard-selfcheck:
     rg -q 'reality truth guard: PASS' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'truth boundary mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'markdown truth boundary mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'runtime_probe_proxy_error' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'runtime_probe_datapath_error' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'str mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'proxy attempted without listener' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'proxy not attempted must be listener_not_found' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'proxy attempted with listener_not_found' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'proxy ok with failed targets' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'proxy error value is invalid' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'proxy totals mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath ok with failed targets' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath error value is invalid' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath totals mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
 
 ship-structure-guard:
     bash scripts/ship_structure_guard.sh \

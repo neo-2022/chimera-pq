@@ -11,7 +11,7 @@ use chimera_dns::{DnsBinding, DnsBindingStore};
 use chimera_gateway::GatewayHandshake;
 use chimera_policy::parse_policy_text;
 use chimera_policy::{FlowContext, OutboundMode, Policy, Protocol, RouteRule, RuleMatcher};
-use chimera_session::{Frame, HandshakeMessage, ReplayWindow};
+use chimera_session::{Frame, FrameKind, HandshakeMessage, ReplayWindow};
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -199,7 +199,7 @@ fn run_datapath_smoke(lang: Language) -> i32 {
                 Language::En => {
                     println!("Datapath smoke: ok");
                     println!("Path: policy -> dns-binding -> session frame -> carrier");
-                    println!("Gateway explain: {}", report.gateway_explain);
+                    println!("Transit explain: {}", report.transit_explain);
                     println!("Block explain: {}", report.block_explain);
                     println!("Direct explain: {}", report.direct_explain);
                     println!("Network state: not modified");
@@ -207,7 +207,7 @@ fn run_datapath_smoke(lang: Language) -> i32 {
                 Language::Ru => {
                     println!("Datapath smoke: ok");
                     println!("Путь: policy -> dns-binding -> session frame -> carrier");
-                    println!("Gateway explain: {}", report.gateway_explain);
+                    println!("Transit explain: {}", report.transit_explain);
                     println!("Block explain: {}", report.block_explain);
                     println!("Direct explain: {}", report.direct_explain);
                     println!("Состояние сети: не изменялось");
@@ -935,7 +935,7 @@ fn run_smoke_with_output(lang: Language, print_output: bool) -> i32 {
                 println!("Data channel: in-memory");
                 println!("Secure session test: passed");
                 println!("Datapath path test: passed");
-                println!("Datapath explain: {}", datapath_report.gateway_explain);
+                println!("Datapath explain: {}", datapath_report.transit_explain);
                 println!("Network state: not modified");
             }
             Language::Ru => {
@@ -943,7 +943,7 @@ fn run_smoke_with_output(lang: Language, print_output: bool) -> i32 {
                 println!("Канал данных: in-memory");
                 println!("Проверка защищенной сессии: пройдена");
                 println!("Проверка datapath-цепочки: пройдена");
-                println!("Datapath explain: {}", datapath_report.gateway_explain);
+                println!("Datapath explain: {}", datapath_report.transit_explain);
                 println!("Состояние сети: не изменялось");
             }
         }
@@ -1310,6 +1310,7 @@ fn execute_perf_smoke(options: PerfSmokeOptions) -> Result<PerfSmokeResult, Stri
     const ITERATIONS: usize = 20_000;
     let payload = vec![0xAB; 1200];
     let frame = Frame {
+        kind: FrameKind::Data,
         packet_number: 1,
         payload,
     };
@@ -2195,9 +2196,9 @@ fn check_benchmark_artifact(path: &str) -> bool {
 fn check_route_determinism() -> bool {
     let policy = Policy::new(vec![
         RouteRule {
-            id: "example-gateway".to_string(),
+            id: "example-transit".to_string(),
             matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-            outbound: OutboundMode::Gateway,
+            outbound: OutboundMode::Transit,
         },
         RouteRule {
             id: "default-direct".to_string(),
@@ -2224,9 +2225,9 @@ fn check_policy_modes() -> bool {
             outbound: OutboundMode::Block,
         },
         RouteRule {
-            id: "gateway-suffix".to_string(),
+            id: "transit-suffix".to_string(),
             matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-            outbound: OutboundMode::Gateway,
+            outbound: OutboundMode::Transit,
         },
         RouteRule {
             id: "default-direct".to_string(),
@@ -2240,7 +2241,7 @@ fn check_policy_modes() -> bool {
         protocol: Protocol::Tcp,
         port: Some(443),
     };
-    let gateway_flow = FlowContext {
+    let transit_flow = FlowContext {
         domain: Some("api.example.org".to_string()),
         destination_ip: None,
         protocol: Protocol::Tcp,
@@ -2253,10 +2254,10 @@ fn check_policy_modes() -> bool {
         port: Some(443),
     };
     let block_decision = policy.explain(&block_flow).decision;
-    let gateway_decision = policy.explain(&gateway_flow).decision;
+    let transit_decision = policy.explain(&transit_flow).decision;
     let direct_decision = policy.explain(&direct_flow).decision;
     block_decision.outbound == OutboundMode::Block
-        && gateway_decision.outbound == OutboundMode::Gateway
+        && transit_decision.outbound == OutboundMode::Transit
         && direct_decision.outbound == OutboundMode::Direct
 }
 
@@ -3776,7 +3777,7 @@ fn render_datapath_report_text(lang: Language, report: &DatapathReport) -> Strin
         Language::En => {
             out.push_str("Datapath report: ok\n");
             out.push_str("Path: policy -> dns-binding -> session frame -> carrier\n");
-            out.push_str(&format!("Gateway explain: {}\n", report.gateway_explain));
+            out.push_str(&format!("Transit explain: {}\n", report.transit_explain));
             out.push_str(&format!("Block explain: {}\n", report.block_explain));
             out.push_str(&format!("Direct explain: {}\n", report.direct_explain));
             out.push_str("Network state: not modified\n");
@@ -3784,7 +3785,7 @@ fn render_datapath_report_text(lang: Language, report: &DatapathReport) -> Strin
         Language::Ru => {
             out.push_str("Datapath report: ok\n");
             out.push_str("Путь: policy -> dns-binding -> session frame -> carrier\n");
-            out.push_str(&format!("Gateway explain: {}\n", report.gateway_explain));
+            out.push_str(&format!("Transit explain: {}\n", report.transit_explain));
             out.push_str(&format!("Block explain: {}\n", report.block_explain));
             out.push_str(&format!("Direct explain: {}\n", report.direct_explain));
             out.push_str("Состояние сети: не изменялось\n");
@@ -3795,8 +3796,8 @@ fn render_datapath_report_text(lang: Language, report: &DatapathReport) -> Strin
 
 fn render_datapath_report_json(report: &DatapathReport) -> String {
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"datapath_report\",\"message_en\":\"Datapath report is ready.\",\"message_ru\":\"Отчет datapath готов.\",\"gateway_explain\":\"{}\",\"block_explain\":\"{}\",\"direct_explain\":\"{}\",\"network_state\":\"not_modified\"}}",
-        report.gateway_explain, report.block_explain, report.direct_explain
+        "{{\"status\":\"ok\",\"kind\":\"datapath_report\",\"message_en\":\"Datapath report is ready.\",\"message_ru\":\"Отчет datapath готов.\",\"transit_explain\":\"{}\",\"block_explain\":\"{}\",\"direct_explain\":\"{}\",\"network_state\":\"not_modified\"}}",
+        report.transit_explain, report.block_explain, report.direct_explain
     )
 }
 
@@ -3877,6 +3878,7 @@ fn run_fake_handshake() -> Result<(), String> {
 
 fn run_frame_replay_check() -> Result<(), String> {
     let frame = Frame {
+        kind: FrameKind::Data,
         packet_number: 1,
         payload: b"chimera-smoke".to_vec(),
     };
@@ -3907,7 +3909,7 @@ fn run_frame_replay_check() -> Result<(), String> {
 
 #[derive(Debug, Clone)]
 struct DatapathReport {
-    gateway_explain: String,
+    transit_explain: String,
     block_explain: String,
     direct_explain: String,
 }
@@ -3944,9 +3946,9 @@ fn run_policy_dns_session_carrier_path() -> Result<DatapathReport, String> {
             outbound: OutboundMode::Block,
         },
         RouteRule {
-            id: "example-gateway".to_string(),
+            id: "example-transit".to_string(),
             matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-            outbound: OutboundMode::Gateway,
+            outbound: OutboundMode::Transit,
         },
         RouteRule {
             id: "default-direct".to_string(),
@@ -3954,28 +3956,29 @@ fn run_policy_dns_session_carrier_path() -> Result<DatapathReport, String> {
             outbound: OutboundMode::Direct,
         },
     ]);
-    let gateway_binding = dns_store
+    let transit_binding = dns_store
         .lookup(gateway_ip, now)
-        .ok_or_else(|| "dns binding missing for gateway destination".to_string())?;
-    let gateway_flow = FlowContext {
-        domain: Some(gateway_binding.domain.clone()),
-        destination_ip: Some(gateway_binding.ip),
+        .ok_or_else(|| "dns binding missing for transit destination".to_string())?;
+    let transit_flow = FlowContext {
+        domain: Some(transit_binding.domain.clone()),
+        destination_ip: Some(transit_binding.ip),
         protocol: Protocol::Tcp,
         port: Some(443),
     };
-    let gateway_decision = policy.decide(&gateway_flow);
-    if gateway_decision.outbound != OutboundMode::Gateway {
+    let transit_decision = policy.decide(&transit_flow);
+    if transit_decision.outbound != OutboundMode::Transit {
         return Err(format!(
-            "unexpected outbound mode for flow: expected gateway, got {:?}",
-            gateway_decision.outbound
+            "unexpected outbound mode for flow: expected transit, got {:?}",
+            transit_decision.outbound
         ));
     }
 
     let frame = Frame {
+        kind: FrameKind::Data,
         packet_number: 1,
         payload: format!(
             "route={} domain={}",
-            gateway_decision.matched_rule_id, gateway_binding.domain
+            transit_decision.matched_rule_id, transit_binding.domain
         )
         .into_bytes(),
     };
@@ -4034,6 +4037,7 @@ fn run_policy_dns_session_carrier_path() -> Result<DatapathReport, String> {
 
     let mut direct_path = InMemoryCarrier::new(4096);
     let direct_frame = Frame {
+        kind: FrameKind::Data,
         packet_number: 7,
         payload: format!(
             "route={} domain={}",
@@ -4055,7 +4059,7 @@ fn run_policy_dns_session_carrier_path() -> Result<DatapathReport, String> {
     }
 
     Ok(DatapathReport {
-        gateway_explain: gateway_decision.explanation,
+        transit_explain: transit_decision.explanation,
         block_explain: block_decision.explanation,
         direct_explain: direct_decision.explanation,
     })
@@ -4126,7 +4130,7 @@ mod tests {
             Ok(report) => report,
             Err(error) => unreachable!("datapath report should be available: {error}"),
         };
-        assert!(report.gateway_explain.contains("matched rule"));
+        assert!(report.transit_explain.contains("matched rule"));
         assert!(report.block_explain.contains("matched rule"));
         assert!(report.direct_explain.contains("matched rule"));
     }
@@ -5022,7 +5026,7 @@ mod tests {
     #[test]
     fn datapath_artifact_check_passes_for_valid_file() {
         let path = std::env::temp_dir().join("chimera_datapath_valid.json");
-        let payload = "{\"status\":\"ok\",\"kind\":\"datapath_report\",\"message_en\":\"Datapath report is ready.\",\"message_ru\":\"Отчет datapath готов.\",\"gateway_explain\":\"matched rule 'example-gateway'\",\"block_explain\":\"matched rule 'blocked-exact'\",\"direct_explain\":\"matched rule 'default-direct'\",\"network_state\":\"not_modified\"}";
+        let payload = "{\"status\":\"ok\",\"kind\":\"datapath_report\",\"message_en\":\"Datapath report is ready.\",\"message_ru\":\"Отчет datapath готов.\",\"transit_explain\":\"matched rule 'example-transit'\",\"block_explain\":\"matched rule 'blocked-exact'\",\"direct_explain\":\"matched rule 'default-direct'\",\"network_state\":\"not_modified\"}";
         assert!(fs::write(&path, payload).is_ok());
         let path_text = path.to_string_lossy().to_string();
         assert!(check_datapath_artifact(&path_text));
@@ -5031,7 +5035,7 @@ mod tests {
     #[test]
     fn datapath_artifact_check_fails_for_missing_field() {
         let path = std::env::temp_dir().join("chimera_datapath_invalid.json");
-        let payload = "{\"status\":\"ok\",\"kind\":\"datapath_report\",\"message_en\":\"Datapath report is ready.\",\"message_ru\":\"Отчет datapath готов.\",\"gateway_explain\":\"matched rule 'example-gateway'\",\"direct_explain\":\"matched rule 'default-direct'\",\"network_state\":\"not_modified\"}";
+        let payload = "{\"status\":\"ok\",\"kind\":\"datapath_report\",\"message_en\":\"Datapath report is ready.\",\"message_ru\":\"Отчет datapath готов.\",\"transit_explain\":\"matched rule 'example-transit'\",\"direct_explain\":\"matched rule 'default-direct'\",\"network_state\":\"not_modified\"}";
         assert!(fs::write(&path, payload).is_ok());
         let path_text = path.to_string_lossy().to_string();
         assert!(!check_datapath_artifact(&path_text));

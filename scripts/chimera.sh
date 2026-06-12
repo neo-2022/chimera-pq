@@ -1,16 +1,151 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+VERSION="0.0.0-dev"
+ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz"
+CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz.sha256"
+
 resolve_self() {
   local src="${BASH_SOURCE[0]}"
-  while [[ -L "$src" ]]; do
+  while [[ -n "${src:-}" && -L "$src" ]]; do
     local dir
     dir="$(cd "$(dirname "$src")" && pwd)"
     src="$(readlink "$src")"
     [[ "$src" != /* ]] && src="$dir/$src"
   done
-  cd "$(dirname "$src")" && pwd
+  if [[ -n "${src:-}" && -f "$src" ]]; then
+    cd "$(dirname "$src")" && pwd
+    return 0
+  fi
+  pwd
+}
+
+download_url_to_file() {
+  local url="${1:?url_required}"
+  local dest="${2:?dest_required}"
+  if command -v curl >/dev/null 2>&1; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      curl -fsSL --retry 3 "$url" -o "$dest"
+    return $?
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      wget -qO "$dest" "$url"
+    return $?
+  fi
+  echo "error: missing downloader: curl or wget" >&2
+  return 1
+}
+
+sha256_file() {
+  local file="${1:?file_required}"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+    return 0
+  fi
+  echo "error: missing sha256 tool: sha256sum or shasum" >&2
+  return 1
+}
+
+verify_archive_checksum() {
+  local archive="${1:?archive_required}"
+  local checksum_file="${2:?checksum_required}"
+  local expected actual
+  expected="$(awk '{print $1}' "$checksum_file" | tr -d '[:space:]')"
+  [[ -n "$expected" ]] || {
+    echo "error: empty checksum file" >&2
+    return 1
+  }
+  actual="$(sha256_file "$archive")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "error: release checksum mismatch expected=$expected actual=$actual" >&2
+    return 1
+  fi
+  CHIMERA_RELEASE_BUNDLE_SHA256="$actual"
+  export CHIMERA_RELEASE_BUNDLE_SHA256
+}
+
+install_release_archive() {
+  local archive="${1:?archive_required}"
+  local chimera_home="${CHIMERA_HOME:-$HOME/.local/share/chimera}"
+  local local_bin="${CHIMERA_LOCAL_BIN:-$HOME/.local/bin}"
+  local extract_parent
+  local extract_tmp
+  extract_parent="$(dirname "$chimera_home")"
+
+  extract_tmp="$(mktemp -d)"
+  trap 'rm -rf "$extract_tmp"' RETURN
+  tar -xzf "$archive" -C "$extract_tmp"
+  if [[ ! -d "$extract_tmp/chimera-release" ]]; then
+    echo "error: release archive did not contain chimera-release/" >&2
+    return 1
+  fi
+  rm -rf "$chimera_home"
+  mkdir -p "$extract_parent"
+  mv "$extract_tmp/chimera-release" "$chimera_home"
+
+  chmod +x "$chimera_home/bin/"* 2>/dev/null || true
+  chmod +x "$chimera_home/scripts/"*.sh 2>/dev/null || true
+  chmod +x "$chimera_home/scripts/chimera-sh" 2>/dev/null || true
+
+  CHIMERA_RELEASE_VERSION="${VERSION}"
+  export CHIMERA_RELEASE_VERSION
+  bash "$chimera_home/scripts/install_desktop_control.sh"
+
+  mkdir -p "$local_bin"
+  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera"
+  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera.sh"
+  ln -sfn "$chimera_home/scripts/chimera-sh" "$local_bin/chimera-sh"
+
+  echo "chimera_install=ok version=$VERSION home=$chimera_home"
+}
+
+bootstrap_install_from_github() {
+  local archive_url="${CHIMERA_RELEASE_ARCHIVE_URL:-$ARCHIVE_URL_DEFAULT}"
+  local checksum_url="${CHIMERA_RELEASE_CHECKSUM_URL:-$CHECKSUM_URL_DEFAULT}"
+  local tmp_dir archive checksum
+
+  command -v tar >/dev/null 2>&1 || {
+    echo "error: missing required command: tar" >&2
+    return 1
+  }
+
+  tmp_dir="$(mktemp -d)"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  echo "chimera_bootstrap=download archive=$archive_url"
+  download_url_to_file "$archive_url" "$archive"
+  download_url_to_file "$checksum_url" "$checksum"
+  verify_archive_checksum "$archive" "$checksum"
+  install_release_archive "$archive"
 }
 
 SCRIPT_DIR="$(resolve_self)"
-exec "$SCRIPT_DIR/chimera-sh" "$@"
+LOCAL_SH="$SCRIPT_DIR/chimera-sh"
+
+case "${1:-}" in
+  -install|install)
+    bootstrap_install_from_github
+    ;;
+  "")
+    if [[ -x "$LOCAL_SH" ]]; then
+      exec "$LOCAL_SH" -help
+    fi
+    echo "usage: curl -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install" >&2
+    exit 2
+    ;;
+  *)
+    if [[ -x "$LOCAL_SH" ]]; then
+      exec "$LOCAL_SH" "$@"
+    fi
+    echo "error: CHIMERA is not installed. Run GitHub one-command install first." >&2
+    echo "usage: curl -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install" >&2
+    exit 2
+    ;;
+esac

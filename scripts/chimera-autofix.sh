@@ -42,14 +42,14 @@ while IFS= read -r raw_domain; do
     echo "${domain//./-}-direct = suffix:$domain => direct" >>"$tmp_policy"
   else
     failed=$((failed + 1))
-    echo "probe[$idx] $domain => gateway (http=$code)" >>"$LOG_FILE"
-    echo "${domain//./-}-gateway = suffix:$domain => gateway" >>"$tmp_policy"
+    echo "probe[$idx] $domain => transit (http=$code)" >>"$LOG_FILE"
+    echo "${domain//./-}-transit = suffix:$domain => transit" >>"$tmp_policy"
   fi
 done <"$DOMAINS_FILE"
 
 if [[ "$failed" -gt 0 ]]; then
-  echo "default-gateway = default => gateway" >>"$tmp_policy"
-  echo "autofix decision: default route switched to gateway (failed_domains=$failed)" >>"$LOG_FILE"
+  echo "default-transit = default => transit" >>"$tmp_policy"
+  echo "autofix decision: default route switched to transit (failed_domains=$failed)" >>"$LOG_FILE"
 else
   echo "default-direct = default => direct" >>"$tmp_policy"
   echo "autofix decision: default route remains direct (failed_domains=0)" >>"$LOG_FILE"

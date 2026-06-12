@@ -10,9 +10,9 @@ use chimera_crypto::{
 };
 
 use crate::peer_egress::options::{
-    AeadSuite, SECURE_MAGIC, SECURE_NONCE_LEN, HANDSHAKE_MAGIC, MAX_TOKEN_LEN,
+    AeadSuite, HANDSHAKE_MAGIC, MAX_TOKEN_LEN, SECURE_MAGIC, SECURE_NONCE_LEN,
 };
-use crate::peer_egress::protocol::{read_line_limited, SecurePeerStream};
+use crate::peer_egress::protocol::{SecurePeerStream, read_line_limited};
 
 pub fn authenticate_peer(stream: &mut TcpStream, token: &str) -> Result<(), String> {
     let mut magic = vec![0_u8; HANDSHAKE_MAGIC.len()];
@@ -197,8 +197,8 @@ fn derive_secure_peer_secrets(
     )
     .map_err(|error| format!("derive secure peer secrets failed: {error}"))?;
     Ok((
-        secrets.client_to_gateway.clone(),
-        secrets.gateway_to_client.clone(),
+        secrets.initiator_to_responder().clone(),
+        secrets.responder_to_initiator().clone(),
     ))
 }
 

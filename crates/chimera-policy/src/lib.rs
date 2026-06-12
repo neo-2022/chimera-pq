@@ -9,9 +9,8 @@ use chimera_core::{ChimeraError, ChimeraResult};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutboundMode {
     Direct,
-    Gateway,
+    Transit,
     Block,
-    LocalProxy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,9 +137,8 @@ impl Policy {
             }
             match rule.outbound {
                 OutboundMode::Direct => summary.direct_outbound_rules += 1,
-                OutboundMode::Gateway => summary.gateway_outbound_rules += 1,
+                OutboundMode::Transit => summary.transit_outbound_rules += 1,
                 OutboundMode::Block => summary.block_outbound_rules += 1,
-                OutboundMode::LocalProxy => summary.local_proxy_outbound_rules += 1,
             }
         }
         summary.total_rules = self.rules.len();
@@ -157,9 +155,8 @@ pub struct PolicySummary {
     pub protoport_rules: usize,
     pub default_rules: usize,
     pub direct_outbound_rules: usize,
-    pub gateway_outbound_rules: usize,
+    pub transit_outbound_rules: usize,
     pub block_outbound_rules: usize,
-    pub local_proxy_outbound_rules: usize,
 }
 
 pub fn parse_policy_text(input: &str) -> ChimeraResult<Policy> {
@@ -297,9 +294,11 @@ fn parse_protocol(input: &str, line_number: usize) -> ChimeraResult<Protocol> {
 fn parse_outbound(input: &str, line_number: usize) -> ChimeraResult<OutboundMode> {
     match input.to_ascii_lowercase().as_str() {
         "direct" => Ok(OutboundMode::Direct),
-        "gateway" => Ok(OutboundMode::Gateway),
+        "transit" | "gateway" => Ok(OutboundMode::Transit),
         "block" => Ok(OutboundMode::Block),
-        "local-proxy" => Ok(OutboundMode::LocalProxy),
+        "local-proxy" => Err(ChimeraError::InvalidConfig(format!(
+            "line {line_number}: outbound 'local-proxy' is forbidden; use transit for WEAVE datapath"
+        ))),
         other => Err(ChimeraError::InvalidConfig(format!(
             "line {line_number}: unknown outbound '{other}'"
         ))),
@@ -368,7 +367,7 @@ mod tests {
             RouteRule {
                 id: "suffix".to_string(),
                 matcher: RuleMatcher::DomainSuffix("example.com".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "exact".to_string(),
@@ -443,7 +442,7 @@ mod tests {
     fn rejects_duplicate_rule_ids() {
         let text = r#"
             same = default => direct
-            same = suffix:example.org => gateway
+            same = suffix:example.org => transit
         "#;
         let parsed = parse_policy_text(text);
         assert!(parsed.is_err());
@@ -453,7 +452,7 @@ mod tests {
     fn rejects_multiple_default_rules() {
         let text = r#"
             default_a = default => direct
-            default_b = default => gateway
+            default_b = default => transit
         "#;
         let parsed = parse_policy_text(text);
         assert!(parsed.is_err());
@@ -465,7 +464,7 @@ mod tests {
             RouteRule {
                 id: "a".to_string(),
                 matcher: RuleMatcher::ExactDomain("api.example.org".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "b".to_string(),
@@ -492,9 +491,8 @@ mod tests {
                 protoport_rules: 0,
                 default_rules: 1,
                 direct_outbound_rules: 1,
-                gateway_outbound_rules: 1,
+                transit_outbound_rules: 1,
                 block_outbound_rules: 1,
-                local_proxy_outbound_rules: 0,
             }
         );
     }
@@ -505,7 +503,7 @@ mod tests {
             RouteRule {
                 id: "suffix-example".to_string(),
                 matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "dns-cidr".to_string(),
@@ -521,7 +519,7 @@ mod tests {
                     protocol: Protocol::Tcp,
                     port: 443,
                 },
-                outbound: OutboundMode::LocalProxy,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "default".to_string(),
@@ -544,9 +542,21 @@ mod tests {
     }
 
     #[test]
+    fn rejects_local_proxy_outbound() {
+        let parsed = parse_policy_text("old_proxy = default => local-proxy");
+        assert!(parsed.is_err());
+        let message = parsed
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(message.contains("local-proxy"));
+        assert!(message.contains("forbidden"));
+    }
+
+    #[test]
     fn matched_rules_order_is_stable_for_same_precedence() {
         let text = r#"
-            b_rule = suffix:example.org => gateway
+            b_rule = suffix:example.org => transit
             a_rule = suffix:example.org => block
             default_route = default => direct
         "#;
@@ -569,5 +579,21 @@ mod tests {
                 "default_route".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn legacy_gateway_token_parses_as_peer_transit() {
+        let policy = match parse_policy_text("legacy = default => gateway") {
+            Ok(policy) => policy,
+            Err(error) => unreachable!("legacy gateway token should parse: {error}"),
+        };
+        let decision = policy.decide(&FlowContext {
+            domain: Some("example.org".to_string()),
+            destination_ip: None,
+            protocol: Protocol::Tcp,
+            port: Some(443),
+        });
+
+        assert_eq!(decision.outbound, OutboundMode::Transit);
     }
 }

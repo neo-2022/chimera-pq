@@ -52,9 +52,8 @@ pub(crate) fn choose_node_id(
     if entries.is_empty() {
         return Err("no mesh nodes available for selection".to_string());
     }
-    match choose_node_id_gui(&entries)? {
-        Some(node_id) => return Ok(node_id),
-        None => {}
+    if let Some(node_id) = choose_node_id_gui(&entries)? {
+        return Ok(node_id);
     }
     choose_node_id_tty(&entries)
 }
@@ -199,9 +198,7 @@ fn choose_node_id_tty(entries: &[MeshNodeSelectionEntry]) -> Result<String, Stri
     Err("unknown node_id or index".to_string())
 }
 
-fn select_best_entry<'a>(
-    entries: &'a [MeshNodeSelectionEntry],
-) -> Option<&'a MeshNodeSelectionEntry> {
+fn select_best_entry(entries: &[MeshNodeSelectionEntry]) -> Option<&MeshNodeSelectionEntry> {
     entries
         .iter()
         .find(|entry| entry.is_best)

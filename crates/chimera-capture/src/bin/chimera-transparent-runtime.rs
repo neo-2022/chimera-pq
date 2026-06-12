@@ -17,7 +17,7 @@ use chimera_capture::redirect::{TransparentRedirectPlan, default_bypass_cidrs_v4
 struct Options {
     transparent_bin: String,
     listen: String,
-    gateway_local: String,
+    transit_local: String,
     direct_mode: String,
     direct_timeout_ms: u64,
     first_response_timeout_ms: u64,
@@ -39,7 +39,8 @@ impl Options {
         let mut transparent_bin = env_value("CHIMERA_TRANSPARENT_BIN")
             .unwrap_or_else(|| "chimera-transparent-tcp".to_string());
         let mut listen = env_value("CHIMERA_TRANSPARENT_TCP_LISTEN");
-        let mut gateway_local = env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL");
+        let mut transit_local = env_value("CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL")
+            .or_else(|| env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL"));
         let mut direct_mode =
             env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE").unwrap_or_else(|| "auto".to_string());
         let mut direct_timeout_ms = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS")
@@ -89,8 +90,8 @@ impl Options {
                     listen = Some(arg_value(args, index, flag)?);
                     index += 2;
                 }
-                "--gateway-local" => {
-                    gateway_local = Some(arg_value(args, index, flag)?);
+                "--transit-local" | "--gateway-local" => {
+                    transit_local = Some(arg_value(args, index, flag)?);
                     index += 2;
                 }
                 "--direct-mode" => {
@@ -182,9 +183,9 @@ impl Options {
         Ok(Self {
             transparent_bin,
             listen: required_value(listen, "missing --listen or CHIMERA_TRANSPARENT_TCP_LISTEN")?,
-            gateway_local: required_value(
-                gateway_local,
-                "missing --gateway-local or CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL",
+            transit_local: required_value(
+                transit_local,
+                "missing --transit-local/--gateway-local or CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL",
             )?,
             direct_mode,
             direct_timeout_ms,
@@ -283,8 +284,8 @@ fn spawn_transparent(options: &Options) -> Result<Child, String> {
     command
         .arg("--listen")
         .arg(&options.listen)
-        .arg("--gateway-local")
-        .arg(&options.gateway_local)
+        .arg("--transit-local")
+        .arg(&options.transit_local)
         .arg("--direct-mode")
         .arg(&options.direct_mode)
         .arg("--direct-timeout-ms")
@@ -326,10 +327,10 @@ fn supervise_child(
         if stopping.load(Ordering::SeqCst) {
             return Ok(());
         }
-        if let Some(limit) = run_ms {
-            if started.elapsed() >= Duration::from_millis(limit) {
-                return Ok(());
-            }
+        if let Some(limit) = run_ms
+            && started.elapsed() >= Duration::from_millis(limit)
+        {
+            return Ok(());
         }
         thread::sleep(Duration::from_millis(100));
     }
@@ -434,7 +435,7 @@ mod tests {
             "/tmp/chimera-transparent-tcp".to_string(),
             "--listen".to_string(),
             "0.0.0.0:18144".to_string(),
-            "--gateway-local".to_string(),
+            "--transit-local".to_string(),
             "127.0.0.1:18142".to_string(),
             "--direct-mode".to_string(),
             "disabled".to_string(),
@@ -456,7 +457,7 @@ mod tests {
         });
         assert_eq!(parsed.transparent_bin, "/tmp/chimera-transparent-tcp");
         assert_eq!(parsed.listen, "0.0.0.0:18144");
-        assert_eq!(parsed.gateway_local, "127.0.0.1:18142");
+        assert_eq!(parsed.transit_local, "127.0.0.1:18142");
         assert_eq!(parsed.direct_mode, "disabled");
         assert_eq!(parsed.exempt_uid, 65534);
         assert_eq!(parsed.transparent_uid, Some(65534));
@@ -471,7 +472,7 @@ mod tests {
         let args = vec![
             "--listen".to_string(),
             "127.0.0.1:18144".to_string(),
-            "--gateway-local".to_string(),
+            "--transit-local".to_string(),
             "127.0.0.1:18142".to_string(),
             "--direct-mode".to_string(),
             "bad".to_string(),

@@ -90,9 +90,9 @@ Use `just chimera-path-proof` to generate direct-vs-CHIMERA path evidence.
 
 Behavior:
 
-1. Checks local listener availability for CHIMERA proxy candidates.
-2. Captures observed public IP for direct path and CHIMERA path.
-3. Probes each target through both paths and emits compact per-target result rows.
+1. Uses the normal process network path without `--proxy` or app proxy flags.
+2. Captures a direct baseline probe and transparent datapath target probes.
+3. Emits compact per-target result rows.
 4. Produces explicit pass/fail reason fields (`status`, `reason`, per-row reasons).
 5. Writes JSON artifact to `docs/CHIMERA_PATH_PROOF.json` (or custom output path).
 
@@ -100,7 +100,7 @@ Key env overrides:
 
 - `CHIMERA_PATH_PROOF_IP_CHECK_URL`
 - `CHIMERA_PATH_PROOF_TARGETS_CSV`
-- `CHIMERA_PATH_PROOF_PROXY_CANDIDATES`
+- `CHIMERA_PATH_PROOF_DIRECT_URL`
 - `CHIMERA_PATH_PROOF_TIMEOUT_SEC`
 - `CHIMERA_PATH_PROOF_JSON_OUT`
 
@@ -120,8 +120,8 @@ apps/services (and possible parallel WEAVEs on the same host).
 
 Report includes:
 
-- CHIMERA proxy listener status;
-- direct vs CHIMERA path proof status and observed public IP split;
+- CHIMERA transparent runtime status;
+- transparent datapath proof status;
 - selective routing inventory (`app_routes_count`, `service_routes_count`);
 - system default-path class (`regular_interface` or `tunnel_path`).
 
@@ -130,8 +130,8 @@ Parallel WEAVE isolation:
 - CHIMERA must not hijack already-used local WEAVE ports.
 - CHIMERA runtime uses the transparent TUN path and does not require a
   user-facing proxy-port selection.
-- Selected upstream settings are persisted to `~/.config/chimera/upstream_proxy.env`
-  for transport bootstrap and reused by runtime.
+- Selected upstream settings are persisted to the configured bootstrap state
+  for transport setup and reused by runtime.
 
 Selfcheck:
 
@@ -168,6 +168,62 @@ mode:
    - `CHIMERA_SINGBOX_SHA256`
 
 This keeps install/start one-command for end users and removes manual
+third-party installation from required flow.
+
+## Stand Install/Update Contract
+
+Laptop/VPS stand verification must use the published GitHub one-command path.
+Source-tree installs are development-only and do not prove that the shipped
+CHIMERA release works.
+
+Required stand flow:
+
+1. Publish the fixed build as a GitHub Release and verify that
+   `releases/latest` points to that version.
+2. Run the GitHub bootstrap command on the stand over SSH.
+3. The bootstrap downloads the latest release bundle, verifies version/checksum,
+   installs ready binaries, and runs the normal installer.
+4. Before `start`, `restart`, or peer connect, CHIMERA checks for a newer
+   version first.
+5. If a newer version is found, the order is always:
+   `update -> verify installed version/checksum -> start/connect`.
+
+Canonical stand command:
+
+```bash
+curl -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install
+```
+
+Required latest release assets:
+
+- `chimera.sh` - public bootstrap script with `VERSION`,
+  `ARCHIVE_URL_DEFAULT`, and `CHECKSUM_URL_DEFAULT` metadata;
+- `chimera-pq-release.tar.gz` - release bundle with ready binaries under `bin/`;
+- `chimera-pq-release.tar.gz.sha256` - checksum file for the bundle.
+
+The published `chimera.sh` bootstrap must download the bundle from
+`GitHub Release/Latest`, verify the checksum before extraction, install ready
+binaries, write installed version/checksum metadata, and then run the normal
+installer. Installed `chimera-sh -start`, `chimera-sh -restart`,
+`chimera-sh -mesh ...`, and `chimera-sh -connect ...` must perform the
+update-first check before starting or connecting.
+
+The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `vps`,
+and `laptop` remain compatibility labels only.
+
+Forbidden for laptop/VPS stand proof:
+
+- `cargo build`, `cargo run`, or requiring `cargo` on the target;
+- `git clone` as the install source on the target;
+- `rsync`, `scp`, local tarballs, `target/`, or a local working tree as the
+  installed artifact;
+- manual replacement of runtime files.
+
+Scripts that accept a local directory or local tarball are allowed only for
+development/debug packaging checks. They are not acceptable evidence for
+real-world stand verification. Local release sources require explicit
+`CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1`, and local tarballs still require a
+matching checksum file before extraction.
 
 ## Mesh Node Selection Flow
 
@@ -193,7 +249,6 @@ Important:
 - subsequent route changes are automatic and hidden from the user when
   runtime conditions change;
 - the selected mesh node stays pinned until the user changes it manually.
-third-party installation from required flow.
 
 ## End-to-End Channel Gate
 
@@ -264,30 +319,29 @@ Additional selfcheck for app/service routing config:
 
 - `just chimera-app-routes-selfcheck`
 
-If path proof reports `proxy_listener_not_found`:
+If path proof fails:
 
-1. Configure upstream channel file from template:
-   `cp configs/upstream_proxy.env.example ~/.config/chimera/upstream_proxy.env`
-2. Fill real upstream credentials.
-3. Start CHIMERA control path:
+1. Start CHIMERA control path:
    `bash scripts/chimera-control.sh start`
-4. Re-run:
+2. Check transparent datapath status:
+   `bash scripts/chimera-control.sh datapath-status`
+3. Re-run:
    `just chimera-runtime-verify`
 
 ## Selective App/Service Routing
 
-CHIMERA control supports selective routing for apps/services through the CHIMERA proxy channel without forcing whole-device traffic.
+CHIMERA control supports selective routing for apps/services through the transparent CHIMERA datapath without forcing whole-device traffic.
 
 1. Create config from example:
    `cp configs/chimera-app-routes.example.conf configs/chimera-app-routes.conf`
 2. Inspect parsed config:
    `bash scripts/chimera-control.sh app-routes-status`
-3. Run a selected app via CHIMERA proxy env:
+3. Run a selected app normally through the configured route:
    `bash scripts/chimera-control.sh run-app telegram`
-4. Enable proxy env for selected user services:
-   `bash scripts/chimera-control.sh service-proxy-enable`
-5. Disable proxy env for selected user services:
-   `bash scripts/chimera-control.sh service-proxy-disable`
+4. Enable route override for selected user services:
+   `bash scripts/chimera-control.sh service-route-enable`
+5. Disable route override for selected user services:
+   `bash scripts/chimera-control.sh service-route-disable`
 
 Notes:
 
@@ -329,7 +383,7 @@ System-wide discovery source:
 
 Adaptive switching hysteresis:
 
-- `SITE_FAILOVER_PROXY_THRESHOLD` (`1` default): consecutive proxy successes
+- `SITE_FAILOVER_DATAPATH_THRESHOLD` (`1` default): consecutive datapath successes
   needed before switching a domain to CHIMERA path.
 - `SITE_FAILBACK_DIRECT_THRESHOLD` (`3` default): consecutive direct successes
   needed before switching a domain back to direct path.
@@ -349,9 +403,9 @@ Use path proof to verify actual path evidence (not just "site opened").
 
 The report includes:
 
-- proxy listener presence (`proxy_listener`);
-- observed public IP direct vs via CHIMERA (`path_ip_direct`, `path_ip_via_chimera`);
-- per-target direct result and via-CHIMERA result with explicit pass/fail fields.
+- transparent datapath mode;
+- direct baseline result;
+- per-target datapath result with explicit pass/fail fields.
 
 Selfcheck:
 
@@ -359,8 +413,8 @@ Selfcheck:
 
 ## App/Service Selective Routing
 
-`scripts/chimera-control.sh` supports selective routing via proxy environment
-variables without changing PAC domain behavior.
+`scripts/chimera-control.sh` supports selective routing through the transparent
+datapath without changing per-app proxy settings.
 
 Config file:
 
@@ -378,10 +432,10 @@ Commands:
    `scripts/chimera-control.sh route-status`
 2. Show parsed map only:
    `scripts/chimera-control.sh app-routes-status`
-3. Run one app via CHIMERA proxy env:
+3. Run one app through the configured route:
    `scripts/chimera-control.sh run-app <app_id> [args...]`
-4. Show live proxy + upstream state:
-   `scripts/chimera-control.sh proxy-status`
+4. Show live datapath + upstream state:
+   `scripts/chimera-control.sh datapath-status`
 5. Show routing + upstream sticky/degrade state:
    `scripts/chimera-control.sh route-status`
 6. Probe upstream endpoint pool and best candidate:
@@ -390,12 +444,12 @@ Commands:
    `scripts/chimera-control.sh upstream-audit 30`
 8. Run upstream resilience smoke and write JSON artifact:
    `just upstream-resilience-smoke`
-9. Enable proxy env override for configured user services:
-   `scripts/chimera-control.sh service-proxy-enable`
-10. Enable proxy env override for one service:
-   `scripts/chimera-control.sh service-proxy-enable <service_name>`
-11. Disable proxy env override for configured user services:
-   `scripts/chimera-control.sh service-proxy-disable`
+9. Enable route override for configured user services:
+   `scripts/chimera-control.sh service-route-enable`
+10. Enable route override for one service:
+   `scripts/chimera-control.sh service-route-enable <service_name>`
+11. Disable route override for configured user services:
+   `scripts/chimera-control.sh service-route-disable`
 
 Self-check commands:
 
@@ -413,5 +467,5 @@ Run installer gate before release/install validation:
 Gate guarantees:
 
 - installer keeps CHIMERA in the transparent runtime contour;
-- installer bootstraps upstream settings from `~/.config/chimera/upstream_proxy.env`;
+- installer bootstraps upstream settings from the configured CHIMERA bootstrap state;
 - control/runtime consume the same upstream bootstrap state from that file.

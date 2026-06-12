@@ -1,7 +1,7 @@
 # CHIMERA-PQ WEAVE
 
-WEAVE means Web of Encrypted Adaptive Virtual Edges: a private fabric network
-that weaves devices, peer nodes, relays, mesh links, and gateways together.
+WEAVE means Web of Encrypted Adaptive Virtual Edges: a private mesh protocol
+that weaves equal peer nodes together.
 
 Linux-first MVP workspace for CHIMERA-PQ WEAVE.
 
@@ -11,20 +11,21 @@ Start with the parent workspace documents:
 2. `../CHIMERA-PQ_MVP_SPEC.md`
 3. `../Agent.md`
 
-This repository intentionally starts small: client, gateway, secure session
-skeleton, carrier abstraction, policy routing, DNS binding, diagnostics and
-tests. CHIMERA-NOVA CEF features such as DHT, DPS, ZK complaints, relay economy
-and emergency carriers are post-MVP.
+This repository intentionally starts small: a symmetric WEAVE node, secure
+session skeleton, carrier abstraction, policy routing, DNS binding, diagnostics
+and tests. Legacy `client` and `gateway` names remain only as transitional
+binary/config names. CHIMERA-NOVA CEF features such as DHT, DPS, ZK complaints,
+relay economy and emergency carriers are post-MVP.
 
 Current status:
 
 - M0 workspace and tooling are in place.
 - Minimal CI is configured in `.github/workflows/ci.yml`.
-- M1 fake client/gateway handshake works over an in-memory carrier.
+- M1 fake node handshake works over an in-memory carrier.
 - M2 key schedule skeleton is wired into `chimera-session` via `chimera-crypto`
   using HKDF-SHA256 with zeroized directional traffic secrets.
 - Carrier and capture crates now include explicit MVP skeletons for TLS, QUIC,
-  and TUN/local-proxy capture planning.
+  and transparent TUN capture planning with fail-closed behavior when TUN is unavailable.
 - Default command paths do not change OS routes/DNS/firewall/proxy.
 - Explicit `chimera up --apply-*` flags can apply local OS-level TUN/route/DNS
   changes with rollback state.
@@ -199,7 +200,7 @@ Control commands:
 ./scripts/chimera-control.sh start
 ./scripts/chimera-control.sh status
 ./scripts/chimera-control.sh stop
-./scripts/chimera-control.sh proxy-status
+./scripts/chimera-control.sh datapath-status
 ./scripts/chimera-control.sh route-status
 ./scripts/chimera-control.sh upstream-probe
 ./scripts/chimera-control.sh upstream-audit 30

@@ -12,14 +12,14 @@ mkdir -p "$(dirname "$OUT")"
 
 started_at="$(now_utc)"
 
-# 1) Local autonomy preflight: must not require manual route/proxy toggles.
+# 1) Local autonomy preflight: must not require manual route toggles or app proxy setup.
 "$CONTROL" start >/tmp/chimera_autonomous_start.log 2>&1 || true
-proxy_status="$("$CONTROL" proxy-status 2>/dev/null || true)"
+datapath_status="$("$CONTROL" datapath-status 2>/dev/null || true)"
 route_status="$("$CONTROL" route-status 2>/dev/null || true)"
 
-listener_up="false"
-if printf '%s\n' "$proxy_status" | grep -q '^chimera_proxy_listener=up$'; then
-  listener_up="true"
+datapath_up="false"
+if printf '%s\n' "$datapath_status" | grep -q '^runtime_state_status=up$'; then
+  datapath_up="true"
 fi
 
 # 2) Path proof as autonomous reachability signal.
@@ -37,10 +37,10 @@ if [[ -z "${adaptation_possible:-}" ]]; then adaptation_possible="false"; fi
 
 status="fail"
 reason="autonomy_guard_failed"
-if [[ "$listener_up" == "true" && "$path_status" == "pass" && "$adaptation_possible" == "true" ]]; then
+if [[ "$datapath_up" == "true" && "$path_status" == "pass" && "$adaptation_possible" == "true" ]]; then
   status="pass"
   reason="autonomous_path_and_adaptation_ready"
-elif [[ "$listener_up" == "true" && "$path_status" == "pass" ]]; then
+elif [[ "$datapath_up" == "true" && "$path_status" == "pass" ]]; then
   status="partial"
   reason="path_ready_but_multi_egress_missing"
 fi
@@ -48,7 +48,7 @@ fi
 finished_at="$(now_utc)"
 
 cat >"$OUT" <<EOF
-{"kind":"chimera_autonomous_nat_guard","status":"$status","reason":"$reason","started_at":"$started_at","finished_at":"$finished_at","network_state":"not_modified","signals":{"listener_up":$listener_up,"path_status":"$(esc "$path_status")","path_reason":"$(esc "$path_reason")","upstream_candidates_total":$candidates_total,"upstream_adaptation_possible":"$(esc "$adaptation_possible")"}}
+{"kind":"chimera_autonomous_nat_guard","status":"$status","reason":"$reason","started_at":"$started_at","finished_at":"$finished_at","network_state":"not_modified","signals":{"datapath_up":$datapath_up,"path_status":"$(esc "$path_status")","path_reason":"$(esc "$path_reason")","upstream_candidates_total":$candidates_total,"upstream_adaptation_possible":"$(esc "$adaptation_possible")"}}
 EOF
 
 cat "$OUT"

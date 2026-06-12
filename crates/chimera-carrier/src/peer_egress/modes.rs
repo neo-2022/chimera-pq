@@ -4,19 +4,21 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_client, establish_secure_peer_server};
+use crate::peer_egress::handshake::{
+    authenticate_peer, establish_secure_peer_client, establish_secure_peer_server,
+};
 use crate::peer_egress::net::{
-    bind_reuse_listener, connect_tcp, pipe_plain_with_secure_peer,
-    pipe_secure_peer_with_plain, read_exact_bytes, tune_tcp, write_repeating_payload,
+    bind_reuse_listener, connect_tcp, pipe_plain_with_secure_peer, pipe_secure_peer_with_plain,
+    read_exact_bytes, tune_tcp, write_repeating_payload,
 };
 use crate::peer_egress::options::{
-    enforce_min_throughput, split_host_port, write_resolved_state_file, AeadSuite,
-    LOCAL_MAGIC, Mode, Options, SECURE_PLAINTEXT_CHUNK_LEN,
+    AeadSuite, LOCAL_MAGIC, Mode, Options, SECURE_PLAINTEXT_CHUNK_LEN, enforce_min_throughput,
+    split_host_port, write_resolved_state_file,
 };
-use crate::peer_egress::pool::{new_shared_pool, SharedPeerPool, PeerPool};
+use crate::peer_egress::pool::{PeerPool, SharedPeerPool, new_shared_pool};
 use crate::peer_egress::protocol::{
-    parse_peer_connect_request, read_line_limited, read_native_connect_destination,
-    read_socks5_connect_destination, write_socks5_success, SecurePeerStream,
+    SecurePeerStream, parse_peer_connect_destination, read_line_limited,
+    read_native_connect_destination, redacted_destination_label, redacted_log_reason,
 };
 
 pub fn run_vps(options: Options) -> Result<(), String> {
@@ -38,9 +40,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
             &options.mode,
             &resolved_local_listen,
             &resolved_peer_listen,
-        ) {
-            eprintln!("event=peer_state_write_failed reason={error}");
-        }
+        )
+    {
+        eprintln!("event=peer_state_write_failed reason={error}");
+    }
     let token = options.token.clone();
     let aead = options.aead;
     let reverse_connect = options.reverse_connect;
@@ -64,7 +67,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                         let pool = r_pool.clone();
                         thread::spawn(move || {
                             if let Err(error) = handle_reverse_peer(peer, pool) {
-                                eprintln!("event=reverse_peer_error reason={error}");
+                                eprintln!(
+                                    "event=reverse_peer_error reason_class={}",
+                                    redacted_log_reason(&error)
+                                );
                             }
                         });
                     }
@@ -76,10 +82,7 @@ pub fn run_vps(options: Options) -> Result<(), String> {
         });
         println!(
             "chimera_peer_egress=vps_reverse_ready local={} peer={} resolved_local={} resolved_peer={}",
-            options.local_listen,
-            options.peer_listen,
-            resolved_local_listen,
-            resolved_peer_listen
+            options.local_listen, options.peer_listen, resolved_local_listen, resolved_peer_listen
         );
         for incoming in local_listener.incoming() {
             let Ok(local) = incoming else {
@@ -88,7 +91,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
             eprintln!("event=reverse_local_ingress_accepted");
             thread::spawn(move || {
                 if let Err(error) = handle_reverse_local_client(local) {
-                    eprintln!("event=reverse_local_client_error reason={error}");
+                    eprintln!(
+                        "event=reverse_local_client_error reason_class={}",
+                        redacted_log_reason(&error)
+                    );
                 }
             });
         }
@@ -118,10 +124,7 @@ pub fn run_vps(options: Options) -> Result<(), String> {
         });
         println!(
             "chimera_peer_egress=vps_ready local={} peer={} resolved_local={} resolved_peer={}",
-            options.local_listen,
-            options.peer_listen,
-            resolved_local_listen,
-            resolved_peer_listen
+            options.local_listen, options.peer_listen, resolved_local_listen, resolved_peer_listen
         );
         for incoming in local_listener.incoming() {
             let Ok(local) = incoming else {
@@ -140,17 +143,30 @@ pub fn run_vps(options: Options) -> Result<(), String> {
     Ok(())
 }
 
-pub fn handle_reverse_peer(mut peer: SecurePeerStream, _pool: SharedPeerPool) -> Result<(), String> {
+pub fn handle_reverse_peer(
+    mut peer: SecurePeerStream,
+    _pool: SharedPeerPool,
+) -> Result<(), String> {
     let request = peer.read_line(512)?;
-    eprintln!("event=reverse_peer_request_received request={request}");
-    let target_addr = parse_peer_connect_request(&request)?;
-    eprintln!("event=reverse_peer_target_connecting target={target_addr}");
+    let destination = parse_peer_connect_destination(&request)?;
+    let target_addr = destination.connect_addr();
+    let destination_id = destination.redacted_label();
+    eprintln!(
+        "event=reverse_peer_request_received request=<redacted> destination_id={destination_id}"
+    );
+    eprintln!(
+        "event=reverse_peer_target_connecting target=<redacted> destination_id={destination_id}"
+    );
     let target = connect_tcp(&target_addr, 10_000)
         .map_err(|error| format!("reverse connect target failed: {error}"))?;
     tune_tcp(&target)?;
-    eprintln!("event=reverse_peer_target_connected target={target_addr}");
+    eprintln!(
+        "event=reverse_peer_target_connected target=<redacted> destination_id={destination_id}"
+    );
     peer.write_line("OK")?;
-    eprintln!("event=reverse_peer_connect_ack_sent target={target_addr}");
+    eprintln!(
+        "event=reverse_peer_connect_ack_sent target=<redacted> destination_id={destination_id}"
+    );
     pipe_secure_peer_with_plain(peer, target)
 }
 
@@ -162,21 +178,25 @@ pub fn handle_reverse_local_client(mut local: TcpStream) -> Result<(), String> {
         .map_err(|error| format!("read reverse local protocol byte failed: {error}"))?;
     let destination = if first[0] == LOCAL_MAGIC[0] {
         read_native_connect_destination(&mut local, first[0])?
-    } else if first[0] == 5 {
-        read_socks5_connect_destination(&mut local, first[0])?
     } else {
-        return Err("unsupported reverse local ingress protocol".to_string());
+        return Err(
+            "unsupported reverse local ingress protocol; expected CHIMERA-LOCAL/1".to_string(),
+        );
     };
+    let destination_id = destination.redacted_label();
     eprintln!(
-        "event=reverse_local_ingress_destination host={} port={}",
-        destination.host, destination.port
+        "event=reverse_local_ingress_destination host=<redacted> port=<redacted> destination_id={destination_id}"
     );
-    let target_addr = format!("{}:{}", destination.host, destination.port);
-    eprintln!("event=reverse_local_target_connecting target={target_addr}");
+    let target_addr = destination.connect_addr();
+    eprintln!(
+        "event=reverse_local_target_connecting target=<redacted> destination_id={destination_id}"
+    );
     let target = connect_tcp(&target_addr, 10_000)
         .map_err(|error| format!("reverse local connect target failed: {error}"))?;
     tune_tcp(&target)?;
-    eprintln!("event=reverse_local_target_connected target={target_addr}");
+    eprintln!(
+        "event=reverse_local_target_connected target=<redacted> destination_id={destination_id}"
+    );
     local
         .write_all(b"OK\n")
         .map_err(|error| format!("write reverse local ack failed: {error}"))?;
@@ -186,15 +206,30 @@ pub fn handle_reverse_local_client(mut local: TcpStream) -> Result<(), String> {
 
 pub fn run_laptop(options: Options) -> Result<(), String> {
     println!(
-        "chimera_peer_egress=laptop_connecting server={} pool={}",
-        options.server, options.pool
+        "chimera_peer_egress=laptop_connecting server=<redacted> server_label={} pool={}",
+        redacted_destination_label(
+            options
+                .server
+                .split_once(':')
+                .map(|(host, _)| host)
+                .unwrap_or(""),
+            options
+                .server
+                .rsplit_once(':')
+                .and_then(|(_, port)| port.parse::<u16>().ok())
+                .unwrap_or(0)
+        ),
+        options.pool
     );
     for _ in 0..options.pool {
         let worker = options.clone();
         thread::spawn(move || {
             loop {
-                if let Err(error) = laptop_worker(&worker) {
-                    eprintln!("worker_error={error}");
+                if let Err(error) = outbound_peer_worker(&worker) {
+                    eprintln!(
+                        "event=outbound_peer_worker_error reason_class={}",
+                        redacted_log_reason(&error)
+                    );
                     thread::sleep(Duration::from_secs(1));
                 }
             }
@@ -206,10 +241,14 @@ pub fn run_laptop(options: Options) -> Result<(), String> {
 }
 
 pub fn laptop_worker(options: &Options) -> Result<(), String> {
+    outbound_peer_worker(options)
+}
+
+pub fn outbound_peer_worker(options: &Options) -> Result<(), String> {
     let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
-        .map_err(|error| format!("connect peer server failed: {error}"))?;
+        .map_err(|error| format!("connect outbound peer failed: {error}"))?;
     tune_tcp(&peer)?;
-    eprintln!("event=laptop_peer_connected");
+    eprintln!("event=outbound_peer_connected");
     peer.write_all(b"CHIMERA-PEER-EGRESS/1\n")
         .map_err(|error| format!("write handshake failed: {error}"))?;
     peer.write_all(options.token.as_bytes())
@@ -217,53 +256,62 @@ pub fn laptop_worker(options: &Options) -> Result<(), String> {
         .map_err(|error| format!("write token failed: {error}"))?;
     let mut peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
     let request = peer.read_line(512)?;
-    eprintln!("event=laptop_peer_request_received request={request}");
-    let target_addr = parse_peer_connect_request(&request)?;
-    eprintln!("event=laptop_target_connecting target={target_addr}");
+    let destination = parse_peer_connect_destination(&request)?;
+    let target_addr = destination.connect_addr();
+    let destination_id = destination.redacted_label();
+    eprintln!(
+        "event=outbound_peer_request_received request=<redacted> destination_id={destination_id}"
+    );
+    eprintln!(
+        "event=outbound_peer_target_connecting target=<redacted> destination_id={destination_id}"
+    );
     let target = connect_tcp(&target_addr, options.connect_timeout_ms)
-        .map_err(|error| format!("connect target failed: {error}"))?;
+        .map_err(|error| format!("connect outbound target failed: {error}"))?;
     tune_tcp(&target)?;
-    eprintln!("event=laptop_target_connected target={target_addr}");
+    eprintln!(
+        "event=outbound_peer_target_connected target=<redacted> destination_id={destination_id}"
+    );
     peer.write_line("OK")?;
-    eprintln!("event=laptop_peer_connect_ack_sent target={target_addr}");
+    eprintln!(
+        "event=outbound_peer_connect_ack_sent target=<redacted> destination_id={destination_id}"
+    );
     pipe_secure_peer_with_plain(peer, target)
 }
 
-pub fn handle_local_client(mut local: TcpStream, mut peer: SecurePeerStream) -> Result<(), String> {
+pub fn handle_local_client(mut local: TcpStream, peer: SecurePeerStream) -> Result<(), String> {
     tune_tcp(&local)?;
     let mut first = [0_u8; 1];
     local
         .read_exact(&mut first)
         .map_err(|error| format!("read local protocol byte failed: {error}"))?;
-    let (destination, native_client) = if first[0] == LOCAL_MAGIC[0] {
-        (read_native_connect_destination(&mut local, first[0])?, true)
-    } else if first[0] == 5 {
-        (
-            read_socks5_connect_destination(&mut local, first[0])?,
-            false,
-        )
+    handle_local_client_with_first_byte(local, peer, first[0])
+}
+
+pub fn handle_local_client_with_first_byte(
+    mut local: TcpStream,
+    mut peer: SecurePeerStream,
+    first_byte: u8,
+) -> Result<(), String> {
+    let destination = if first_byte == LOCAL_MAGIC[0] {
+        read_native_connect_destination(&mut local, first_byte)?
     } else {
-        return Err("unsupported local ingress protocol".to_string());
+        return Err("unsupported local ingress protocol; expected CHIMERA-LOCAL/1".to_string());
     };
+    let destination_id = destination.redacted_label();
     eprintln!(
-        "event=local_ingress_destination host={} port={} native_client={}",
-        destination.host, destination.port, native_client
+        "event=local_ingress_destination host=<redacted> port=<redacted> destination_id={destination_id}"
     );
     let request = format!("CONNECT {} {}", destination.host, destination.port);
     peer.write_line(&request)?;
-    eprintln!("event=peer_connect_request_sent request={request}");
+    eprintln!("event=peer_connect_request_sent request=<redacted> destination_id={destination_id}");
     let ack = peer.read_line(16)?;
     if ack != "OK" {
         return Err("peer connect failed".to_string());
     }
-    eprintln!("event=peer_connect_ack_received");
-    if native_client {
-        local
-            .write_all(b"OK\n")
-            .map_err(|error| format!("write native local ack failed: {error}"))?;
-    } else {
-        write_socks5_success(&mut local)?;
-    }
+    eprintln!("event=peer_connect_ack_received destination_id={destination_id}");
+    local
+        .write_all(b"OK\n")
+        .map_err(|error| format!("write native local ack failed: {error}"))?;
     pipe_plain_with_secure_peer(local, peer)
 }
 
@@ -330,7 +378,7 @@ pub fn run_bench(options: Options) -> Result<(), String> {
         let worker = worker_options.clone();
         thread::spawn(move || {
             loop {
-                if laptop_worker(&worker).is_err() {
+                if outbound_peer_worker(&worker).is_err() {
                     thread::sleep(Duration::from_millis(10));
                 }
             }

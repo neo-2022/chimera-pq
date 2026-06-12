@@ -25,8 +25,8 @@ enum DirectMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Options {
     listen: String,
-    gateway_local: String,
-    gateway_fallback: Option<String>,
+    transit_local: String,
+    transit_fallback: Option<String>,
     direct_mode: DirectMode,
     direct_timeout_ms: u64,
     first_response_timeout_ms: u64,
@@ -37,8 +37,10 @@ struct Options {
 impl Options {
     fn parse(args: &[String]) -> Result<Self, String> {
         let mut listen = env_value("CHIMERA_TRANSPARENT_TCP_LISTEN");
-        let mut gateway_local = env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL");
-        let mut gateway_fallback = env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_FALLBACK");
+        let mut transit_local = env_value("CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL")
+            .or_else(|| env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL"));
+        let mut transit_fallback = env_value("CHIMERA_TRANSPARENT_TCP_TRANSIT_FALLBACK")
+            .or_else(|| env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_FALLBACK"));
         let mut direct_mode = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE")
             .map(|value| parse_direct_mode(&value))
             .transpose()?
@@ -67,8 +69,10 @@ impl Options {
                 .ok_or_else(|| format!("missing value for {flag}"))?;
             match flag {
                 "--listen" => listen = Some(value.clone()),
-                "--gateway-local" => gateway_local = Some(value.clone()),
-                "--gateway-fallback" => gateway_fallback = Some(value.clone()),
+                "--transit-local" | "--gateway-local" => transit_local = Some(value.clone()),
+                "--transit-fallback" | "--gateway-fallback" => {
+                    transit_fallback = Some(value.clone());
+                }
                 "--direct-mode" => direct_mode = parse_direct_mode(value)?,
                 "--direct-timeout-ms" => {
                     direct_timeout_ms = parse_positive_u64(value, "direct-timeout-ms")?;
@@ -88,11 +92,11 @@ impl Options {
 
         Ok(Self {
             listen: required_value(listen, "missing --listen or CHIMERA_TRANSPARENT_TCP_LISTEN")?,
-            gateway_local: required_value(
-                gateway_local,
-                "missing --gateway-local or CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL",
+            transit_local: required_value(
+                transit_local,
+                "missing --transit-local/--gateway-local or CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL",
             )?,
-            gateway_fallback,
+            transit_fallback,
             direct_mode,
             direct_timeout_ms,
             first_response_timeout_ms,
@@ -141,17 +145,17 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
     let destination = resolve_destination(&client, &initial, options)?;
     eprintln!("event=transparent_flow_accepted destination={destination}");
     if options.direct_mode == DirectMode::Disabled {
-        let gateway = connect_gateway_with_fallback(
-            &options.gateway_local,
-            options.gateway_fallback.as_deref(),
+        let transit = connect_transit_with_fallback(
+            &options.transit_local,
+            options.transit_fallback.as_deref(),
             &destination,
             &initial,
             options.direct_timeout_ms,
         )?;
         eprintln!(
-            "event=transparent_route_selected route=gateway reason=direct_mode_disabled destination={destination}"
+            "event=transparent_route_selected route=transit reason=direct_mode_disabled destination={destination}"
         );
-        return relay_plain(client, gateway);
+        return relay_plain(client, transit);
     }
     match try_direct(&destination, &initial, options) {
         Ok((target, first_response)) => {
@@ -160,34 +164,32 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
         }
         Err(error) => {
             eprintln!("event=transparent_direct_failed reason={error}");
-            let gateway = connect_gateway_with_fallback(
-                &options.gateway_local,
-                options.gateway_fallback.as_deref(),
+            let transit = connect_transit_with_fallback(
+                &options.transit_local,
+                options.transit_fallback.as_deref(),
                 &destination,
                 &initial,
                 options.direct_timeout_ms,
             )?;
-            eprintln!("event=transparent_route_selected route=gateway destination={destination}");
-            relay_plain(client, gateway)
+            eprintln!("event=transparent_route_selected route=transit destination={destination}");
+            relay_plain(client, transit)
         }
     }
 }
 
-fn connect_gateway_with_fallback(
-    gateway_local: &str,
-    gateway_fallback: Option<&str>,
+fn connect_transit_with_fallback(
+    transit_local: &str,
+    transit_fallback: Option<&str>,
     destination: &SocketAddr,
     initial: &[u8],
     timeout_ms: u64,
 ) -> Result<TcpStream, String> {
-    match connect_gateway(gateway_local, destination, initial, timeout_ms) {
+    match connect_transit(transit_local, destination, initial, timeout_ms) {
         Ok(stream) => Ok(stream),
-        Err(err) => match gateway_fallback {
+        Err(err) => match transit_fallback {
             Some(fallback) => {
-                eprintln!(
-                    "event=gateway_fallback_trying fallback={fallback} reason=\"{err}\""
-                );
-                connect_gateway(fallback, destination, initial, timeout_ms)
+                eprintln!("event=transit_fallback_trying fallback={fallback} reason=\"{err}\"");
+                connect_transit(fallback, destination, initial, timeout_ms)
             }
             None => Err(err),
         },
@@ -231,32 +233,32 @@ fn try_direct(
     }
 }
 
-fn connect_gateway(
-    gateway_local: &str,
+fn connect_transit(
+    transit_local: &str,
     destination: &SocketAddr,
     initial: &[u8],
     timeout_ms: u64,
 ) -> Result<TcpStream, String> {
-    let mut gateway = connect_tcp(gateway_local, timeout_ms)
-        .map_err(|error| format!("gateway connect failed: {error}"))?;
-    tune_tcp(&gateway)?;
+    let mut transit = connect_tcp(transit_local, timeout_ms)
+        .map_err(|error| format!("transit connect failed: {error}"))?;
+    tune_tcp(&transit)?;
     let host = destination.ip().to_string();
-    gateway
+    transit
         .write_all(LOCAL_MAGIC)
         .and_then(|_| {
-            gateway.write_all(format!("CONNECT {host} {}\n", destination.port()).as_bytes())
+            transit.write_all(format!("CONNECT {host} {}\n", destination.port()).as_bytes())
         })
-        .map_err(|error| format!("gateway connect request write failed: {error}"))?;
-    let ack = read_line_limited(&mut gateway, 16)?;
+        .map_err(|error| format!("transit connect request write failed: {error}"))?;
+    let ack = read_line_limited(&mut transit, 16)?;
     if ack != "OK" {
-        return Err("gateway connect request rejected".to_string());
+        return Err("transit connect request rejected".to_string());
     }
     if !initial.is_empty() {
-        gateway
+        transit
             .write_all(initial)
-            .map_err(|error| format!("gateway initial write failed: {error}"))?;
+            .map_err(|error| format!("transit initial write failed: {error}"))?;
     }
-    Ok(gateway)
+    Ok(transit)
 }
 
 fn relay_after_probe(
@@ -362,7 +364,7 @@ fn parse_proxy_destination(initial: &[u8]) -> Option<SocketAddr> {
         return Some(addr);
     }
     if let Some(rest) = text.strip_prefix("GET http://") {
-        let host_part = rest.splitn(2, '/').next()?;
+        let host_part = rest.split('/').next()?;
         let (host, resolved_port) = if let Some((h, p)) = host_part.rsplit_once(':') {
             (h, p.parse::<u16>().ok().unwrap_or(80))
         } else {
@@ -372,7 +374,7 @@ fn parse_proxy_destination(initial: &[u8]) -> Option<SocketAddr> {
         return Some(addr);
     }
     if let Some(rest) = text.strip_prefix("POST http://") {
-        let host_part = rest.splitn(2, '/').next()?;
+        let host_part = rest.split('/').next()?;
         let (host, resolved_port) = if let Some((h, p)) = host_part.rsplit_once(':') {
             (h, p.parse::<u16>().ok().unwrap_or(80))
         } else {
@@ -510,7 +512,7 @@ mod tests {
         let args = vec![
             "--listen".to_string(),
             "127.0.0.1:0".to_string(),
-            "--gateway-local".to_string(),
+            "--transit-local".to_string(),
             "127.0.0.1:1".to_string(),
             "--direct-mode".to_string(),
             "disabled".to_string(),
@@ -527,34 +529,34 @@ mod tests {
             unreachable!("options should parse: {error}");
         });
         assert_eq!(parsed.listen, "127.0.0.1:0");
-        assert_eq!(parsed.gateway_local, "127.0.0.1:1");
+        assert_eq!(parsed.transit_local, "127.0.0.1:1");
         assert_eq!(parsed.direct_mode, DirectMode::Disabled);
         assert_eq!(parsed.direct_timeout_ms, 100);
         assert_eq!(parsed.first_response_timeout_ms, 200);
         assert_eq!(parsed.initial_read_timeout_ms, 50);
         assert_eq!(parsed.static_destination, Some("127.0.0.1:2".to_string()));
-        assert_eq!(parsed.gateway_fallback, None);
+        assert_eq!(parsed.transit_fallback, None);
     }
 
     #[test]
-    fn options_parse_gateway_fallback() {
+    fn options_parse_transit_fallback() {
         let args = vec![
             "--listen".to_string(),
             "127.0.0.1:0".to_string(),
-            "--gateway-local".to_string(),
+            "--transit-local".to_string(),
             "127.0.0.1:1".to_string(),
-            "--gateway-fallback".to_string(),
+            "--transit-fallback".to_string(),
             "127.0.0.1:3".to_string(),
         ];
         let parsed = Options::parse(&args).unwrap_or_else(|error| {
             unreachable!("options should parse: {error}");
         });
-        assert_eq!(parsed.gateway_fallback, Some("127.0.0.1:3".to_string()));
+        assert_eq!(parsed.transit_fallback, Some("127.0.0.1:3".to_string()));
     }
 
     #[test]
     fn options_require_listener() {
-        let args = vec!["--gateway-local".to_string(), "127.0.0.1:1".to_string()];
+        let args = vec!["--transit-local".to_string(), "127.0.0.1:1".to_string()];
         assert!(Options::parse(&args).is_err());
     }
 
@@ -583,11 +585,11 @@ mod tests {
             let _ = stream.write_all(&buf[..n]);
         });
 
-        let gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("gateway listener should bind: {error}");
+        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transit listener should bind: {error}");
         });
-        let gateway_addr = gateway.local_addr().unwrap_or_else(|error| {
-            unreachable!("gateway addr should be available: {error}");
+        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("transit addr should be available: {error}");
         });
 
         let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
@@ -598,8 +600,8 @@ mod tests {
         });
         let options = Options {
             listen: transparent_addr.to_string(),
-            gateway_local: gateway_addr.to_string(),
-            gateway_fallback: None,
+            transit_local: transit_addr.to_string(),
+            transit_fallback: None,
             direct_mode: DirectMode::Auto,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,
@@ -627,7 +629,7 @@ mod tests {
     }
 
     #[test]
-    fn transparent_tcp_falls_back_to_gateway_when_direct_is_down() {
+    fn transparent_tcp_falls_back_to_transit_when_direct_is_down() {
         let closed_target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
             unreachable!("closed target listener should bind: {error}");
         });
@@ -636,14 +638,14 @@ mod tests {
         });
         drop(closed_target);
 
-        let gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("gateway listener should bind: {error}");
+        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transit listener should bind: {error}");
         });
-        let gateway_addr = gateway.local_addr().unwrap_or_else(|error| {
-            unreachable!("gateway addr should be available: {error}");
+        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("transit addr should be available: {error}");
         });
         thread::spawn(move || {
-            let Ok((mut stream, _)) = gateway.accept() else {
+            let Ok((mut stream, _)) = transit.accept() else {
                 return;
             };
             let mut magic = [0_u8; super::LOCAL_MAGIC.len()];
@@ -660,7 +662,7 @@ mod tests {
             let Ok(n) = stream.read(&mut buf) else {
                 return;
             };
-            let _ = stream.write_all(b"gateway:");
+            let _ = stream.write_all(b"transit:");
             let _ = stream.write_all(&buf[..n]);
         });
 
@@ -672,8 +674,8 @@ mod tests {
         });
         let options = Options {
             listen: transparent_addr.to_string(),
-            gateway_local: gateway_addr.to_string(),
-            gateway_fallback: None,
+            transit_local: transit_addr.to_string(),
+            transit_fallback: None,
             direct_mode: DirectMode::Auto,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,
@@ -697,11 +699,11 @@ mod tests {
         client.read_exact(&mut reply).unwrap_or_else(|error| {
             unreachable!("client read should work: {error}");
         });
-        assert_eq!(&reply, b"gateway:hello");
+        assert_eq!(&reply, b"transit:hello");
     }
 
     #[test]
-    fn transparent_tcp_direct_disabled_uses_gateway_without_direct_probe() {
+    fn transparent_tcp_direct_disabled_uses_transit_without_direct_probe() {
         let direct_target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
             unreachable!("direct target listener should bind: {error}");
         });
@@ -709,14 +711,14 @@ mod tests {
             unreachable!("direct target addr should be available: {error}");
         });
 
-        let gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("gateway listener should bind: {error}");
+        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transit listener should bind: {error}");
         });
-        let gateway_addr = gateway.local_addr().unwrap_or_else(|error| {
-            unreachable!("gateway addr should be available: {error}");
+        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("transit addr should be available: {error}");
         });
         thread::spawn(move || {
-            let Ok((mut stream, _)) = gateway.accept() else {
+            let Ok((mut stream, _)) = transit.accept() else {
                 return;
             };
             let mut magic = [0_u8; super::LOCAL_MAGIC.len()];
@@ -733,7 +735,7 @@ mod tests {
             let Ok(n) = stream.read(&mut buf) else {
                 return;
             };
-            let _ = stream.write_all(b"forced-gw:");
+            let _ = stream.write_all(b"forced-transit:");
             let _ = stream.write_all(&buf[..n]);
         });
 
@@ -745,8 +747,8 @@ mod tests {
         });
         let options = Options {
             listen: transparent_addr.to_string(),
-            gateway_local: gateway_addr.to_string(),
-            gateway_fallback: None,
+            transit_local: transit_addr.to_string(),
+            transit_fallback: None,
             direct_mode: DirectMode::Disabled,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,
@@ -766,24 +768,24 @@ mod tests {
         client.write_all(b"hello").unwrap_or_else(|error| {
             unreachable!("client write should work: {error}");
         });
-        let mut reply = [0_u8; 15];
+        let mut reply = [0_u8; 20];
         client.read_exact(&mut reply).unwrap_or_else(|error| {
             unreachable!("client read should work: {error}");
         });
-        assert_eq!(&reply, b"forced-gw:hello");
+        assert_eq!(&reply, b"forced-transit:hello");
         drop(direct_target);
     }
 
     #[test]
-    fn transparent_tcp_uses_gateway_fallback_when_gateway_local_is_down() {
-        let gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("fallback gateway listener should bind: {error}");
+    fn transparent_tcp_uses_transit_fallback_when_transit_local_is_down() {
+        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("fallback transit listener should bind: {error}");
         });
-        let gateway_addr = gateway.local_addr().unwrap_or_else(|error| {
-            unreachable!("fallback gateway addr should be available: {error}");
+        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("fallback transit addr should be available: {error}");
         });
         thread::spawn(move || {
-            let Ok((mut stream, _)) = gateway.accept() else {
+            let Ok((mut stream, _)) = transit.accept() else {
                 return;
             };
             let mut magic = [0_u8; super::LOCAL_MAGIC.len()];
@@ -810,18 +812,18 @@ mod tests {
         let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
             unreachable!("transparent addr should be available: {error}");
         });
-        let closed_gateway = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("closed gateway listener should bind: {error}");
+        let closed_transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("closed transit listener should bind: {error}");
         });
-        let closed_gateway_addr = closed_gateway.local_addr().unwrap_or_else(|error| {
-            unreachable!("closed gateway addr should be available: {error}");
+        let closed_transit_addr = closed_transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("closed transit addr should be available: {error}");
         });
-        drop(closed_gateway);
+        drop(closed_transit);
 
         let options = Options {
             listen: transparent_addr.to_string(),
-            gateway_local: closed_gateway_addr.to_string(),
-            gateway_fallback: Some(gateway_addr.to_string()),
+            transit_local: closed_transit_addr.to_string(),
+            transit_fallback: Some(transit_addr.to_string()),
             direct_mode: DirectMode::Disabled,
             direct_timeout_ms: 500,
             first_response_timeout_ms: 500,

@@ -48,14 +48,7 @@ fi
 
 REMOTE_CMD=$(cat <<'EOF'
 set -euo pipefail
-latest_sha="$(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-  curl -fsSL https://api.github.com/repos/neo-2022/chimera/commits/main \
-  | sed -n 's/^[[:space:]]*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' | head -n1)"
-if [[ -z "$latest_sha" ]]; then
-  echo "error: failed to resolve latest main sha"
-  exit 1
-fi
-bootstrap_url="https://raw.githubusercontent.com/neo-2022/chimera/${latest_sha}/chimera.sh"
+bootstrap_url="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh"
 for i in $(seq 1 "__CYCLES__"); do
   echo "cycle=$i step=install"
   env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \

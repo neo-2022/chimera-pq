@@ -70,8 +70,8 @@ fn emit_string(
         .get(source_key)
         .and_then(|v| v.as_str())
         .unwrap_or(default_value);
-    let normalized = if source_key == "proxy_probe_error" {
-        normalize_proxy_probe_error(raw)
+    let normalized = if source_key == "datapath_probe_error" {
+        normalize_datapath_probe_error(raw)
     } else {
         raw
     };
@@ -79,28 +79,26 @@ fn emit_string(
     out.push(format!("{shell_key}='{escaped}'"));
 }
 
-fn normalize_proxy_probe_error(value: &str) -> &str {
+fn normalize_datapath_probe_error(value: &str) -> &str {
     match value {
-        "none" | "proxy_listener_not_found" | "proxy_connect_or_upstream_failed" | "unknown" => {
-            value
-        }
+        "none" | "curl_not_found" | "datapath_target_failed" | "unknown" => value,
         _ => "unknown",
     }
 }
 
 fn render_exports(parsed: &Value) -> Vec<String> {
-    let mut out = Vec::with_capacity(12);
-    let totals = normalize_blocked_target_totals(
+    let mut out = Vec::with_capacity(8);
+    let totals = normalize_datapath_target_totals(
         parsed
-            .get("proxy_blocked_targets_total")
+            .get("datapath_targets_total")
             .and_then(|v| v.as_i64())
             .unwrap_or(0),
         parsed
-            .get("proxy_blocked_targets_ok")
+            .get("datapath_targets_ok")
             .and_then(|v| v.as_i64())
             .unwrap_or(0),
         parsed
-            .get("proxy_blocked_targets_failed")
+            .get("datapath_targets_failed")
             .and_then(|v| v.as_i64())
             .unwrap_or(0),
     );
@@ -114,44 +112,23 @@ fn render_exports(parsed: &Value) -> Vec<String> {
     emit_bool(
         &mut out,
         parsed,
-        "proxy_listener_detected",
-        "runtime_real_world_proxy_listener_detected",
+        "datapath_probe_attempted",
+        "runtime_real_world_datapath_probe_attempted",
         false,
     );
     emit_bool(
         &mut out,
         parsed,
-        "proxy_probe_attempted",
-        "runtime_real_world_proxy_probe_attempted",
-        false,
-    );
-    emit_bool(
-        &mut out,
-        parsed,
-        "proxy_probe_ok",
-        "runtime_real_world_proxy_probe_ok",
-        false,
-    );
-    emit_bool(
-        &mut out,
-        parsed,
-        "proxy_selected_from_candidates",
-        "runtime_real_world_proxy_selected_from_candidates",
+        "datapath_probe_ok",
+        "runtime_real_world_datapath_probe_ok",
         false,
     );
     emit_string(
         &mut out,
         parsed,
-        "proxy_probe_error",
-        "runtime_real_world_proxy_probe_error",
+        "datapath_probe_error",
+        "runtime_real_world_datapath_probe_error",
         "unknown",
-    );
-    emit_string(
-        &mut out,
-        parsed,
-        "proxy_candidates",
-        "runtime_real_world_proxy_candidates",
-        "",
     );
     emit_bool(
         &mut out,
@@ -160,38 +137,31 @@ fn render_exports(parsed: &Value) -> Vec<String> {
         "runtime_real_world_skipped_no_curl",
         false,
     );
-    emit_bool(
-        &mut out,
-        parsed,
-        "skipped_no_proxy_listener",
-        "runtime_real_world_skipped_no_proxy_listener",
-        false,
-    );
     emit_i64(
         &mut out,
         &serde_json::json!({ "v": totals.0 }),
         "v",
-        "runtime_real_world_proxy_blocked_targets_total",
+        "runtime_real_world_datapath_targets_total",
         0,
     );
     emit_i64(
         &mut out,
         &serde_json::json!({ "v": totals.1 }),
         "v",
-        "runtime_real_world_proxy_blocked_targets_ok",
+        "runtime_real_world_datapath_targets_ok",
         0,
     );
     emit_i64(
         &mut out,
         &serde_json::json!({ "v": totals.2 }),
         "v",
-        "runtime_real_world_proxy_blocked_targets_failed",
+        "runtime_real_world_datapath_targets_failed",
         0,
     );
     out
 }
 
-fn normalize_blocked_target_totals(
+fn normalize_datapath_target_totals(
     total_raw: i64,
     ok_raw: i64,
     failed_raw: i64,
@@ -222,7 +192,7 @@ fn normalize_blocked_target_totals(
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_blocked_target_totals, normalize_proxy_probe_error, render_exports};
+    use super::{normalize_datapath_probe_error, normalize_datapath_target_totals, render_exports};
     use serde_json::json;
 
     #[test]
@@ -234,11 +204,11 @@ mod tests {
         );
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_probe_error='unknown'")
+                .any(|l| l == "runtime_real_world_datapath_probe_error='unknown'")
         );
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_blocked_targets_total=0")
+                .any(|l| l == "runtime_real_world_datapath_targets_total=0")
         );
     }
 
@@ -246,17 +216,13 @@ mod tests {
     fn maps_present_fields() {
         let got = render_exports(&json!({
             "direct_probe_ok": true,
-            "proxy_listener_detected": true,
-            "proxy_probe_attempted": true,
-            "proxy_probe_ok": false,
-            "proxy_selected_from_candidates": true,
-            "proxy_candidates": "socks5h://127.0.0.1:11080,http://127.0.0.1:1080",
-            "proxy_probe_error": "none",
+            "datapath_probe_attempted": true,
+            "datapath_probe_ok": false,
+            "datapath_probe_error": "datapath_target_failed",
             "skipped_no_curl": false,
-            "skipped_no_proxy_listener": false,
-            "proxy_blocked_targets_total": 3,
-            "proxy_blocked_targets_ok": 2,
-            "proxy_blocked_targets_failed": 1
+            "datapath_targets_total": 3,
+            "datapath_targets_ok": 2,
+            "datapath_targets_failed": 1
         }));
         assert!(
             got.iter()
@@ -264,63 +230,52 @@ mod tests {
         );
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_listener_detected=true")
+                .any(|l| l == "runtime_real_world_datapath_probe_attempted=true")
         );
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_probe_attempted=true")
+                .any(|l| l == "runtime_real_world_datapath_probe_ok=false")
         );
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_probe_ok=false")
+                .any(|l| l == "runtime_real_world_datapath_probe_error='datapath_target_failed'")
         );
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_selected_from_candidates=true")
-        );
-        assert!(
-            got.iter()
-                .any(|l| l == "runtime_real_world_proxy_probe_error='none'")
-        );
-        assert!(got
-            .iter()
-            .any(|l| l == "runtime_real_world_proxy_candidates='socks5h://127.0.0.1:11080,http://127.0.0.1:1080'"));
-        assert!(
-            got.iter()
-                .any(|l| l == "runtime_real_world_proxy_blocked_targets_total=3")
+                .any(|l| l == "runtime_real_world_datapath_targets_total=3")
         );
     }
 
     #[test]
     fn escapes_single_quotes_for_shell_eval() {
         let got = render_exports(&json!({
-            "proxy_probe_error": "bad'quote"
+            "datapath_probe_error": "bad'quote"
         }));
         assert!(
             got.iter()
-                .any(|l| l == "runtime_real_world_proxy_probe_error='unknown'")
+                .any(|l| l == "runtime_real_world_datapath_probe_error='unknown'")
         );
     }
 
     #[test]
-    fn normalize_proxy_probe_error_allows_only_known_values() {
-        assert_eq!(normalize_proxy_probe_error("none"), "none");
+    fn normalize_datapath_probe_error_allows_only_known_values() {
+        assert_eq!(normalize_datapath_probe_error("none"), "none");
         assert_eq!(
-            normalize_proxy_probe_error("proxy_listener_not_found"),
-            "proxy_listener_not_found"
+            normalize_datapath_probe_error("curl_not_found"),
+            "curl_not_found"
         );
         assert_eq!(
-            normalize_proxy_probe_error("proxy_connect_or_upstream_failed"),
-            "proxy_connect_or_upstream_failed"
+            normalize_datapath_probe_error("datapath_target_failed"),
+            "datapath_target_failed"
         );
-        assert_eq!(normalize_proxy_probe_error("unknown"), "unknown");
-        assert_eq!(normalize_proxy_probe_error("something_else"), "unknown");
+        assert_eq!(normalize_datapath_probe_error("unknown"), "unknown");
+        assert_eq!(normalize_datapath_probe_error("something_else"), "unknown");
     }
 
     #[test]
-    fn normalize_blocked_target_totals_clamps_negative_and_overflow() {
-        assert_eq!(normalize_blocked_target_totals(-1, -2, -3), (0, 0, 0));
-        assert_eq!(normalize_blocked_target_totals(2, 7, 1), (2, 2, 0));
-        assert_eq!(normalize_blocked_target_totals(3, 2, 9), (3, 2, 1));
+    fn normalize_datapath_target_totals_clamps_negative_and_overflow() {
+        assert_eq!(normalize_datapath_target_totals(-1, -2, -3), (0, 0, 0));
+        assert_eq!(normalize_datapath_target_totals(2, 7, 1), (2, 2, 0));
+        assert_eq!(normalize_datapath_target_totals(3, 2, 9), (3, 2, 1));
     }
 }

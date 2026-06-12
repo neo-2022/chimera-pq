@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn tls_carrier_has_expected_name() {
         let carrier = match TlsCarrier::new(TlsCarrierConfig {
-            server_name: "gateway.example.org".to_string(),
+            server_name: "node.example.org".to_string(),
             connect_addr: "127.0.0.1:443".to_string(),
             connect_timeout_ms: 1000,
         }) {
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn tls_carrier_round_trips_frame_on_same_addr() {
         let cfg = TlsCarrierConfig {
-            server_name: "gateway.example.org".to_string(),
+            server_name: "node.example.org".to_string(),
             connect_addr: "127.0.0.1:443".to_string(),
             connect_timeout_ms: 1000,
         };
@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn tls_carrier_rejects_oversized_frame() {
         let cfg = TlsCarrierConfig {
-            server_name: "gateway.example.org".to_string(),
+            server_name: "node.example.org".to_string(),
             connect_addr: "127.0.0.1:9443".to_string(),
             connect_timeout_ms: 1000,
         };
@@ -305,7 +305,7 @@ mod tests {
         });
 
         let cfg = TlsCarrierConfig {
-            server_name: "gateway.example.org".to_string(),
+            server_name: "node.example.org".to_string(),
             connect_addr: format!("tcp://{addr}"),
             connect_timeout_ms: 2000,
         };

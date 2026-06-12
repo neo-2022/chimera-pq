@@ -125,7 +125,7 @@ case "$action" in
     if command -v notify-send >/dev/null 2>&1; then
       notify-send "CHIMERA Control" "CHIMERA запущена с системной интеграцией (split по умолчанию)." || true
     fi
-    "$CONTROL" proxy-status 2>&1 | show_text "CHIMERA Start (Background)"
+    "$CONTROL" datapath-status 2>&1 | show_text "CHIMERA Start (Background)"
     ;;
   "Stop CHIMERA"|stop)
     "$CONTROL" stop 2>&1 | show_text "CHIMERA Stop"

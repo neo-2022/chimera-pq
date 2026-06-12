@@ -64,6 +64,16 @@ pub struct TrafficSecrets {
     pub gateway_to_client: TrafficSecret,
 }
 
+impl TrafficSecrets {
+    pub fn initiator_to_responder(&self) -> &TrafficSecret {
+        &self.client_to_gateway
+    }
+
+    pub fn responder_to_initiator(&self) -> &TrafficSecret {
+        &self.gateway_to_client
+    }
+}
+
 pub fn derive_traffic_secrets(
     suite_id: SuiteId,
     transcript_hash: &TranscriptHash,

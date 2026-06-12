@@ -16,7 +16,6 @@ REMOTE_REPO="$CHIMERA_LAPTOP_REPO"
 REMOTE_DURATION_SEC="${CHIMERA_LOAD_DURATION_SEC:-300}"
 REMOTE_TIMEOUT_SEC="${CHIMERA_LOAD_TIMEOUT_SEC:-12}"
 REMOTE_CONNECT_TIMEOUT_SEC="${CHIMERA_LOAD_CONNECT_TIMEOUT_SEC:-5}"
-REMOTE_PROXY_FALLBACK="${CHIMERA_PROXY_FALLBACK:-}"
 OUT_DIR="${1:-$ROOT_DIR/docs/load}"
 TS="$(date +%Y%m%d_%H%M%S)"
 LOCAL_OUT="$OUT_DIR/CHIMERA_LOAD_${REMOTE_DURATION_SEC}S_LAPTOP_${TS}.json"
@@ -43,14 +42,7 @@ REMOTE_CMD=$(
   cat <<'EOF_REMOTE'
 set -euo pipefail
 cd "$REMOTE_REPO"
-proxy_url="$(bash scripts/chimera-control.sh route-status | sed -n 's/^chimera_proxy_url=//p' | head -n 1)"
-if [[ -z "$proxy_url" ]]; then
-  proxy_url="$REMOTE_PROXY_FALLBACK"
-fi
-if [[ -z "$proxy_url" ]]; then
-  echo "chimera-load-5m-laptop: proxy URL is unavailable" >&2
-  exit 1
-fi
+datapath_status="$(bash scripts/chimera-control.sh route-status | sed -n 's/^runtime_state_status=//p' | head -n 1)"
 
 tmp_out="docs/CHIMERA_LOAD_${REMOTE_DURATION_SEC}S_${TS}.json"
 tmp_dir="$(mktemp -d)"
@@ -69,7 +61,8 @@ while IFS= read -r site; do
     : > "$codes_file"
     while (( $(date +%s) < stop )); do
       err_file="$tmp_dir/err_${i}_$$.txt"
-      code="$(curl -sS -L --proxy "$proxy_url" \
+      code="$(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+        curl -sS -L --noproxy '*' \
         --connect-timeout "$REMOTE_CONNECT_TIMEOUT_SEC" \
         --max-time "$REMOTE_TIMEOUT_SEC" \
         -o /dev/null -w '%{http_code}' "$site" 2>"$err_file" || true)"
@@ -101,8 +94,8 @@ json_escape() {
 }
 
 {
-  printf '{"kind":"chimera_load_test","duration_sec":%s,"proxy":"%s","generated_at":%s,"sites":[' \
-    "$REMOTE_DURATION_SEC" "$(json_escape "$proxy_url")" "$(date +%s)"
+  printf '{"kind":"chimera_load_test","duration_sec":%s,"datapath":"transparent","runtime_state":"%s","generated_at":%s,"sites":[' \
+    "$REMOTE_DURATION_SEC" "$(json_escape "${datapath_status:-unknown}")" "$(date +%s)"
   first=1
   for file in "$tmp_dir"/site_*.env; do
     [[ -f "$file" ]] || continue
@@ -147,7 +140,6 @@ REMOTE_OUTPUT="$(sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no \
   REMOTE_DURATION_SEC="$REMOTE_DURATION_SEC" \
   REMOTE_TIMEOUT_SEC="$REMOTE_TIMEOUT_SEC" \
   REMOTE_CONNECT_TIMEOUT_SEC="$REMOTE_CONNECT_TIMEOUT_SEC" \
-  REMOTE_PROXY_FALLBACK="$REMOTE_PROXY_FALLBACK" \
   TS="$TS" \
   TARGETS_PAYLOAD="$TARGETS_PAYLOAD" \
   bash -s <<<"$REMOTE_CMD")"

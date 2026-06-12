@@ -11,5 +11,7 @@ workspace = true
 [dependencies]
 chimera-core = { path = "../chimera-core" }
 chimera-crypto = { path = "../chimera-crypto" }
+chimera-mesh = { path = "../chimera-mesh" }
+chimera-session = { path = "../chimera-session" }
 sha2 = "0.10"
 socket2 = "0.6"

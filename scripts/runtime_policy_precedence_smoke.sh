@@ -10,7 +10,7 @@ out_dns="/tmp/chimera_policy_precedence_dns.json"
 
 cat > "$policy_file" <<'POLICY'
 exact-direct = exact:video.example.org => direct
-suffix-gateway = suffix:example.org => gateway
+suffix-transit = suffix:example.org => transit
 default-direct = default => direct
 POLICY
 
@@ -35,10 +35,10 @@ network_state_ok=false
 if rg -q '"rule_used":"exact-direct"' "$out_main" && rg -q '"outbound":"direct"' "$out_main"; then
   precedence_ok=true
 fi
-if rg -q '"matched_rules":\["exact-direct","suffix-gateway","default-direct"\]' "$out_main"; then
+if rg -q '"matched_rules":\["exact-direct","suffix-transit","default-direct"\]' "$out_main"; then
   all_matches_ok=true
 fi
-if rg -q '"domain_source_dns":true' "$out_dns" && rg -q '"rule_used":"suffix-gateway"' "$out_dns" && rg -q '"outbound":"gateway"' "$out_dns"; then
+if rg -q '"domain_source_dns":true' "$out_dns" && rg -q '"rule_used":"suffix-transit"' "$out_dns" && rg -q '"outbound":"transit"' "$out_dns"; then
   dns_binding_ok=true
 fi
 if rg -q '"network_state":"not_modified"' "$out_main" && rg -q '"network_state":"not_modified"' "$out_dns"; then

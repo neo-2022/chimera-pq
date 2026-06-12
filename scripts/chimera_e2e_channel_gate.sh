@@ -57,7 +57,7 @@ main() {
   if APP_ROUTES_FILE="$APP_ROUTES_FILE" bash "$CONTROL_SCRIPT" app-routes-status >/tmp/chimera_e2e_app_status_before.log 2>&1; then
     service_override_before="$(awk -F= '/^service_route_override\[example\]=/ {print $2; exit}' /tmp/chimera_e2e_app_status_before.log)"
   fi
-  if APP_ROUTES_FILE="$APP_ROUTES_FILE" bash "$CONTROL_SCRIPT" service-proxy-enable example >/tmp/chimera_e2e_service_enable.log 2>&1; then
+  if APP_ROUTES_FILE="$APP_ROUTES_FILE" bash "$CONTROL_SCRIPT" service-route-enable example >/tmp/chimera_e2e_service_enable.log 2>&1; then
     if APP_ROUTES_FILE="$APP_ROUTES_FILE" bash "$CONTROL_SCRIPT" app-routes-status >/tmp/chimera_e2e_app_status_after.log 2>&1; then
       service_override_after="$(awk -F= '/^service_route_override\[example\]=/ {print $2; exit}' /tmp/chimera_e2e_app_status_after.log)"
       service_override_checked=true

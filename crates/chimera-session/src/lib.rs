@@ -14,17 +14,84 @@ pub const NONCE_LEN: usize = 32;
 pub const TEST_ONLY_SUITE_ID: u16 = 0x0001;
 pub const X25519_HKDF_SHA256_SUITE_ID: u16 = 0x0101;
 pub const X25519_MLKEM768_HKDF_SHA256_SUITE_ID: u16 = 0x0201;
-const HEADER_LEN: usize = 13;
+const HEADER_LEN: usize = 14;
 const CLIENT_HELLO_TYPE: u8 = 1;
 const SERVER_HELLO_TYPE: u8 = 2;
 const HYBRID_CLIENT_HELLO_TYPE: u8 = 3;
 const HYBRID_SERVER_HELLO_TYPE: u8 = 4;
+const FRAME_KIND_DATA: u8 = 1;
+const FRAME_KIND_FIN: u8 = 2;
 const HANDSHAKE_LEN: usize = 1 + 1 + 2 + NONCE_LEN + NONCE_LEN + X25519_PUBLIC_KEY_LEN;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameKind {
+    Data,
+    Fin,
+}
+
+impl FrameKind {
+    fn encode(self) -> u8 {
+        match self {
+            Self::Data => FRAME_KIND_DATA,
+            Self::Fin => FRAME_KIND_FIN,
+        }
+    }
+
+    fn decode(value: u8) -> ChimeraResult<Self> {
+        match value {
+            FRAME_KIND_DATA => Ok(Self::Data),
+            FRAME_KIND_FIN => Ok(Self::Fin),
+            _ => Err(ChimeraError::InvalidFrame("unknown frame kind".to_string())),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
+    pub kind: FrameKind,
     pub packet_number: u64,
     pub payload: Vec<u8>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct SealedTransitFrame {
+    kind: FrameKind,
+    packet_number: u64,
+    payload_len: usize,
+    encoded: Vec<u8>,
+}
+
+impl core::fmt::Debug for SealedTransitFrame {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SealedTransitFrame")
+            .field("kind", &self.kind)
+            .field("packet_number", &self.packet_number)
+            .field("payload_len", &self.payload_len)
+            .field("encoded", &"<sealed>")
+            .finish()
+    }
+}
+
+impl SealedTransitFrame {
+    pub fn kind(&self) -> FrameKind {
+        self.kind
+    }
+
+    pub fn packet_number(&self) -> u64 {
+        self.packet_number
+    }
+
+    pub fn payload_len(&self) -> usize {
+        self.payload_len
+    }
+
+    pub fn encoded(&self) -> &[u8] {
+        &self.encoded
+    }
+
+    pub fn into_encoded(self) -> Vec<u8> {
+        self.encoded
+    }
 }
 
 impl Frame {
@@ -37,6 +104,7 @@ impl Frame {
             .map_err(|_| ChimeraError::InvalidFrame("payload length overflow".to_string()))?;
         let mut encoded = Vec::with_capacity(HEADER_LEN + self.payload.len());
         encoded.push(FRAME_VERSION);
+        encoded.push(self.kind.encode());
         encoded.extend_from_slice(&self.packet_number.to_be_bytes());
         encoded.extend_from_slice(&payload_len.to_be_bytes());
         encoded.extend_from_slice(&self.payload);
@@ -54,8 +122,9 @@ impl Frame {
             ));
         }
 
-        let packet_number = read_u64(&input[1..9])?;
-        let payload_len = read_u32(&input[9..13])? as usize;
+        let kind = FrameKind::decode(input[1])?;
+        let packet_number = read_u64(&input[2..10])?;
+        let payload_len = read_u32(&input[10..14])? as usize;
 
         if payload_len > MAX_PAYLOAD_LEN {
             return Err(ChimeraError::InvalidFrame("payload too large".to_string()));
@@ -68,6 +137,7 @@ impl Frame {
         }
 
         Ok(Self {
+            kind,
             packet_number,
             payload: input[HEADER_LEN..].to_vec(),
         })
@@ -79,12 +149,30 @@ pub fn encrypt_frame_payload(
     plaintext: &[u8],
     traffic_secret: &TrafficSecret,
 ) -> ChimeraResult<Frame> {
+    encrypt_frame_payload_with_kind(FrameKind::Data, packet_number, plaintext, traffic_secret)
+}
+
+pub fn encrypt_fin_frame_payload(
+    packet_number: u64,
+    plaintext: &[u8],
+    traffic_secret: &TrafficSecret,
+) -> ChimeraResult<Frame> {
+    encrypt_frame_payload_with_kind(FrameKind::Fin, packet_number, plaintext, traffic_secret)
+}
+
+fn encrypt_frame_payload_with_kind(
+    kind: FrameKind,
+    packet_number: u64,
+    plaintext: &[u8],
+    traffic_secret: &TrafficSecret,
+) -> ChimeraResult<Frame> {
     if plaintext.len() > MAX_PAYLOAD_LEN {
         return Err(ChimeraError::InvalidFrame("payload too large".to_string()));
     }
-    let aad = frame_aad(packet_number);
+    let aad = frame_aad(kind, packet_number);
     let payload = encrypt_chacha20poly1305(traffic_secret, packet_number, &aad, plaintext)?;
     Ok(Frame {
+        kind,
         packet_number,
         payload,
     })
@@ -94,14 +182,50 @@ pub fn decrypt_frame_payload(
     frame: &Frame,
     traffic_secret: &TrafficSecret,
 ) -> ChimeraResult<Vec<u8>> {
-    let aad = frame_aad(frame.packet_number);
+    let aad = frame_aad(frame.kind, frame.packet_number);
     decrypt_chacha20poly1305(traffic_secret, frame.packet_number, &aad, &frame.payload)
 }
 
-fn frame_aad(packet_number: u64) -> [u8; 9] {
-    let mut aad = [0_u8; 9];
+pub fn validate_sealed_transit_frame(input: &[u8]) -> ChimeraResult<SealedTransitFrame> {
+    if input.len() < HEADER_LEN {
+        return Err(ChimeraError::InvalidFrame("frame too short".to_string()));
+    }
+
+    if input[0] != FRAME_VERSION {
+        return Err(ChimeraError::InvalidFrame(
+            "unsupported frame version".to_string(),
+        ));
+    }
+
+    let kind = FrameKind::decode(input[1])?;
+    let packet_number = read_u64(&input[2..10])?;
+    let payload_len = read_u32(&input[10..14])? as usize;
+    if payload_len > MAX_PAYLOAD_LEN {
+        return Err(ChimeraError::InvalidFrame("payload too large".to_string()));
+    }
+    if input.len() != HEADER_LEN + payload_len {
+        return Err(ChimeraError::InvalidFrame(
+            "payload length mismatch".to_string(),
+        ));
+    }
+
+    Ok(SealedTransitFrame {
+        kind,
+        packet_number,
+        payload_len,
+        encoded: input.to_vec(),
+    })
+}
+
+pub fn forward_sealed_transit_frame(input: &[u8]) -> ChimeraResult<Vec<u8>> {
+    validate_sealed_transit_frame(input).map(SealedTransitFrame::into_encoded)
+}
+
+fn frame_aad(kind: FrameKind, packet_number: u64) -> [u8; 10] {
+    let mut aad = [0_u8; 10];
     aad[0] = FRAME_VERSION;
-    aad[1..].copy_from_slice(&packet_number.to_be_bytes());
+    aad[1] = kind.encode();
+    aad[2..].copy_from_slice(&packet_number.to_be_bytes());
     aad
 }
 
@@ -829,17 +953,20 @@ fn derive_test_only_input_key_material(
 #[cfg(test)]
 mod tests {
     use super::{
-        Frame, HandshakeMessage, HybridHandshakeMessage, RekeyPolicy, RekeyReason, RekeyState,
-        ReplayWindow, TEST_ONLY_SUITE_ID, X25519_MLKEM768_HKDF_SHA256_SUITE_ID,
-        client_finish_handshake, decrypt_frame_payload, encrypt_frame_payload,
-        finish_hybrid_handshake_with_shared_secrets, server_accept_client_hello,
-        server_accept_hybrid_client_hello, server_finish_handshake,
+        Frame, FrameKind, HandshakeMessage, HybridHandshakeMessage, MAX_PAYLOAD_LEN, RekeyPolicy,
+        RekeyReason, RekeyState, ReplayWindow, TEST_ONLY_SUITE_ID,
+        X25519_MLKEM768_HKDF_SHA256_SUITE_ID, client_finish_handshake, decrypt_frame_payload,
+        encrypt_fin_frame_payload, encrypt_frame_payload,
+        finish_hybrid_handshake_with_shared_secrets, forward_sealed_transit_frame,
+        server_accept_client_hello, server_accept_hybrid_client_hello, server_finish_handshake,
+        validate_sealed_transit_frame,
     };
     use chimera_crypto::{X25519Secret, ml_kem_768_decapsulate, ml_kem_768_generate_keypair};
 
     #[test]
     fn frame_round_trip() {
         let frame = Frame {
+            kind: FrameKind::Data,
             packet_number: 7,
             payload: b"hello".to_vec(),
         };
@@ -927,11 +1054,11 @@ mod tests {
         assert_eq!(
             client_session
                 .traffic_secrets
-                .client_to_gateway
+                .initiator_to_responder()
                 .expose_for_tests(),
             server_session
                 .traffic_secrets
-                .client_to_gateway
+                .initiator_to_responder()
                 .expose_for_tests()
         );
     }
@@ -986,21 +1113,21 @@ mod tests {
         assert_eq!(
             client_session
                 .traffic_secrets
-                .client_to_gateway
+                .initiator_to_responder()
                 .expose_for_tests(),
             server_session
                 .traffic_secrets
-                .client_to_gateway
+                .initiator_to_responder()
                 .expose_for_tests()
         );
         assert_eq!(
             client_session
                 .traffic_secrets
-                .gateway_to_client
+                .responder_to_initiator()
                 .expose_for_tests(),
             server_session
                 .traffic_secrets
-                .gateway_to_client
+                .responder_to_initiator()
                 .expose_for_tests()
         );
     }
@@ -1022,17 +1149,159 @@ mod tests {
         let encrypted = encrypt_frame_payload(
             42,
             b"application payload",
-            &client_session.traffic_secrets.client_to_gateway,
+            client_session.traffic_secrets.initiator_to_responder(),
         )
         .unwrap_or_else(|error| unreachable!("frame should encrypt: {error}"));
         assert_ne!(encrypted.payload, b"application payload");
 
         let decrypted = decrypt_frame_payload(
             &encrypted,
-            &server_session.traffic_secrets.client_to_gateway,
+            server_session.traffic_secrets.initiator_to_responder(),
         )
         .unwrap_or_else(|error| unreachable!("frame should decrypt: {error}"));
         assert_eq!(decrypted, b"application payload");
+    }
+
+    #[test]
+    fn fin_frame_round_trips_after_handshake() {
+        let client_hello = HandshakeMessage::ClientHello {
+            suite_id: TEST_ONLY_SUITE_ID,
+            client_nonce: [31_u8; 32],
+            client_key_share: [0_u8; 32],
+        };
+        let server_hello = server_accept_client_hello(&client_hello, [32_u8; 32])
+            .unwrap_or_else(|error| unreachable!("server should accept client hello: {error}"));
+        let client_session = client_finish_handshake(&client_hello, &server_hello)
+            .unwrap_or_else(|error| unreachable!("client should finish handshake: {error}"));
+        let server_session = server_finish_handshake(&client_hello, &server_hello)
+            .unwrap_or_else(|error| unreachable!("server should finish handshake: {error}"));
+
+        let encrypted = encrypt_fin_frame_payload(
+            43,
+            b"stream finished",
+            client_session.traffic_secrets.initiator_to_responder(),
+        )
+        .unwrap_or_else(|error| unreachable!("FIN frame should encrypt: {error}"));
+        assert_eq!(encrypted.kind, FrameKind::Fin);
+
+        let decrypted = decrypt_frame_payload(
+            &encrypted,
+            server_session.traffic_secrets.initiator_to_responder(),
+        )
+        .unwrap_or_else(|error| unreachable!("FIN frame should decrypt: {error}"));
+        assert_eq!(decrypted, b"stream finished");
+    }
+
+    #[test]
+    fn sealed_transit_forwards_encoded_frame_without_payload_access() {
+        let client_hello = HandshakeMessage::ClientHello {
+            suite_id: TEST_ONLY_SUITE_ID,
+            client_nonce: [21_u8; 32],
+            client_key_share: [0_u8; 32],
+        };
+        let server_hello = server_accept_client_hello(&client_hello, [22_u8; 32])
+            .unwrap_or_else(|error| unreachable!("server should accept client hello: {error}"));
+        let client_session = client_finish_handshake(&client_hello, &server_hello)
+            .unwrap_or_else(|error| unreachable!("client should finish handshake: {error}"));
+
+        let frame = encrypt_frame_payload(
+            77,
+            b"third-party closed payload",
+            client_session.traffic_secrets.initiator_to_responder(),
+        )
+        .unwrap_or_else(|error| unreachable!("frame should encrypt: {error}"));
+        let encoded = frame
+            .encode()
+            .unwrap_or_else(|error| unreachable!("frame should encode: {error}"));
+
+        let transit = validate_sealed_transit_frame(&encoded)
+            .unwrap_or_else(|error| unreachable!("transit frame should validate: {error}"));
+        assert_eq!(transit.kind(), FrameKind::Data);
+        assert_eq!(transit.packet_number(), 77);
+        assert_eq!(transit.payload_len(), frame.payload.len());
+        assert_eq!(transit.encoded(), encoded.as_slice());
+        assert!(
+            !transit
+                .encoded()
+                .windows(26)
+                .any(|w| w == b"third-party closed payload")
+        );
+        let debug = format!("{transit:?}");
+        assert!(debug.contains("<sealed>"));
+        assert!(!debug.contains("third-party closed payload"));
+        assert!(!debug.contains(&format!("{:?}", frame.payload)));
+
+        let forwarded = forward_sealed_transit_frame(&encoded)
+            .unwrap_or_else(|error| unreachable!("transit frame should forward: {error}"));
+        assert_eq!(forwarded, encoded);
+    }
+
+    #[test]
+    fn sealed_transit_forwards_fin_frame_without_payload_access() {
+        let client_hello = HandshakeMessage::ClientHello {
+            suite_id: TEST_ONLY_SUITE_ID,
+            client_nonce: [41_u8; 32],
+            client_key_share: [0_u8; 32],
+        };
+        let server_hello = server_accept_client_hello(&client_hello, [42_u8; 32])
+            .unwrap_or_else(|error| unreachable!("server should accept client hello: {error}"));
+        let client_session = client_finish_handshake(&client_hello, &server_hello)
+            .unwrap_or_else(|error| unreachable!("client should finish handshake: {error}"));
+
+        let frame = encrypt_fin_frame_payload(
+            78,
+            b"third-party stream finished",
+            client_session.traffic_secrets.initiator_to_responder(),
+        )
+        .unwrap_or_else(|error| unreachable!("FIN frame should encrypt: {error}"));
+        let encoded = frame
+            .encode()
+            .unwrap_or_else(|error| unreachable!("FIN frame should encode: {error}"));
+
+        let transit = validate_sealed_transit_frame(&encoded)
+            .unwrap_or_else(|error| unreachable!("FIN transit frame should validate: {error}"));
+        assert_eq!(transit.kind(), FrameKind::Fin);
+        assert_eq!(transit.packet_number(), 78);
+        assert!(
+            !transit
+                .encoded()
+                .windows(27)
+                .any(|w| w == b"third-party stream finished")
+        );
+        let debug = format!("{transit:?}");
+        assert!(debug.contains("<sealed>"));
+        assert!(!debug.contains("third-party stream finished"));
+
+        let forwarded = forward_sealed_transit_frame(&encoded)
+            .unwrap_or_else(|error| unreachable!("FIN transit frame should forward: {error}"));
+        assert_eq!(forwarded, encoded);
+    }
+
+    #[test]
+    fn sealed_transit_rejects_malformed_envelope_without_decrypting() {
+        let mut encoded = Frame {
+            kind: FrameKind::Data,
+            packet_number: 1,
+            payload: vec![0_u8; MAX_PAYLOAD_LEN + 1],
+        }
+        .encode();
+        assert!(encoded.is_err());
+
+        let mut malformed = vec![1_u8; 14];
+        malformed[1] = FrameKind::Data.encode();
+        malformed[10..14].copy_from_slice(&(MAX_PAYLOAD_LEN as u32 + 1).to_be_bytes());
+        assert!(validate_sealed_transit_frame(&malformed).is_err());
+
+        encoded = Frame {
+            kind: FrameKind::Data,
+            packet_number: 2,
+            payload: vec![1, 2, 3],
+        }
+        .encode();
+        let mut truncated =
+            encoded.unwrap_or_else(|error| unreachable!("frame should encode: {error}"));
+        truncated.pop();
+        assert!(forward_sealed_transit_frame(&truncated).is_err());
     }
 
     #[test]
@@ -1046,13 +1315,16 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("server should accept client hello: {error}"));
         let session = client_finish_handshake(&client_hello, &server_hello)
             .unwrap_or_else(|error| unreachable!("client should finish handshake: {error}"));
-        let mut encrypted =
-            encrypt_frame_payload(7, b"payload", &session.traffic_secrets.client_to_gateway)
-                .unwrap_or_else(|error| unreachable!("frame should encrypt: {error}"));
+        let mut encrypted = encrypt_frame_payload(
+            7,
+            b"payload",
+            session.traffic_secrets.initiator_to_responder(),
+        )
+        .unwrap_or_else(|error| unreachable!("frame should encrypt: {error}"));
         encrypted.packet_number = 8;
 
         let decrypted =
-            decrypt_frame_payload(&encrypted, &session.traffic_secrets.client_to_gateway);
+            decrypt_frame_payload(&encrypted, session.traffic_secrets.initiator_to_responder());
         assert!(decrypted.is_err());
     }
 
@@ -1105,8 +1377,14 @@ mod tests {
         };
 
         assert_ne!(
-            first.traffic_secrets.client_to_gateway.expose_for_tests(),
-            second.traffic_secrets.client_to_gateway.expose_for_tests()
+            first
+                .traffic_secrets
+                .initiator_to_responder()
+                .expose_for_tests(),
+            second
+                .traffic_secrets
+                .initiator_to_responder()
+                .expose_for_tests()
         );
     }
 

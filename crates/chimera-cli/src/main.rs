@@ -54,7 +54,6 @@ struct StatusOptions {
 enum CapturePreference {
     Auto,
     Tun,
-    LocalProxy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,7 +80,7 @@ struct RouteExplainOptions {
 
 const RUNTIME_FAILOVER_OVERRIDES_PATH: &str = "configs/failover_overrides.txt";
 const DEFAULT_CARRIER_ADDR: &str = "127.0.0.1:443";
-const DEFAULT_CARRIER_SERVER_NAME: &str = "gateway.example.org";
+const DEFAULT_CARRIER_SERVER_NAME: &str = "node.example.org";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UpDownOptions {
@@ -113,7 +112,6 @@ struct RollbackOptions {
 struct ProbeOptions {
     urls: Vec<String>,
     url_file: Option<String>,
-    proxy_url: Option<String>,
     timeout_seconds: u64,
     apply_policy_path: Option<String>,
     rule_id_prefix: String,
@@ -122,12 +120,12 @@ struct ProbeOptions {
     out_path: Option<String>,
 }
 
-const STATUS_USAGE_EN: &str = "usage: chimera [--lang en|ru] status [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
-const STATUS_USAGE_RU: &str = "использование: chimera [--lang en|ru] status [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
-const HEALTH_USAGE_EN: &str = "usage: chimera [--lang en|ru] health [--config <client_config_file>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
-const HEALTH_USAGE_RU: &str = "использование: chimera [--lang en|ru] health [--config <файл_client_config>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
-const DOCTOR_USAGE_EN: &str = "usage: chimera [--lang en|ru] doctor [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]";
-const DOCTOR_USAGE_RU: &str = "использование: chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]";
+const STATUS_USAGE_EN: &str = "usage: chimera [--lang en|ru] status [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
+const STATUS_USAGE_RU: &str = "использование: chimera [--lang en|ru] status [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
+const HEALTH_USAGE_EN: &str = "usage: chimera [--lang en|ru] health [--config <client_config_file>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
+const HEALTH_USAGE_RU: &str = "использование: chimera [--lang en|ru] health [--config <файл_client_config>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
+const DOCTOR_USAGE_EN: &str = "usage: chimera [--lang en|ru] doctor [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]";
+const DOCTOR_USAGE_RU: &str = "использование: chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]";
 const ROUTE_USAGE_EN: &str = "usage: chimera [--lang en|ru] route explain [domain] [--domain <domain>] [--policy <policy_file>] [--ip <ipv4|ipv6>] [--proto <tcp|udp|icmp>] [--port <n>] [--dns-bind-domain <domain>] [--dns-bind-ip <ipv4|ipv6>] [--show-all-matches] [--json] [--out <file>]";
 const ROUTE_USAGE_RU: &str = "использование: chimera [--lang en|ru] route explain [домен] [--domain <домен>] [--policy <файл_policy>] [--ip <ipv4|ipv6>] [--proto <tcp|udp|icmp>] [--port <число>] [--dns-bind-domain <домен>] [--dns-bind-ip <ipv4|ipv6>] [--show-all-matches] [--json] [--out <файл>]";
 const MESH_USAGE_EN: &str = "usage: chimera [--lang en|ru] mesh <nodes|contracts|route-explain|connect-probe|launch-preflight|launch-preflight-verify> ...";
@@ -146,8 +144,8 @@ const DOWN_USAGE_EN: &str = "usage: chimera [--lang en|ru] down [--state-file <f
 const DOWN_USAGE_RU: &str = "использование: chimera [--lang en|ru] down [--state-file <файл>] [--config <файл_client_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
 const ROLLBACK_USAGE_EN: &str = "usage: chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <file>] [--json] [--out <file>]";
 const ROLLBACK_USAGE_RU: &str = "использование: chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <файл>] [--json] [--out <файл>]";
-const PROBE_USAGE_EN: &str = "usage: chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--proxy-url <proxy_url>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]";
-const PROBE_USAGE_RU: &str = "использование: chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--proxy-url <proxy_url>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]";
+const PROBE_USAGE_EN: &str = "usage: chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]";
+const PROBE_USAGE_RU: &str = "использование: chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]";
 const LAB_USAGE_EN: &str = "usage: chimera [--lang en|ru] lab <smoke|doctor|config-smoke|fuzz-smoke|perf-smoke|net-sim|benchmark-report|benchmark-regression-check|hardening-smoke|mvp-spec-check|mvp-spec-report|m5-artifacts-report|m6-artifacts-report|release-readiness-report|report-pack|artifact-audit|mvp-snapshot|mvp-verify|mvp-check> [extra args for chimera-lab]";
 const LAB_USAGE_RU: &str = "использование: chimera [--lang en|ru] lab <smoke|doctor|config-smoke|fuzz-smoke|perf-smoke|net-sim|benchmark-report|benchmark-regression-check|hardening-smoke|mvp-spec-check|mvp-spec-report|m5-artifacts-report|m6-artifacts-report|release-readiness-report|report-pack|artifact-audit|mvp-snapshot|mvp-verify|mvp-check> [доп. аргументы для chimera-lab]";
 
@@ -375,6 +373,17 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
         eprintln!("{}", probe_usage(lang));
         return 2;
     }
+    if args.iter().any(|arg| arg == "--proxy-url") {
+        match lang {
+            Language::En => eprintln!(
+                "--proxy-url is forbidden for CHIMERA proof paths; use transparent WEAVE datapath"
+            ),
+            Language::Ru => eprintln!(
+                "--proxy-url запрещен для proof-проверок CHIMERA; используйте прозрачный WEAVE datapath"
+            ),
+        }
+        return 2;
+    }
     let options = match parse_probe_options(args) {
         Ok(options) => options,
         Err(()) => {
@@ -392,43 +401,20 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
             return 2;
         }
     };
-    if let Some(proxy) = options.proxy_url.as_deref()
-        && !is_supported_proxy_url(proxy)
-    {
-        match lang {
-            Language::En => eprintln!("Invalid --proxy-url value."),
-            Language::Ru => eprintln!("Некорректный --proxy-url."),
-        }
-        return 2;
-    }
-
     let mut rows: Vec<String> = Vec::new();
     let mut plain_lines: Vec<String> = Vec::new();
     let mut total = 0usize;
     let mut direct_ok_total = 0usize;
-    let mut proxy_ok_total = 0usize;
     let mut unreachable_total = 0usize;
     let mut policy_apply_failed_total = 0usize;
     for url in &urls {
         total += 1;
-        let direct_ok = run_curl_probe(url, None, options.timeout_seconds).unwrap_or(false);
+        let direct_ok = run_curl_probe(url, options.timeout_seconds).unwrap_or(false);
         if direct_ok {
             direct_ok_total += 1;
         }
-        let proxy_ok = options.proxy_url.as_deref().is_some_and(|proxy| {
-            run_curl_probe(url, Some(proxy), options.timeout_seconds).unwrap_or(false)
-        });
-        if proxy_ok {
-            proxy_ok_total += 1;
-        }
-        let recommendation = if direct_ok {
-            "direct"
-        } else if proxy_ok {
-            "gateway"
-        } else {
-            "unreachable"
-        };
-        if recommendation == "unreachable" {
+        let recommendation = if direct_ok { "direct" } else { "transit" };
+        if !direct_ok {
             unreachable_total += 1;
         }
         let suggested_domain = extract_domain_from_url(url);
@@ -441,14 +427,11 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
         let mut policy_verify_ok = false;
         let mut policy_verify_outbound = String::new();
         let mut target_error = String::new();
-        if let Some(domain) = suggested_domain.as_deref() {
+        if direct_ok && let Some(domain) = suggested_domain.as_deref() {
             let flow_key = flow_key_for(domain, Protocol::Tcp, 443);
-            let mark_blocked = !direct_ok && proxy_ok;
-            if let Err(error) = update_failover_override_key(
-                RUNTIME_FAILOVER_OVERRIDES_PATH,
-                &flow_key,
-                mark_blocked,
-            ) {
+            if let Err(error) =
+                update_failover_override_key(RUNTIME_FAILOVER_OVERRIDES_PATH, &flow_key, false)
+            {
                 target_error = format!("failover_override_update_error:{error}");
             }
         }
@@ -458,10 +441,9 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                 policy_apply_result = "failed".to_string();
                 target_error = "domain_extract_failed".to_string();
                 rows.push(format!(
-                    "{{\"url\":\"{}\",\"direct_ok\":{},\"proxy_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
+                    "{{\"url\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
                     escape_json(url),
                     if direct_ok { "true" } else { "false" },
-                    if proxy_ok { "true" } else { "false" },
                     recommendation,
                     escape_json(&policy_hint),
                     escape_json(&policy_apply_result),
@@ -471,9 +453,8 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                     escape_json(&target_error),
                 ));
                 plain_lines.push(format!(
-                    "URL: {url} | direct={} | proxy={} | route={} | policy={} | error={}",
+                    "URL: {url} | direct={} | route={} | policy={} | error={}",
                     if direct_ok { "ok" } else { "fail" },
-                    if proxy_ok { "ok" } else { "fail" },
                     recommendation,
                     policy_apply_result,
                     target_error
@@ -485,10 +466,9 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                 policy_apply_result = "failed".to_string();
                 target_error = "policy_domain_ip_literal_not_supported".to_string();
                 rows.push(format!(
-                    "{{\"url\":\"{}\",\"direct_ok\":{},\"proxy_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
+                    "{{\"url\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
                     escape_json(url),
                     if direct_ok { "true" } else { "false" },
-                    if proxy_ok { "true" } else { "false" },
                     recommendation,
                     escape_json(&policy_hint),
                     escape_json(&policy_apply_result),
@@ -498,18 +478,17 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                     escape_json(&target_error),
                 ));
                 plain_lines.push(format!(
-                    "URL: {url} | direct={} | proxy={} | route={} | policy={} | error={}",
+                    "URL: {url} | direct={} | route={} | policy={} | error={}",
                     if direct_ok { "ok" } else { "fail" },
-                    if proxy_ok { "ok" } else { "fail" },
                     recommendation,
                     policy_apply_result,
                     target_error
                 ));
                 continue;
             }
-            if matches!(recommendation, "direct" | "gateway") {
-                let outbound = if recommendation == "gateway" {
-                    OutboundMode::Gateway
+            if matches!(recommendation, "direct" | "transit") {
+                let outbound = if recommendation == "transit" {
+                    OutboundMode::Transit
                 } else {
                     OutboundMode::Direct
                 };
@@ -541,14 +520,13 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                     }
                 }
             } else {
-                policy_apply_result = "skipped_unreachable".to_string();
+                policy_apply_result = "skipped_unknown_recommendation".to_string();
             }
         }
         rows.push(format!(
-            "{{\"url\":\"{}\",\"direct_ok\":{},\"proxy_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
+            "{{\"url\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
             escape_json(url),
             if direct_ok { "true" } else { "false" },
-            if proxy_ok { "true" } else { "false" },
             recommendation,
             escape_json(&policy_hint),
             escape_json(&policy_apply_result),
@@ -558,9 +536,8 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
             escape_json(&target_error)
         ));
         plain_lines.push(format!(
-            "URL: {url} | direct={} | proxy={} | route={} | policy={}{}",
+            "URL: {url} | direct={} | route={} | policy={}{}",
             if direct_ok { "ok" } else { "fail" },
-            if proxy_ok { "ok" } else { "fail" },
             recommendation,
             policy_apply_result,
             if target_error.is_empty() {
@@ -574,13 +551,10 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
     let threshold_exceeded = failed_total > options.fail_threshold;
 
     if options.json_output {
-        let proxy_value = options.proxy_url.clone().unwrap_or_default();
         let report = format!(
-            "{{\"status\":\"ok\",\"kind\":\"probe_access\",\"proxy_url\":\"{}\",\"totals\":{{\"all\":{},\"direct_ok\":{},\"proxy_ok\":{},\"unreachable\":{},\"policy_apply_failed\":{},\"failed_total\":{},\"fail_threshold\":{},\"threshold_exceeded\":{}}},\"targets\":[{}],\"network_state\":\"not_modified\"}}\n",
-            escape_json(&proxy_value),
+            "{{\"status\":\"ok\",\"kind\":\"probe_access\",\"totals\":{{\"all\":{},\"direct_ok\":{},\"unreachable\":{},\"policy_apply_failed\":{},\"failed_total\":{},\"fail_threshold\":{},\"threshold_exceeded\":{}}},\"targets\":[{}],\"network_state\":\"not_modified\"}}\n",
             total,
             direct_ok_total,
-            proxy_ok_total,
             unreachable_total,
             policy_apply_failed_total,
             failed_total,
@@ -600,10 +574,9 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
         print!("{report}");
     } else {
         println!(
-            "Итоги: всего={} direct_ok={} proxy_ok={} недоступно={} ошибок_применения_policy={} всего_ошибок={} порог_ошибок={}",
+            "Итоги: всего={} direct_ok={} недоступно={} ошибок_применения_policy={} всего_ошибок={} порог_ошибок={}",
             total,
             direct_ok_total,
-            proxy_ok_total,
             unreachable_total,
             policy_apply_failed_total,
             failed_total,
@@ -620,7 +593,6 @@ fn parse_probe_options(args: &[String]) -> Result<ProbeOptions, ()> {
     let mut options = ProbeOptions {
         urls: Vec::new(),
         url_file: None,
-        proxy_url: None,
         timeout_seconds: 8,
         apply_policy_path: None,
         rule_id_prefix: "auto-probe".to_string(),
@@ -640,8 +612,7 @@ fn parse_probe_options(args: &[String]) -> Result<ProbeOptions, ()> {
                 index += 2;
             }
             "--proxy-url" => {
-                options.proxy_url = Some(args.get(index + 1).cloned().ok_or(())?);
-                index += 2;
+                return Err(());
             }
             "--timeout-sec" => {
                 let raw = args.get(index + 1).ok_or(())?;
@@ -725,8 +696,8 @@ fn is_ip_literal(value: &str) -> bool {
     value.parse::<std::net::IpAddr>().is_ok()
 }
 
-fn run_curl_probe(url: &str, proxy: Option<&str>, timeout_seconds: u64) -> Result<bool, String> {
-    fn run_once(url: &str, proxy: Option<&str>, timeout_seconds: u64) -> Result<bool, String> {
+fn run_curl_probe(url: &str, timeout_seconds: u64) -> Result<bool, String> {
+    fn run_once(url: &str, timeout_seconds: u64) -> Result<bool, String> {
         let timeout_arg = timeout_seconds.to_string();
         let mut cmd = Command::new("curl");
         cmd.arg("-sS")
@@ -739,9 +710,6 @@ fn run_curl_probe(url: &str, proxy: Option<&str>, timeout_seconds: u64) -> Resul
             .arg(&timeout_arg)
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        if let Some(proxy_url) = proxy {
-            cmd.arg("--proxy").arg(proxy_url);
-        }
         cmd.arg(url);
         let status = cmd
             .status()
@@ -754,7 +722,7 @@ fn run_curl_probe(url: &str, proxy: Option<&str>, timeout_seconds: u64) -> Resul
     const MAX_ATTEMPTS: usize = 2;
     let mut last_ok = false;
     for _ in 0..MAX_ATTEMPTS {
-        last_ok = run_once(url, proxy, timeout_seconds)?;
+        last_ok = run_once(url, timeout_seconds)?;
         if last_ok {
             return Ok(true);
         }
@@ -767,17 +735,6 @@ fn run_curl_probe(url: &str, proxy: Option<&str>, timeout_seconds: u64) -> Resul
 fn is_supported_probe_url(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     lower.starts_with("http://") || lower.starts_with("https://")
-}
-
-fn is_supported_proxy_url(value: &str) -> bool {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-    let Some((scheme, rest)) = trimmed.split_once("://") else {
-        return false;
-    };
-    !scheme.trim().is_empty() && !rest.trim().is_empty()
 }
 
 fn extract_domain_from_url(url: &str) -> Option<String> {
@@ -802,9 +759,8 @@ fn extract_domain_from_url(url: &str) -> Option<String> {
 fn outbound_to_policy_token(outbound: OutboundMode) -> &'static str {
     match outbound {
         OutboundMode::Direct => "direct",
-        OutboundMode::Gateway => "gateway",
+        OutboundMode::Transit => "transit",
         OutboundMode::Block => "block",
-        OutboundMode::LocalProxy => "local-proxy",
     }
 }
 
@@ -976,16 +932,15 @@ fn update_failover_override_key(path: &str, key: &str, blocked: bool) -> Result<
 fn outbound_to_datapath_route(outbound: OutboundMode) -> DatapathRoute {
     match outbound {
         OutboundMode::Direct => DatapathRoute::Direct,
-        OutboundMode::Gateway => DatapathRoute::Gateway,
+        OutboundMode::Transit => DatapathRoute::Transit,
         OutboundMode::Block => DatapathRoute::Block,
-        OutboundMode::LocalProxy => DatapathRoute::Gateway,
     }
 }
 
 fn datapath_route_to_outbound(route: DatapathRoute) -> OutboundMode {
     match route {
         DatapathRoute::Direct => OutboundMode::Direct,
-        DatapathRoute::Gateway => OutboundMode::Gateway,
+        DatapathRoute::Transit => OutboundMode::Transit,
         DatapathRoute::Block => OutboundMode::Block,
     }
 }
@@ -1054,9 +1009,9 @@ fn route_command(
     } else {
         Policy::new(vec![
             RouteRule {
-                id: "example-gateway".to_string(),
+                id: "example-transit".to_string(),
                 matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "default-direct".to_string(),
@@ -1156,16 +1111,18 @@ fn route_command(
     }
 
     if options.json_output {
-        let json = render_route_explain_json(
-            effective_domain.as_deref(),
+        let render_context = RouteExplainRenderContext {
+            lang,
+            domain: effective_domain.as_deref(),
             domain_source_from_dns,
             dns_note,
-            &flow,
-            &trace,
+            flow: &flow,
+            trace: &trace,
             runtime_outbound,
-            &runtime_reason,
-            options.show_all_matches,
-        );
+            runtime_reason: &runtime_reason,
+            show_all_matches: options.show_all_matches,
+        };
+        let json = render_route_explain_json(&render_context);
         if let Some(path) = options.out_path.as_deref()
             && let Err(error) = std::fs::write(path, &json)
         {
@@ -1174,20 +1131,18 @@ fn route_command(
         }
         println!("{json}");
     } else {
-        print!(
-            "{}",
-            render_route_explain_block(
-                lang,
-                effective_domain.as_deref(),
-                domain_source_from_dns,
-                dns_note,
-                &flow,
-                &trace,
-                runtime_outbound,
-                &runtime_reason,
-                options.show_all_matches,
-            )
-        );
+        let render_context = RouteExplainRenderContext {
+            lang,
+            domain: effective_domain.as_deref(),
+            domain_source_from_dns,
+            dns_note,
+            flow: &flow,
+            trace: &trace,
+            runtime_outbound,
+            runtime_reason: &runtime_reason,
+            show_all_matches: options.show_all_matches,
+        };
+        print!("{}", render_route_explain_block(&render_context));
     }
     0
 }
@@ -1296,18 +1251,22 @@ fn parse_route_explain_options(args: &[String]) -> Result<RouteExplainOptions, (
     Ok(options)
 }
 
-fn render_route_explain_json(
-    domain: Option<&str>,
+struct RouteExplainRenderContext<'a> {
+    lang: Language,
+    domain: Option<&'a str>,
     domain_source_from_dns: bool,
-    dns_note: Option<&str>,
-    flow: &FlowContext,
-    trace: &RouteExplainTrace,
+    dns_note: Option<&'a str>,
+    flow: &'a FlowContext,
+    trace: &'a RouteExplainTrace,
     runtime_outbound: OutboundMode,
-    runtime_reason: &str,
+    runtime_reason: &'a str,
     show_all_matches: bool,
-) -> String {
-    let decision: &RouteDecision = &trace.decision;
-    let domain_value = domain.unwrap_or("");
+}
+
+fn render_route_explain_json(context: &RouteExplainRenderContext<'_>) -> String {
+    let decision: &RouteDecision = &context.trace.decision;
+    let domain_value = context.domain.unwrap_or("");
+    let flow = context.flow;
     let ip_value = flow
         .destination_ip
         .map(|ip| ip.to_string())
@@ -1321,17 +1280,17 @@ fn render_route_explain_json(
     let port_value = flow.port.unwrap_or(0);
     let outbound_value = match decision.outbound {
         OutboundMode::Direct => "direct",
-        OutboundMode::Gateway => "gateway",
+        OutboundMode::Transit => "transit",
         OutboundMode::Block => "block",
-        OutboundMode::LocalProxy => "local_proxy",
     };
-    let dns_note_json = match dns_note {
+    let dns_note_json = match context.dns_note {
         Some(note) => format!("\"{note}\""),
         None => "null".to_string(),
     };
-    let runtime_outbound_value = outbound_to_policy_token(runtime_outbound);
-    let matched_rules_json = if show_all_matches {
-        let items = trace
+    let runtime_outbound_value = outbound_to_policy_token(context.runtime_outbound);
+    let matched_rules_json = if context.show_all_matches {
+        let items = context
+            .trace
             .matched_rule_ids_by_priority
             .iter()
             .map(|id| format!("\"{id}\""))
@@ -1344,7 +1303,7 @@ fn render_route_explain_json(
     format!(
         "{{\"status\":\"ok\",\"kind\":\"route_explain\",\"message_en\":\"Route explanation is ready.\",\"message_ru\":\"Объяснение маршрута готово.\",\"domain\":\"{}\",\"domain_source_dns\":{},\"dns_note\":{},\"ip\":\"{}\",\"proto\":\"{}\",\"port\":{},\"rule_used\":\"{}\",\"outbound\":\"{}\",\"reason\":\"{}\",\"runtime_outbound\":\"{}\",\"runtime_reason\":\"{}\",\"rules_checked\":{},\"rules_matched\":{},\"matched_rules\":{},\"network_state\":\"not_modified\"}}",
         domain_value,
-        domain_source_from_dns,
+        context.domain_source_from_dns,
         dns_note_json,
         ip_value,
         proto_value,
@@ -1353,9 +1312,9 @@ fn render_route_explain_json(
         outbound_value,
         decision.explanation,
         runtime_outbound_value,
-        escape_json(runtime_reason),
-        trace.examined_rules,
-        trace.matched_rules,
+        escape_json(context.runtime_reason),
+        context.trace.examined_rules,
+        context.trace.matched_rules,
         matched_rules_json
     )
 }
@@ -1533,7 +1492,7 @@ Total rules: {}\n\
 Domain rules: exact={}, suffix={}\n\
 IP/protocol rules: cidr4={}, protoport={}\n\
 Default rules: {}\n\
-Traffic actions: direct={}, gateway={}, block={}, local-proxy={}\n\
+Traffic actions: direct={}, peer transit={}, block={}\n\
 {}\
 Next step: run `chimera route explain --policy <file> --domain example.org`\n",
             summary.total_rules,
@@ -1543,9 +1502,8 @@ Next step: run `chimera route explain --policy <file> --domain example.org`\n",
             summary.protoport_rules,
             summary.default_rules,
             summary.direct_outbound_rules,
-            summary.gateway_outbound_rules,
+            summary.transit_outbound_rules,
             summary.block_outbound_rules,
-            summary.local_proxy_outbound_rules,
             warning_block
         ),
         Language::Ru => format!(
@@ -1554,7 +1512,7 @@ Next step: run `chimera route explain --policy <file> --domain example.org`\n",
 Правила по доменам: exact={}, suffix={}\n\
 Правила по IP/протоколу: cidr4={}, protoport={}\n\
 Правила по умолчанию: default={}\n\
-Действия для трафика: direct={}, gateway={}, block={}, local-proxy={}\n\
+Действия для трафика: direct={}, peer transit={}, block={}\n\
 {}\
 Дальше: запустите `chimera route explain --policy <файл> --domain example.org`\n",
             summary.total_rules,
@@ -1564,9 +1522,8 @@ Next step: run `chimera route explain --policy <file> --domain example.org`\n",
             summary.protoport_rules,
             summary.default_rules,
             summary.direct_outbound_rules,
-            summary.gateway_outbound_rules,
+            summary.transit_outbound_rules,
             summary.block_outbound_rules,
-            summary.local_proxy_outbound_rules,
             warning_block
         ),
     }
@@ -1579,8 +1536,8 @@ fn policy_warnings(lang: Language, summary: &PolicySummary) -> Vec<&'static str>
             if summary.default_rules == 0 {
                 warnings.push("No default rule. Unknown traffic will use implicit direct route.");
             }
-            if summary.gateway_outbound_rules == 0 {
-                warnings.push("No gateway action rules. WEAVE path may never be selected.");
+            if summary.transit_outbound_rules == 0 {
+                warnings.push("No peer transit rules. WEAVE node may never relay.");
             }
         }
         Language::Ru => {
@@ -1589,30 +1546,19 @@ fn policy_warnings(lang: Language, summary: &PolicySummary) -> Vec<&'static str>
                     "Нет default-правила. Неизвестный трафик уйдет напрямую по неявному правилу.",
                 );
             }
-            if summary.gateway_outbound_rules == 0 {
-                warnings.push(
-                    "Нет правил с действием gateway. WEAVE-маршрут может никогда не выбираться.",
-                );
+            if summary.transit_outbound_rules == 0 {
+                warnings.push("Нет правил peer transit. Узел WEAVE может никогда не транзитить.");
             }
         }
     }
     warnings
 }
 
-fn render_route_explain_block(
-    lang: Language,
-    domain: Option<&str>,
-    domain_source_from_dns: bool,
-    dns_note: Option<&str>,
-    flow: &FlowContext,
-    trace: &RouteExplainTrace,
-    runtime_outbound: OutboundMode,
-    runtime_reason: &str,
-    show_all_matches: bool,
-) -> String {
+fn render_route_explain_block(context: &RouteExplainRenderContext<'_>) -> String {
     let mut out = String::new();
-    let decision: &RouteDecision = &trace.decision;
-    let domain_label = domain.unwrap_or("-");
+    let decision: &RouteDecision = &context.trace.decision;
+    let flow = context.flow;
+    let domain_label = context.domain.unwrap_or("-");
     let ip_label = flow
         .destination_ip
         .map(|ip| ip.to_string())
@@ -1627,13 +1573,13 @@ fn render_route_explain_block(
         .port
         .map(|port| port.to_string())
         .unwrap_or_else(|| "-".to_string());
-    match lang {
+    match context.lang {
         Language::En => {
             out.push_str(&format!("Site: {domain_label}\n"));
-            if domain_source_from_dns {
+            if context.domain_source_from_dns {
                 out.push_str("Domain source: DNS binding (IP -> domain)\n");
             }
-            if let Some(note) = dns_note {
+            if let Some(note) = context.dns_note {
                 out.push_str(&format!("DNS note: {note}\n"));
             }
             out.push_str(&format!("IP: {ip_label}\n"));
@@ -1647,27 +1593,30 @@ fn render_route_explain_block(
             out.push_str(&format!("Reason: {}\n", decision.explanation));
             out.push_str(&format!(
                 "Runtime route: {}\n",
-                outbound_label_en(runtime_outbound)
+                outbound_label_en(context.runtime_outbound)
             ));
-            out.push_str(&format!("Runtime reason: {}\n", runtime_reason));
-            out.push_str(&format!("Rules checked: {}\n", trace.examined_rules));
-            out.push_str(&format!("Rules matched: {}\n", trace.matched_rules));
-            if show_all_matches {
+            out.push_str(&format!("Runtime reason: {}\n", context.runtime_reason));
+            out.push_str(&format!(
+                "Rules checked: {}\n",
+                context.trace.examined_rules
+            ));
+            out.push_str(&format!("Rules matched: {}\n", context.trace.matched_rules));
+            if context.show_all_matches {
                 out.push_str("Matched rules (best first): ");
-                if trace.matched_rule_ids_by_priority.is_empty() {
+                if context.trace.matched_rule_ids_by_priority.is_empty() {
                     out.push_str("none\n");
                 } else {
-                    out.push_str(&trace.matched_rule_ids_by_priority.join(", "));
+                    out.push_str(&context.trace.matched_rule_ids_by_priority.join(", "));
                     out.push('\n');
                 }
             }
         }
         Language::Ru => {
             out.push_str(&format!("Сайт: {domain_label}\n"));
-            if domain_source_from_dns {
+            if context.domain_source_from_dns {
                 out.push_str("Источник домена: DNS binding (IP -> домен)\n");
             }
-            if let Some(note) = dns_note {
+            if let Some(note) = context.dns_note {
                 out.push_str(&format!("Примечание DNS: {note}\n"));
             }
             out.push_str(&format!("IP: {ip_label}\n"));
@@ -1684,17 +1633,23 @@ fn render_route_explain_block(
             out.push_str(&format!("Причина: {}\n", decision.explanation));
             out.push_str(&format!(
                 "Runtime маршрут: {}\n",
-                outbound_label_ru(runtime_outbound)
+                outbound_label_ru(context.runtime_outbound)
             ));
-            out.push_str(&format!("Причина runtime: {}\n", runtime_reason));
-            out.push_str(&format!("Проверено правил: {}\n", trace.examined_rules));
-            out.push_str(&format!("Совпало правил: {}\n", trace.matched_rules));
-            if show_all_matches {
+            out.push_str(&format!("Причина runtime: {}\n", context.runtime_reason));
+            out.push_str(&format!(
+                "Проверено правил: {}\n",
+                context.trace.examined_rules
+            ));
+            out.push_str(&format!(
+                "Совпало правил: {}\n",
+                context.trace.matched_rules
+            ));
+            if context.show_all_matches {
                 out.push_str("Совпавшие правила (лучшее первым): ");
-                if trace.matched_rule_ids_by_priority.is_empty() {
+                if context.trace.matched_rule_ids_by_priority.is_empty() {
                     out.push_str("нет\n");
                 } else {
-                    out.push_str(&trace.matched_rule_ids_by_priority.join(", "));
+                    out.push_str(&context.trace.matched_rule_ids_by_priority.join(", "));
                     out.push('\n');
                 }
             }
@@ -1706,40 +1661,20 @@ fn render_route_explain_block(
 fn outbound_label_en(outbound: chimera_policy::OutboundMode) -> &'static str {
     match outbound {
         chimera_policy::OutboundMode::Direct => "direct connection",
-        chimera_policy::OutboundMode::Gateway => "through WEAVE gateway",
+        chimera_policy::OutboundMode::Transit => "through peer transit node",
         chimera_policy::OutboundMode::Block => "blocked by policy",
-        chimera_policy::OutboundMode::LocalProxy => "through local proxy",
     }
 }
 
 fn outbound_label_ru(outbound: chimera_policy::OutboundMode) -> &'static str {
     match outbound {
         chimera_policy::OutboundMode::Direct => "напрямую",
-        chimera_policy::OutboundMode::Gateway => "через WEAVE-шлюз",
+        chimera_policy::OutboundMode::Transit => "через транзитный узел",
         chimera_policy::OutboundMode::Block => "заблокировано правилом",
-        chimera_policy::OutboundMode::LocalProxy => "через локальный прокси",
     }
 }
 
 fn status_command(lang: Language, lang_source: LanguageSource, args: &[String]) -> i32 {
-    match lang {
-        Language::En => {
-            println!("Status: ready.");
-            println!("Network safety: system routes/DNS/firewall were not changed.");
-            println!(
-                "Language: EN (source: {})",
-                language_source_label_en(lang_source)
-            );
-        }
-        Language::Ru => {
-            println!("Статус: готово.");
-            println!("Безопасность сети: системные маршруты/DNS/firewall не менялись.");
-            println!(
-                "Язык: RU (источник: {})",
-                language_source_label_ru(lang_source)
-            );
-        }
-    }
     let options = match parse_status_options(args) {
         Ok(options) => options,
         Err(()) => {
@@ -1795,6 +1730,38 @@ fn status_command(lang: Language, lang_source: LanguageSource, args: &[String]) 
         rekey_state.on_packet_sent();
     }
     let reason = rekey_state.rekey_reason(options.mock_age_seconds);
+    match lang {
+        Language::En => {
+            println!(
+                "Status: {}.",
+                if capture_plan_is_ready(&capture_plan) {
+                    "ready"
+                } else {
+                    "fail-closed"
+                }
+            );
+            println!("Network safety: system routes/DNS/firewall were not changed.");
+            println!(
+                "Language: EN (source: {})",
+                language_source_label_en(lang_source)
+            );
+        }
+        Language::Ru => {
+            println!(
+                "Статус: {}.",
+                if capture_plan_is_ready(&capture_plan) {
+                    "готово"
+                } else {
+                    "fail-closed"
+                }
+            );
+            println!("Безопасность сети: системные маршруты/DNS/firewall не менялись.");
+            println!(
+                "Язык: RU (источник: {})",
+                language_source_label_ru(lang_source)
+            );
+        }
+    }
     print!(
         "{}",
         render_status_runtime_profile(lang, &options, &capture_plan)
@@ -1971,11 +1938,11 @@ fn status_capture_plan(options: &StatusOptions) -> CapturePlan {
             mode: CaptureMode::Tun,
             reason: "forced by CLI option".to_string(),
         },
-        CapturePreference::LocalProxy => CapturePlan {
-            mode: CaptureMode::LocalProxy,
-            reason: "forced by CLI option".to_string(),
-        },
     }
+}
+
+fn capture_plan_is_ready(capture_plan: &CapturePlan) -> bool {
+    capture_plan.mode == CaptureMode::Tun
 }
 
 fn validate_status_carrier(options: &StatusOptions) -> Result<(), String> {
@@ -2058,22 +2025,22 @@ fn render_status_runtime_profile(
 fn capture_mode_label_en(mode: CaptureMode) -> &'static str {
     match mode {
         CaptureMode::Tun => "tun",
-        CaptureMode::LocalProxy => "local-proxy",
+        CaptureMode::FailClosed => "fail-closed",
     }
 }
 
 fn capture_mode_label_ru(mode: CaptureMode) -> &'static str {
     match mode {
         CaptureMode::Tun => "tun",
-        CaptureMode::LocalProxy => "local-proxy",
+        CaptureMode::FailClosed => "fail-closed",
     }
 }
 
 fn capture_reason_label_en(reason: &str) -> &str {
     match reason {
         "TUN is available on this system" => "TUN is available on this system",
-        "TUN is unavailable, fallback to local proxy mode" => {
-            "TUN is unavailable, fallback to local proxy mode"
+        "TUN is unavailable; fail closed because proxy capture is forbidden" => {
+            "TUN is unavailable; fail closed because proxy capture is forbidden"
         }
         "forced by CLI option" => "forced by CLI option",
         _ => reason,
@@ -2083,8 +2050,8 @@ fn capture_reason_label_en(reason: &str) -> &str {
 fn capture_reason_label_ru(reason: &str) -> &str {
     match reason {
         "TUN is available on this system" => "TUN доступен в системе",
-        "TUN is unavailable, fallback to local proxy mode" => {
-            "TUN недоступен, используем fallback local-proxy"
+        "TUN is unavailable; fail closed because proxy capture is forbidden" => {
+            "TUN недоступен; закрытый отказ, потому что proxy-захват запрещен"
         }
         "forced by CLI option" => "принудительно задано в CLI",
         _ => reason,
@@ -2185,7 +2152,7 @@ fn parse_status_options(args: &[String]) -> Result<StatusOptions, ()> {
                 options.capture_preference = match value {
                     "auto" => CapturePreference::Auto,
                     "tun" => CapturePreference::Tun,
-                    "local-proxy" => CapturePreference::LocalProxy,
+                    "local-proxy" => return Err(()),
                     _ => return Err(()),
                 };
             }
@@ -2235,7 +2202,6 @@ fn apply_status_config_overrides(mut options: StatusOptions) -> Result<StatusOpt
     options.capture_preference = match config.capture_mode {
         ConfigCaptureMode::Auto => CapturePreference::Auto,
         ConfigCaptureMode::Tun => CapturePreference::Tun,
-        ConfigCaptureMode::LocalProxy => CapturePreference::LocalProxy,
     };
     options.tun_supported = config.tun_supported;
     options.max_age_seconds = config.rekey.max_age_seconds;
@@ -2444,8 +2410,14 @@ fn render_diag_export_json(
         Some(RekeyReason::PacketLimitExceeded) => "packet_limit_exceeded",
         None => "none",
     };
+    let report_status = if capture_plan_is_ready(capture_plan) {
+        "ok"
+    } else {
+        "fail_closed"
+    };
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"diag_export\",\"message_en\":\"Diagnostic export is ready.\",\"message_ru\":\"Экспорт диагностики готов.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"{}\",\"kind\":\"diag_export\",\"message_en\":\"Diagnostic export is ready.\",\"message_ru\":\"Экспорт диагностики готов.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
+        report_status,
         capture_mode_label_en(capture_plan.mode),
         capture_plan.reason,
         carrier_profile_label_en(status.carrier_profile),
@@ -2515,33 +2487,62 @@ fn render_health_block(
     capture_plan: &CapturePlan,
 ) -> String {
     let mut out = String::new();
+    let ready = capture_plan_is_ready(capture_plan);
     match lang {
         Language::En => {
-            out.push_str("Client check: ok\n");
+            out.push_str(if ready {
+                "Client check: ok\n"
+            } else {
+                "Client check: fail-closed\n"
+            });
             out.push_str("Checks:\n");
             out.push_str("  - Config parse: ok\n");
             out.push_str("  - Carrier setup: ok\n");
             out.push_str("  - Rekey limits: ok\n");
+            out.push_str(&format!(
+                "  - Capture datapath: {}\n",
+                if ready { "ok" } else { "fail-closed" }
+            ));
             out.push_str(&format!(
                 "Summary: capture={}, carrier={}, target={}\n",
                 capture_mode_label_en(capture_plan.mode),
                 carrier_profile_label_en(options.carrier_profile),
                 options.carrier_addr
             ));
+            if !ready {
+                out.push_str(&format!(
+                    "Reason: {}\n",
+                    capture_reason_label_en(&capture_plan.reason)
+                ));
+            }
             out.push_str("Network state: not modified\n");
         }
         Language::Ru => {
-            out.push_str("Проверка клиента: ok\n");
+            out.push_str(if ready {
+                "Проверка клиента: ok\n"
+            } else {
+                "Проверка клиента: fail-closed\n"
+            });
             out.push_str("Проверки:\n");
             out.push_str("  - Чтение конфига: ok\n");
             out.push_str("  - Настройка carrier: ok\n");
             out.push_str("  - Лимиты rekey: ok\n");
+            out.push_str(&format!(
+                "  - Захват datapath: {}\n",
+                if ready { "ok" } else { "fail-closed" }
+            ));
             out.push_str(&format!(
                 "Сводка: capture={}, carrier={}, target={}\n",
                 capture_mode_label_ru(capture_plan.mode),
                 carrier_profile_label_ru(options.carrier_profile),
                 options.carrier_addr
             ));
+            if !ready {
+                out.push_str(&format!(
+                    "Причина: {}\n",
+                    capture_reason_label_ru(&capture_plan.reason)
+                ));
+            }
             out.push_str("Состояние сети: не изменялось\n");
         }
     }
@@ -2555,35 +2556,64 @@ fn render_doctor_block(
     reason: Option<RekeyReason>,
 ) -> String {
     let mut out = String::new();
+    let ready = capture_plan_is_ready(capture_plan);
     match lang {
         Language::En => {
-            out.push_str("Doctor report: ok\n");
+            out.push_str(if ready {
+                "Doctor report: ok\n"
+            } else {
+                "Doctor report: fail-closed\n"
+            });
             out.push_str("Checks:\n");
             out.push_str("  - Config parse: ok\n");
             out.push_str("  - Carrier setup: ok\n");
             out.push_str("  - Rekey policy: ok\n");
+            out.push_str(&format!(
+                "  - Capture datapath: {}\n",
+                if ready { "ok" } else { "fail-closed" }
+            ));
             out.push_str(&format!(
                 "Summary: capture={}, carrier={}, target={}\n",
                 capture_mode_label_en(capture_plan.mode),
                 carrier_profile_label_en(options.carrier_profile),
                 options.carrier_addr
             ));
+            if !ready {
+                out.push_str(&format!(
+                    "Reason: {}\n",
+                    capture_reason_label_en(&capture_plan.reason)
+                ));
+            }
             out.push_str(&format!("Rekey needed now: {}\n", reason.is_some()));
             out.push_str("Secrets: <redacted>\n");
             out.push_str("Network state: not modified\n");
         }
         Language::Ru => {
-            out.push_str("Отчет doctor: ok\n");
+            out.push_str(if ready {
+                "Отчет doctor: ok\n"
+            } else {
+                "Отчет doctor: fail-closed\n"
+            });
             out.push_str("Проверки:\n");
             out.push_str("  - Чтение конфига: ok\n");
             out.push_str("  - Настройка carrier: ok\n");
             out.push_str("  - Политика rekey: ok\n");
+            out.push_str(&format!(
+                "  - Захват datapath: {}\n",
+                if ready { "ok" } else { "fail-closed" }
+            ));
             out.push_str(&format!(
                 "Сводка: capture={}, carrier={}, target={}\n",
                 capture_mode_label_ru(capture_plan.mode),
                 carrier_profile_label_ru(options.carrier_profile),
                 options.carrier_addr
             ));
+            if !ready {
+                out.push_str(&format!(
+                    "Причина: {}\n",
+                    capture_reason_label_ru(&capture_plan.reason)
+                ));
+            }
             out.push_str(&format!("Нужен rekey сейчас: {}\n", reason.is_some()));
             out.push_str("Секреты: <redacted>\n");
             out.push_str("Состояние сети: не изменялось\n");
@@ -2602,9 +2632,16 @@ fn render_doctor_json(
         Some(RekeyReason::PacketLimitExceeded) => "packet_limit_exceeded",
         None => "none",
     };
+    let report_status = if capture_plan_is_ready(capture_plan) {
+        "ok"
+    } else {
+        "fail_closed"
+    };
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"doctor\",\"message_en\":\"Doctor check is ready.\",\"message_ru\":\"Проверка doctor готова.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"{}\",\"kind\":\"doctor\",\"message_en\":\"Doctor check is ready.\",\"message_ru\":\"Проверка doctor готова.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
+        report_status,
         capture_mode_label_en(capture_plan.mode),
+        escape_json(&capture_plan.reason),
         carrier_profile_label_en(status.carrier_profile),
         status.carrier_addr,
         status.mock_age_seconds,
@@ -2664,9 +2701,9 @@ fn render_help_text(lang: Language) -> String {
         Language::En => {
             out.push_str("Chimera CLI (simple mode)\n");
             out.push_str("Commands:\n");
-            out.push_str("  chimera [--lang en|ru] status [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
-            out.push_str("  chimera [--lang en|ru] health [--config <client_config_file>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
-            out.push_str("  chimera [--lang en|ru] doctor [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]\n");
+            out.push_str("  chimera [--lang en|ru] status [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
+            out.push_str("  chimera [--lang en|ru] health [--config <client_config_file>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
+            out.push_str("  chimera [--lang en|ru] doctor [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] up\n");
             out.push_str("  chimera [--lang en|ru] down\n");
             out.push_str("  chimera [--lang en|ru] mvp-check\n");
@@ -2703,16 +2740,16 @@ fn render_help_text(lang: Language) -> String {
             out.push_str("  chimera [--lang en|ru] mesh <route-explain|connect-probe|launch-preflight|launch-preflight-verify> --namespace <name> --node <name> (--policy-payload <payload> | --traffic-profile <high_speed_anonymous|privacy_first|speed_first|low_latency_private>) --peer <node@endpoint#region@load@reliability> [--peer ...] [--invite-token <token>] [--failed-node <id>] [--cooldown-node <id>] [--table-max-entries <n>] [--table-max-per-region <n>] [--table-stale-after <ticks>] [--timeout-ms <n>] [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] mesh launch-preflight-verify --vps-report <file> --laptop-report <file> [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] policy validate <policy_file>\n");
-            out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--proxy-url <proxy_url>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]\n");
+            out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] diag rekey <age_sec> <packets_sent>\n");
             out.push_str("  chimera [--lang en|ru] diag export [--config <client_config_file>] [--age <seconds>] [--packets <count>] [--out <file>]\n");
         }
         Language::Ru => {
             out.push_str("Chimera CLI (простой режим)\n");
             out.push_str("Команды:\n");
-            out.push_str("  chimera [--lang en|ru] status [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
-            out.push_str("  chimera [--lang en|ru] health [--config <файл_client_config>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
-            out.push_str("  chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun|local-proxy>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]\n");
+            out.push_str("  chimera [--lang en|ru] status [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
+            out.push_str("  chimera [--lang en|ru] health [--config <файл_client_config>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
+            out.push_str("  chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] up\n");
             out.push_str("  chimera [--lang en|ru] down\n");
             out.push_str("  chimera [--lang en|ru] mvp-check\n");
@@ -2749,7 +2786,7 @@ fn render_help_text(lang: Language) -> String {
             out.push_str("  chimera [--lang en|ru] mesh <route-explain|connect-probe|launch-preflight|launch-preflight-verify> --namespace <имя> --node <имя> (--policy-payload <payload> | --traffic-profile <high_speed_anonymous|privacy_first|speed_first|low_latency_private>) --peer <node@endpoint#region@load@reliability> [--peer ...] [--invite-token <токен>] [--failed-node <id>] [--cooldown-node <id>] [--table-max-entries <n>] [--table-max-per-region <n>] [--table-stale-after <ticks>] [--timeout-ms <n>] [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] mesh launch-preflight-verify --vps-report <файл> --laptop-report <файл> [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] policy validate <файл_policy>\n");
-            out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--proxy-url <proxy_url>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]\n");
+            out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] diag rekey <секунды> <пакеты>\n");
             out.push_str("  chimera [--lang en|ru] diag export [--config <файл_client_config>] [--age <секунды>] [--packets <число>] [--out <файл>]\n");
         }
@@ -3214,6 +3251,9 @@ fn build_up_runtime_state(options: &UpDownOptions) -> Result<UpRuntimeState, Str
     let capture_plan = status_capture_plan(&status);
     if status.capture_preference == CapturePreference::Tun && !detect_tun_support() {
         return Err("capture mode is forced to tun, but /dev/net/tun is unavailable".to_string());
+    }
+    if !capture_plan_is_ready(&capture_plan) {
+        return Err(capture_plan.reason.clone());
     }
     validate_status_carrier(&status)?;
     if !options.skip_connect_check {
@@ -4164,14 +4204,14 @@ fn render_rollback_json(
 #[cfg(test)]
 mod tests {
     use super::{
-        CapturePreference, CarrierProfile, Language, LanguageSource, RekeyReason, StatusOptions,
-        detect_language_from_lang_value, down_command, lab_command, parse_diag_export_options,
-        parse_doctor_options, parse_language_flag, parse_mesh_route_explain_options,
-        parse_rollback_options, parse_route_explain_options, parse_status_options,
-        parse_up_down_options, render_diag_export_json, render_diag_rekey_block,
-        render_doctor_json, render_health_block, render_help_text, render_policy_validate_block,
-        render_route_explain_block, render_route_explain_json, render_status_rekey_block,
-        rollback_command, up_command,
+        CapturePreference, CarrierProfile, Language, LanguageSource, RekeyReason,
+        RouteExplainRenderContext, StatusOptions, detect_language_from_lang_value, down_command,
+        lab_command, parse_diag_export_options, parse_doctor_options, parse_language_flag,
+        parse_mesh_route_explain_options, parse_rollback_options, parse_route_explain_options,
+        parse_status_options, parse_up_down_options, render_diag_export_json,
+        render_diag_rekey_block, render_doctor_json, render_health_block, render_help_text,
+        render_policy_validate_block, render_route_explain_block, render_route_explain_json,
+        render_status_rekey_block, rollback_command, up_command,
     };
     use chimera_policy::{
         FlowContext, OutboundMode, Policy, PolicySummary, Protocol, RouteDecision,
@@ -4179,6 +4219,46 @@ mod tests {
     };
     use std::net::IpAddr;
     use std::path::PathBuf;
+
+    struct TestRouteRenderInput<'a> {
+        lang: Language,
+        domain: Option<&'a str>,
+        domain_source_from_dns: bool,
+        dns_note: Option<&'a str>,
+        runtime_outbound: OutboundMode,
+        show_all_matches: bool,
+    }
+
+    impl Default for TestRouteRenderInput<'_> {
+        fn default() -> Self {
+            Self {
+                lang: Language::En,
+                domain: None,
+                domain_source_from_dns: false,
+                dns_note: None,
+                runtime_outbound: OutboundMode::Direct,
+                show_all_matches: false,
+            }
+        }
+    }
+
+    fn render_context<'a>(
+        input: TestRouteRenderInput<'a>,
+        flow: &'a FlowContext,
+        trace: &'a RouteExplainTrace,
+    ) -> RouteExplainRenderContext<'a> {
+        RouteExplainRenderContext {
+            lang: input.lang,
+            domain: input.domain,
+            domain_source_from_dns: input.domain_source_from_dns,
+            dns_note: input.dns_note,
+            flow,
+            trace,
+            runtime_outbound: input.runtime_outbound,
+            runtime_reason: "runtime default",
+            show_all_matches: input.show_all_matches,
+        }
+    }
 
     #[test]
     fn parse_status_options_defaults_when_empty() {
@@ -4251,7 +4331,7 @@ mod tests {
             "--age".to_string(),
             "3".to_string(),
             "--capture".to_string(),
-            "local-proxy".to_string(),
+            "tun".to_string(),
             "--tun-supported".to_string(),
             "false".to_string(),
             "--carrier".to_string(),
@@ -4265,11 +4345,24 @@ mod tests {
             Ok(parsed) => parsed,
             Err(()) => unreachable!("status runtime profile args should parse"),
         };
-        assert_eq!(parsed.capture_preference, CapturePreference::LocalProxy);
+        assert_eq!(parsed.capture_preference, CapturePreference::Tun);
         assert!(!parsed.tun_supported);
         assert_eq!(parsed.carrier_profile, CarrierProfile::Quic);
         assert_eq!(parsed.carrier_addr, "198.51.100.10:9443");
         assert_eq!(parsed.carrier_server_name, "gw.example.org");
+    }
+
+    #[test]
+    fn parse_status_options_rejects_local_proxy_capture() {
+        let args = vec![
+            "--mock-traffic".to_string(),
+            "2".to_string(),
+            "--age".to_string(),
+            "3".to_string(),
+            "--capture".to_string(),
+            "local-proxy".to_string(),
+        ];
+        assert!(parse_status_options(&args).is_err());
     }
 
     #[test]
@@ -4384,9 +4477,9 @@ mod tests {
     fn route_render_snapshot_gateway_match() {
         let policy = Policy::new(vec![
             RouteRule {
-                id: "example-gateway".to_string(),
+                id: "example-transit".to_string(),
                 matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "default-direct".to_string(),
@@ -4401,20 +4494,17 @@ mod tests {
             port: Some(443),
         };
         let trace = policy.explain(&flow);
-        let rendered = render_route_explain_block(
-            Language::En,
-            Some("api.example.org"),
-            false,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                domain: Some("api.example.org"),
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains("Site: api.example.org"));
-        assert!(rendered.contains("Rule used: example-gateway"));
-        assert!(rendered.contains("How we send: through WEAVE gateway"));
+        assert!(rendered.contains("Rule used: example-transit"));
+        assert!(rendered.contains("How we send: through peer transit node"));
         assert!(rendered.contains("Rules checked: 2"));
         assert!(rendered.contains("Rules matched: 2"));
     }
@@ -4423,9 +4513,9 @@ mod tests {
     fn route_render_snapshot_default_direct() {
         let policy = Policy::new(vec![
             RouteRule {
-                id: "example-gateway".to_string(),
+                id: "example-transit".to_string(),
                 matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "default-direct".to_string(),
@@ -4440,17 +4530,14 @@ mod tests {
             port: Some(443),
         };
         let trace = policy.explain(&flow);
-        let rendered = render_route_explain_block(
-            Language::En,
-            Some("rust-lang.org"),
-            false,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                domain: Some("rust-lang.org"),
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains("Site: rust-lang.org"));
         assert!(rendered.contains("Rule used: default-direct"));
         assert!(rendered.contains("How we send: direct connection"));
@@ -4460,9 +4547,9 @@ mod tests {
     fn route_render_snapshot_ru_gateway_match() {
         let policy = Policy::new(vec![
             RouteRule {
-                id: "example-gateway".to_string(),
+                id: "example-transit".to_string(),
                 matcher: RuleMatcher::DomainSuffix("example.org".to_string()),
-                outbound: OutboundMode::Gateway,
+                outbound: OutboundMode::Transit,
             },
             RouteRule {
                 id: "default-direct".to_string(),
@@ -4477,20 +4564,18 @@ mod tests {
             port: Some(443),
         };
         let trace = policy.explain(&flow);
-        let rendered = render_route_explain_block(
-            Language::Ru,
-            Some("api.example.org"),
-            false,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                lang: Language::Ru,
+                domain: Some("api.example.org"),
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains("Сайт: api.example.org"));
-        assert!(rendered.contains("Сработало правило: example-gateway"));
-        assert!(rendered.contains("Как отправляем: через WEAVE-шлюз"));
+        assert!(rendered.contains("Сработало правило: example-transit"));
+        assert!(rendered.contains("Как отправляем: через транзитный узел"));
     }
 
     #[test]
@@ -4510,17 +4595,14 @@ mod tests {
             port: Some(443),
         };
         let trace = policy.explain(&flow);
-        let rendered = render_route_explain_block(
-            Language::En,
-            Some("cdn.ads.example"),
-            false,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                domain: Some("cdn.ads.example"),
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains("Rule used: block_ads"));
         assert!(rendered.contains("How we send: blocked by policy"));
     }
@@ -4532,7 +4614,8 @@ mod tests {
         assert!(rendered.contains("status [--config <client_config_file>]"));
         assert!(rendered.contains("health [--config <client_config_file>]"));
         assert!(rendered.contains("doctor [--config <client_config_file>]"));
-        assert!(rendered.contains("--capture <auto|tun|local-proxy>"));
+        assert!(rendered.contains("--capture <auto|tun>"));
+        assert!(!rendered.contains("--capture <auto|tun|local-proxy>"));
         assert!(rendered.contains("--carrier <in-memory|tls|quic>"));
         assert!(rendered.contains("route explain [domain]"));
         assert!(rendered.contains(
@@ -4576,7 +4659,8 @@ mod tests {
         assert!(rendered.contains("status [--config <файл_client_config>]"));
         assert!(rendered.contains("health [--config <файл_client_config>]"));
         assert!(rendered.contains("doctor [--config <файл_client_config>]"));
-        assert!(rendered.contains("--capture <auto|tun|local-proxy>"));
+        assert!(rendered.contains("--capture <auto|tun>"));
+        assert!(!rendered.contains("--capture <auto|tun|local-proxy>"));
         assert!(rendered.contains("--carrier <in-memory|tls|quic>"));
         assert!(rendered.contains("route explain [домен]"));
         assert!(rendered.contains(
@@ -4848,7 +4932,6 @@ mod tests {
             Ok(options) => {
                 assert_eq!(options.urls, vec!["https://example.org".to_string()]);
                 assert_eq!(options.url_file, None);
-                assert_eq!(options.proxy_url, None);
                 assert_eq!(options.timeout_seconds, 8);
                 assert_eq!(options.apply_policy_path, None);
                 assert_eq!(options.rule_id_prefix, "auto-probe");
@@ -4867,8 +4950,6 @@ mod tests {
             "https://youtube.com".to_string(),
             "--url".to_string(),
             "https://discord.com".to_string(),
-            "--proxy-url".to_string(),
-            "socks5h://127.0.0.1:11080".to_string(),
             "--url-file".to_string(),
             "/tmp/targets.txt".to_string(),
             "--timeout-sec".to_string(),
@@ -4894,10 +4975,6 @@ mod tests {
                     ]
                 );
                 assert_eq!(options.url_file, Some("/tmp/targets.txt".to_string()));
-                assert_eq!(
-                    options.proxy_url,
-                    Some("socks5h://127.0.0.1:11080".to_string())
-                );
                 assert_eq!(options.timeout_seconds, 15);
                 assert_eq!(
                     options.apply_policy_path,
@@ -4910,6 +4987,17 @@ mod tests {
             }
             Err(()) => unreachable!("probe options should parse"),
         }
+    }
+
+    #[test]
+    fn parse_probe_options_rejects_proxy_url() {
+        let args = vec![
+            "--url".to_string(),
+            "https://example.org".to_string(),
+            "--proxy-url".to_string(),
+            "socks5h://127.0.0.1:11080".to_string(),
+        ];
+        assert!(crate::parse_probe_options(&args).is_err());
     }
 
     #[test]
@@ -4936,7 +5024,6 @@ https://discord.com\n";
         let options = crate::ProbeOptions {
             urls: vec!["https://example.org".to_string()],
             url_file: Some(path.to_string_lossy().to_string()),
-            proxy_url: None,
             timeout_seconds: 8,
             apply_policy_path: None,
             rule_id_prefix: "auto-probe".to_string(),
@@ -4965,7 +5052,6 @@ https://discord.com\n";
                 "https://discord.com".to_string(),
             ],
             url_file: None,
-            proxy_url: None,
             timeout_seconds: 8,
             apply_policy_path: None,
             rule_id_prefix: "auto-probe".to_string(),
@@ -5034,12 +5120,12 @@ https://discord.com\n";
             &path_text,
             "auto-probe",
             "www.youtube.com",
-            OutboundMode::Gateway,
+            OutboundMode::Transit,
         );
         assert_eq!(result, Ok("auto-probe-www.youtube.com".to_string()));
         let content = std::fs::read_to_string(&path_text).unwrap_or_default();
         assert!(content.contains("default = default => direct"));
-        assert!(content.contains("auto-probe-www.youtube.com = exact:www.youtube.com => gateway"));
+        assert!(content.contains("auto-probe-www.youtube.com = exact:www.youtube.com => transit"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -5057,12 +5143,12 @@ default = default => direct\n";
             &path_text,
             "auto-probe",
             "www.youtube.com",
-            OutboundMode::Gateway,
+            OutboundMode::Transit,
         );
         assert_eq!(result, Ok("auto-probe-www.youtube.com".to_string()));
         let content = std::fs::read_to_string(&path_text).unwrap_or_default();
         assert!(!content.contains("old-id = exact:www.youtube.com => direct"));
-        assert!(content.contains("auto-probe-www.youtube.com = exact:www.youtube.com => gateway"));
+        assert!(content.contains("auto-probe-www.youtube.com = exact:www.youtube.com => transit"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -5073,11 +5159,11 @@ default = default => direct\n";
         let path_text = path.to_string_lossy().to_string();
         let body = "\
 default = default => direct\n\
-yt = exact:www.youtube.com => gateway\n";
+yt = exact:www.youtube.com => transit\n";
         let _ = std::fs::write(&path, body);
         let result =
-            crate::verify_probe_policy_route(&path_text, "www.youtube.com", OutboundMode::Gateway);
-        assert_eq!(result, Ok((true, "gateway".to_string())));
+            crate::verify_probe_policy_route(&path_text, "www.youtube.com", OutboundMode::Transit);
+        assert_eq!(result, Ok((true, "transit".to_string())));
         let _ = std::fs::remove_file(path);
     }
 
@@ -5091,7 +5177,7 @@ default = default => direct\n\
 yt = exact:www.youtube.com => direct\n";
         let _ = std::fs::write(&path, body);
         let result =
-            crate::verify_probe_policy_route(&path_text, "www.youtube.com", OutboundMode::Gateway);
+            crate::verify_probe_policy_route(&path_text, "www.youtube.com", OutboundMode::Transit);
         assert_eq!(result, Ok((false, "direct".to_string())));
         let _ = std::fs::remove_file(path);
     }
@@ -5625,7 +5711,7 @@ yt = exact:www.youtube.com => direct\n";
         state_path.push("chimera_cli_rollback_status_modified_state.json");
         let state_text = state_path.to_string_lossy().to_string();
         let state_json = format!(
-            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"gateway.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"/tmp/chimera_resolv_test.conf\",\"dns_backup_path\":\"/tmp/chimera_resolv_test.conf.chimera.bak\"}}\n",
+            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"node.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"/tmp/chimera_resolv_test.conf\",\"dns_backup_path\":\"/tmp/chimera_resolv_test.conf.chimera.bak\"}}\n",
             test_client_carrier_addr()
         );
         let write_result = std::fs::write(&state_text, state_json);
@@ -5668,7 +5754,7 @@ yt = exact:www.youtube.com => direct\n";
         let state_text = state_path.to_string_lossy().to_string();
         let carrier_addr = test_client_carrier_addr();
         let state_json = format!(
-            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"gateway.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
+            "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"node.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
             carrier_addr, resolv_text, backup_path
         );
         let write_state = std::fs::write(&state_text, state_json);
@@ -5767,17 +5853,11 @@ yt = exact:www.youtube.com => direct\n";
             matched_rules: 1,
             matched_rule_ids_by_priority: vec!["default-direct".to_string()],
         };
-        let rendered = render_route_explain_block(
-            Language::En,
-            None,
-            false,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput::default(),
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains("Site: -"));
         assert!(rendered.contains("IP: 10.1.2.3"));
         assert!(rendered.contains("Protocol: udp"));
@@ -5788,7 +5868,7 @@ yt = exact:www.youtube.com => direct\n";
     fn route_render_snapshot_show_all_matches() {
         let text = r#"
             exact_api = exact:api.example.org => block
-            suffix_example = suffix:example.org => gateway
+            suffix_example = suffix:example.org => transit
             default_route = default => direct
         "#;
         let policy = match parse_policy_text(text) {
@@ -5802,17 +5882,15 @@ yt = exact:www.youtube.com => direct\n";
             port: Some(443),
         };
         let trace = policy.explain(&flow);
-        let rendered = render_route_explain_block(
-            Language::En,
-            Some("api.example.org"),
-            false,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                domain: Some("api.example.org"),
+                show_all_matches: true,
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            true,
-        );
+        ));
         assert!(
             rendered
                 .contains("Matched rules (best first): exact_api, suffix_example, default_route")
@@ -5841,17 +5919,15 @@ yt = exact:www.youtube.com => direct\n";
             matched_rules: 1,
             matched_rule_ids_by_priority: vec!["default-direct".to_string()],
         };
-        let rendered = render_route_explain_block(
-            Language::En,
-            Some("resolved.example.org"),
-            true,
-            None,
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                domain: Some("resolved.example.org"),
+                domain_source_from_dns: true,
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains("Domain source: DNS binding (IP -> domain)"));
     }
 
@@ -5873,17 +5949,14 @@ yt = exact:www.youtube.com => direct\n";
             matched_rules: 1,
             matched_rule_ids_by_priority: vec!["default-direct".to_string()],
         };
-        let rendered = render_route_explain_block(
-            Language::En,
-            None,
-            false,
-            Some("DNS binding was provided, but IP did not match binding IP."),
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                dns_note: Some("DNS binding was provided, but IP did not match binding IP."),
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(
             rendered
                 .contains("DNS note: DNS binding was provided, but IP did not match binding IP.")
@@ -5908,17 +5981,15 @@ yt = exact:www.youtube.com => direct\n";
             matched_rules: 1,
             matched_rule_ids_by_priority: vec!["default-direct".to_string()],
         };
-        let rendered = render_route_explain_block(
-            Language::Ru,
-            None,
-            false,
-            Some("Для этого IP DNS binding не задан. Домен остался неизвестным."),
+        let rendered = render_route_explain_block(&render_context(
+            TestRouteRenderInput {
+                lang: Language::Ru,
+                dns_note: Some("Для этого IP DNS binding не задан. Домен остался неизвестным."),
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Direct,
-            "runtime default",
-            false,
-        );
+        ));
         assert!(rendered.contains(
             "Примечание DNS: Для этого IP DNS binding не задан. Домен остался неизвестным."
         ));
@@ -6010,53 +6081,53 @@ yt = exact:www.youtube.com => direct\n";
         };
         let trace = RouteExplainTrace {
             decision: RouteDecision {
-                outbound: OutboundMode::Gateway,
-                matched_rule_id: "example-gateway".to_string(),
+                outbound: OutboundMode::Transit,
+                matched_rule_id: "example-transit".to_string(),
                 explanation: "matched domain suffix rule".to_string(),
             },
             examined_rules: 2,
             matched_rules: 1,
-            matched_rule_ids_by_priority: vec!["example-gateway".to_string()],
+            matched_rule_ids_by_priority: vec!["example-transit".to_string()],
         };
-        let json = render_route_explain_json(
-            Some("api.example.org"),
-            false,
-            None,
+        let json = render_route_explain_json(&render_context(
+            TestRouteRenderInput {
+                domain: Some("api.example.org"),
+                runtime_outbound: OutboundMode::Transit,
+                show_all_matches: true,
+                ..TestRouteRenderInput::default()
+            },
             &flow,
             &trace,
-            OutboundMode::Gateway,
-            "runtime default",
-            true,
-        );
+        ));
         assert!(json.contains("\"kind\":\"route_explain\""));
         assert!(json.contains("\"message_en\":\"Route explanation is ready.\""));
         assert!(json.contains("\"message_ru\":\"Объяснение маршрута готово.\""));
-        assert!(json.contains("\"outbound\":\"gateway\""));
-        assert!(json.contains("\"matched_rules\":[\"example-gateway\"]"));
+        assert!(json.contains("\"outbound\":\"transit\""));
+        assert!(json.contains("\"matched_rules\":[\"example-transit\"]"));
         assert!(json.contains("\"network_state\":\"not_modified\""));
     }
 
     #[test]
     fn policy_validate_render_snapshot_en() {
         let summary = PolicySummary {
-            total_rules: 5,
+            total_rules: 4,
             exact_domain_rules: 1,
             domain_suffix_rules: 1,
             cidr4_rules: 1,
             protoport_rules: 1,
             default_rules: 1,
             direct_outbound_rules: 2,
-            gateway_outbound_rules: 1,
+            transit_outbound_rules: 1,
             block_outbound_rules: 1,
-            local_proxy_outbound_rules: 1,
         };
         let rendered = render_policy_validate_block(Language::En, &summary);
         assert!(rendered.contains("Policy file is valid."));
-        assert!(rendered.contains("Total rules: 5"));
+        assert!(rendered.contains("Total rules: 4"));
         assert!(rendered.contains("Domain rules: exact=1, suffix=1"));
         assert!(rendered.contains("IP/protocol rules: cidr4=1, protoport=1"));
         assert!(rendered.contains("Default rules: 1"));
-        assert!(rendered.contains("Traffic actions: direct=2, gateway=1, block=1, local-proxy=1"));
+        assert!(rendered.contains("Traffic actions: direct=2, peer transit=1, block=1"));
+        assert!(!rendered.contains("local-proxy="));
     }
 
     #[test]
@@ -6069,9 +6140,8 @@ yt = exact:www.youtube.com => direct\n";
             protoport_rules: 1,
             default_rules: 1,
             direct_outbound_rules: 1,
-            gateway_outbound_rules: 2,
+            transit_outbound_rules: 2,
             block_outbound_rules: 1,
-            local_proxy_outbound_rules: 0,
         };
         let rendered = render_policy_validate_block(Language::Ru, &summary);
         assert!(rendered.contains("Файл policy корректный."));
@@ -6079,9 +6149,8 @@ yt = exact:www.youtube.com => direct\n";
         assert!(rendered.contains("Правила по доменам: exact=1, suffix=1"));
         assert!(rendered.contains("Правила по IP/протоколу: cidr4=0, protoport=1"));
         assert!(rendered.contains("Правила по умолчанию: default=1"));
-        assert!(
-            rendered.contains("Действия для трафика: direct=1, gateway=2, block=1, local-proxy=0")
-        );
+        assert!(rendered.contains("Действия для трафика: direct=1, peer transit=2, block=1"));
+        assert!(!rendered.contains("local-proxy="));
     }
 
     #[test]
@@ -6094,14 +6163,13 @@ yt = exact:www.youtube.com => direct\n";
             protoport_rules: 0,
             default_rules: 0,
             direct_outbound_rules: 2,
-            gateway_outbound_rules: 0,
+            transit_outbound_rules: 0,
             block_outbound_rules: 0,
-            local_proxy_outbound_rules: 0,
         };
         let rendered = render_policy_validate_block(Language::En, &summary);
         assert!(rendered.contains("Warnings:"));
         assert!(rendered.contains("No default rule."));
-        assert!(rendered.contains("No gateway action rules."));
+        assert!(rendered.contains("No peer transit rules."));
     }
 
     #[test]
@@ -6114,14 +6182,13 @@ yt = exact:www.youtube.com => direct\n";
             protoport_rules: 0,
             default_rules: 0,
             direct_outbound_rules: 1,
-            gateway_outbound_rules: 0,
+            transit_outbound_rules: 0,
             block_outbound_rules: 0,
-            local_proxy_outbound_rules: 0,
         };
         let rendered = render_policy_validate_block(Language::Ru, &summary);
         assert!(rendered.contains("Предупреждения:"));
         assert!(rendered.contains("Нет default-правила."));
-        assert!(rendered.contains("Нет правил с действием gateway."));
+        assert!(rendered.contains("Нет правил peer transit."));
     }
 
     #[test]

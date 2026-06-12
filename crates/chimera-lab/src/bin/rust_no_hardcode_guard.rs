@@ -322,12 +322,9 @@ fn main() {
     let probe_text = read_to_string(probe_rs);
     for required in [
         r#"resolve_non_empty_setting("CHIMERA_REAL_WORLD_DIRECT_URL""#,
-        r#"resolve_non_empty_setting("CHIMERA_REAL_WORLD_BLOCKED_TARGETS""#,
-        r#"resolve_non_empty_setting("CHIMERA_REAL_WORLD_PROXY_URL""#,
-        "CHIMERA_REAL_WORLD_PROXY_CANDIDATES",
+        r#"resolve_non_empty_setting("CHIMERA_REAL_WORLD_DATAPATH_TARGETS""#,
         "CHIMERA_REAL_WORLD_DIRECT_TIMEOUT_SEC",
-        "CHIMERA_REAL_WORLD_PROXY_TIMEOUT_SEC",
-        "CHIMERA_REAL_WORLD_CONNECT_TIMEOUT_MS",
+        "CHIMERA_REAL_WORLD_DATAPATH_TIMEOUT_SEC",
         "CHIMERA_REAL_WORLD_CONFIG",
     ] {
         if !probe_text.contains(required) {

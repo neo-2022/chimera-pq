@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ALLOW_BUILD_FALLBACK="${CHIMERA_ALLOW_BUILD_FALLBACK:-0}"
 
 usage() {
   cat <<'EOF'
@@ -19,27 +18,15 @@ EOF
 
 run_with_fallback() {
   local bin_path="$1"
-  local cargo_pkg="$2"
+  local runtime_name="$2"
   shift 2
 
   if [[ -x "$bin_path" ]]; then
-    if "$bin_path" "$@"; then
-      return 0
-    fi
-    if [[ "$ALLOW_BUILD_FALLBACK" != "1" ]]; then
-      return 1
-    fi
-  fi
-
-  if [[ "$ALLOW_BUILD_FALLBACK" == "1" ]] && command -v cargo >/dev/null 2>&1; then
-    (
-      cd "$ROOT_DIR"
-      cargo run -q -p "$cargo_pkg" -- "$@"
-    )
+    "$bin_path" "$@"
     return $?
   fi
 
-  echo "error: failed to run $cargo_pkg binary and cargo fallback is unavailable" >&2
+  echo "error: missing shipped runtime binary: $runtime_name ($bin_path)" >&2
   return 1
 }
 

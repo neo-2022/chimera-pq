@@ -17,7 +17,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONTROL="$ROOT_DIR/scripts/chimera-control.sh"
 INSTALLER="$ROOT_DIR/scripts/install_desktop_control.sh"
 AUTO_UPDATE_ENABLED="${CHIMERA_AUTO_UPDATE_ENABLED:-1}"
-UPDATE_BOOTSTRAP_URL="${CHIMERA_UPDATE_BOOTSTRAP_URL:-https://raw.githubusercontent.com/neo-2022/chimera/main/chimera.sh}"
+UPDATE_BOOTSTRAP_URL="${CHIMERA_UPDATE_BOOTSTRAP_URL:-https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh}"
 RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
 RUNTIME_BUNDLE_SHA_FILE="$ROOT_DIR/.chimera_release_bundle.sha256"
 INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
@@ -25,11 +25,13 @@ INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
 usage() {
   cat <<'EOF'
 Usage:
-  chimera-sh -install [--vps-endpoint host:port]
+  chimera-sh -install
   chimera-sh -start
   chimera-sh -stop
   chimera-sh -restart
   chimera-sh -status
+  chimera-sh -mesh <args...>
+  chimera-sh -connect <index|node_id> [mesh node filters...]
   chimera-sh -version
   chimera-sh -doctor
   chimera-sh -logs
@@ -119,11 +121,12 @@ read_local_install_role() {
     local env_mode=""
     env_mode="$(awk -F= '/^CHIMERA_PEER_EGRESS_MODE=/{print $2; exit}' "$env_file" 2>/dev/null | tr -d '[:space:]')"
     case "$env_mode" in
+      node|weave-node) echo "node"; return 0 ;;
       vps) echo "server"; return 0 ;;
       laptop|client) echo "client"; return 0 ;;
     esac
   fi
-  echo "${CHIMERA_INSTALL_NODE_ROLE:-client}"
+  echo "${CHIMERA_INSTALL_NODE_ROLE:-node}"
 }
 
 parse_release_metadata() {
@@ -269,6 +272,30 @@ main() {
         exit 1
       }
       exec "$CONTROL" restart
+      ;;
+    -mesh|mesh)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      auto_update_if_needed "$cmd" "${@:2}" || {
+        echo "error: CHIMERA runtime is not aligned with latest release. Update required before mesh command." >&2
+        exit 1
+      }
+      exec "$CONTROL" mesh "${@:2}"
+      ;;
+    -connect|connect)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      auto_update_if_needed "$cmd" "${@:2}" || {
+        echo "error: CHIMERA runtime is not aligned with latest release. Update required before connect." >&2
+        exit 1
+      }
+      exec "$CONTROL" mesh nodes connect "${@:2}"
       ;;
     -status)
       ensure_runtime_files || {

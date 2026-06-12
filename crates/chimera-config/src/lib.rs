@@ -94,7 +94,6 @@ pub enum ConfigCarrierProfile {
 pub enum ConfigCaptureMode {
     Auto,
     Tun,
-    LocalProxy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,7 +167,7 @@ pub fn parse_client_config_text(input: &str) -> ChimeraResult<ClientConfig> {
         .to_string();
     let carrier_server_name = raw
         .get("carrier.server_name")
-        .unwrap_or("gateway.example.org")
+        .unwrap_or("node.example.org")
         .to_string();
     if carrier_addr.trim().is_empty() {
         return Err(ChimeraError::InvalidConfig(
@@ -411,7 +410,9 @@ fn parse_capture_mode(input: &str, key: &str) -> ChimeraResult<ConfigCaptureMode
     match input {
         "auto" => Ok(ConfigCaptureMode::Auto),
         "tun" => Ok(ConfigCaptureMode::Tun),
-        "local-proxy" => Ok(ConfigCaptureMode::LocalProxy),
+        "local-proxy" => Err(ChimeraError::InvalidConfig(format!(
+            "{key} value 'local-proxy' is forbidden; use transparent TUN datapath"
+        ))),
         _ => Err(ChimeraError::InvalidConfig(format!(
             "{key} has unknown value '{input}'"
         ))),
@@ -487,6 +488,19 @@ mod tests {
     fn rejects_client_config_with_bad_bool() {
         let text = "capture.tun_supported = maybe";
         assert!(parse_client_config_text(text).is_err());
+    }
+
+    #[test]
+    fn rejects_client_config_with_local_proxy_capture_mode() {
+        let text = "capture.mode = local-proxy";
+        let parsed = parse_client_config_text(text);
+        assert!(parsed.is_err());
+        let message = parsed
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(message.contains("local-proxy"));
+        assert!(message.contains("forbidden"));
     }
 
     #[test]

@@ -90,57 +90,39 @@ fn main() {
         require_field(&rt_probe, "network_state", "not_modified");
         eq_bool_cross(
             &ship,
-            "runtime_real_world_proxy_listener_detected",
+            "runtime_real_world_datapath_probe_attempted",
             &rt_probe,
-            "proxy_listener_detected",
+            "datapath_probe_attempted",
         );
         eq_bool_cross(
             &ship,
-            "runtime_real_world_proxy_probe_attempted",
+            "runtime_real_world_datapath_probe_ok",
             &rt_probe,
-            "proxy_probe_attempted",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_proxy_probe_ok",
-            &rt_probe,
-            "proxy_probe_ok",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_proxy_selected_from_candidates",
-            &rt_probe,
-            "proxy_selected_from_candidates",
+            "datapath_probe_ok",
         );
         eq_str_cross(
             &ship,
-            "runtime_real_world_proxy_candidates",
+            "runtime_real_world_datapath_probe_error",
             &rt_probe,
-            "proxy_candidates",
-        );
-        eq_str_cross(
-            &ship,
-            "runtime_real_world_proxy_probe_error",
-            &rt_probe,
-            "proxy_probe_error",
+            "datapath_probe_error",
         );
         eq_i64_cross(
             &ship,
-            "runtime_real_world_proxy_blocked_targets_total",
+            "runtime_real_world_datapath_targets_total",
             &rt_probe,
-            "proxy_blocked_targets_total",
+            "datapath_targets_total",
         );
         eq_i64_cross(
             &ship,
-            "runtime_real_world_proxy_blocked_targets_ok",
+            "runtime_real_world_datapath_targets_ok",
             &rt_probe,
-            "proxy_blocked_targets_ok",
+            "datapath_targets_ok",
         );
         eq_i64_cross(
             &ship,
-            "runtime_real_world_proxy_blocked_targets_failed",
+            "runtime_real_world_datapath_targets_failed",
             &rt_probe,
-            "proxy_blocked_targets_failed",
+            "datapath_targets_failed",
         );
         eq_bool_cross(
             &ship,
@@ -154,58 +136,8 @@ fn main() {
             &rt_probe,
             "skipped_no_curl",
         );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_skipped_no_proxy_listener",
-            &rt_probe,
-            "skipped_no_proxy_listener",
-        );
-        let proxy_attempted = get_bool(&ship, "runtime_real_world_proxy_probe_attempted");
-        let proxy_listener = get_bool(&ship, "runtime_real_world_proxy_listener_detected");
-        let proxy_ok = get_bool(&ship, "runtime_real_world_proxy_probe_ok");
-        let proxy_selected = get_bool(&ship, "runtime_real_world_proxy_selected_from_candidates");
-        let proxy_candidates = get_str(&ship, "runtime_real_world_proxy_candidates");
-        let proxy_error = get_str(&ship, "runtime_real_world_proxy_probe_error");
-        let total = get_i64(&ship, "runtime_real_world_proxy_blocked_targets_total");
-        let ok = get_i64(&ship, "runtime_real_world_proxy_blocked_targets_ok");
-        let failed = get_i64(&ship, "runtime_real_world_proxy_blocked_targets_failed");
-        if ![
-            "none",
-            "proxy_listener_not_found",
-            "proxy_connect_or_upstream_failed",
-            "unknown",
-        ]
-        .contains(&proxy_error)
-        {
-            fail("ship nonregression guard: proxy error value is invalid");
-        }
-        if ok + failed != total {
-            fail("ship nonregression guard: proxy totals mismatch");
-        }
-        if proxy_attempted && !proxy_listener {
-            fail("ship nonregression guard: proxy attempted without listener");
-        }
-        if !proxy_attempted && proxy_error != "proxy_listener_not_found" {
-            fail("ship nonregression guard: proxy not attempted must be listener_not_found");
-        }
-        if proxy_attempted && proxy_error == "proxy_listener_not_found" {
-            fail("ship nonregression guard: proxy attempted with listener_not_found");
-        }
-        if proxy_ok && failed != 0 {
-            fail("ship nonregression guard: proxy ok with failed targets");
-        }
-        if proxy_selected && !proxy_attempted {
-            fail("ship nonregression guard: proxy selected_from_candidates requires attempted");
-        }
-        if proxy_candidates.trim().is_empty() {
-            fail("ship nonregression guard: proxy candidates is empty");
-        }
-        if proxy_attempted && total <= 0 {
-            fail("ship nonregression guard: proxy attempted with empty target totals");
-        }
-        if !proxy_attempted && total != 0 {
-            fail("ship nonregression guard: proxy not attempted with non-zero totals");
-        }
+        validate_datapath_logic(&ship)
+            .unwrap_or_else(|msg| fail(&format!("ship nonregression guard: {msg}")));
     }
 
     require_step_true(&ship, "report_pack_json");
@@ -258,16 +190,15 @@ fn require_bool_field(obj: &serde_json::Map<String, Value>, key: &str, expected:
         fail(&format!("ship nonregression guard: {key} mismatch"));
     }
 }
-fn require_step_true(ship: &serde_json::Map<String, Value>, key: &str) {
-    let steps = ship
+fn require_step_true(root: &serde_json::Map<String, Value>, step: &str) {
+    let steps = root
         .get("steps")
         .and_then(Value::as_object)
-        .unwrap_or_else(|| fail("ship nonregression guard: missing steps object"));
-    if steps.get(key).and_then(Value::as_bool) != Some(true) {
-        fail(&format!("ship nonregression guard: step not true: {key}"));
+        .unwrap_or_else(|| fail("ship nonregression guard: steps missing"));
+    if steps.get(step).and_then(Value::as_bool) != Some(true) {
+        fail(&format!("ship nonregression guard: step not true: {step}"));
     }
 }
-
 fn eq_bool_cross(
     a: &serde_json::Map<String, Value>,
     ak: &str,
@@ -300,9 +231,51 @@ fn eq_str_cross(
 ) {
     if get_str(a, ak) != get_str(b, bk) {
         fail(&format!(
-            "ship nonregression guard: string mismatch {ak} vs {bk}"
+            "ship nonregression guard: str mismatch {ak} vs {bk}"
         ));
     }
+}
+
+fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), String> {
+    let attempted = get_bool(ship, "runtime_real_world_datapath_probe_attempted");
+    let ok_flag = get_bool(ship, "runtime_real_world_datapath_probe_ok");
+    let skipped_no_curl = get_bool(ship, "runtime_real_world_skipped_no_curl");
+    let error = get_str(ship, "runtime_real_world_datapath_probe_error");
+    let total = get_i64(ship, "runtime_real_world_datapath_targets_total");
+    let ok = get_i64(ship, "runtime_real_world_datapath_targets_ok");
+    let failed = get_i64(ship, "runtime_real_world_datapath_targets_failed");
+    if ![
+        "none",
+        "curl_not_found",
+        "datapath_target_failed",
+        "unknown",
+    ]
+    .contains(&error)
+    {
+        return Err("datapath error value is invalid".to_string());
+    }
+    if ok + failed != total {
+        return Err("datapath totals mismatch".to_string());
+    }
+    if skipped_no_curl && attempted {
+        return Err("no curl but datapath attempted".to_string());
+    }
+    if !skipped_no_curl && !attempted {
+        return Err("datapath must be attempted when curl is available".to_string());
+    }
+    if attempted && total <= 0 {
+        return Err("datapath attempted with empty target totals".to_string());
+    }
+    if !attempted && total != 0 {
+        return Err("datapath not attempted with non-zero totals".to_string());
+    }
+    if ok_flag && failed != 0 {
+        return Err("datapath ok with failed targets".to_string());
+    }
+    if attempted && error == "curl_not_found" {
+        return Err("datapath attempted with curl_not_found".to_string());
+    }
+    Ok(())
 }
 
 fn fail(msg: &str) -> ! {

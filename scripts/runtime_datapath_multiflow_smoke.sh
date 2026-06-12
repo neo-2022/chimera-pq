@@ -9,11 +9,11 @@ rm -f "$tmp_json"
 
 cargo run -q -p chimera-lab --bin chimera-lab -- datapath-report --json --out "$tmp_json"
 
-gateway_ok=false
+transit_ok=false
 block_ok=false
 direct_ok=false
-if rg -q '"gateway_explain":"matched rule' "$tmp_json"; then
-  gateway_ok=true
+if rg -q '"transit_explain":"matched rule' "$tmp_json"; then
+  transit_ok=true
 fi
 if rg -q '"block_explain":"matched rule' "$tmp_json"; then
   block_ok=true
@@ -22,10 +22,10 @@ if rg -q '"direct_explain":"matched rule' "$tmp_json"; then
   direct_ok=true
 fi
 
-json="{\"status\":\"ok\",\"kind\":\"runtime_datapath_multiflow_smoke\",\"message_en\":\"Runtime datapath multiflow smoke executed.\",\"message_ru\":\"Smoke-проверка runtime datapath multiflow выполнена.\",\"network_state\":\"not_modified\",\"gateway_ok\":${gateway_ok},\"block_ok\":${block_ok},\"direct_ok\":${direct_ok}}"
+json="{\"status\":\"ok\",\"kind\":\"runtime_datapath_multiflow_smoke\",\"message_en\":\"Runtime datapath multiflow smoke executed.\",\"message_ru\":\"Smoke-проверка runtime datapath multiflow выполнена.\",\"network_state\":\"not_modified\",\"transit_ok\":${transit_ok},\"block_ok\":${block_ok},\"direct_ok\":${direct_ok}}"
 printf "%s\n" "$json" > docs/RUNTIME_DATAPATH_MULTIFLOW_SMOKE.json
 
-if [[ "$gateway_ok" != "true" || "$block_ok" != "true" || "$direct_ok" != "true" ]]; then
+if [[ "$transit_ok" != "true" || "$block_ok" != "true" || "$direct_ok" != "true" ]]; then
   echo "runtime datapath multiflow smoke: FAIL" >&2
   exit 1
 fi

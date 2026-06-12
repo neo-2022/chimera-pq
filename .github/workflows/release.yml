@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to publish, for example v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  github-latest:
+    name: Build and Publish GitHub Latest Assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Release Tag
+        id: release
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_tag="${INPUT_RELEASE_TAG:-}"
+            if [[ -z "$release_tag" ]]; then
+              echo "error: workflow_dispatch requires release_tag" >&2
+              exit 1
+            fi
+            git fetch --tags --force
+            git rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null || {
+              echo "error: release tag does not exist: ${release_tag}" >&2
+              exit 1
+            }
+            git checkout -q "refs/tags/${release_tag}"
+          fi
+          release_version="${release_tag#v}"
+          echo "tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${release_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Installer Contract Gate
+        run: bash scripts/chimera_installer_gate.sh
+
+      - name: Build Release Bundle
+        env:
+          CHIMERA_RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: bash scripts/build_release.sh
+
+      - name: Verify Release Assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s target/chimera.sh
+          test -s target/chimera-pq-release.tar.gz
+          test -s target/chimera-pq-release.tar.gz.sha256
+          grep -q '^VERSION="' target/chimera.sh
+          grep -q '^ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz"' target/chimera.sh
+          grep -q '^CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz\.sha256"' target/chimera.sh
+          (cd target && sha256sum -c chimera-pq-release.tar.gz.sha256)
+          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/bin/chimera-cli$'
+          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/bin/chimera-peer-egress$'
+          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/scripts/chimera.sh$'
+          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/scripts/chimera-sh$'
+
+      - name: Publish GitHub Release Latest Assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cat > target/release-notes.md <<EOF
+          CHIMERA-PQ ${RELEASE_TAG}
+
+          Required one-command install assets:
+          - chimera.sh
+          - chimera-pq-release.tar.gz
+          - chimera-pq-release.tar.gz.sha256
+          EOF
+
+          required_assets=(
+            "chimera.sh"
+            "chimera-pq-release.tar.gz"
+            "chimera-pq-release.tar.gz.sha256"
+          )
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            mapfile -t current_assets < <(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+            for asset in "${current_assets[@]}"; do
+              keep=0
+              for required in "${required_assets[@]}"; do
+                [[ "$asset" == "$required" ]] && keep=1
+              done
+              if [[ "$keep" -eq 0 ]]; then
+                gh release delete-asset "$RELEASE_TAG" "$asset" -y
+              fi
+            done
+            gh release upload "$RELEASE_TAG" \
+              target/chimera.sh \
+              target/chimera-pq-release.tar.gz \
+              target/chimera-pq-release.tar.gz.sha256 \
+              --clobber
+            gh release edit "$RELEASE_TAG" --latest --title "$RELEASE_TAG" --notes-file target/release-notes.md
+          else
+            gh release create "$RELEASE_TAG" \
+              target/chimera.sh \
+              target/chimera-pq-release.tar.gz \
+              target/chimera-pq-release.tar.gz.sha256 \
+              --verify-tag \
+              --latest \
+              --title "$RELEASE_TAG" \
+              --notes-file target/release-notes.md
+          fi
+
+      - name: Verify GitHub Latest Contract
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          latest_tag="$(gh release view --json tagName --jq '.tagName')"
+          if [[ "$latest_tag" != "$RELEASE_TAG" ]]; then
+            echo "error: releases/latest points to ${latest_tag}, expected ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+
+          expected="$(printf '%s\n' chimera-pq-release.tar.gz chimera-pq-release.tar.gz.sha256 chimera.sh)"
+          actual="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | sort)"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "error: release assets do not match required set" >&2
+            printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual" >&2
+            exit 1
+          fi

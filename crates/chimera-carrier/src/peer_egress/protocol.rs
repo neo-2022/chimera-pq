@@ -1,15 +1,78 @@
+use std::collections::hash_map::RandomState;
+use std::hash::{BuildHasher, Hasher};
 use std::io::{Read, Write};
-use std::net::{Ipv4Addr, Ipv6Addr, TcpStream};
+use std::net::TcpStream;
+use std::sync::OnceLock;
 
-use crate::peer_egress::options::{
-    AeadSuite, LOCAL_MAGIC, SECURE_MAX_CIPHERTEXT_LEN,
-};
+use crate::peer_egress::options::{AeadSuite, LOCAL_MAGIC, SECURE_MAX_CIPHERTEXT_LEN};
 use chimera_crypto::TrafficSecret;
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
 pub struct Destination {
     pub host: String,
     pub port: u16,
+}
+
+impl Destination {
+    pub fn connect_addr(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+
+    pub fn redacted_label(&self) -> String {
+        redacted_destination_label(&self.host, self.port)
+    }
+}
+
+pub fn redacted_destination_label(host: &str, port: u16) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(redaction_salt());
+    hasher.update(host.as_bytes());
+    hasher.update(b":");
+    hasher.update(port.to_string().as_bytes());
+    let digest = hasher.finalize();
+    short_hex(&digest[..8])
+}
+
+pub fn redacted_log_reason(error: &str) -> &'static str {
+    if error.contains("request") {
+        "request_invalid_or_unsupported"
+    } else if error.contains("target") {
+        "target_connect_failed"
+    } else if error.contains("connect") {
+        "connect_failed"
+    } else {
+        "runtime_error"
+    }
+}
+
+fn redaction_salt() -> &'static [u8; 16] {
+    static SALT: OnceLock<[u8; 16]> = OnceLock::new();
+    SALT.get_or_init(|| {
+        let state = RandomState::new();
+        let first = redaction_seed_part(&state, b"chimera-peer-egress-redaction-salt-1");
+        let second = redaction_seed_part(&state, b"chimera-peer-egress-redaction-salt-2");
+        let mut salt = [0_u8; 16];
+        salt[..8].copy_from_slice(&first.to_be_bytes());
+        salt[8..].copy_from_slice(&second.to_be_bytes());
+        salt
+    })
+}
+
+fn redaction_seed_part(state: &RandomState, label: &[u8]) -> u64 {
+    let mut hasher = state.build_hasher();
+    hasher.write(label);
+    hasher.finish()
+}
+
+fn short_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }
 
 #[derive(Debug)]
@@ -109,9 +172,12 @@ fn encrypt_secure_payload_in_place(
     buffer: &mut Vec<u8>,
 ) -> chimera_core::ChimeraResult<()> {
     match aead {
-        AeadSuite::Chacha20Poly1305 => {
-            chimera_crypto::encrypt_chacha20poly1305_in_place(secret, packet, associated_data, buffer)
-        }
+        AeadSuite::Chacha20Poly1305 => chimera_crypto::encrypt_chacha20poly1305_in_place(
+            secret,
+            packet,
+            associated_data,
+            buffer,
+        ),
         AeadSuite::Aes256Gcm => {
             chimera_crypto::encrypt_aes256gcm_in_place(secret, packet, associated_data, buffer)
         }
@@ -126,9 +192,12 @@ fn decrypt_secure_payload_in_place(
     buffer: &mut Vec<u8>,
 ) -> chimera_core::ChimeraResult<()> {
     match aead {
-        AeadSuite::Chacha20Poly1305 => {
-            chimera_crypto::decrypt_chacha20poly1305_in_place(secret, packet, associated_data, buffer)
-        }
+        AeadSuite::Chacha20Poly1305 => chimera_crypto::decrypt_chacha20poly1305_in_place(
+            secret,
+            packet,
+            associated_data,
+            buffer,
+        ),
         AeadSuite::Aes256Gcm => {
             chimera_crypto::decrypt_aes256gcm_in_place(secret, packet, associated_data, buffer)
         }
@@ -170,76 +239,7 @@ pub fn read_native_connect_destination(
     })
 }
 
-pub fn read_socks5_connect_destination(
-    stream: &mut TcpStream,
-    first_byte: u8,
-) -> Result<Destination, String> {
-    let mut greeting_tail = [0_u8; 1];
-    stream
-        .read_exact(&mut greeting_tail)
-        .map_err(|error| format!("read socks greeting failed: {error}"))?;
-    if first_byte != 5 {
-        return Err("unsupported socks version".to_string());
-    }
-    let methods_len = greeting_tail[0] as usize;
-    let mut methods = vec![0_u8; methods_len];
-    stream
-        .read_exact(&mut methods)
-        .map_err(|error| format!("read socks methods failed: {error}"))?;
-    stream
-        .write_all(&[5, 0])
-        .map_err(|error| format!("write socks method response failed: {error}"))?;
-
-    let mut head = [0_u8; 4];
-    stream
-        .read_exact(&mut head)
-        .map_err(|error| format!("read socks connect head failed: {error}"))?;
-    if head[0] != 5 || head[1] != 1 {
-        return Err("only socks5 CONNECT is supported".to_string());
-    }
-    let host = match head[3] {
-        1 => {
-            let mut octets = [0_u8; 4];
-            stream
-                .read_exact(&mut octets)
-                .map_err(|error| format!("read ipv4 target failed: {error}"))?;
-            Ipv4Addr::from(octets).to_string()
-        }
-        3 => {
-            let mut len = [0_u8; 1];
-            stream
-                .read_exact(&mut len)
-                .map_err(|error| format!("read domain length failed: {error}"))?;
-            let mut raw = vec![0_u8; len[0] as usize];
-            stream
-                .read_exact(&mut raw)
-                .map_err(|error| format!("read domain target failed: {error}"))?;
-            String::from_utf8(raw).map_err(|_| "domain target is not utf-8".to_string())?
-        }
-        4 => {
-            let mut octets = [0_u8; 16];
-            stream
-                .read_exact(&mut octets)
-                .map_err(|error| format!("read ipv6 target failed: {error}"))?;
-            Ipv6Addr::from(octets).to_string()
-        }
-        _ => return Err("unsupported socks address type".to_string()),
-    };
-    let mut port_raw = [0_u8; 2];
-    stream
-        .read_exact(&mut port_raw)
-        .map_err(|error| format!("read socks target port failed: {error}"))?;
-    let port = u16::from_be_bytes(port_raw);
-    Ok(Destination { host, port })
-}
-
-pub fn write_socks5_success(stream: &mut TcpStream) -> Result<(), String> {
-    stream
-        .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
-        .map_err(|error| format!("write socks success failed: {error}"))
-}
-
-pub fn parse_peer_connect_request(line: &str) -> Result<String, String> {
+pub fn parse_peer_connect_destination(line: &str) -> Result<Destination, String> {
     let mut parts = line.split_whitespace();
     let Some(kind) = parts.next() else {
         return Err("empty peer request".to_string());
@@ -261,7 +261,14 @@ pub fn parse_peer_connect_request(line: &str) -> Result<String, String> {
     if host.is_empty() || host.contains('\n') || host.contains('\r') {
         return Err("peer request has invalid host".to_string());
     }
-    Ok(format!("{host}:{port}"))
+    Ok(Destination {
+        host: host.to_string(),
+        port,
+    })
+}
+
+pub fn parse_peer_connect_request(line: &str) -> Result<String, String> {
+    parse_peer_connect_destination(line).map(|destination| destination.connect_addr())
 }
 
 pub fn read_line_limited(stream: &mut TcpStream, max_len: usize) -> Result<String, String> {
@@ -294,5 +301,29 @@ mod tests {
     fn native_local_request_rejects_bad_shape() {
         let request = parse_peer_connect_request("GET example.org 443");
         assert!(request.is_err());
+    }
+
+    #[test]
+    fn redacted_destination_label_is_stable_for_same_destination() {
+        let label1 = redacted_destination_label("example.org", 443);
+        let label2 = redacted_destination_label("example.org", 443);
+        assert_eq!(label1, label2);
+        assert_eq!(label1.len(), 16);
+    }
+
+    #[test]
+    fn redacted_destination_label_does_not_expose_raw_destination() {
+        let label = redacted_destination_label("example.org", 443);
+        assert!(!label.contains("example"));
+        assert!(!label.contains("443"));
+        assert_ne!(label, "example.org:443");
+    }
+
+    #[test]
+    fn parse_peer_connect_destination_preserves_parts_without_logging_shape() {
+        let destination = parse_peer_connect_destination("CONNECT example.org 443")
+            .unwrap_or_else(|error| unreachable!("request must parse: {error}"));
+        assert_eq!(destination.host, "example.org");
+        assert_eq!(destination.port, 443);
     }
 }

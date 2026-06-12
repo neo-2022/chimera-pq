@@ -96,11 +96,15 @@ main() {
     bash "$PATH_PROOF_SCRIPT" "$PATH_PROOF_JSON" >/dev/null 2>&1 || true
   fi
 
-  local proxy_listener route_proxy_url
-  proxy_listener="$(extract_route_status_value "$route_status_tmp" "chimera_proxy_listener")"
-  route_proxy_url="$(extract_route_status_value "$route_status_tmp" "chimera_proxy_url")"
-  proxy_listener="${proxy_listener:-unknown}"
-  route_proxy_url="${route_proxy_url:-unknown}"
+  local runtime_state transparent_runtime route_mode split_mode
+  runtime_state="$(extract_route_status_value "$route_status_tmp" "runtime_state_status")"
+  transparent_runtime="$(extract_route_status_value "$route_status_tmp" "transparent_runtime")"
+  route_mode="$(extract_route_status_value "$route_status_tmp" "route_mode")"
+  split_mode="$(extract_route_status_value "$route_status_tmp" "split_list_mode")"
+  runtime_state="${runtime_state:-unknown}"
+  transparent_runtime="${transparent_runtime:-unknown}"
+  route_mode="${route_mode:-unknown}"
+  split_mode="${split_mode:-unknown}"
 
   local app_routes_count service_routes_count service_overrides_enabled
   app_routes_count="$(extract_route_status_value "$app_status_tmp" "app_routes_count")"
@@ -109,29 +113,26 @@ main() {
   service_routes_count="${service_routes_count:-0}"
   service_overrides_enabled="$(count_route_lines "$app_status_tmp" "service_route_override[")"
 
-  local path_status path_reason path_direct_ip path_chimera_ip
+  local path_status path_reason path_direct_ip
   local path_targets_total path_targets_passed path_targets_failed
   if command -v jq >/dev/null 2>&1; then
     path_status="$(jq -r '.status // empty' "$PATH_PROOF_JSON" 2>/dev/null || true)"
     path_reason="$(jq -r '.reason // empty' "$PATH_PROOF_JSON" 2>/dev/null || true)"
-    path_direct_ip="$(jq -r '.observed_public_ip.direct.ip // empty' "$PATH_PROOF_JSON" 2>/dev/null || true)"
-    path_chimera_ip="$(jq -r '.observed_public_ip.chimera.ip // empty' "$PATH_PROOF_JSON" 2>/dev/null || true)"
-    path_targets_total="$(jq -r '.totals.targets // 0' "$PATH_PROOF_JSON" 2>/dev/null || true)"
-    path_targets_passed="$(jq -r '.totals.passed // 0' "$PATH_PROOF_JSON" 2>/dev/null || true)"
-    path_targets_failed="$(jq -r '.totals.failed // 0' "$PATH_PROOF_JSON" 2>/dev/null || true)"
+    path_direct_ip="$(jq -r '.direct_baseline.remote_ip // empty' "$PATH_PROOF_JSON" 2>/dev/null || true)"
+    path_targets_total="$(jq -r '.datapath.targets_total // 0' "$PATH_PROOF_JSON" 2>/dev/null || true)"
+    path_targets_passed="$(jq -r '.datapath.targets_passed // 0' "$PATH_PROOF_JSON" 2>/dev/null || true)"
+    path_targets_failed="$(jq -r '.datapath.targets_failed // 0' "$PATH_PROOF_JSON" 2>/dev/null || true)"
   else
     path_status="$(extract_json_string "$PATH_PROOF_JSON" "status")"
     path_reason="$(extract_json_string "$PATH_PROOF_JSON" "reason")"
-    path_direct_ip="$(extract_json_string "$PATH_PROOF_JSON" "ip")"
-    path_chimera_ip="$(tr -d '\n' <"$PATH_PROOF_JSON" | sed -n 's/.*"chimera":[[:space:]]*{[^}]*"ip":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-    path_targets_total="$(extract_json_number "$PATH_PROOF_JSON" "targets")"
-    path_targets_passed="$(extract_json_number "$PATH_PROOF_JSON" "passed")"
-    path_targets_failed="$(extract_json_number "$PATH_PROOF_JSON" "failed")"
+    path_direct_ip="$(tr -d '\n' <"$PATH_PROOF_JSON" | sed -n 's/.*"direct_baseline":[[:space:]]*{[^}]*"remote_ip":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    path_targets_total="$(tr -d '\n' <"$PATH_PROOF_JSON" | sed -n 's/.*"targets_total":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    path_targets_passed="$(tr -d '\n' <"$PATH_PROOF_JSON" | sed -n 's/.*"targets_passed":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    path_targets_failed="$(tr -d '\n' <"$PATH_PROOF_JSON" | sed -n 's/.*"targets_failed":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
   fi
   path_status="${path_status:-unknown}"
   path_reason="${path_reason:-unknown}"
   path_direct_ip="${path_direct_ip:-}"
-  path_chimera_ip="${path_chimera_ip:-}"
   path_targets_total="${path_targets_total:-0}"
   path_targets_passed="${path_targets_passed:-0}"
   path_targets_failed="${path_targets_failed:-0}"
@@ -142,25 +143,22 @@ main() {
   default_iface_class="$(classify_default_iface "$default_iface")"
 
   local overall_status overall_reason
-  if [[ "$proxy_listener" != "up" ]]; then
+  if [[ "$transparent_runtime" != "running" && "$runtime_state" != "up" ]]; then
     overall_status="fail"
-    overall_reason="chimera_listener_down"
+    overall_reason="transparent_datapath_not_running"
   elif [[ "$path_status" != "pass" ]]; then
     overall_status="fail"
     overall_reason="path_proof_${path_reason}"
-  elif [[ "$path_direct_ip" == "$path_chimera_ip" ]]; then
-    overall_status="warn"
-    overall_reason="same_public_ip_direct_and_chimera"
   else
     overall_status="pass"
-    overall_reason="channel_separation_observed"
+    overall_reason="transparent_datapath_observed"
   fi
 
   local finished_at
   finished_at="$(now_utc)"
 
   cat >"$AUDIT_JSON_OUT" <<EOF
-{"kind":"chimera_channel_audit","status":"$overall_status","reason":"$overall_reason","started_at":"$started_at","finished_at":"$finished_at","network_state":"not_modified","chimera":{"proxy_listener":"$proxy_listener","proxy_url":"$(json_escape "$route_proxy_url")"},"path_proof":{"status":"$path_status","reason":"$(json_escape "$path_reason")","public_ip_direct":"$(json_escape "$path_direct_ip")","public_ip_via_chimera":"$(json_escape "$path_chimera_ip")","targets_total":$path_targets_total,"targets_passed":$path_targets_passed,"targets_failed":$path_targets_failed},"selective_routing":{"app_routes_count":$app_routes_count,"service_routes_count":$service_routes_count,"service_override_rows":$service_overrides_enabled,"app_routes_file":"$(json_escape "$APP_ROUTES_FILE")"},"system_default_path":{"iface":"$(json_escape "$default_iface")","gateway":"$(json_escape "$default_gateway")","iface_class":"$default_iface_class"}}
+{"kind":"chimera_channel_audit","status":"$overall_status","reason":"$overall_reason","started_at":"$started_at","finished_at":"$finished_at","network_state":"not_modified","chimera":{"runtime_state":"$(json_escape "$runtime_state")","transparent_runtime":"$(json_escape "$transparent_runtime")","route_mode":"$(json_escape "$route_mode")","split_list_mode":"$(json_escape "$split_mode")"},"path_proof":{"status":"$path_status","reason":"$(json_escape "$path_reason")","direct_remote_ip":"$(json_escape "$path_direct_ip")","datapath_mode":"transparent_datapath","targets_total":$path_targets_total,"targets_passed":$path_targets_passed,"targets_failed":$path_targets_failed},"selective_routing":{"app_routes_count":$app_routes_count,"service_routes_count":$service_routes_count,"service_override_rows":$service_overrides_enabled,"app_routes_file":"$(json_escape "$APP_ROUTES_FILE")"},"system_default_path":{"iface":"$(json_escape "$default_iface")","gateway":"$(json_escape "$default_gateway")","iface_class":"$default_iface_class"}}
 EOF
 
   if [[ "$QUIET" != "1" ]]; then

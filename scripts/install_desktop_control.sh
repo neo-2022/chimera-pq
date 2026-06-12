@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INSTALL_NODE_ROLE="${CHIMERA_INSTALL_NODE_ROLE:-client}"
+INSTALL_NODE_ROLE="${CHIMERA_INSTALL_NODE_ROLE:-node}"
 INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
@@ -144,7 +144,7 @@ configure_client_target() {
     return 0
   fi
   local client_conf="$ROOT_DIR/configs/client.conf"
-  local candidate="${CHIMERA_VPS_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}"
+  local candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-${CHIMERA_VPS_ENDPOINT:-}}}}}"
   local -a mesh_nodes_args=()
   if [[ -z "$candidate" ]]; then
     if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
@@ -172,6 +172,7 @@ configure_client_target() {
   fi
   if [[ -z "$candidate" ]]; then
     CONFIGURED_CLIENT_ENDPOINT=""
+    echo "peer_config_node_endpoint=none"
     echo "peer_config_carrier_addr=none mode=peer_only"
     return 0
   fi
@@ -197,6 +198,7 @@ configure_client_target() {
   fi
   printf '%s\n' "$candidate" > "$ROOT_DIR/configs/chimera_runtime_endpoint.txt"
   CONFIGURED_CLIENT_ENDPOINT="$candidate"
+  echo "peer_config_node_endpoint=$candidate"
   echo "peer_config_carrier_addr=$candidate"
 }
 
@@ -221,7 +223,7 @@ configure_peer_egress_env() {
   if [[ -z "$invite_token" ]]; then
     invite_token="$(generate_runtime_token)"
   fi
-  if [[ "$mode" == "vps" && -z "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]]; then
+  if [[ "$mode" == "node" && -z "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]]; then
     peer_listen="0.0.0.0:0"
   fi
   mkdir -p "$(dirname "$PEER_EGRESS_ENV_FILE")"
@@ -255,12 +257,12 @@ configure_transparent_runtime_env() {
   local exempt_uid
   exempt_uid="$(id -u)"
   local listen="${CHIMERA_TRANSPARENT_TCP_LISTEN:-127.0.0.1:18134}"
-  local gateway_local="${CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL:-127.0.0.1:18135}"
+  local transit_local="${CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL:-${CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL:-127.0.0.1:18135}}"
   mkdir -p "$(dirname "$TRANSPARENT_RUNTIME_ENV_FILE")"
   {
     printf 'CHIMERA_TRANSPARENT_BIN=%s\n' "${CHIMERA_TRANSPARENT_BIN:-$ROOT_DIR/bin/chimera-transparent-tcp}"
     printf 'CHIMERA_TRANSPARENT_TCP_LISTEN=%s\n' "$listen"
-    printf 'CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL=%s\n' "$gateway_local"
+    printf 'CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL=%s\n' "$transit_local"
     printf 'CHIMERA_TRANSPARENT_TCP_DIRECT_MODE=%s\n' "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-auto}"
     printf 'CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS:-1200}"
     printf 'CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS:-1800}"
@@ -274,7 +276,7 @@ configure_transparent_runtime_env() {
   } >"$TRANSPARENT_RUNTIME_ENV_FILE"
   chmod 600 "$TRANSPARENT_RUNTIME_ENV_FILE"
   echo "transparent_runtime_listen=$listen"
-  echo "transparent_runtime_gateway_local=$gateway_local"
+  echo "transparent_runtime_transit_local=$transit_local"
 }
 
 SYSTEMD_USER_READY=0
@@ -289,13 +291,13 @@ run_install_permissions_preflight
 configure_client_target
 if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "vps" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
 elif [[ -n "${CONFIGURED_CLIENT_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "laptop" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "127.0.0.1:8443"
+  configure_peer_egress_env "node" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
 else
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "vps" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
 fi
 configure_transparent_runtime_env
 if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then

@@ -48,10 +48,9 @@ if [[ -f "$PATH_PROOF_JSON" ]]; then
   if command -v jq >/dev/null 2>&1; then
     jq -r '"path_proof.status=\(.status // "unknown")",
            "path_proof.reason=\(.reason // "unknown")",
-           "path_proof.listener_ok=\(.listener.ok // false)",
-           "path_proof.direct_ip=\(.observed_public_ip.direct.ip // "")",
-           "path_proof.chimera_ip=\(.observed_public_ip.chimera.ip // "")",
-           "path_proof.targets_passed=\(.totals.passed // 0)/\(.totals.targets // 0)"' "$PATH_PROOF_JSON"
+           "path_proof.mode=\(.mode // "unknown")",
+           "path_proof.direct_remote_ip=\(.direct_baseline.remote_ip // "")",
+           "path_proof.targets_passed=\(.datapath.targets_passed // 0)/\(.datapath.targets_total // 0)"' "$PATH_PROOF_JSON"
   else
     echo "path_proof.status=$(awk -F'\"' '/\"status\":/ {print $4; exit}' "$PATH_PROOF_JSON")"
     echo "path_proof.reason=$(awk -F'\"' '/\"reason\":/ {print $4; exit}' "$PATH_PROOF_JSON")"
@@ -64,10 +63,10 @@ if [[ -f "$CHANNEL_AUDIT_JSON" ]]; then
   if command -v jq >/dev/null 2>&1; then
     jq -r '"channel_audit.status=\(.status // "unknown")",
            "channel_audit.reason=\(.reason // "unknown")",
-           "channel_audit.listener=\(.chimera.proxy_listener // "unknown")",
+           "channel_audit.datapath=\(.chimera.transparent_runtime // "unknown")",
            "channel_audit.path_status=\(.path_proof.status // "unknown")",
-           "channel_audit.direct_ip=\(.path_proof.public_ip_direct // "")",
-           "channel_audit.chimera_ip=\(.path_proof.public_ip_via_chimera // "")",
+           "channel_audit.direct_remote_ip=\(.path_proof.direct_remote_ip // "")",
+           "channel_audit.datapath_mode=\(.path_proof.datapath_mode // "")",
            "channel_audit.app_routes=\(.selective_routing.app_routes_count // 0)",
            "channel_audit.service_routes=\(.selective_routing.service_routes_count // 0)",
            "channel_audit.iface_class=\(.system_default_path.iface_class // "unknown")"' "$CHANNEL_AUDIT_JSON"

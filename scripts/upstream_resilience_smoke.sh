@@ -28,7 +28,7 @@ mkdir -p "$(dirname "$OUT_FILE")"
 # Reset sticky/health and collect baseline.
 "$CONTROL" upstream-reset >/dev/null 2>&1 || true
 "$CONTROL" upstream-probe >"$TMP_LOG"
-"$CONTROL" proxy-status >>"$TMP_LOG"
+"$CONTROL" datapath-status >>"$TMP_LOG"
 
 best_endpoint="$(awk -F'endpoint=| latency_ms=' '/^upstream_best /{print $2; exit}' "$TMP_LOG")"
 best_latency_ms="$(awk -F'latency_ms=| strategy=' '/^upstream_best /{print $2; exit}' "$TMP_LOG")"
@@ -37,7 +37,7 @@ strategy="$(awk -F'=' '/^upstream_strategy=/{print $2; exit}' "$TMP_LOG")"
 pre_health_ok="$(awk -F'=' '/^upstream_health_ok=/{print $2; exit}' "$TMP_LOG")"
 pre_degrade_fails="$(awk -F'=' '/^upstream_degrade_fails=/{print $2; exit}' "$TMP_LOG")"
 
-"$CONTROL" proxy-status >"$TMP_LOG"
+"$CONTROL" datapath-status >"$TMP_LOG"
 "$CONTROL" upstream-audit 20 >>"$TMP_LOG"
 
 post_health_ok="$(awk -F'=' '/^upstream_health_ok=/{print $2; exit}' "$TMP_LOG")"
