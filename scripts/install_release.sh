@@ -27,14 +27,18 @@ download_url_to_file() {
   local url="${1:?url_required}"
   local dest="${2:?dest_required}"
   if command -v curl >/dev/null 2>&1; then
-    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      curl -fsSL --retry 3 -o "$dest" "$url"
-    return $?
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 -o "$dest" "$url"
+    then
+      return 0
+    fi
   fi
   if command -v wget >/dev/null 2>&1; then
-    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
       wget -qO "$dest" "$url"
-    return $?
+    then
+      return 0
+    fi
   fi
   echo "error: need curl or wget to download release" >&2
   return 1

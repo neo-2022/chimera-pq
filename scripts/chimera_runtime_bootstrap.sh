@@ -21,18 +21,23 @@ download_url_to_file() {
   local dest="${2:?dest_required}"
   local bootstrap_bin="${CHIMERA_BOOTSTRAP_BIN:-${ROOT_DIR}/bin/chimera-bootstrap}"
   if [[ -x "$bootstrap_bin" ]]; then
-    "$bootstrap_bin" download --url "$url" --output "$dest"
-    return $?
+    if "$bootstrap_bin" download --url "$url" --output "$dest"; then
+      return 0
+    fi
   fi
   if command -v curl >/dev/null 2>&1; then
-    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      curl -fL "$url" -o "$dest"
-    return $?
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      curl -fL --connect-timeout 10 --max-time 60 "$url" -o "$dest"
+    then
+      return 0
+    fi
   fi
   if command -v wget >/dev/null 2>&1; then
-    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
       wget -qO "$dest" "$url"
-    return $?
+    then
+      return 0
+    fi
   fi
   echo "bootstrap_error=missing_downloader_rust_helper" >&2
   return 1
