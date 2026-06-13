@@ -232,6 +232,15 @@ Peer update fallback:
   bounded operationally by a trusted peer list until signed release manifests
   are added.
 
+Start contract:
+
+- `chimera-sh -start` prepares user-cache log targets before the systemd user
+  start path, so `StandardOutput=append:%h/.cache/chimera/...` does not fail on
+  a missing log file or missing cache directory.
+- If either `chimera-gateway.service` or the transparent runtime service fails
+  its active check, `chimera-sh -start` must return non-zero and report
+  `start_status=fail` with the matching failure reason.
+
 Serving a release from an already-installed CHIMERA:
 
 ```bash

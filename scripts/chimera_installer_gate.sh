@@ -12,6 +12,26 @@ rg -n "installer_gate_prepare_upstream_env|transparent runtime|transparent runti
 
 rg -n "datapath-status|transparent_runtime|split-transparent" \
   "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_transparent_runtime"
+rg -n '^GATEWAY_LOG="\$\{GATEWAY_LOG:-\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/chimera_gateway\.service\.log\}"' \
+  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_gateway_log_not_user_cache"
+rg -n '^CLIENT_LOG="\$\{CLIENT_LOG:-\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/chimera_client\.service\.log\}"' \
+  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_client_log_not_user_cache"
+rg -n '^ensure_runtime_log_paths\(\) \{$' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation_helper"
+rg -n '^  ensure_runtime_log_paths$' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation_call"
+if rg -n '^Standard(Output|Error)=append:__CHIMERA_ROOT__' "$ROOT_DIR/deploy/systemd-user"/*.service >/dev/null; then
+  fail "systemd_unit_logs_under_release_root"
+fi
+rg -n '^StandardOutput=append:%h/\.cache/chimera/chimera_gateway\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >/dev/null || fail "gateway_unit_stdout_not_user_cache"
+rg -n '^StandardError=append:%h/\.cache/chimera/chimera_gateway\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >/dev/null || fail "gateway_unit_stderr_not_user_cache"
+rg -n '^StandardOutput=append:%h/\.cache/chimera/chimera_client\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-client.service" >/dev/null || fail "client_unit_stdout_not_user_cache"
+rg -n '^StandardError=append:%h/\.cache/chimera/chimera_client\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-client.service" >/dev/null || fail "client_unit_stderr_not_user_cache"
+rg -n 'reason=node_service_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_does_not_fail_failed_node"
+rg -n 'reason=transparent_service_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_does_not_fail_failed_transparent"
+rg -n 'ensure_runtime_log_paths' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation"
 
 rg -n '^VERSION="' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_version_metadata"
 rg -n '^ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz"' \

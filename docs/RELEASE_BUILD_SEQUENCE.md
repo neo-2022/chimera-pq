@@ -37,7 +37,13 @@ Use this sequence for every bundle or bootstrap update.
    - if no trusted update source is reachable, CHIMERA keeps the installed
      version and emits `chimera_update=unavailable`;
    - peer update evidence is not used as first-install stand proof.
-10. Smoke-test the install flow on the notebook/VPS only through the GitHub
+10. Verify the start contract before release:
+   - `chimera-sh -start` prepares user-cache log targets before the systemd
+     user start path;
+   - `chimera-sh -start` returns non-zero if either node or transparent runtime
+     service fails its active check;
+   - false `start_status=ok` is a release-blocking regression.
+11. Smoke-test the install flow on the notebook/VPS only through the GitHub
    one-command bootstrap.
    - first install must not loop on self-update
    - start/status must work

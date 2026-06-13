@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+fail() {
+  echo "chimera_start_contract_smoke: $1" >&2
+  exit 1
+}
+
+run_case() {
+  local case_name="$1"
+  local client_ready="$2"
+  local systemctl_mode="$3"
+  local tmp_dir systemctl_dir cache_dir config_dir runtime_dir client_conf output rc
+
+  tmp_dir="$(mktemp -d)"
+  systemctl_dir="$tmp_dir/bin"
+  cache_dir="$tmp_dir/cache/chimera"
+  config_dir="$tmp_dir/config/chimera"
+  runtime_dir="$tmp_dir/runtime"
+  mkdir -p "$systemctl_dir" "$cache_dir" "$config_dir" "$runtime_dir"
+
+  client_conf="$tmp_dir/client.conf"
+  if [[ "$client_ready" == "1" ]]; then
+    cat >"$client_conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 198.51.100.10:443
+carrier.server_name = gateway.local
+capture.mode = tun
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  else
+    cat >"$client_conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = gateway.local
+capture.mode = tun
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  fi
+
+  cat >"$systemctl_dir/systemctl" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+cache_root="\${XDG_CACHE_HOME:-\${HOME:-}/.cache}"
+gateway_log="\$cache_root/chimera/chimera_gateway.service.log"
+client_log="\$cache_root/chimera/chimera_client.service.log"
+mode="$systemctl_mode"
+case "\${1:-}" in
+  --user)
+    shift
+    ;;
+esac
+case "\${1:-}" in
+  show-environment|daemon-reload)
+    exit 0
+    ;;
+  start)
+    if [[ ! -f "\$gateway_log" || ! -f "\$client_log" ]]; then
+      exit 209
+    fi
+    exit 0
+    ;;
+  is-active)
+    if [[ "\$mode" == "node_fail" && "\${2:-}" == "chimera-gateway.service" ]]; then
+      exit 3
+    fi
+    if [[ "\$mode" == "client_fail" && "\${2:-}" == "chimera-client.service" ]]; then
+      exit 3
+    fi
+    exit 0
+    ;;
+  stop|list-units|list-unit-files)
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$systemctl_dir/systemctl"
+
+  set +e
+  output="$(
+    PATH="$systemctl_dir:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$config_dir" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    CLIENT_CONFIG_FILE="$client_conf" \
+    CHIMERA_AUTO_UPDATE_ENABLED=0 \
+    CHIMERA_AUTOFIX_MAX_TIME=0 \
+    bash "$ROOT_DIR/scripts/chimera-sh" -start 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -ne 0 ]] || fail "$case_name: expected non-zero exit"
+  [[ "$output" == *"start_status=fail"* ]] || fail "$case_name: missing fail status"
+  [[ "$output" != *"start_status=ok"* ]] || fail "$case_name: false ok status leaked"
+  [[ "$output" == *"systemctl_start_rc=0"* ]] || fail "$case_name: systemctl did not see prepared log targets"
+  [[ "$output" == *"reason=node_service_failed"* || "$output" == *"reason=transparent_service_failed"* ]] || fail "$case_name: missing failure reason"
+  [[ -f "$cache_dir/chimera_gateway.service.log" ]] || fail "$case_name: gateway log file missing"
+  [[ -f "$cache_dir/chimera_client.service.log" ]] || fail "$case_name: client log file missing"
+
+  rm -rf "$tmp_dir"
+}
+
+run_case "node_service_failure" "1" "node_fail"
+run_case "client_service_failure" "1" "client_fail"
+
+echo "chimera_start_contract_smoke=pass"

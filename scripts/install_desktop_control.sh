@@ -11,6 +11,7 @@ UPSTREAM_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env"
 PEER_EGRESS_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
 PEER_EGRESS_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state"
 TRANSPARENT_RUNTIME_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"
+CHIMERA_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -288,6 +289,7 @@ if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/d
 fi
 
 mkdir -p "$SYSTEMD_USER_DIR" "$APPLICATIONS_DIR"
+mkdir -p "$CHIMERA_CACHE_DIR"
 installer_gate_prepare_upstream_env
 auto_fix_runtime_permissions
 run_install_permissions_preflight
@@ -326,6 +328,11 @@ chmod +x \
   "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" \
   "$ROOT_DIR/scripts/chimera-control-tray.sh" \
   "$ROOT_DIR/scripts/chimera-control-launcher.sh"
+
+if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
+  install -d -m 0700 "$CHIMERA_CACHE_DIR"
+  touch "$CHIMERA_CACHE_DIR/chimera_gateway.service.log" "$CHIMERA_CACHE_DIR/chimera_client.service.log"
+fi
 
 if [[ -n "${CHIMERA_RELEASE_VERSION:-}" ]]; then
   printf '%s\n' "$CHIMERA_RELEASE_VERSION" > "$ROOT_DIR/.chimera_release_version"

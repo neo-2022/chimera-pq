@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 STATE_FILE="${STATE_FILE:-$ROOT_DIR/docs/runtime_state_latest.json}"
-GATEWAY_LOG="${GATEWAY_LOG:-$ROOT_DIR/docs/chimera_gateway.service.log}"
-CLIENT_LOG="${CLIENT_LOG:-$ROOT_DIR/docs/chimera_client.service.log}"
+GATEWAY_LOG="${GATEWAY_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_gateway.service.log}"
+CLIENT_LOG="${CLIENT_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_client.service.log}"
 UI_MODE_FILE="${UI_MODE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/ui_mode}"
 UPSTREAM_ENV_FILE="${UPSTREAM_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env}"
 CHIMERA_PROTECTED_PORTS_CSV="${CHIMERA_PROTECTED_PORTS_CSV:-11080,22180}"
@@ -339,6 +339,15 @@ require_cmd() {
 
 ensure_base_path() {
   export PATH="$HOME/.local/bin:$PATH"
+}
+
+ensure_runtime_log_paths() {
+  local gateway_log="${GATEWAY_LOG:-}"
+  local client_log="${CLIENT_LOG:-}"
+  local state_log="${AUTOFIX_LOG_FILE:-}"
+  [[ -n "$gateway_log" ]] && ensure_parent_dir "$gateway_log" && touch "$gateway_log"
+  [[ -n "$client_log" ]] && ensure_parent_dir "$client_log" && touch "$client_log"
+  [[ -n "$state_log" ]] && ensure_parent_dir "$state_log" && touch "$state_log"
 }
 
 client_config_path() {
@@ -1589,13 +1598,15 @@ doctor_run() {
 
 start_runtime() {
   ensure_base_path
+  ensure_runtime_log_paths
   ensure_upstream_env_bootstrapped
   if [[ -x "$RUNTIME_BOOTSTRAP_SCRIPT" ]]; then
     "$RUNTIME_BOOTSTRAP_SCRIPT" ensure-singbox >/dev/null 2>&1 || true
   fi
   if systemd_user_ready; then
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    systemctl --user start chimera-gateway.service >/dev/null 2>&1 || true
+    local systemd_start_rc=0
+    systemctl --user start chimera-gateway.service >/dev/null 2>&1 || systemd_start_rc=$?
     local node_state node_runtime node_status
     node_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
     if [[ "$node_state" == "active" ]]; then
@@ -1605,11 +1616,26 @@ start_runtime() {
       node_runtime="stopped"
       node_status="failed"
     fi
+    if [[ "$node_status" != "started" ]]; then
+      echo "start_status=fail mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=stopped reason=node_service_failed systemctl_start_rc=$systemd_start_rc"
+      return 1
+    fi
     if client_config_ready; then
-      systemctl --user start chimera-client.service >/dev/null 2>&1 || true
-      local transparent_state transparent_runtime
+      local transparent_start_rc=0
+      systemctl --user start chimera-client.service >/dev/null 2>&1 || transparent_start_rc=$?
+      local transparent_state transparent_runtime transparent_status
       transparent_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
-      transparent_runtime="$([[ "$transparent_state" == "active" ]] && echo running || echo stopped)"
+      if [[ "$transparent_state" == "active" ]]; then
+        transparent_runtime="running"
+        transparent_status="started"
+      else
+        transparent_runtime="stopped"
+        transparent_status="failed"
+      fi
+      if [[ "$transparent_status" != "started" ]]; then
+        echo "start_status=fail mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=$transparent_runtime reason=transparent_service_failed systemctl_start_rc=$transparent_start_rc"
+        return 1
+      fi
       site_auto_watch_start >/dev/null 2>&1 || true
       echo "start_status=ok mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=$transparent_runtime"
     else
@@ -1669,6 +1695,14 @@ start_runtime() {
     site_auto_watch_start >/dev/null 2>&1 || true
   else
     site_auto_watch_stop >/dev/null 2>&1 || true
+  fi
+  if [[ "$gateway_status" != "started" ]]; then
+    echo "start_status=fail mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status reason=node_service_failed"
+    return 1
+  fi
+  if client_config_ready && [[ "$client_status" != "started" ]]; then
+    echo "start_status=fail mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status reason=transparent_service_failed"
+    return 1
   fi
   if client_config_ready; then
     echo "start_status=ok mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status"
