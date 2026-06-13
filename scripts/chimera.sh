@@ -79,10 +79,12 @@ install_release_archive() {
   local local_bin="${CHIMERA_LOCAL_BIN:-$HOME/.local/bin}"
   local extract_parent
   local extract_tmp
+  local cleanup_extract_tmp
   extract_parent="$(dirname "$chimera_home")"
 
   extract_tmp="$(mktemp -d)"
-  trap 'rm -rf "$extract_tmp"' RETURN
+  cleanup_extract_tmp="$(printf '%q' "$extract_tmp")"
+  trap "rm -rf -- ${cleanup_extract_tmp}" RETURN
   tar -xzf "$archive" -C "$extract_tmp"
   if [[ ! -d "$extract_tmp/chimera-release" ]]; then
     echo "error: release archive did not contain chimera-release/" >&2
@@ -112,6 +114,7 @@ bootstrap_install_from_github() {
   local archive_url="${CHIMERA_RELEASE_ARCHIVE_URL:-$ARCHIVE_URL_DEFAULT}"
   local checksum_url="${CHIMERA_RELEASE_CHECKSUM_URL:-$CHECKSUM_URL_DEFAULT}"
   local tmp_dir archive checksum
+  local cleanup_tmp_dir
 
   command -v tar >/dev/null 2>&1 || {
     echo "error: missing required command: tar" >&2
@@ -119,9 +122,10 @@ bootstrap_install_from_github() {
   }
 
   tmp_dir="$(mktemp -d)"
+  cleanup_tmp_dir="$(printf '%q' "$tmp_dir")"
   archive="$tmp_dir/chimera-pq-release.tar.gz"
   checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
-  trap 'rm -rf "$tmp_dir"' RETURN
+  trap "rm -rf -- ${cleanup_tmp_dir}" RETURN
 
   echo "chimera_bootstrap=download archive=$archive_url"
   download_url_to_file "$archive_url" "$archive"

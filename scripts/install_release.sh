@@ -81,10 +81,12 @@ install_from_archive() {
   local archive="${1:?archive_required}"
   local checksum
   local extract_tmp
+  local cleanup_extract_tmp
   checksum="$(resolve_checksum_source "$archive" "${2:-}")"
   verify_checksum_required "$archive" "$checksum"
   extract_tmp="$(mktemp -d)"
-  trap 'rm -rf "$extract_tmp"' RETURN
+  cleanup_extract_tmp="$(printf '%q' "$extract_tmp")"
+  trap "rm -rf -- ${cleanup_extract_tmp}" RETURN
   tar -xzf "$archive" -C "$extract_tmp"
   if [[ ! -d "$extract_tmp/chimera-release" ]]; then
     echo "error: release archive did not contain chimera-release/" >&2
