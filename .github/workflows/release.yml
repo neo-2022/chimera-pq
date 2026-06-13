@@ -62,6 +62,9 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Release Gate Tools
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Installer Contract Gate
         run: bash scripts/chimera_installer_gate.sh
 
