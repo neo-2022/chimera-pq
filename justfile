@@ -292,13 +292,13 @@ runtime-apply-dns-smoke:
     printf '%s\n' '# smoketest' 'nameserver 8.8.8.8' > /tmp/chimera_resolv_smoke.conf
     CHIMERA_GATEWAY_IDLE_EXIT_MS=6000 cargo run -q -p chimera-gateway -- run --config /tmp/chimera_gateway_smoke.conf > /tmp/chimera_gateway_smoke.log 2>&1 &
     sleep 0.5
-    cargo run -q -p chimera-cli -- up --state-file /tmp/chimera_runtime_apply_state.json --config /tmp/chimera_client_smoke.conf --apply-dns true --dns-server 9.9.9.9 --resolv-conf /tmp/chimera_resolv_smoke.conf
+    cargo run -q -p chimera-cli -- up --state-file /tmp/chimera_runtime_apply_state.json --config /tmp/chimera_client_smoke.conf --skip-connect-check true --apply-dns true --dns-server 9.9.9.9 --resolv-conf /tmp/chimera_resolv_smoke.conf
     rg -q '"network_state":"modified"' /tmp/chimera_runtime_apply_state.json
     rg -q 'nameserver 9.9.9.9' /tmp/chimera_resolv_smoke.conf
     cargo run -q -p chimera-cli -- down --state-file /tmp/chimera_runtime_apply_state.json
     rg -q 'nameserver 8.8.8.8' /tmp/chimera_resolv_smoke.conf
     test ! -f /tmp/chimera_runtime_apply_state.json
-    printf '%s\n' '{"status":"ok","kind":"runtime_apply_dns_smoke","message_en":"Runtime apply DNS smoke passed.","message_ru":"Smoke-проверка runtime apply DNS пройдена.","network_state":"modified","rollback_ok":true}' > docs/RUNTIME_APPLY_DNS_SMOKE.json
+    printf '%s\n' '{"status":"ok","kind":"runtime_apply_dns_smoke","message_en":"Runtime apply DNS smoke passed.","message_ru":"Smoke-проверка runtime apply DNS пройдена.","network_state":"modified","rollback_ok":true,"connect_check_skipped":true,"scope":"dns_apply_rollback_only"}' > docs/RUNTIME_APPLY_DNS_SMOKE.json
 
 runtime-apply-route-smoke:
     bash scripts/runtime_apply_route_smoke.sh
