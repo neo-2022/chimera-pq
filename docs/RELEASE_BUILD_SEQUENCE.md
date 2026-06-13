@@ -29,7 +29,15 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera.sh`
    - `chimera-pq-release.tar.gz`
    - `chimera-pq-release.tar.gz.sha256`
-9. Smoke-test the install flow on the notebook/VPS only through the GitHub
+9. Verify the peer-update fallback contract remains update-only:
+   - `chimera-sh` checks GitHub Latest first;
+   - configured peer bootstrap URLs are tried only as fallback for already
+     installed CHIMERA;
+   - the peer path still verifies the release checksum before extraction;
+   - if no trusted update source is reachable, CHIMERA keeps the installed
+     version and emits `chimera_update=unavailable`;
+   - peer update evidence is not used as first-install stand proof.
+10. Smoke-test the install flow on the notebook/VPS only through the GitHub
    one-command bootstrap.
    - first install must not loop on self-update
    - start/status must work
@@ -43,3 +51,4 @@ Non-goals:
 - do not use `rsync`, `scp`, local tarballs, `git clone`, `cargo build`, or
   `cargo run` as laptop/VPS stand install proof
 - do not extract any release archive before its checksum is verified
+- do not treat peer-update fallback as GitHub first-install proof

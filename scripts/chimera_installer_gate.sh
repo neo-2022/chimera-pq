@@ -23,6 +23,11 @@ rg -n 'CHIMERA_RELEASE_BUNDLE_SHA256=' "$ROOT_DIR/scripts/chimera.sh" >/dev/null
 rg -n 'https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh' \
   "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_update_url_not_latest_chimera_pq"
 rg -n 'auto_update_if_needed "\$cmd" "\$\{@:2\}"' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_update_first_for_mesh_or_connect"
+rg -n 'CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_peer_update_bootstrap_urls"
+rg -n 'UPDATE_PEER_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_peer_update_bootstrap_url_file"
+rg -n 'try_update_from_bootstrap_source "peer"' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_peer_update_fallback"
+rg -n 'remote_archive_sha256 "\$remote_archive_url" "\$remote_checksum_url"' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_peer_update_checksum_not_bound"
+rg -n 'reason=update_sources_unreachable' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_update_source_unavailable_diagnostic"
 rg -n 'LATEST_ARCHIVE_NAME="chimera-pq-release\.tar\.gz"' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_stable_latest_archive"
 rg -n 'cargo build --release' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_binary_build_step"
 rg -n 'target/release/chimera-cli' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_ready_binary_copy"

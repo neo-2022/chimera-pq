@@ -208,6 +208,46 @@ installer. Installed `chimera-sh -start`, `chimera-sh -restart`,
 `chimera-sh -mesh ...`, and `chimera-sh -connect ...` must perform the
 update-first check before starting or connecting.
 
+Peer update fallback:
+
+- GitHub Release/Latest remains the primary source for first install and stand
+  proof.
+- If GitHub is unavailable during `start`, `restart`, `mesh`, or `connect`,
+  an already-installed CHIMERA can try trusted peer bootstrap URLs from:
+  - `CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS`
+  - `${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_peer_bootstrap_urls.list`
+- Each peer entry may be the peer base URL, `/metadata.json`, `/chimera.sh`,
+  `/chimera-pq-release.tar.gz`, or `/chimera-pq-release.tar.gz.sha256`;
+  the launcher normalizes it to `/chimera.sh`.
+- A peer source is used only if its bootstrap metadata reports a newer version.
+  The update still downloads the archive and checksum, verifies checksum before
+  extraction, writes installed version/checksum metadata, and re-runs the
+  original command after install.
+- If GitHub and all trusted peers are unreachable, CHIMERA keeps the installed
+  version and emits `chimera_update=unavailable`; network outage alone is not
+  a release block.
+- Peer update is update-only fallback. It is not acceptable evidence for the
+  GitHub one-command first-install stand proof.
+- Checksum verification gives bundle integrity. Peer-source provenance must be
+  bounded operationally by a trusted peer list until signed release manifests
+  are added.
+
+Serving a release from an already-installed CHIMERA:
+
+```bash
+chimera-bootstrap serve-release \
+  --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" \
+  --listen 0.0.0.0:18179 \
+  --base-url http://node.example:18179
+```
+
+The peer server exposes:
+
+- `/metadata.json`
+- `/chimera.sh`
+- `/chimera-pq-release.tar.gz`
+- `/chimera-pq-release.tar.gz.sha256`
+
 The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `vps`,
 and `laptop` remain compatibility labels only.
 

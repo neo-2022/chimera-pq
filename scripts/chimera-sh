@@ -18,6 +18,7 @@ CONTROL="$ROOT_DIR/scripts/chimera-control.sh"
 INSTALLER="$ROOT_DIR/scripts/install_desktop_control.sh"
 AUTO_UPDATE_ENABLED="${CHIMERA_AUTO_UPDATE_ENABLED:-1}"
 UPDATE_BOOTSTRAP_URL="${CHIMERA_UPDATE_BOOTSTRAP_URL:-https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh}"
+UPDATE_PEER_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_peer_bootstrap_urls.list}"
 RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
 RUNTIME_BUNDLE_SHA_FILE="$ROOT_DIR/.chimera_release_bundle.sha256"
 INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
@@ -129,31 +130,187 @@ read_local_install_role() {
   echo "${CHIMERA_INSTALL_NODE_ROLE:-node}"
 }
 
+trim_ascii() {
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+split_update_candidates() {
+  local raw="${1:-}"
+  raw="${raw//$'\r'/ }"
+  raw="${raw//$'\n'/ }"
+  raw="${raw//,/ }"
+  local candidate
+  for candidate in $raw; do
+    candidate="$(trim_ascii "$candidate")"
+    [[ -n "$candidate" ]] || continue
+    printf '%s\n' "$candidate"
+  done
+}
+
+validate_update_bootstrap_url() {
+  local url="${1:-}"
+  if [[ -z "$url" || ( "$url" != http://* && "$url" != https://* ) ]]; then
+    return 1
+  fi
+  if [[ "$url" == *'"'* || "$url" == *"'"* || "$url" == *$'\r'* || "$url" == *$'\n'* ]]; then
+    return 1
+  fi
+  return 0
+}
+
+normalize_update_bootstrap_url() {
+  local candidate="${1:-}"
+  candidate="$(trim_ascii "$candidate")"
+  candidate="${candidate%/}"
+  case "$candidate" in
+    */chimera.sh)
+      ;;
+    */metadata.json)
+      candidate="${candidate%/metadata.json}/chimera.sh"
+      ;;
+    */chimera-pq-release.tar.gz)
+      candidate="${candidate%/chimera-pq-release.tar.gz}/chimera.sh"
+      ;;
+    */chimera-pq-release.tar.gz.sha256)
+      candidate="${candidate%/chimera-pq-release.tar.gz.sha256}/chimera.sh"
+      ;;
+    *)
+      candidate="${candidate}/chimera.sh"
+      ;;
+  esac
+  validate_update_bootstrap_url "$candidate" || return 1
+  printf '%s\n' "$candidate"
+}
+
+cache_buster_url() {
+  local url="${1:?url_required}"
+  local stamp="ts=$(date +%s)"
+  if [[ "$url" == *"?"* ]]; then
+    printf '%s&%s\n' "$url" "$stamp"
+  else
+    printf '%s?%s\n' "$url" "$stamp"
+  fi
+}
+
+download_url_to_file() {
+  local url="${1:?url_required}"
+  local dest="${2:?dest_required}"
+  local bootstrap_bin="${CHIMERA_BOOTSTRAP_BIN:-${ROOT_DIR}/bin/chimera-bootstrap}"
+  if [[ -x "$bootstrap_bin" ]]; then
+    if "$bootstrap_bin" download --url "$url" --output "$dest"; then
+      return 0
+    fi
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 "$url" -o "$dest"
+    then
+      return 0
+    fi
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      wget -qO "$dest" "$url"
+    then
+      return 0
+    fi
+  fi
+  echo "error: missing downloader: Rust bootstrap helper, curl, or wget" >&2
+  return 1
+}
+
+load_update_peer_bootstrap_urls() {
+  if [[ -n "${CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS:-}" ]]; then
+    split_update_candidates "$CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS"
+  fi
+  if [[ -f "$UPDATE_PEER_BOOTSTRAP_URLS_FILE" ]]; then
+    while IFS= read -r line; do
+      line="${line%%#*}"
+      split_update_candidates "$line"
+    done < "$UPDATE_PEER_BOOTSTRAP_URLS_FILE"
+  fi
+}
+
 parse_release_metadata() {
   local script_file="${1:?script_file_required}"
-  local release_version archive_url
+  local release_version archive_url checksum_url
   release_version="$(grep -m1 '^VERSION="' "$script_file" | cut -d'"' -f2 | tr -d '[:space:]')"
   archive_url="$(grep -m1 '^ARCHIVE_URL_DEFAULT="' "$script_file" | cut -d'"' -f2 | tr -d '[:space:]')"
-  [[ -n "$release_version" && -n "$archive_url" ]] || return 1
-  printf '%s\n%s\n' "$release_version" "$archive_url"
+  checksum_url="$(grep -m1 '^CHECKSUM_URL_DEFAULT="' "$script_file" | cut -d'"' -f2 | tr -d '[:space:]')"
+  [[ -n "$release_version" && -n "$archive_url" && -n "$checksum_url" ]] || return 1
+  printf '%s\n%s\n%s\n' "$release_version" "$archive_url" "$checksum_url"
 }
 
 remote_archive_sha256() {
   local archive_url="${1:?archive_url_required}"
-  local checksum_url tmp_checksum expected
-  checksum_url="${archive_url}.sha256"
-  if [[ "$checksum_url" == *"raw.githubusercontent.com"* ]] && [[ "$checksum_url" != *"?"* ]]; then
-    checksum_url="${checksum_url}?ts=$(date +%s)"
-  fi
+  local checksum_url="${2:-${archive_url}.sha256}" tmp_checksum expected
   tmp_checksum="$(mktemp)"
-  if ! download_url_to_file "$checksum_url" "$tmp_checksum" 2>/dev/null; then
+  if ! download_url_to_file "$(cache_buster_url "$checksum_url")" "$tmp_checksum" 2>/dev/null; then
     rm -f "$tmp_checksum"
     return 1
   fi
   expected="$(awk '{print $1}' "$tmp_checksum" | tr -d '[:space:]')"
   rm -f "$tmp_checksum"
-  [[ -n "$expected" ]] || return 1
+  [[ -n "$expected" && ${#expected} -eq 64 && "$expected" =~ ^[[:xdigit:]]+$ ]] || return 1
   printf '%s\n' "$expected"
+}
+
+try_update_from_bootstrap_source() {
+  local source_name="${1:?source_name_required}"
+  local bootstrap_url="${2:?bootstrap_url_required}"
+  local local_version="${3:?local_version_required}"
+  local local_sha="${4:-}"
+  shift 4 || true
+  local -a original_args=("$@")
+  local release_meta_output=""
+  local -a release_meta=()
+  local tmp_script remote_version remote_archive_url remote_checksum_url remote_sha install_role
+
+  tmp_script="$(mktemp)"
+  if ! download_url_to_file "$(cache_buster_url "$bootstrap_url")" "$tmp_script" 2>/dev/null; then
+    rm -f "$tmp_script"
+    return 2
+  fi
+
+  if ! release_meta_output="$(parse_release_metadata "$tmp_script")"; then
+    rm -f "$tmp_script"
+    return 2
+  fi
+  mapfile -t release_meta <<<"$release_meta_output"
+  remote_version="${release_meta[0]:-}"
+  remote_archive_url="${release_meta[1]:-}"
+  remote_checksum_url="${release_meta[2]:-}"
+  if [[ -z "$remote_version" || -z "$remote_archive_url" || -z "$remote_checksum_url" ]]; then
+    rm -f "$tmp_script"
+    return 2
+  fi
+
+  remote_sha="$(remote_archive_sha256 "$remote_archive_url" "$remote_checksum_url" || true)"
+  if [[ -z "$remote_sha" ]]; then
+    rm -f "$tmp_script"
+    return 2
+  fi
+
+  if ! is_remote_newer "$local_version" "$remote_version"; then
+    if [[ "$local_version" == "$remote_version" && -n "$local_sha" && "$local_sha" != "$remote_sha" ]]; then
+      echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=$local_sha latest_sha=$remote_sha action=hold" >&2
+    fi
+    rm -f "$tmp_script"
+    return 0
+  fi
+
+  echo "chimera_update=available source=$source_name current_version=$local_version latest_version=$remote_version current_sha=${local_sha:-none} latest_sha=$remote_sha action=install"
+  install_role="$(read_local_install_role)"
+  if CHIMERA_INSTALL_NODE_ROLE="$install_role" bash "$tmp_script" -install; then
+    rm -f "$tmp_script"
+    exec "$0" "${original_args[@]}"
+  fi
+
+  rm -f "$tmp_script"
+  return 3
 }
 
 auto_update_if_needed() {
@@ -168,75 +325,55 @@ auto_update_if_needed() {
     return 0
   fi
 
-  download_url_to_file() {
-    local url="${1:?url_required}"
-    local dest="${2:?dest_required}"
-    local bootstrap_bin="${CHIMERA_BOOTSTRAP_BIN:-${ROOT_DIR}/bin/chimera-bootstrap}"
-    if [[ -x "$bootstrap_bin" ]]; then
-      if "$bootstrap_bin" download --url "$url" --output "$dest"; then
-        return 0
-      fi
-    fi
-    if command -v curl >/dev/null 2>&1; then
-      if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-        curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 "$url" -o "$dest"
-      then
-        return 0
-      fi
-    fi
-    if command -v wget >/dev/null 2>&1; then
-      if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-        wget -qO "$dest" "$url"
-      then
-        return 0
-      fi
-    fi
-    echo "error: missing downloader: Rust bootstrap helper, curl, or wget" >&2
-    return 1
-  }
+  local update_rc peer_bootstrap_url normalized_peer_url update_failed=0 update_source_unavailable=0
 
-  local tmp_script=""
-  tmp_script="$(mktemp)"
-
-  if ! download_url_to_file "${UPDATE_BOOTSTRAP_URL}?ts=$(date +%s)" "$tmp_script" 2>/dev/null; then
-    rm -f "$tmp_script"
+  if try_update_from_bootstrap_source "github" "$UPDATE_BOOTSTRAP_URL" "$local_version" "$local_sha" "${original_args[@]}"; then
     return 0
+  else
+    update_rc=$?
+  fi
+  case "$update_rc" in
+    0)
+      return 0
+      ;;
+    2)
+      update_source_unavailable=1
+      ;;
+    3)
+      update_failed=1
+      ;;
+  esac
+
+  while IFS= read -r peer_bootstrap_url; do
+    normalized_peer_url="$(normalize_update_bootstrap_url "$peer_bootstrap_url" || true)"
+    [[ -n "$normalized_peer_url" ]] || continue
+    if try_update_from_bootstrap_source "peer" "$normalized_peer_url" "$local_version" "$local_sha" "${original_args[@]}"; then
+      return 0
+    else
+      update_rc=$?
+    fi
+    case "$update_rc" in
+      0)
+        return 0
+        ;;
+      2)
+        update_source_unavailable=1
+        ;;
+      3)
+        update_failed=1
+        ;;
+    esac
+  done < <(load_update_peer_bootstrap_urls)
+
+  if [[ "$update_failed" -ne 0 ]]; then
+    return 1
   fi
 
-  local remote_version remote_archive_url local_version local_sha remote_sha
-  local -a release_meta=()
-  mapfile -t release_meta < <(parse_release_metadata "$tmp_script") || {
-    rm -f "$tmp_script"
-    return 1
-  }
-  remote_version="${release_meta[0]:-}"
-  remote_archive_url="${release_meta[1]:-}"
-  if [[ -z "$remote_version" || -z "$remote_archive_url" ]]; then
-    rm -f "$tmp_script"
-    return 1
-  fi
-  local_version="$(read_local_runtime_version)"
-  if [[ -z "$local_version" || "$local_version" == "0.0.0" ]]; then
-    rm -f "$tmp_script"
-    return 0
+  if [[ "$update_source_unavailable" -ne 0 ]]; then
+    echo "chimera_update=unavailable current_version=$local_version action=continue reason=update_sources_unreachable" >&2
   fi
 
-  local_sha="$(read_local_runtime_bundle_sha)"
-  remote_sha="$(remote_archive_sha256 "$remote_archive_url" || true)"
-  if [[ -z "$remote_sha" ]]; then
-    rm -f "$tmp_script"
-    return 1
-  fi
-
-  if [[ "$local_version" != "$remote_version" || "$local_sha" != "$remote_sha" ]]; then
-    echo "chimera_update=available current_version=$local_version latest_version=$remote_version current_sha=${local_sha:-none} latest_sha=$remote_sha action=install"
-    local install_role
-    install_role="$(read_local_install_role)"
-    CHIMERA_INSTALL_NODE_ROLE="$install_role" bash "$tmp_script" -install
-    rm -f "$tmp_script"
-    exec "$0" "${original_args[@]}"
-  fi
-  rm -f "$tmp_script"
+  return 0
 }
 
 main() {
@@ -352,4 +489,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

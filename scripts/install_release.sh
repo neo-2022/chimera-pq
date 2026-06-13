@@ -8,6 +8,8 @@ DEFAULT_RELEASE_URL="https://github.com/neo-2022/chimera-pq/releases/latest/down
 BUNDLE_SOURCE="${1:-${CHIMERA_RELEASE_ARCHIVE_URL:-$DEFAULT_RELEASE_URL}}"
 CHECKSUM_SOURCE="${2:-${CHIMERA_RELEASE_CHECKSUM_FILE:-}}"
 ALLOW_LOCAL_SOURCE="${CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE:-0}"
+RELEASE_VERSION_FILE=".chimera_release_version"
+RELEASE_BUNDLE_SHA_FILE=".chimera_release_bundle.sha256"
 
 sha256_file() {
   local file="${1:?file_required}"
@@ -95,6 +97,9 @@ install_from_archive() {
   rm -rf "$CHIMERA_HOME"
   mkdir -p "$(dirname "$CHIMERA_HOME")"
   mv "$extract_tmp/chimera-release" "$CHIMERA_HOME"
+  mkdir -p "$CHIMERA_HOME/releases"
+  cp -f "$archive" "$CHIMERA_HOME/releases/chimera-pq-release.tar.gz"
+  cp -f "$checksum" "$CHIMERA_HOME/releases/chimera-pq-release.tar.gz.sha256"
 }
 
 require_local_source_opt_in() {
@@ -143,6 +148,7 @@ fi
 
 chmod +x "${CHIMERA_HOME}/bin/"*
 chmod +x "${CHIMERA_HOME}/scripts/"*.sh
+chmod +x "${CHIMERA_HOME}/bin/chimera-bootstrap" 2>/dev/null || true
 
 echo "install: running desktop control setup"
 CHIMERA_RELEASE_VERSION="$(cat "${CHIMERA_HOME}/.chimera_release_version" 2>/dev/null || true)"
