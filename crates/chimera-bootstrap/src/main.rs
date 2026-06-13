@@ -6,12 +6,19 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
 use tar::Archive;
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const RELEASE_ARCHIVE_NAME: &str = "chimera-pq-release.tar.gz";
 const RELEASE_CHECKSUM_NAME: &str = "chimera-pq-release.tar.gz.sha256";
+const PEER_UPDATE_IO_TIMEOUT: Duration = Duration::from_secs(5);
+const PEER_UPDATE_HEADER_TIMEOUT: Duration = Duration::from_secs(10);
+const PEER_UPDATE_MAX_ACTIVE_CONNECTIONS: usize = 32;
 
 fn main() {
     if let Err(err) = run() {
@@ -204,20 +211,74 @@ fn serve_release(root: &Path, listen: &str, public_base_url: Option<&str>) -> Re
         "chimera_peer_update_serve=ready listen={} version={} sha256={}",
         listen, version, checksum
     );
+    let root = Arc::new(root.to_path_buf());
+    let listen = listen.to_string();
+    let public_base_url = public_base_url.map(str::to_string);
+    let active_connections = Arc::new(AtomicUsize::new(0));
     for incoming in listener.incoming() {
         match incoming {
-            Ok(mut stream) => {
-                if let Err(error) =
-                    handle_release_request(&mut stream, root, listen, public_base_url)
-                {
-                    eprintln!("chimera_peer_update_request=fail reason={error}");
+            Ok(stream) => {
+                if !try_acquire_peer_update_slot(&active_connections) {
+                    eprintln!(
+                        "chimera_peer_update_request=reject reason=too_many_active_connections"
+                    );
+                    drop(stream);
+                    continue;
                 }
+                let root = Arc::clone(&root);
+                let listen = listen.clone();
+                let public_base_url = public_base_url.clone();
+                let active_connections = Arc::clone(&active_connections);
+                thread::spawn(move || {
+                    let _slot = PeerUpdateConnectionSlot::new(active_connections);
+                    let mut stream = stream;
+                    if let Err(error) = prepare_peer_update_stream(&stream).and_then(|_| {
+                        handle_release_request(
+                            &mut stream,
+                            root.as_path(),
+                            &listen,
+                            public_base_url.as_deref(),
+                        )
+                    }) {
+                        eprintln!("chimera_peer_update_request=fail reason={error}");
+                    }
+                });
             }
             Err(error) => {
                 eprintln!("chimera_peer_update_accept=fail reason={error}");
             }
         }
     }
+    Ok(())
+}
+
+fn try_acquire_peer_update_slot(active_connections: &AtomicUsize) -> bool {
+    active_connections
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            (current < PEER_UPDATE_MAX_ACTIVE_CONNECTIONS).then_some(current + 1)
+        })
+        .is_ok()
+}
+
+struct PeerUpdateConnectionSlot {
+    active_connections: Arc<AtomicUsize>,
+}
+
+impl PeerUpdateConnectionSlot {
+    fn new(active_connections: Arc<AtomicUsize>) -> Self {
+        Self { active_connections }
+    }
+}
+
+impl Drop for PeerUpdateConnectionSlot {
+    fn drop(&mut self) {
+        self.active_connections.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+fn prepare_peer_update_stream(stream: &TcpStream) -> Result<()> {
+    stream.set_read_timeout(Some(PEER_UPDATE_IO_TIMEOUT))?;
+    stream.set_write_timeout(Some(PEER_UPDATE_IO_TIMEOUT))?;
     Ok(())
 }
 
@@ -303,9 +364,13 @@ fn handle_release_request(
 }
 
 fn read_http_request(stream: &mut TcpStream) -> Result<String> {
+    let started = Instant::now();
     let mut request = Vec::new();
     let mut chunk = [0_u8; 1024];
     loop {
+        if started.elapsed() > PEER_UPDATE_HEADER_TIMEOUT {
+            return Err("HTTP request header timed out".into());
+        }
         let read = stream.read(&mut chunk)?;
         if read == 0 {
             break;
@@ -575,8 +640,12 @@ fn strip_path_components(path: &Path, strip_components: usize) -> Result<PathBuf
 mod tests {
     use super::{generate_peer_bootstrap_script, read_release_checksum, render_metadata_json};
     use std::fs;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::time::{Duration, Instant};
 
-    type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
     fn fixture_root() -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
         let root = super::temp_dir("chimera-bootstrap-test")?;
@@ -597,6 +666,44 @@ mod tests {
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef  chimera-pq-release.tar.gz\n",
         )?;
         Ok(root)
+    }
+
+    fn fixture_server_addr() -> TestResult<(std::path::PathBuf, String, thread::JoinHandle<()>)> {
+        let root = fixture_root()?;
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?.to_string();
+        drop(listener);
+        let server_root = root.clone();
+        let server_addr = addr.clone();
+        let handle = thread::spawn(move || {
+            let _ = super::serve_release(&server_root, &server_addr, None);
+        });
+        wait_for_server(&addr)?;
+        Ok((root, addr, handle))
+    }
+
+    fn wait_for_server(addr: &str) -> TestResult {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if TcpStream::connect(addr).is_ok() {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        Err("server did not start".into())
+    }
+
+    fn get_path(addr: &str, path: &str) -> TestResult<String> {
+        let mut stream = TcpStream::connect(addr)?;
+        stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+        write!(
+            stream,
+            "GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"
+        )?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response)?;
+        Ok(response)
     }
 
     #[test]
@@ -636,6 +743,37 @@ mod tests {
             "\n",
         )?;
         assert!(read_release_checksum(&root).is_err());
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn peer_release_idle_tcp_client_does_not_block_metadata() -> TestResult {
+        let (root, addr, _server) = fixture_server_addr()?;
+        let idle = TcpStream::connect(&addr)?;
+        idle.set_read_timeout(Some(Duration::from_millis(200)))?;
+
+        let response = get_path(&addr, "/metadata.json")?;
+
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+        assert!(response.contains("\"kind\":\"chimera_peer_update_metadata\""));
+        drop(idle);
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn peer_release_partial_header_client_does_not_block_health() -> TestResult {
+        let (root, addr, _server) = fixture_server_addr()?;
+        let mut slow = TcpStream::connect(&addr)?;
+        slow.set_write_timeout(Some(Duration::from_secs(1)))?;
+        slow.write_all(b"GET /metadata.json HTTP/1.1\r\nHost: ")?;
+
+        let response = get_path(&addr, "/health")?;
+
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+        assert!(response.contains("status=ok version=1.2.3"));
+        drop(slow);
         fs::remove_dir_all(root)?;
         Ok(())
     }
