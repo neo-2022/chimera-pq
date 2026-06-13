@@ -44,13 +44,15 @@ rekey.max_packets_per_key = 10000
 EOF
   fi
 
-  cat >"$systemctl_dir/systemctl" <<EOF
+  cat >"$systemctl_dir/systemctl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-cache_root="\${XDG_CACHE_HOME:-\${HOME:-}/.cache}"
-gateway_log="\$cache_root/chimera/chimera_gateway.service.log"
-client_log="\$cache_root/chimera/chimera_client.service.log"
-mode="$systemctl_mode"
+cache_root="${XDG_CACHE_HOME:-${HOME:-}/.cache}"
+gateway_log="$cache_root/chimera/chimera_gateway.service.log"
+client_log="$cache_root/chimera/chimera_client.service.log"
+mode="__MODE__"
+count_dir="${TMPDIR:-/tmp}/chimera-start-contract-counts"
+mkdir -p "$count_dir"
 case "\${1:-}" in
   --user)
     shift
@@ -67,10 +69,28 @@ case "\${1:-}" in
     exit 0
     ;;
   is-active)
-    if [[ "\$mode" == "node_fail" && "\${2:-}" == "chimera-gateway.service" ]]; then
+    local_unit="${2:-}"
+    case "\$mode" in
+      node_flap)
+        if [[ "$local_unit" == "chimera-gateway.service" ]]; then
+          count_file="$count_dir/node_flap.count"
+          count="0"
+          if [[ -f "$count_file" ]]; then
+            read -r count <"$count_file" 2>/dev/null || count="0"
+          fi
+          count=$((count + 1))
+          printf '%s\n' "$count" >"$count_file"
+          if (( count <= 2 )); then
+            exit 0
+          fi
+          exit 3
+        fi
+        ;;
+    esac
+    if [[ "$mode" == "node_fail" && "${2:-}" == "chimera-gateway.service" ]]; then
       exit 3
     fi
-    if [[ "\$mode" == "client_fail" && "\${2:-}" == "chimera-client.service" ]]; then
+    if [[ "$mode" == "client_fail" && "${2:-}" == "chimera-client.service" ]]; then
       exit 3
     fi
     exit 0
@@ -83,6 +103,7 @@ case "\${1:-}" in
     ;;
 esac
 EOF
+  sed -i "s|__MODE__|$systemctl_mode|g" "$systemctl_dir/systemctl"
   chmod +x "$systemctl_dir/systemctl"
 
   set +e
@@ -112,6 +133,7 @@ EOF
 }
 
 run_case "node_service_failure" "1" "node_fail"
+run_case "node_flap_failure" "1" "node_flap"
 run_case "client_service_failure" "1" "client_fail"
 
 echo "chimera_start_contract_smoke=pass"

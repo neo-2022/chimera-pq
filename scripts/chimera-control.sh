@@ -350,6 +350,40 @@ ensure_runtime_log_paths() {
   [[ -n "$state_log" ]] && ensure_parent_dir "$state_log" && touch "$state_log"
 }
 
+wait_for_systemd_unit_stable_active() {
+  local unit="${1:?unit_required}"
+  local active_timeout_polls="${2:-20}"
+  local stable_polls="${3:-5}"
+  local i=0
+  local state=""
+
+  while (( i < active_timeout_polls )); do
+    state="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    case "$state" in
+      active)
+        break
+        ;;
+      failed|inactive|deactivating)
+        return 1
+        ;;
+    esac
+    sleep 0.1
+    i=$((i + 1))
+  done
+
+  [[ "$state" == "active" ]] || return 1
+
+  i=0
+  while (( i < stable_polls )); do
+    sleep 0.2
+    state="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    [[ "$state" == "active" ]] || return 1
+    i=$((i + 1))
+  done
+
+  return 0
+}
+
 client_config_path() {
   if [[ -f "$CLIENT_CONFIG_FILE" ]]; then
     echo "$CLIENT_CONFIG_FILE"
@@ -1608,11 +1642,12 @@ start_runtime() {
     local systemd_start_rc=0
     systemctl --user start chimera-gateway.service >/dev/null 2>&1 || systemd_start_rc=$?
     local node_state node_runtime node_status
-    node_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
-    if [[ "$node_state" == "active" ]]; then
+    if wait_for_systemd_unit_stable_active chimera-gateway.service 20 5; then
+      node_state="active"
       node_runtime="running"
       node_status="started"
     else
+      node_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
       node_runtime="stopped"
       node_status="failed"
     fi
@@ -1624,11 +1659,12 @@ start_runtime() {
       local transparent_start_rc=0
       systemctl --user start chimera-client.service >/dev/null 2>&1 || transparent_start_rc=$?
       local transparent_state transparent_runtime transparent_status
-      transparent_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
-      if [[ "$transparent_state" == "active" ]]; then
+      if wait_for_systemd_unit_stable_active chimera-client.service 20 5; then
+        transparent_state="active"
         transparent_runtime="running"
         transparent_status="started"
       else
+        transparent_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
         transparent_runtime="stopped"
         transparent_status="failed"
       fi
