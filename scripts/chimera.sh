@@ -75,6 +75,7 @@ verify_archive_checksum() {
 
 install_release_archive() {
   local archive="${1:?archive_required}"
+  local checksum_file="${2:?checksum_required}"
   local chimera_home="${CHIMERA_HOME:-$HOME/.local/share/chimera}"
   local local_bin="${CHIMERA_LOCAL_BIN:-$HOME/.local/bin}"
   local extract_parent
@@ -93,6 +94,9 @@ install_release_archive() {
   rm -rf "$chimera_home"
   mkdir -p "$extract_parent"
   mv "$extract_tmp/chimera-release" "$chimera_home"
+  mkdir -p "$chimera_home/releases"
+  cp -f "$archive" "$chimera_home/releases/chimera-pq-release.tar.gz"
+  cp -f "$checksum_file" "$chimera_home/releases/chimera-pq-release.tar.gz.sha256"
 
   chmod +x "$chimera_home/bin/"* 2>/dev/null || true
   chmod +x "$chimera_home/scripts/"*.sh 2>/dev/null || true
@@ -131,7 +135,7 @@ bootstrap_install_from_github() {
   download_url_to_file "$archive_url" "$archive"
   download_url_to_file "$checksum_url" "$checksum"
   verify_archive_checksum "$archive" "$checksum"
-  install_release_archive "$archive"
+  install_release_archive "$archive" "$checksum"
 }
 
 SCRIPT_DIR="$(resolve_self)"
