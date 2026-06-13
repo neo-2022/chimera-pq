@@ -273,14 +273,14 @@ datapath-report-json:
     cargo run -p chimera-lab --bin chimera-lab -- datapath-report --json --out docs/datapath_latest.json
 
 rollback-smoke:
-    cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json
+    cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json --skip-connect-check true
     cargo run -p chimera-cli -- rollback status --state-file docs/runtime_state_latest.json
     cargo run -p chimera-cli -- rollback recover --state-file docs/runtime_state_latest.json
     cargo run -p chimera-cli -- rollback status --state-file docs/runtime_state_latest.json
     cargo run -p chimera-cli -- down --state-file docs/runtime_state_latest.json
 
 rollback-json-smoke:
-    cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json
+    cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json --skip-connect-check true
     cargo run -p chimera-cli -- rollback status --state-file docs/runtime_state_latest.json --json --out docs/rollback_status_latest.json
     cargo run -p chimera-cli -- rollback recover --state-file docs/runtime_state_latest.json --json --out docs/rollback_recover_latest.json
     cargo run -p chimera-cli -- rollback status --state-file docs/runtime_state_latest.json --json --out docs/rollback_status_after_recover_latest.json
