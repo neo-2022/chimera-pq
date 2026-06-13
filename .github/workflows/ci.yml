@@ -44,10 +44,10 @@ jobs:
         run: cargo deny check
 
       - name: Hardening Smoke
-        run: cargo run -p chimera-lab -- hardening-smoke
+        run: cargo run -p chimera-lab --bin chimera-lab -- hardening-smoke
 
       - name: MVP Spec Check
-        run: cargo run -p chimera-lab -- mvp-spec-check --json --out docs/mvp_spec_check_latest.json
+        run: cargo run -p chimera-lab --bin chimera-lab -- mvp-spec-check --json --out docs/mvp_spec_check_latest.json
 
       - name: Ship Readiness Full Gate
         run: just ship-readiness
