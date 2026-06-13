@@ -84,10 +84,11 @@ jobs:
           grep -q '^ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz"' target/chimera.sh
           grep -q '^CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz\.sha256"' target/chimera.sh
           (cd target && sha256sum -c chimera-pq-release.tar.gz.sha256)
-          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/bin/chimera-cli$'
-          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/bin/chimera-peer-egress$'
-          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/scripts/chimera.sh$'
-          tar -tzf target/chimera-pq-release.tar.gz | grep -q '^chimera-release/scripts/chimera-sh$'
+          tar -tzf target/chimera-pq-release.tar.gz > target/chimera-release-contents.txt
+          grep -q '^chimera-release/bin/chimera-cli$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/bin/chimera-peer-egress$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/scripts/chimera.sh$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/scripts/chimera-sh$' target/chimera-release-contents.txt
 
       - name: Publish GitHub Release Latest Assets
         shell: bash
