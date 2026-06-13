@@ -106,7 +106,10 @@ impl SecurePeerStream {
 
     pub fn write_secure_payload(&mut self, plaintext: &[u8]) -> Result<(), String> {
         let packet = self.send_packet;
-        self.send_packet = self.send_packet.saturating_add(1);
+        self.send_packet = self
+            .send_packet
+            .checked_add(1)
+            .ok_or_else(|| "secure send packet counter exhausted".to_string())?;
         let mut ciphertext = Vec::with_capacity(plaintext.len() + 16);
         ciphertext.extend_from_slice(plaintext);
         encrypt_secure_payload_in_place(
@@ -139,7 +142,10 @@ impl SecurePeerStream {
         if packet != self.recv_packet {
             return Err("secure packet number mismatch".to_string());
         }
-        self.recv_packet = self.recv_packet.saturating_add(1);
+        self.recv_packet = self
+            .recv_packet
+            .checked_add(1)
+            .ok_or_else(|| "secure receive packet counter exhausted".to_string())?;
         let len = u32::from_be_bytes(
             header[8..12]
                 .try_into()
@@ -164,7 +170,7 @@ impl SecurePeerStream {
     }
 }
 
-fn encrypt_secure_payload_in_place(
+pub(crate) fn encrypt_secure_payload_in_place(
     aead: AeadSuite,
     secret: &TrafficSecret,
     packet: u64,
@@ -184,7 +190,7 @@ fn encrypt_secure_payload_in_place(
     }
 }
 
-fn decrypt_secure_payload_in_place(
+pub(crate) fn decrypt_secure_payload_in_place(
     aead: AeadSuite,
     secret: &TrafficSecret,
     packet: u64,
@@ -325,5 +331,108 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("request must parse: {error}"));
         assert_eq!(destination.host, "example.org");
         assert_eq!(destination.port, 443);
+    }
+
+    #[test]
+    fn write_secure_payload_rejects_packet_counter_overflow() {
+        let transcript =
+            chimera_crypto::TranscriptHash::from_messages(&[b"peer-egress-overflow-test"]);
+        let secrets = chimera_crypto::derive_traffic_secrets(
+            chimera_crypto::SuiteId(
+                crate::peer_egress::options::AeadSuite::Chacha20Poly1305.suite_id(),
+            ),
+            &transcript,
+            &[7_u8; 32],
+        )
+        .unwrap_or_else(|error| unreachable!("test secrets must derive: {error}"));
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap_or_else(|error| unreachable!("listener bind failed: {error}"));
+        let addr = listener
+            .local_addr()
+            .unwrap_or_else(|error| unreachable!("listener addr failed: {error}"));
+        let client = std::net::TcpStream::connect(addr)
+            .unwrap_or_else(|error| unreachable!("client connect failed: {error}"));
+        let (server, _) = listener
+            .accept()
+            .unwrap_or_else(|error| unreachable!("server accept failed: {error}"));
+        drop(server);
+
+        let mut peer = SecurePeerStream {
+            stream: client,
+            send_secret: secrets.initiator_to_responder().clone(),
+            recv_secret: secrets.responder_to_initiator().clone(),
+            send_packet: u64::MAX,
+            recv_packet: 0,
+            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+        };
+
+        let error = match peer.write_secure_payload(b"payload") {
+            Ok(()) => unreachable!("packet counter overflow must fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains("counter exhausted"));
+    }
+
+    #[test]
+    fn read_secure_payload_rejects_packet_counter_overflow() {
+        use std::io::Write;
+
+        let transcript =
+            chimera_crypto::TranscriptHash::from_messages(&[b"peer-egress-read-overflow-test"]);
+        let secrets = chimera_crypto::derive_traffic_secrets(
+            chimera_crypto::SuiteId(
+                crate::peer_egress::options::AeadSuite::Chacha20Poly1305.suite_id(),
+            ),
+            &transcript,
+            &[13_u8; 32],
+        )
+        .unwrap_or_else(|error| unreachable!("test secrets must derive: {error}"));
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap_or_else(|error| unreachable!("listener bind failed: {error}"));
+        let addr = listener
+            .local_addr()
+            .unwrap_or_else(|error| unreachable!("listener addr failed: {error}"));
+        let client = std::net::TcpStream::connect(addr)
+            .unwrap_or_else(|error| unreachable!("client connect failed: {error}"));
+        let (server, _) = listener
+            .accept()
+            .unwrap_or_else(|error| unreachable!("server accept failed: {error}"));
+
+        let mut writer = client;
+        let mut reader = SecurePeerStream {
+            stream: server,
+            send_secret: secrets.responder_to_initiator().clone(),
+            recv_secret: secrets.initiator_to_responder().clone(),
+            send_packet: 0,
+            recv_packet: u64::MAX,
+            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+        };
+
+        let mut ciphertext = b"payload".to_vec();
+        encrypt_secure_payload_in_place(
+            crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+            secrets.initiator_to_responder(),
+            u64::MAX,
+            b"peer-egress",
+            &mut ciphertext,
+        )
+        .unwrap_or_else(|error| unreachable!("test payload must encrypt: {error}"));
+        let len = u32::try_from(ciphertext.len())
+            .unwrap_or_else(|error| unreachable!("test ciphertext length must fit: {error}"));
+        let writer_thread = std::thread::spawn(move || {
+            writer
+                .write_all(&u64::MAX.to_be_bytes())
+                .and_then(|_| writer.write_all(&len.to_be_bytes()))
+                .and_then(|_| writer.write_all(&ciphertext))
+        });
+        let error = match reader.read_secure_payload() {
+            Ok(_) => unreachable!("receive packet counter overflow must fail"),
+            Err(error) => error,
+        };
+        writer_thread
+            .join()
+            .unwrap_or_else(|_| unreachable!("writer thread must not panic"))
+            .unwrap_or_else(|error| unreachable!("writer must write frame: {error}"));
+        assert!(error.contains("counter exhausted"));
     }
 }

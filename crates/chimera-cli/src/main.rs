@@ -3257,7 +3257,7 @@ fn build_up_runtime_state(options: &UpDownOptions) -> Result<UpRuntimeState, Str
     }
     validate_status_carrier(&status)?;
     if !options.skip_connect_check {
-        probe_gateway_reachability(&status)?;
+        probe_carrier_reachability(&status)?;
     }
     Ok(UpRuntimeState {
         status,
@@ -3265,7 +3265,7 @@ fn build_up_runtime_state(options: &UpDownOptions) -> Result<UpRuntimeState, Str
     })
 }
 
-fn probe_gateway_reachability(status: &StatusOptions) -> Result<(), String> {
+fn probe_carrier_reachability(status: &StatusOptions) -> Result<(), String> {
     if is_self_loop_carrier_target(&status.carrier_addr)? {
         return Err(format!(
             "carrier target '{}' matches local host address (self-loop blocked)",
@@ -3279,7 +3279,7 @@ fn probe_gateway_reachability(status: &StatusOptions) -> Result<(), String> {
             TcpStream::connect_timeout(&target, Duration::from_millis(1500))
                 .map(|_| ())
                 .map_err(|error| {
-                    format!("gateway tcp reachability check failed for {target}: {error}")
+                    format!("carrier tcp reachability check failed for {target}: {error}")
                 })
         }
         CarrierProfile::Quic => {
@@ -3287,7 +3287,7 @@ fn probe_gateway_reachability(status: &StatusOptions) -> Result<(), String> {
             let socket = UdpSocket::bind("0.0.0.0:0")
                 .map_err(|error| format!("udp bind failed: {error}"))?;
             socket.connect(target).map_err(|error| {
-                format!("gateway udp reachability check failed for {target}: {error}")
+                format!("carrier udp reachability check failed for {target}: {error}")
             })
         }
     }
@@ -5593,6 +5593,8 @@ yt = exact:www.youtube.com => direct\n";
             path_text.clone(),
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
+            "--skip-connect-check".to_string(),
+            "true".to_string(),
         ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&path_text).exists());
@@ -5615,6 +5617,8 @@ yt = exact:www.youtube.com => direct\n";
             path_text.clone(),
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
+            "--skip-connect-check".to_string(),
+            "true".to_string(),
         ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&path_text).exists());
@@ -5646,6 +5650,8 @@ yt = exact:www.youtube.com => direct\n";
             path_text.clone(),
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
+            "--skip-connect-check".to_string(),
+            "true".to_string(),
         ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&path_text).exists());
@@ -5671,6 +5677,8 @@ yt = exact:www.youtube.com => direct\n";
             state_text.clone(),
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
+            "--skip-connect-check".to_string(),
+            "true".to_string(),
         ];
         assert_eq!(up_command(Language::En, &up_args), 0);
         assert!(PathBuf::from(&state_text).exists());

@@ -5,8 +5,10 @@ pub mod node;
 pub mod options;
 pub mod pool;
 pub mod protocol;
+pub(crate) mod secure_halves;
 pub mod startup_contract;
 pub mod transit;
+pub mod wire;
 
 pub use handshake::{
     authenticate_peer, establish_secure_peer_client, establish_secure_peer_server,

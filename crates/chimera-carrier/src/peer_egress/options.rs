@@ -69,6 +69,7 @@ pub struct Options {
     pub connections: usize,
     pub aead: AeadSuite,
     pub reverse_connect: bool,
+    pub allow_pool_transit: bool,
 }
 
 fn env_value(name: &str) -> Option<String> {
@@ -158,6 +159,10 @@ impl Options {
             .map(|value| parse_bool(&value))
             .transpose()?
             .unwrap_or(false);
+        let mut allow_pool_transit = env_value("CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT")
+            .map(|value| parse_bool(&value))
+            .transpose()?
+            .unwrap_or(false);
         let mut index = 0usize;
         while index < args.len() {
             let flag = args[index].as_str();
@@ -203,6 +208,9 @@ impl Options {
                 }
                 "--reverse-connect" => {
                     reverse_connect = parse_bool(value)?;
+                }
+                "--allow-pool-transit" => {
+                    allow_pool_transit = parse_bool(value)?;
                 }
                 "--bench-bytes" => {
                     bench_bytes = parse_positive_usize(value, "bench-bytes")?;
@@ -291,6 +299,7 @@ impl Options {
             connections,
             aead,
             reverse_connect,
+            allow_pool_transit,
         })
     }
 }
@@ -392,6 +401,7 @@ mod tests {
         });
         assert_eq!(parsed.mode, Mode::Laptop);
         assert_eq!(parsed.pool, 8);
+        assert!(!parsed.allow_pool_transit);
     }
 
     #[test]
@@ -433,6 +443,27 @@ mod tests {
         let parsed = Options::parse(&args)?;
         assert_eq!(parsed.mode, Mode::Node);
         assert_eq!(parsed.server, "peer.example.invalid:8443");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_node_options_accepts_explicit_pool_transit_policy() -> Result<(), String> {
+        let args = vec![
+            "--mode".to_string(),
+            "node".to_string(),
+            "--local-listen".to_string(),
+            "127.0.0.1:18135".to_string(),
+            "--peer-listen".to_string(),
+            "0.0.0.0:8443".to_string(),
+            "--server".to_string(),
+            "peer.example.invalid:8443".to_string(),
+            "--token".to_string(),
+            "abc".to_string(),
+            "--allow-pool-transit".to_string(),
+            "true".to_string(),
+        ];
+        let parsed = Options::parse(&args)?;
+        assert!(parsed.allow_pool_transit);
         Ok(())
     }
 

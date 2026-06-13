@@ -124,6 +124,20 @@ pidfile_running() {
   kill -0 "$pid" >/dev/null 2>&1
 }
 
+runner_started() {
+  local pidfile="${1:?pidfile_required}"
+  local attempts="${2:-10}"
+  local i=0
+  while (( i < attempts )); do
+    if pidfile_running "$pidfile"; then
+      return 0
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 peer_egress_pid_path() {
   printf '%s' "${PEER_EGRESS_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-peer-egress.pid}"
 }
@@ -1582,28 +1596,51 @@ start_runtime() {
   if systemd_user_ready; then
     systemctl --user daemon-reload >/dev/null 2>&1 || true
     systemctl --user start chimera-gateway.service >/dev/null 2>&1 || true
+    local node_state node_runtime node_status
+    node_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
+    if [[ "$node_state" == "active" ]]; then
+      node_runtime="running"
+      node_status="started"
+    else
+      node_runtime="stopped"
+      node_status="failed"
+    fi
     if client_config_ready; then
       systemctl --user start chimera-client.service >/dev/null 2>&1 || true
+      local transparent_state transparent_runtime
+      transparent_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
+      transparent_runtime="$([[ "$transparent_state" == "active" ]] && echo running || echo stopped)"
       site_auto_watch_start >/dev/null 2>&1 || true
-      echo "start_status=ok mode=systemd_user node=started"
+      echo "start_status=ok mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=$transparent_runtime"
     else
       systemctl --user stop chimera-client.service >/dev/null 2>&1 || true
       site_auto_watch_stop >/dev/null 2>&1 || true
-      echo "start_status=ok mode=systemd_user node=skipped reason=no_endpoint"
+      echo "start_status=ok mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=stopped endpoint=unconfigured"
     fi
     return 0
   fi
   run_chimera_gateway doctor --config "$ROOT_DIR/configs/gateway.example.conf" --json --out "$ROOT_DIR/docs/gateway_doctor_latest.json" >/dev/null 2>&1 || true
   local gateway_status="skipped"
   local client_status="skipped"
+  local node_runtime="stopped"
   if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
     start_runner_background "peer_egress" "$(peer_egress_pid_path)" "$GATEWAY_LOG" "$PEER_EGRESS_ENV_FILE" "peer-egress" >/dev/null 2>&1 || true
-    gateway_status="started"
-    publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
+    if runner_started "$(peer_egress_pid_path)" 10; then
+      gateway_status="started"
+      node_runtime="running"
+      publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
+    else
+      gateway_status="failed"
+      node_runtime="stopped"
+    fi
   fi
   if client_config_ready && [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
     start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$CLIENT_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
-    client_status="started"
+    if runner_started "$(transparent_runtime_pid_path)" 10; then
+      client_status="started"
+    else
+      client_status="failed"
+    fi
     if [[ -f "$PEER_EGRESS_ENV_FILE" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$PEER_EGRESS_ENV_FILE"; then
       sudo -n bash -lc '
         set -euo pipefail
@@ -1634,9 +1671,9 @@ start_runtime() {
     site_auto_watch_stop >/dev/null 2>&1 || true
   fi
   if client_config_ready; then
-    echo "start_status=ok mode=direct node=$gateway_status transparent_runtime=$client_status"
+    echo "start_status=ok mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status"
   else
-    echo "start_status=ok mode=direct node=$gateway_status transparent_runtime=skipped reason=no_endpoint"
+    echo "start_status=ok mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=stopped endpoint=unconfigured"
   fi
 }
 
@@ -1695,15 +1732,24 @@ runtime_status() {
   echo "transparent_runtime_service_state=$client_state"
   echo "peer_egress_state_file=$(peer_egress_state_path)"
   echo "$watch_status"
+  if [[ "$gateway_state" == "active" ]]; then
+    echo "node_runtime=running"
+  else
+    echo "node_runtime=stopped"
+  fi
   if runtime_state_is_up; then
-    echo "transparent_runtime=running"
+    if client_config_ready; then
+      echo "transparent_runtime=$([[ "$client_state" == "active" ]] && echo running || echo stopped)"
+    else
+      echo "transparent_runtime=stopped"
+    fi
     echo "runtime_state_status=up"
   else
     if systemd_user_ready; then
       if client_config_ready; then
         echo "transparent_runtime=$([[ "$client_state" == "active" ]] && echo running || echo stopped)"
       else
-        echo "transparent_runtime=$([[ "$gateway_state" == "active" ]] && echo running || echo stopped)"
+        echo "transparent_runtime=stopped"
       fi
     else
       if client_config_ready; then
@@ -1713,11 +1759,7 @@ runtime_status() {
           echo "transparent_runtime=stopped"
         fi
       else
-        if pidfile_running "$(peer_egress_pid_path)"; then
-          echo "transparent_runtime=running"
-        else
-          echo "transparent_runtime=stopped"
-        fi
+        echo "transparent_runtime=stopped"
       fi
     fi
     echo "runtime_state_status=unknown"

@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
 use crate::peer_egress::modes::{
-    handle_local_client, handle_local_client_with_first_byte, outbound_peer_worker,
+    handle_local_client_with_first_byte, outbound_peer_worker_with_next_hop,
 };
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
-use crate::peer_egress::options::{Options, write_resolved_state_file};
+use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
 use crate::peer_egress::pool::new_shared_pool;
 use crate::peer_egress::protocol::redacted_log_reason;
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
@@ -85,9 +85,12 @@ pub fn run_node(options: Options) -> Result<(), String> {
     if startup_contract.outbound_bootstrap_configured {
         for _ in 0..options.pool {
             let worker = options.clone();
+            let outbound_pool = peer_pool.clone();
             thread::spawn(move || {
                 loop {
-                    if let Err(error) = outbound_peer_worker(&worker) {
+                    if let Err(error) =
+                        outbound_peer_worker_with_next_hop(&worker, Some(outbound_pool.clone()))
+                    {
                         eprintln!(
                             "event=weave_outbound_peer_worker_error reason_class={}",
                             redacted_log_reason(&error)
@@ -100,12 +103,13 @@ pub fn run_node(options: Options) -> Result<(), String> {
     }
 
     println!(
-        "chimera_peer_egress=node_ready local={} peer={} resolved_local={} resolved_peer={} outbound_bootstrap_configured={} capabilities={}",
+        "chimera_peer_egress=node_ready local={} peer={} resolved_local={} resolved_peer={} outbound_bootstrap_configured={} pool_transit_allowed={} capabilities={}",
         startup_contract.local_listen,
         startup_contract.peer_listen,
         resolved_local_listen,
         resolved_peer_listen,
         startup_contract.outbound_bootstrap_configured,
+        startup_contract.pool_transit_allowed,
         startup_contract.capability_names().join(",")
     );
     for incoming in local_listener.incoming() {
@@ -113,9 +117,6 @@ pub fn run_node(options: Options) -> Result<(), String> {
             continue;
         };
         eprintln!("event=weave_local_ingress_accepted");
-        let Ok(peer) = peer_pool.pop_wait() else {
-            continue;
-        };
         let mut local = local;
         let mut first = [0_u8; 1];
         match local.read_exact(&mut first) {
@@ -125,6 +126,9 @@ pub fn run_node(options: Options) -> Result<(), String> {
                     LocalIngressBranch::SealedTransit
                 ) =>
             {
+                let Ok(peer) = peer_pool.pop_wait() else {
+                    continue;
+                };
                 eprintln!("event=weave_local_ingress_transit_branch");
                 thread::spawn(move || {
                     if let Err(error) = relay_local_sealed_transit(local, peer, first[0]) {
@@ -136,6 +140,15 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 });
             }
             Ok(()) => {
+                if classify_local_ingress(first[0]) == LocalIngressBranch::NativeConnect
+                    && first[0] != LOCAL_MAGIC[0]
+                {
+                    eprintln!("event=weave_local_ingress_unsupported");
+                    continue;
+                }
+                let Ok(peer) = peer_pool.pop_wait() else {
+                    continue;
+                };
                 eprintln!("event=weave_local_ingress_paired_with_peer");
                 thread::spawn(move || {
                     if let Err(error) = handle_local_client_with_first_byte(local, peer, first[0]) {
@@ -148,14 +161,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
             }
             Err(error) => {
                 eprintln!("event=weave_local_ingress_peek_failed reason={error}");
-                thread::spawn(move || {
-                    if let Err(error) = handle_local_client(local, peer) {
-                        eprintln!(
-                            "event=weave_local_ingress_error reason_class={}",
-                            redacted_log_reason(&error)
-                        );
-                    }
-                });
+                continue;
             }
         }
     }

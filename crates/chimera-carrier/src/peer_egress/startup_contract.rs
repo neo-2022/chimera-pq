@@ -8,6 +8,7 @@ pub struct NodeStartupContract {
     pub local_listen: String,
     pub peer_listen: String,
     pub outbound_bootstrap_configured: bool,
+    pub pool_transit_allowed: bool,
     pub capabilities: Vec<WeaveNodeCapability>,
 }
 
@@ -49,6 +50,7 @@ fn validate_node_startup_contract_with_contract(
         local_listen,
         peer_listen,
         outbound_bootstrap_configured: !options.server.trim().is_empty(),
+        pool_transit_allowed: options.allow_pool_transit,
         capabilities,
     })
 }
@@ -82,6 +84,7 @@ mod tests {
             connections: 1,
             aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
             reverse_connect: false,
+            allow_pool_transit: false,
         }
     }
 
@@ -93,6 +96,7 @@ mod tests {
         assert_eq!(contract.local_listen, "127.0.0.1:18135");
         assert_eq!(contract.peer_listen, "0.0.0.0:8443");
         assert!(!contract.outbound_bootstrap_configured);
+        assert!(!contract.pool_transit_allowed);
         assert_eq!(
             contract.capability_names(),
             vec![
@@ -111,6 +115,16 @@ mod tests {
 
         assert!(contract.outbound_bootstrap_configured);
         assert_eq!(contract.mode, Mode::Node);
+        Ok(())
+    }
+
+    #[test]
+    fn node_startup_contract_marks_explicit_pool_transit_policy() -> Result<(), String> {
+        let mut options = node_options("peer.example.invalid:8443");
+        options.allow_pool_transit = true;
+        let contract = validate_node_startup_contract(&options)?;
+
+        assert!(contract.pool_transit_allowed);
         Ok(())
     }
 

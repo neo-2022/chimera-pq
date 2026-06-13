@@ -211,6 +211,7 @@ configure_peer_egress_env() {
   local pool="${CHIMERA_PEER_EGRESS_POOL:-8}"
   local connections="${CHIMERA_PEER_EGRESS_CONNECTIONS:-8}"
   local aead="${CHIMERA_PEER_EGRESS_AEAD:-aes256gcm}"
+  local allow_pool_transit="${CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT:-false}"
   if [[ ! "$local_listen" == *:* ]]; then
     local_listen="127.0.0.1:${local_listen}"
   fi
@@ -241,12 +242,14 @@ configure_peer_egress_env() {
     printf 'CHIMERA_PEER_EGRESS_POOL=%s\n' "$pool"
     printf 'CHIMERA_PEER_EGRESS_CONNECTIONS=%s\n' "$connections"
     printf 'CHIMERA_PEER_EGRESS_AEAD=%s\n' "$aead"
+    printf 'CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT=%s\n' "$allow_pool_transit"
   } >"$PEER_EGRESS_ENV_FILE"
   chmod 600 "$PEER_EGRESS_ENV_FILE"
   echo "peer_egress_mode=$mode"
   echo "peer_egress_local_listen=$local_listen"
   echo "peer_egress_peer_listen=$peer_listen"
   echo "peer_egress_state_file=$PEER_EGRESS_STATE_FILE"
+  echo "peer_egress_allow_pool_transit=$allow_pool_transit"
   if [[ -n "$server" ]]; then
     echo "peer_egress_server=$server"
   fi

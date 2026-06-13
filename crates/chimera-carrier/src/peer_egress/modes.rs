@@ -17,8 +17,12 @@ use crate::peer_egress::options::{
 };
 use crate::peer_egress::pool::{PeerPool, SharedPeerPool, new_shared_pool};
 use crate::peer_egress::protocol::{
-    SecurePeerStream, parse_peer_connect_destination, read_line_limited,
-    read_native_connect_destination, redacted_destination_label, redacted_log_reason,
+    SecurePeerStream, read_line_limited, read_native_connect_destination,
+    redacted_destination_label, redacted_log_reason,
+};
+use crate::peer_egress::transit::{PeerTransitPolicy, forward_peer_sealed_transit_to_next_hop};
+use crate::peer_egress::wire::{
+    PeerMessage, read_peer_message, write_ack_ok, write_connect_message,
 };
 
 pub fn run_vps(options: Options) -> Result<(), String> {
@@ -47,6 +51,7 @@ pub fn run_vps(options: Options) -> Result<(), String> {
     let token = options.token.clone();
     let aead = options.aead;
     let reverse_connect = options.reverse_connect;
+    let peer_transit_policy = PeerTransitPolicy::from_bool(options.allow_pool_transit);
     if reverse_connect {
         let peer_pool = new_shared_pool();
         let r_pool = peer_pool.clone();
@@ -65,8 +70,9 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                     Ok(peer) => {
                         eprintln!("event=reverse_peer_authenticated");
                         let pool = r_pool.clone();
+                        let policy = peer_transit_policy;
                         thread::spawn(move || {
-                            if let Err(error) = handle_reverse_peer(peer, pool) {
+                            if let Err(error) = handle_reverse_peer(peer, policy, pool) {
                                 eprintln!(
                                     "event=reverse_peer_error reason_class={}",
                                     redacted_log_reason(&error)
@@ -145,10 +151,16 @@ pub fn run_vps(options: Options) -> Result<(), String> {
 
 pub fn handle_reverse_peer(
     mut peer: SecurePeerStream,
-    _pool: SharedPeerPool,
+    policy: PeerTransitPolicy,
+    pool: SharedPeerPool,
 ) -> Result<(), String> {
-    let request = peer.read_line(512)?;
-    let destination = parse_peer_connect_destination(&request)?;
+    let destination = match read_peer_message(&mut peer, 512)? {
+        PeerMessage::Connect(destination) => destination,
+        PeerMessage::SealedTransit(frame) => {
+            return forward_peer_sealed_transit_to_next_hop(peer, policy, Some(pool), frame);
+        }
+        PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
+    };
     let target_addr = destination.connect_addr();
     let destination_id = destination.redacted_label();
     eprintln!(
@@ -163,7 +175,7 @@ pub fn handle_reverse_peer(
     eprintln!(
         "event=reverse_peer_target_connected target=<redacted> destination_id={destination_id}"
     );
-    peer.write_line("OK")?;
+    write_ack_ok(&mut peer)?;
     eprintln!(
         "event=reverse_peer_connect_ack_sent target=<redacted> destination_id={destination_id}"
     );
@@ -245,6 +257,13 @@ pub fn laptop_worker(options: &Options) -> Result<(), String> {
 }
 
 pub fn outbound_peer_worker(options: &Options) -> Result<(), String> {
+    outbound_peer_worker_with_next_hop(options, None)
+}
+
+pub fn outbound_peer_worker_with_next_hop(
+    options: &Options,
+    next_hops: Option<SharedPeerPool>,
+) -> Result<(), String> {
     let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
         .map_err(|error| format!("connect outbound peer failed: {error}"))?;
     tune_tcp(&peer)?;
@@ -255,8 +274,18 @@ pub fn outbound_peer_worker(options: &Options) -> Result<(), String> {
         .and_then(|_| peer.write_all(b"\n"))
         .map_err(|error| format!("write token failed: {error}"))?;
     let mut peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
-    let request = peer.read_line(512)?;
-    let destination = parse_peer_connect_destination(&request)?;
+    let destination = match read_peer_message(&mut peer, 512)? {
+        PeerMessage::Connect(destination) => destination,
+        PeerMessage::SealedTransit(frame) => {
+            return forward_peer_sealed_transit_to_next_hop(
+                peer,
+                PeerTransitPolicy::from_bool(options.allow_pool_transit),
+                next_hops,
+                frame,
+            );
+        }
+        PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
+    };
     let target_addr = destination.connect_addr();
     let destination_id = destination.redacted_label();
     eprintln!(
@@ -271,7 +300,7 @@ pub fn outbound_peer_worker(options: &Options) -> Result<(), String> {
     eprintln!(
         "event=outbound_peer_target_connected target=<redacted> destination_id={destination_id}"
     );
-    peer.write_line("OK")?;
+    write_ack_ok(&mut peer)?;
     eprintln!(
         "event=outbound_peer_connect_ack_sent target=<redacted> destination_id={destination_id}"
     );
@@ -301,18 +330,22 @@ pub fn handle_local_client_with_first_byte(
     eprintln!(
         "event=local_ingress_destination host=<redacted> port=<redacted> destination_id={destination_id}"
     );
-    let request = format!("CONNECT {} {}", destination.host, destination.port);
-    peer.write_line(&request)?;
+    write_connect_message(&mut peer, &destination)?;
     eprintln!("event=peer_connect_request_sent request=<redacted> destination_id={destination_id}");
-    let ack = peer.read_line(16)?;
-    if ack != "OK" {
-        return Err("peer connect failed".to_string());
-    }
+    require_peer_ack(&mut peer)?;
     eprintln!("event=peer_connect_ack_received destination_id={destination_id}");
     local
         .write_all(b"OK\n")
         .map_err(|error| format!("write native local ack failed: {error}"))?;
     pipe_plain_with_secure_peer(local, peer)
+}
+
+fn require_peer_ack(peer: &mut SecurePeerStream) -> Result<(), String> {
+    match read_peer_message(peer, 16)? {
+        PeerMessage::AckOk => Ok(()),
+        PeerMessage::Connect(_) => Err("peer returned unexpected connect request".to_string()),
+        PeerMessage::SealedTransit(_) => Err("peer returned unexpected transit frame".to_string()),
+    }
 }
 
 pub fn run_bench(options: Options) -> Result<(), String> {
@@ -373,6 +406,7 @@ pub fn run_bench(options: Options) -> Result<(), String> {
         connections: 1,
         aead: options.aead,
         reverse_connect: false,
+        allow_pool_transit: false,
     };
     for _ in 0..options.pool {
         let worker = worker_options.clone();
