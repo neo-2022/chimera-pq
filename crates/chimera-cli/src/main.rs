@@ -916,7 +916,9 @@ fn runtime_failover_overrides_path() -> PathBuf {
             .join("chimera")
             .join(RUNTIME_FAILOVER_OVERRIDES_FILE);
     }
-    PathBuf::from("state").join(RUNTIME_FAILOVER_OVERRIDES_FILE)
+    std::env::temp_dir()
+        .join("chimera")
+        .join(RUNTIME_FAILOVER_OVERRIDES_FILE)
 }
 
 fn load_failover_override_keys_from_path(
