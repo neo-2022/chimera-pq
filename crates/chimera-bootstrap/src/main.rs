@@ -16,6 +16,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const RELEASE_ARCHIVE_NAME: &str = "chimera-pq-release.tar.gz";
 const RELEASE_CHECKSUM_NAME: &str = "chimera-pq-release.tar.gz.sha256";
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const PEER_UPDATE_IO_TIMEOUT: Duration = Duration::from_secs(5);
 const PEER_UPDATE_HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 const PEER_UPDATE_MAX_ACTIVE_CONNECTIONS: usize = 32;
@@ -121,7 +122,12 @@ fn download_to_file(url: &str, output: &Path) -> Result<()> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
-    let resp = ureq::get(url).call()?;
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(DOWNLOAD_TIMEOUT)
+        .timeout_read(DOWNLOAD_TIMEOUT)
+        .timeout_write(DOWNLOAD_TIMEOUT)
+        .build();
+    let resp = agent.get(url).call()?;
     let mut reader = resp.into_reader();
     let mut file = File::create(output)?;
     io::copy(&mut reader, &mut file)?;

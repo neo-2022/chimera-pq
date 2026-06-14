@@ -2,7 +2,7 @@
 
 use std::net::IpAddr;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -78,7 +78,8 @@ struct RouteExplainOptions {
     out_path: Option<String>,
 }
 
-const RUNTIME_FAILOVER_OVERRIDES_PATH: &str = "configs/failover_overrides.txt";
+const LEGACY_RUNTIME_FAILOVER_OVERRIDES_PATH: &str = "configs/failover_overrides.txt";
+const RUNTIME_FAILOVER_OVERRIDES_FILE: &str = "failover_overrides.txt";
 const DEFAULT_CARRIER_ADDR: &str = "127.0.0.1:443";
 const DEFAULT_CARRIER_SERVER_NAME: &str = "node.example.org";
 
@@ -429,9 +430,7 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
         let mut target_error = String::new();
         if direct_ok && let Some(domain) = suggested_domain.as_deref() {
             let flow_key = flow_key_for(domain, Protocol::Tcp, 443);
-            if let Err(error) =
-                update_failover_override_key(RUNTIME_FAILOVER_OVERRIDES_PATH, &flow_key, false)
-            {
+            if let Err(error) = update_failover_override_key(&flow_key, false) {
                 target_error = format!("failover_override_update_error:{error}");
             }
         }
@@ -842,13 +841,17 @@ fn apply_probe_policy_rule(
     }
     chimera_policy::parse_policy_text(&rendered)
         .map_err(|error| format!("resulting policy is invalid: {error}"))?;
-    atomic_write_text_file(policy_path, &rendered)
+    atomic_write_text_file(Path::new(policy_path), &rendered)
         .map_err(|error| format!("write failed: {error}"))?;
     Ok(rule_id)
 }
 
-fn atomic_write_text_file(path: &str, content: &str) -> Result<(), String> {
-    let target = std::path::Path::new(path);
+fn atomic_write_text_file(target: &Path, content: &str) -> Result<(), String> {
+    if let Some(parent) = target.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir failed: {e}"))?;
+    }
     let mut tmp_name = target
         .file_name()
         .and_then(|n| n.to_str())
@@ -891,10 +894,40 @@ fn flow_key_for(domain: &str, protocol: Protocol, port: u16) -> String {
     format!("{}:{port}/{proto}", domain.to_ascii_lowercase())
 }
 
-fn load_failover_override_keys(path: &str) -> std::collections::BTreeSet<String> {
+fn runtime_failover_overrides_path() -> PathBuf {
+    if let Ok(path) = std::env::var("CHIMERA_FAILOVER_OVERRIDES_PATH")
+        && !path.trim().is_empty()
+    {
+        return PathBuf::from(path);
+    }
+    if let Ok(xdg_state_home) = std::env::var("XDG_STATE_HOME")
+        && !xdg_state_home.trim().is_empty()
+    {
+        return PathBuf::from(xdg_state_home)
+            .join("chimera")
+            .join(RUNTIME_FAILOVER_OVERRIDES_FILE);
+    }
+    if let Ok(home) = std::env::var("HOME")
+        && !home.trim().is_empty()
+    {
+        return PathBuf::from(home)
+            .join(".local")
+            .join("state")
+            .join("chimera")
+            .join(RUNTIME_FAILOVER_OVERRIDES_FILE);
+    }
+    PathBuf::from("state").join(RUNTIME_FAILOVER_OVERRIDES_FILE)
+}
+
+fn load_failover_override_keys_from_path(
+    path: &Path,
+) -> Option<std::collections::BTreeSet<String>> {
+    if !path.is_file() {
+        return None;
+    }
     let mut out = std::collections::BTreeSet::new();
     let Ok(text) = std::fs::read_to_string(path) else {
-        return out;
+        return Some(out);
     };
     for line in text.lines() {
         let item = line.trim();
@@ -903,11 +936,19 @@ fn load_failover_override_keys(path: &str) -> std::collections::BTreeSet<String>
         }
         out.insert(item.to_string());
     }
-    out
+    Some(out)
+}
+
+fn load_failover_override_keys() -> std::collections::BTreeSet<String> {
+    if let Some(out) = load_failover_override_keys_from_path(&runtime_failover_overrides_path()) {
+        return out;
+    }
+    load_failover_override_keys_from_path(Path::new(LEGACY_RUNTIME_FAILOVER_OVERRIDES_PATH))
+        .unwrap_or_default()
 }
 
 fn write_failover_override_keys(
-    path: &str,
+    path: &Path,
     values: &std::collections::BTreeSet<String>,
 ) -> Result<(), String> {
     let mut rendered = String::new();
@@ -919,14 +960,14 @@ fn write_failover_override_keys(
     atomic_write_text_file(path, &rendered)
 }
 
-fn update_failover_override_key(path: &str, key: &str, blocked: bool) -> Result<(), String> {
-    let mut values = load_failover_override_keys(path);
+fn update_failover_override_key(key: &str, blocked: bool) -> Result<(), String> {
+    let mut values = load_failover_override_keys();
     if blocked {
         values.insert(key.to_string());
     } else {
         values.remove(key);
     }
-    write_failover_override_keys(path, &values)
+    write_failover_override_keys(&runtime_failover_overrides_path(), &values)
 }
 
 fn outbound_to_datapath_route(outbound: OutboundMode) -> DatapathRoute {
@@ -1095,7 +1136,7 @@ fn route_command(
             }
         };
         let flow_key = flow_key_for(domain_value, flow.protocol, flow.port.unwrap_or(443));
-        if load_failover_override_keys(RUNTIME_FAILOVER_OVERRIDES_PATH).contains(&flow_key) {
+        if load_failover_override_keys().contains(&flow_key) {
             engine.report_direct_blocked(&flow_key);
         }
         let decision = engine.evaluate(
@@ -5188,7 +5229,7 @@ yt = exact:www.youtube.com => direct\n";
         path.push("chimera_atomic_write_test.conf");
         let path_text = path.to_string_lossy().to_string();
         let _ = std::fs::write(&path, "old\n");
-        assert!(crate::atomic_write_text_file(&path_text, "new\n").is_ok());
+        assert!(crate::atomic_write_text_file(&path, "new\n").is_ok());
         let content = std::fs::read_to_string(&path_text).unwrap_or_default();
         assert_eq!(content, "new\n");
         let _ = std::fs::remove_file(path);
