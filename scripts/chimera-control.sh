@@ -359,6 +359,22 @@ dispatch_update_first() {
   exec "$launcher" "$@"
 }
 
+update_first_gate() {
+  local rc=0
+  require_update_first_checked "$@" || rc=$?
+  case "$rc" in
+    0)
+      return 0
+      ;;
+    2)
+      dispatch_update_first "$@"
+      ;;
+    *)
+      return "$rc"
+      ;;
+  esac
+}
+
 ensure_base_path() {
   export PATH="$HOME/.local/bin:$PATH"
 }
@@ -1962,20 +1978,14 @@ main() {
   local cmd="${1:-}"
   case "$cmd" in
     start)
-      if ! require_update_first_checked; then
-        dispatch_update_first -start
-        exit 1
-      fi
+      update_first_gate -start
       start_runtime
       ;;
     stop)
       stop_runtime
       ;;
     restart)
-      if ! require_update_first_checked; then
-        dispatch_update_first -restart
-        exit 1
-      fi
+      update_first_gate -restart
       restart_runtime
       ;;
     status)
@@ -2123,16 +2133,10 @@ main() {
     split-transparent)
       case "${2:-status}" in
         start)
-          if ! require_update_first_checked; then
-            dispatch_update_first -start
-            exit 1
-          fi
+          update_first_gate -start
           ;;
         refresh)
-          if ! require_update_first_checked; then
-            dispatch_update_first -restart
-            exit 1
-          fi
+          update_first_gate -restart
           ;;
       esac
       split_transparent_dispatch "${2:-status}"
@@ -2177,11 +2181,7 @@ main() {
       uninstall_runtime
       ;;
     mesh)
-      if ! require_update_first_checked; then
-        shift || true
-        dispatch_update_first -mesh "$@"
-        exit 1
-      fi
+      update_first_gate -mesh "${@:2}"
       shift || true
       run_chimera_cli mesh "$@"
       ;;

@@ -90,10 +90,9 @@ case_failed_install_restores_previous_release() (
 )
 
 case_control_requires_update_first_marker() (
-  local tmp_dir control_stub launcher_stub output rc
+  local tmp_dir control_stub output rc
   tmp_dir="$(mktemp -d)"
   control_stub="$tmp_dir/chimera-control.sh"
-  launcher_stub="$tmp_dir/chimera-sh"
   cat >"$control_stub" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -104,12 +103,6 @@ fi
 echo "control_ok"
 EOF
   chmod +x "$control_stub"
-  cat >"$launcher_stub" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$1" start
-EOF
-  chmod +x "$launcher_stub"
 
   set +e
   output="$(CHIMERA_UPDATE_FIRST_CHECKED=0 "$control_stub" start 2>&1)"
@@ -120,10 +113,46 @@ EOF
   rm -rf "$tmp_dir"
 )
 
+case_real_control_delegates_direct_start_and_mesh() (
+  local tmp_dir launcher output rc
+  tmp_dir="$(mktemp -d)"
+  launcher="$tmp_dir/chimera-sh"
+  cat >"$launcher" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'fake_launcher_args=%s\n' "$*"
+exit 23
+EOF
+  chmod +x "$launcher"
+
+  set +e
+  output="$(CHIMERA_UPDATE_FIRST_LAUNCHER="$launcher" bash "$ROOT_DIR/scripts/chimera-control.sh" start 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 23 ]] || fail "direct real control start did not delegate to update-first launcher"
+  [[ "$output" == *"fake_launcher_args=-start"* ]] || fail "direct real control start delegated wrong args"
+
+  set +e
+  output="$(CHIMERA_UPDATE_FIRST_LAUNCHER="$launcher" bash "$ROOT_DIR/scripts/chimera-control.sh" restart 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 23 ]] || fail "direct real control restart did not delegate to update-first launcher"
+  [[ "$output" == *"fake_launcher_args=-restart"* ]] || fail "direct real control restart delegated wrong args"
+
+  set +e
+  output="$(CHIMERA_UPDATE_FIRST_LAUNCHER="$launcher" bash "$ROOT_DIR/scripts/chimera-control.sh" mesh nodes list 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 23 ]] || fail "direct real control mesh did not delegate to update-first launcher"
+  [[ "$output" == *"fake_launcher_args=-mesh nodes list"* ]] || fail "direct real control mesh delegated wrong args"
+  rm -rf "$tmp_dir"
+)
+
 case_update_sources_unreachable_continues
 case_update_required_install_failure_blocks
 case_semver_update_order
 case_failed_install_restores_previous_release
 case_control_requires_update_first_marker
+case_real_control_delegates_direct_start_and_mesh
 
 echo "chimera_update_contract_smoke=pass"
