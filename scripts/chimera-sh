@@ -77,9 +77,10 @@ ensure_runtime_files() {
   return 0
 }
 
-version_to_sortable() {
+release_version_to_sortable() {
   local v="${1:-0.0.0}"
   v="${v#v}"
+  [[ "$v" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || return 1
   awk -F. '
     {
       major=$1+0; minor=$2+0; patch=$3+0;
@@ -91,8 +92,8 @@ is_remote_newer() {
   local local_v="${1:-0.0.0}"
   local remote_v="${2:-0.0.0}"
   local local_key remote_key
-  local_key="$(version_to_sortable "$local_v")"
-  remote_key="$(version_to_sortable "$remote_v")"
+  remote_key="$(release_version_to_sortable "$remote_v")" || return 1
+  local_key="$(release_version_to_sortable "$local_v")" || local_key="000000000000000000"
   [[ "$remote_key" > "$local_key" ]]
 }
 
@@ -287,6 +288,11 @@ try_update_from_bootstrap_source() {
     rm -f "$tmp_script"
     return 2
   fi
+  if ! release_version_to_sortable "$remote_version" >/dev/null; then
+    echo "chimera_update=source_invalid source=$source_name latest_version=$remote_version action=hold reason=invalid_release_version" >&2
+    rm -f "$tmp_script"
+    return 2
+  fi
 
   remote_sha="$(remote_archive_sha256 "$remote_archive_url" "$remote_checksum_url" || true)"
   if [[ -z "$remote_sha" ]]; then
@@ -393,7 +399,7 @@ main() {
         echo "error: CHIMERA runtime is not aligned with latest release. Update required before start." >&2
         exit 1
       }
-      exec "$CONTROL" start
+      CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" start
       ;;
     -stop)
       ensure_runtime_files || {
@@ -413,7 +419,7 @@ main() {
         echo "error: CHIMERA runtime is not aligned with latest release. Update required before restart." >&2
         exit 1
       }
-      exec "$CONTROL" restart
+      CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" restart
       ;;
     -mesh|mesh)
       ensure_runtime_files || {
@@ -425,7 +431,7 @@ main() {
         echo "error: CHIMERA runtime is not aligned with latest release. Update required before mesh command." >&2
         exit 1
       }
-      exec "$CONTROL" mesh "${@:2}"
+      CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh "${@:2}"
       ;;
     -connect|connect)
       ensure_runtime_files || {
@@ -437,7 +443,7 @@ main() {
         echo "error: CHIMERA runtime is not aligned with latest release. Update required before connect." >&2
         exit 1
       }
-      exec "$CONTROL" mesh nodes connect "${@:2}"
+      CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh nodes connect "${@:2}"
       ;;
     -status)
       ensure_runtime_files || {

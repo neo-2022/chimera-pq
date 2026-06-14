@@ -73,6 +73,25 @@ verify_archive_checksum() {
   export CHIMERA_RELEASE_BUNDLE_SHA256
 }
 
+link_launchers() {
+  local chimera_home="${1:?chimera_home_required}"
+  local local_bin="${2:?local_bin_required}"
+  mkdir -p "$local_bin"
+  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera"
+  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera.sh"
+  ln -sfn "$chimera_home/scripts/chimera-sh" "$local_bin/chimera-sh"
+}
+
+restore_previous_release() {
+  local chimera_home="${1:?chimera_home_required}"
+  local backup_home="${2:-}"
+  local had_previous="${3:-0}"
+  rm -rf "$chimera_home"
+  if [[ "$had_previous" == "1" && -n "$backup_home" && -d "$backup_home" ]]; then
+    mv "$backup_home" "$chimera_home"
+  fi
+}
+
 install_release_archive() {
   local archive="${1:?archive_required}"
   local checksum_file="${2:?checksum_required}"
@@ -81,35 +100,54 @@ install_release_archive() {
   local extract_parent
   local extract_tmp
   local cleanup_extract_tmp
+  local prepared_release
+  local backup_home=""
+  local had_previous=0
   extract_parent="$(dirname "$chimera_home")"
 
+  mkdir -p "$extract_parent"
   extract_tmp="$(mktemp -d)"
   cleanup_extract_tmp="$(printf '%q' "$extract_tmp")"
   trap "rm -rf -- ${cleanup_extract_tmp}" RETURN
   tar -xzf "$archive" -C "$extract_tmp"
-  if [[ ! -d "$extract_tmp/chimera-release" ]]; then
+  prepared_release="$extract_tmp/chimera-release"
+  if [[ ! -d "$prepared_release" ]]; then
     echo "error: release archive did not contain chimera-release/" >&2
     return 1
   fi
-  rm -rf "$chimera_home"
-  mkdir -p "$extract_parent"
-  mv "$extract_tmp/chimera-release" "$chimera_home"
-  mkdir -p "$chimera_home/releases"
-  cp -f "$archive" "$chimera_home/releases/chimera-pq-release.tar.gz"
-  cp -f "$checksum_file" "$chimera_home/releases/chimera-pq-release.tar.gz.sha256"
+  mkdir -p "$prepared_release/releases"
+  cp -f "$archive" "$prepared_release/releases/chimera-pq-release.tar.gz"
+  cp -f "$checksum_file" "$prepared_release/releases/chimera-pq-release.tar.gz.sha256"
 
-  chmod +x "$chimera_home/bin/"* 2>/dev/null || true
-  chmod +x "$chimera_home/scripts/"*.sh 2>/dev/null || true
-  chmod +x "$chimera_home/scripts/chimera-sh" 2>/dev/null || true
+  chmod +x "$prepared_release/bin/"* 2>/dev/null || true
+  chmod +x "$prepared_release/scripts/"*.sh 2>/dev/null || true
+  chmod +x "$prepared_release/scripts/chimera-sh" 2>/dev/null || true
+
+  if [[ -e "$chimera_home" ]]; then
+    backup_home="$(mktemp -d "${extract_parent}/.chimera-previous.XXXXXX")"
+    rmdir "$backup_home"
+    mv "$chimera_home" "$backup_home"
+    had_previous=1
+  fi
+  if ! mv "$prepared_release" "$chimera_home"; then
+    restore_previous_release "$chimera_home" "$backup_home" "$had_previous"
+    return 1
+  fi
 
   CHIMERA_RELEASE_VERSION="${VERSION}"
   export CHIMERA_RELEASE_VERSION
-  bash "$chimera_home/scripts/install_desktop_control.sh"
+  local install_rc=0
+  bash "$chimera_home/scripts/install_desktop_control.sh" || install_rc=$?
+  if [[ "$install_rc" -ne 0 ]]; then
+    restore_previous_release "$chimera_home" "$backup_home" "$had_previous"
+    if [[ "$had_previous" == "1" ]]; then
+      link_launchers "$chimera_home" "$local_bin"
+    fi
+    return "$install_rc"
+  fi
 
-  mkdir -p "$local_bin"
-  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera"
-  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera.sh"
-  ln -sfn "$chimera_home/scripts/chimera-sh" "$local_bin/chimera-sh"
+  link_launchers "$chimera_home" "$local_bin"
+  [[ -n "$backup_home" ]] && rm -rf "$backup_home"
 
   echo "chimera_install=ok version=$VERSION home=$chimera_home"
 }

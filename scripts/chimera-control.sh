@@ -337,6 +337,28 @@ require_cmd() {
   }
 }
 
+update_first_launcher() {
+  printf '%s\n' "${CHIMERA_UPDATE_FIRST_LAUNCHER:-$ROOT_DIR/scripts/chimera-sh}"
+}
+
+require_update_first_checked() {
+  local launcher
+  [[ "${CHIMERA_UPDATE_FIRST_CHECKED:-0}" == "1" ]] && return 0
+  launcher="$(update_first_launcher)"
+  if [[ ! -x "$launcher" ]]; then
+    echo "error: update-first launcher is missing: $launcher" >&2
+    echo "hint: use chimera-sh for start, restart, mesh and connect commands." >&2
+    return 1
+  fi
+  return 2
+}
+
+dispatch_update_first() {
+  local launcher
+  launcher="$(update_first_launcher)"
+  exec "$launcher" "$@"
+}
+
 ensure_base_path() {
   export PATH="$HOME/.local/bin:$PATH"
 }
@@ -1940,12 +1962,20 @@ main() {
   local cmd="${1:-}"
   case "$cmd" in
     start)
+      if ! require_update_first_checked; then
+        dispatch_update_first -start
+        exit 1
+      fi
       start_runtime
       ;;
     stop)
       stop_runtime
       ;;
     restart)
+      if ! require_update_first_checked; then
+        dispatch_update_first -restart
+        exit 1
+      fi
       restart_runtime
       ;;
     status)
@@ -2091,6 +2121,20 @@ main() {
       site_auto_watch_loop
       ;;
     split-transparent)
+      case "${2:-status}" in
+        start)
+          if ! require_update_first_checked; then
+            dispatch_update_first -start
+            exit 1
+          fi
+          ;;
+        refresh)
+          if ! require_update_first_checked; then
+            dispatch_update_first -restart
+            exit 1
+          fi
+          ;;
+      esac
       split_transparent_dispatch "${2:-status}"
       ;;
     grant-perms)
@@ -2133,6 +2177,11 @@ main() {
       uninstall_runtime
       ;;
     mesh)
+      if ! require_update_first_checked; then
+        shift || true
+        dispatch_update_first -mesh "$@"
+        exit 1
+      fi
       shift || true
       run_chimera_cli mesh "$@"
       ;;

@@ -79,6 +79,73 @@ verify_checksum_required() {
   export CHIMERA_RELEASE_BUNDLE_SHA256
 }
 
+link_launchers() {
+  mkdir -p "${LOCAL_BIN}"
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera"
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera.sh"
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera-sh" "${LOCAL_BIN}/chimera-sh"
+}
+
+restore_previous_release() {
+  local backup_home="${1:-}"
+  local had_previous="${2:-0}"
+  rm -rf "$CHIMERA_HOME"
+  if [[ "$had_previous" == "1" && -n "$backup_home" && -d "$backup_home" ]]; then
+    mv "$backup_home" "$CHIMERA_HOME"
+  fi
+}
+
+install_prepared_release_tree() {
+  local prepared_release="${1:?prepared_release_required}"
+  local archive="${2:-}"
+  local checksum="${3:-}"
+  local parent_dir backup_home="" had_previous=0
+
+  [[ -d "$prepared_release" ]] || {
+    echo "error: prepared release tree not found: $prepared_release" >&2
+    return 1
+  }
+  parent_dir="$(dirname "$CHIMERA_HOME")"
+  mkdir -p "$parent_dir"
+
+  if [[ -n "$archive" && -n "$checksum" ]]; then
+    mkdir -p "$prepared_release/releases"
+    cp -f "$archive" "$prepared_release/releases/chimera-pq-release.tar.gz"
+    cp -f "$checksum" "$prepared_release/releases/chimera-pq-release.tar.gz.sha256"
+  fi
+
+  chmod +x "$prepared_release/bin/"*
+  chmod +x "$prepared_release/scripts/"*.sh
+  chmod +x "$prepared_release/bin/chimera-bootstrap" 2>/dev/null || true
+
+  if [[ -e "$CHIMERA_HOME" ]]; then
+    backup_home="$(mktemp -d "${parent_dir}/.chimera-previous.XXXXXX")"
+    rmdir "$backup_home"
+    mv "$CHIMERA_HOME" "$backup_home"
+    had_previous=1
+  fi
+  if ! mv "$prepared_release" "$CHIMERA_HOME"; then
+    restore_previous_release "$backup_home" "$had_previous"
+    return 1
+  fi
+
+  echo "install: running desktop control setup"
+  CHIMERA_RELEASE_VERSION="$(cat "${CHIMERA_HOME}/.chimera_release_version" 2>/dev/null || true)"
+  export CHIMERA_RELEASE_VERSION
+  local install_rc=0
+  bash "${CHIMERA_HOME}/scripts/install_desktop_control.sh" || install_rc=$?
+  if [[ "$install_rc" -ne 0 ]]; then
+    restore_previous_release "$backup_home" "$had_previous"
+    if [[ "$had_previous" == "1" ]]; then
+      link_launchers
+    fi
+    return "$install_rc"
+  fi
+
+  link_launchers
+  [[ -n "$backup_home" ]] && rm -rf "$backup_home"
+}
+
 install_from_archive() {
   local archive="${1:?archive_required}"
   local checksum
@@ -94,12 +161,7 @@ install_from_archive() {
     echo "error: release archive did not contain chimera-release/" >&2
     return 1
   fi
-  rm -rf "$CHIMERA_HOME"
-  mkdir -p "$(dirname "$CHIMERA_HOME")"
-  mv "$extract_tmp/chimera-release" "$CHIMERA_HOME"
-  mkdir -p "$CHIMERA_HOME/releases"
-  cp -f "$archive" "$CHIMERA_HOME/releases/chimera-pq-release.tar.gz"
-  cp -f "$checksum" "$CHIMERA_HOME/releases/chimera-pq-release.tar.gz.sha256"
+  install_prepared_release_tree "$extract_tmp/chimera-release" "$archive" "$checksum"
 }
 
 require_local_source_opt_in() {
@@ -116,9 +178,10 @@ echo "  source: ${BUNDLE_SOURCE}"
 if [[ -d "${BUNDLE_SOURCE}" ]]; then
   require_local_source_opt_in
   echo "install: copying release directory"
-  rm -rf "${CHIMERA_HOME}"
-  mkdir -p "$(dirname "${CHIMERA_HOME}")"
-  cp -a "${BUNDLE_SOURCE}" "${CHIMERA_HOME}"
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TMP_DIR"' EXIT
+  cp -a "${BUNDLE_SOURCE}" "${TMP_DIR}/chimera-release"
+  install_prepared_release_tree "${TMP_DIR}/chimera-release"
 elif [[ -f "${BUNDLE_SOURCE}" && "${BUNDLE_SOURCE}" == *.tar.gz ]]; then
   require_local_source_opt_in
   echo "install: extracting tarball"
@@ -145,20 +208,6 @@ else
   echo "usage: ${0} [<path-to-tarball> | <path-to-release-dir> | <url>]" >&2
   exit 1
 fi
-
-chmod +x "${CHIMERA_HOME}/bin/"*
-chmod +x "${CHIMERA_HOME}/scripts/"*.sh
-chmod +x "${CHIMERA_HOME}/bin/chimera-bootstrap" 2>/dev/null || true
-
-echo "install: running desktop control setup"
-CHIMERA_RELEASE_VERSION="$(cat "${CHIMERA_HOME}/.chimera_release_version" 2>/dev/null || true)"
-export CHIMERA_RELEASE_VERSION
-bash "${CHIMERA_HOME}/scripts/install_desktop_control.sh"
-
-mkdir -p "${LOCAL_BIN}"
-ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera"
-ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera.sh"
-ln -sfn "${CHIMERA_HOME}/scripts/chimera-sh" "${LOCAL_BIN}/chimera-sh"
 
 echo
 echo "CHIMERA self-contained install complete."

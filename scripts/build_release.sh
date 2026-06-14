@@ -2,10 +2,22 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_DIR="${ROOT_DIR}/target/chimera-release"
-RELEASE_VERSION="${CHIMERA_RELEASE_VERSION:-$(date +%Y%m%d-%H%M%S)}"
+release_version_from_exact_tag() {
+  local tag=""
+  tag="$(git -C "$ROOT_DIR" describe --tags --exact-match 2>/dev/null || true)"
+  [[ "$tag" == v* ]] || return 1
+  printf '%s\n' "${tag#v}"
+}
+
+RELEASE_VERSION="${CHIMERA_RELEASE_VERSION:-$(release_version_from_exact_tag || true)}"
 ARCHIVE_NAME="chimera-pq-${RELEASE_VERSION}.tar.gz"
 LATEST_ARCHIVE_NAME="chimera-pq-release.tar.gz"
 LATEST_CHECKSUM_NAME="${LATEST_ARCHIVE_NAME}.sha256"
+
+if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+  echo "error: CHIMERA_RELEASE_VERSION must be semver X.Y.Z, or build from an exact vX.Y.Z tag" >&2
+  exit 2
+fi
 
 echo "build_release: version=${RELEASE_VERSION}"
 

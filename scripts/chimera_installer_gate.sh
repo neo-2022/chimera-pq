@@ -32,6 +32,9 @@ rg -n '^StandardError=append:%h/\.cache/chimera/chimera_client\.service\.log$' \
 rg -n 'reason=node_service_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_does_not_fail_failed_node"
 rg -n 'reason=transparent_service_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_does_not_fail_failed_transparent"
 rg -n 'ensure_runtime_log_paths' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation"
+rg -n 'CHIMERA_UPDATE_FIRST_CHECKED' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_update_first_guard"
+rg -n 'dispatch_update_first -start' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_can_bypass_update_first"
+rg -n 'dispatch_update_first -mesh' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_mesh_can_bypass_update_first"
 
 rg -n '^VERSION="' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_version_metadata"
 rg -n '^ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz"' \
@@ -43,6 +46,8 @@ rg -n 'CHIMERA_RELEASE_BUNDLE_SHA256=' "$ROOT_DIR/scripts/chimera.sh" >/dev/null
 rg -n 'https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh' \
   "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_update_url_not_latest_chimera_pq"
 rg -n 'auto_update_if_needed "\$cmd" "\$\{@:2\}"' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_update_first_for_mesh_or_connect"
+rg -n 'CHIMERA_UPDATE_FIRST_CHECKED=1 exec "\$CONTROL" start' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_start_missing_update_first_marker"
+rg -n 'CHIMERA_UPDATE_FIRST_CHECKED=1 exec "\$CONTROL" mesh' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_mesh_missing_update_first_marker"
 rg -n 'CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_peer_update_bootstrap_urls"
 rg -n 'UPDATE_PEER_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_peer_update_bootstrap_url_file"
 rg -n 'try_update_from_bootstrap_source "peer"' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_missing_peer_update_fallback"
@@ -57,6 +62,10 @@ rg -n 'set_write_timeout' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev
 rg -n 'HTTP request header timed out' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev/null || fail "peer_release_missing_header_deadline"
 rg -n 'too_many_active_connections' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev/null || fail "peer_release_missing_active_connection_reject"
 rg -n 'LATEST_ARCHIVE_NAME="chimera-pq-release\.tar\.gz"' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_stable_latest_archive"
+rg -n 'CHIMERA_RELEASE_VERSION must be semver' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_semver_guard"
+if rg -n 'date \+%Y%m%d' "$ROOT_DIR/scripts/build_release.sh" >/dev/null; then
+  fail "release_build_uses_timestamp_version_fallback"
+fi
 rg -n 'cargo build --release' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_binary_build_step"
 rg -n 'target/release/chimera-cli' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_ready_binary_copy"
 rg -n 'target/chimera\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_public_bootstrap_asset"
@@ -78,6 +87,7 @@ rg -n '"node" \| "weave-node" => Mode::Node' "$ROOT_DIR/crates/chimera-carrier/s
 rg -n 'Mode::Node => node::run_node' "$ROOT_DIR/crates/chimera-carrier/src/bin/chimera-peer-egress.rs" >/dev/null || fail "peer_egress_binary_not_dispatching_node_mode"
 rg -n 'remote release checksum is required for URL install' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_url_checksum_not_required"
 rg -n 'verify_checksum_required' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_missing_checksum_verification"
+rg -n 'restore_previous_release' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_missing_failed_update_restore"
 rg -n 'release checksum is required before archive extraction' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_local_archive_checksum_not_required"
 rg -n 'DEFAULT_RELEASE_URL="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release\.tar\.gz"' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_default_not_github_latest"
 if rg -n 'cargo run|CHIMERA_ALLOW_CARGO_FALLBACK|CHIMERA_ALLOW_BUILD_FALLBACK|ALLOW_BUILD_FALLBACK' \
