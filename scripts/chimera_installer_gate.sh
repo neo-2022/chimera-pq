@@ -110,6 +110,8 @@ fi
 rg -n 'chimera-release/bin/chimera-bootstrap' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_bootstrap_binary_content_guard"
 rg -n 'chimera-release/scripts/install_release\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_installer_content_guard"
 rg -n 'chimera-release/scripts/chimera-update\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_module_content_guard"
+rg -n '^[[:space:]]*--base-url http://node\.example:18179' "$ROOT_DIR/docs/OPERATIONS.md" >/dev/null || fail "operations_missing_peer_release_base_url_example"
+rg -n 'serve_release\(Path::new\(&root\), &listen, base_url\.as_deref\(\)\)' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev/null || fail "bootstrap_missing_peer_release_base_url_wiring"
 rg -n '\.sha256' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_checksum_output"
 rg -n 'sha256sum -c "\$\{LATEST_CHECKSUM_NAME\}"' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_checksum_self_verify"
 [[ -f "$ROOT_DIR/.github/workflows/release.yml" ]] || fail "github_release_workflow_missing"
