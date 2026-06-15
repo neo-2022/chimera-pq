@@ -70,6 +70,13 @@ fn policy_from_dps_payload_parses_connect_fallback_ports() {
 }
 
 #[test]
+fn policy_from_dps_payload_accepts_route_binding_control_key() {
+    let payload = "allow=mesh;mesh_allowed_regions=eu;mesh_route_binding_id=7001";
+    let policy = MeshPathPolicy::from_dps_payload(payload).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(policy.allowed_regions, vec!["eu".to_string()]);
+}
+
+#[test]
 fn policy_from_dps_payload_rejects_invalid_values() {
     assert!(MeshPathPolicy::from_dps_payload("mesh_max_peers=0").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_max_load=101").is_err());
@@ -78,12 +85,17 @@ fn policy_from_dps_payload_rejects_invalid_values() {
     assert!(MeshPathPolicy::from_dps_payload("mesh_connect_fallback_ports=").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_connect_fallback_ports=0").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_connect_fallback_ports=abc").is_err());
+    assert!(MeshPathPolicy::from_dps_payload("mesh_route_binding_id=0").is_err());
     assert!(
         MeshPathPolicy::from_dps_payload("mesh_max_peers=1;mesh_max_selected_per_region=2")
             .is_err()
     );
     assert!(MeshPathPolicy::from_dps_payload("mesh_typo_key=1").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_max_peers=1;mesh_max_peers=2").is_err());
+    assert!(
+        MeshPathPolicy::from_dps_payload("mesh_route_binding_id=1;MESH_ROUTE_BINDING_ID=2")
+            .is_err()
+    );
     assert!(MeshPathPolicy::from_dps_payload("mesh_max_peers=1;MESH_MAX_PEERS=2").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_min_distinct_regions=0").is_err());
     assert!(

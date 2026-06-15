@@ -64,7 +64,7 @@ impl MeshRuntime {
         let mut plan = self.failover_plan(request, &policy, event)?;
         annotate_dps_payload_explain(&mut plan.explain, payload, "failover");
         adapt_standby_shadow_from_dps(&mut plan.explain);
-        dps_eval::apply_dps_multipath_schedule(payload, &mut plan);
+        dps_eval::apply_dps_multipath_schedule(payload, &mut plan)?;
         Ok(plan)
     }
 
@@ -88,7 +88,7 @@ impl MeshRuntime {
         let mut plan = self.reselection_plan_with_health(request, &policy, health)?;
         annotate_dps_payload_explain(&mut plan.explain, payload, "reselection");
         adapt_standby_shadow_from_dps(&mut plan.explain);
-        dps_eval::apply_dps_multipath_schedule(payload, &mut plan);
+        dps_eval::apply_dps_multipath_schedule(payload, &mut plan)?;
         Ok(plan)
     }
 }

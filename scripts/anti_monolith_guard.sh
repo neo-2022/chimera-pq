@@ -18,6 +18,13 @@ LIMITS=(
   "crates/chimera-mesh/src/policy_parse.rs:220"
   "crates/chimera-mesh/src/model.rs:300"
   "crates/chimera-mesh/src/preemptive.rs:200"
+  "crates/chimera-session/src/lib.rs:80"
+  "crates/chimera-session/src/frame.rs:300"
+  "crates/chimera-session/src/replay.rs:120"
+  "crates/chimera-session/src/rekey.rs:160"
+  "crates/chimera-session/src/handshake/message.rs:320"
+  "crates/chimera-session/src/handshake/session.rs:420"
+  "crates/chimera-carrier/src/peer_egress/options.rs:420"
   "scripts/chimera-sh:260"
   "scripts/chimera-update.sh:550"
 )
@@ -69,6 +76,44 @@ while IFS= read -r cli_mesh_file; do
     FAILED=1
   fi
 done < <(find "crates/chimera-cli/src/mesh_cli" -maxdepth 1 -type f -name '*.rs' | sort)
+
+# Session crate must stay split by frame/replay/rekey/handshake domains.
+SESSION_FILE_LIMIT=420
+while IFS= read -r session_file; do
+  lines="$(wc -l < "$session_file" | tr -d ' ')"
+  if (( lines > SESSION_FILE_LIMIT )); then
+    echo "anti-monolith guard: FAIL $session_file lines=$lines limit=$SESSION_FILE_LIMIT" >&2
+    FAILED=1
+  fi
+done < <(find "crates/chimera-session/src" -mindepth 1 -type f -name '*.rs' | sort)
+
+SESSION_TEST_FILE_LIMIT=260
+while IFS= read -r session_test_file; do
+  lines="$(wc -l < "$session_test_file" | tr -d ' ')"
+  if (( lines > SESSION_TEST_FILE_LIMIT )); then
+    echo "anti-monolith guard: FAIL $session_test_file lines=$lines limit=$SESSION_TEST_FILE_LIMIT" >&2
+    FAILED=1
+  fi
+done < <(find "crates/chimera-session/src/session_tests" -type f -name '*.rs' | sort)
+
+# Carrier peer-egress files must remain split by protocol, node, transit and test domains.
+CARRIER_PEER_EGRESS_FILE_LIMIT=500
+while IFS= read -r carrier_peer_file; do
+  lines="$(wc -l < "$carrier_peer_file" | tr -d ' ')"
+  if (( lines > CARRIER_PEER_EGRESS_FILE_LIMIT )); then
+    echo "anti-monolith guard: FAIL $carrier_peer_file lines=$lines limit=$CARRIER_PEER_EGRESS_FILE_LIMIT" >&2
+    FAILED=1
+  fi
+done < <(find "crates/chimera-carrier/src/peer_egress" -maxdepth 2 -type f -name '*.rs' ! -path '*/transit_tests/*' ! -path '*/options_tests/*' | sort)
+
+CARRIER_PEER_EGRESS_TEST_FILE_LIMIT=320
+while IFS= read -r carrier_peer_test_file; do
+  lines="$(wc -l < "$carrier_peer_test_file" | tr -d ' ')"
+  if (( lines > CARRIER_PEER_EGRESS_TEST_FILE_LIMIT )); then
+    echo "anti-monolith guard: FAIL $carrier_peer_test_file lines=$lines limit=$CARRIER_PEER_EGRESS_TEST_FILE_LIMIT" >&2
+    FAILED=1
+  fi
+done < <(find "crates/chimera-carrier/src/peer_egress" -mindepth 2 -type f \( -path '*/transit_tests/*.rs' -o -path '*/options_tests/*.rs' \) | sort)
 
 # Mesh test leaf files must stay readable without becoming another runtime.
 MESH_TEST_FILE_LIMIT=450

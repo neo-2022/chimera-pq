@@ -462,6 +462,11 @@ impl MeshPathPolicy {
                 "mesh_continuity_policy" => {
                     let _ = ContinuityPolicy::from_dps_value(value)?;
                 }
+                "mesh_route_binding_id" => {
+                    if parse_u64_field(value, key)? == 0 {
+                        return Err("mesh policy route_binding_id must be nonzero".to_string());
+                    }
+                }
                 _ => {
                     if key_norm.starts_with("mesh_") {
                         return Err(format!(

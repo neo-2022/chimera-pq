@@ -1,4 +1,5 @@
 use super::*;
+use crate::multipath_model::MeshRouteBindingId;
 use crate::runtime::plan_dps_adaptation::apply_dps_traffic_hints_adaptation;
 use crate::runtime::standby_shadow_explain::adapt_standby_shadow_from_dps;
 
@@ -20,16 +21,35 @@ pub(super) fn plan_path_from_dps_payload(
     let mut plan = runtime.plan_path(request, &policy)?;
     annotate_dps_payload_explain(&mut plan.explain, payload, "plan");
     adapt_standby_shadow_from_dps(&mut plan.explain);
-    apply_dps_multipath_schedule(payload, &mut plan);
+    apply_dps_multipath_schedule(payload, &mut plan)?;
     Ok(plan)
 }
 
-pub(super) fn apply_dps_multipath_schedule(payload: &str, plan: &mut MeshPathPlan) {
+pub(super) fn apply_dps_multipath_schedule(
+    payload: &str,
+    plan: &mut MeshPathPlan,
+) -> Result<(), String> {
     if let Ok(hints) = traffic_hints_from_dps_payload(payload)
         && let Some(mode) = hints.multipath_mode
     {
-        replace_multipath_schedule(plan, schedule_mode_from_multipath_hint(mode));
+        replace_multipath_schedule(
+            plan,
+            schedule_mode_from_multipath_hint(mode),
+            mesh_route_binding_id_from_dps_payload(payload),
+        )?;
     }
+    Ok(())
+}
+
+fn mesh_route_binding_id_from_dps_payload(payload: &str) -> Option<MeshRouteBindingId> {
+    payload
+        .split(';')
+        .filter_map(|segment| segment.split_once('='))
+        .find_map(|(key, value)| {
+            (key.trim().eq_ignore_ascii_case("mesh_route_binding_id")).then_some(value.trim())
+        })
+        .and_then(|value| value.parse::<u64>().ok())
+        .and_then(|value| MeshRouteBindingId::new(value).ok())
 }
 
 pub(super) fn evaluate_dps_policy_payload(

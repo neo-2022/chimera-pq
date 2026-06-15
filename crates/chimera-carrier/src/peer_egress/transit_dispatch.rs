@@ -137,4 +137,28 @@ mod tests {
         assert!(dispatcher.pop_for(binding(9, 9)).is_err());
         Ok(())
     }
+
+    #[test]
+    fn dispatcher_allows_fresh_registration_after_binding_is_claimed() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let binding = binding(7, 1);
+
+        for _ in 0..3 {
+            dispatcher.register(binding, test_peer_stream()?)?;
+            assert!(dispatcher.contains_binding(binding)?);
+
+            let error = match dispatcher.register(binding, test_peer_stream()?) {
+                Ok(()) => return Err("occupied binding must fail before claim".to_string()),
+                Err(error) => error,
+            };
+            assert!(error.contains("ambiguous"));
+
+            let claimed_peer = dispatcher.pop_for(binding)?;
+            drop(claimed_peer);
+            assert!(!dispatcher.contains_binding(binding)?);
+        }
+
+        assert!(dispatcher.pop_for(binding).is_err());
+        Ok(())
+    }
 }

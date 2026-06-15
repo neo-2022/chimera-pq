@@ -391,6 +391,262 @@ make_fake_release_archive() {
   (cd "$out_dir" && sha256sum chimera-pq-release.tar.gz > chimera-pq-release.tar.gz.sha256)
 }
 
+make_fake_release_archive_with_current_installer() {
+  local out_dir="${1:?out_dir_required}"
+  local version="${2:?version_required}"
+  local release_dir="$out_dir/chimera-release"
+  mkdir -p \
+    "$release_dir/bin" \
+    "$release_dir/configs" \
+    "$release_dir/deploy/desktop" \
+    "$release_dir/deploy/systemd-user" \
+    "$release_dir/scripts"
+  printf '%s\n' "$version" >"$release_dir/.chimera_release_version"
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$release_dir/scripts/install_desktop_control.sh"
+  cat >"$release_dir/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    echo "grant_perms=skipped"
+    ;;
+esac
+EOF
+  cat >"$release_dir/scripts/chimera.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$release_dir/scripts/chimera-sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$release_dir/scripts/chimera-update.sh" <<'EOF'
+#!/usr/bin/env bash
+return 0 2>/dev/null || exit 0
+EOF
+  cat >"$release_dir/scripts/chimera_runtime_bootstrap.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$release_dir/scripts/chimera-control-tray.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$release_dir/scripts/chimera-control-launcher.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$release_dir/bin/chimera-bootstrap" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  cat >"$release_dir/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-sh
+EOF
+  cat >"$release_dir/deploy/systemd-user/chimera-gateway.service" <<'EOF'
+[Service]
+ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
+EOF
+  cat >"$release_dir/deploy/systemd-user/chimera-client.service" <<'EOF'
+[Service]
+ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
+EOF
+  printf '%s\n' 'CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000' \
+    >"$release_dir/configs/upstream_proxy.env.example"
+  chmod +x "$release_dir/scripts/"*.sh "$release_dir/bin/chimera-bootstrap"
+  tar -czf "$out_dir/chimera-pq-release.tar.gz" -C "$out_dir" chimera-release
+  (cd "$out_dir" && sha256sum chimera-pq-release.tar.gz > chimera-pq-release.tar.gz.sha256)
+}
+
+case_auto_update_preserves_bound_transit_env() (
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum env_file output rc
+  tmp_dir="$(mktemp -d)"
+  old_home="$tmp_dir/home/chimera"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  fake_bin="$tmp_dir/fake-bin"
+  env_file="$xdg_config/chimera/peer-egress.env"
+  mkdir -p "$old_home/scripts" "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
+  printf '%s\n' \
+    'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true' \
+    'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=/safe/test/lanes.csv' \
+    >"$env_file"
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.99"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+
+  set +e
+  output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_HOME="$old_home" \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_PEER_EGRESS_TOKEN=test-token \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "auto-update preserve env install failed: $output"
+  grep -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" \
+    || fail "auto-update lost bound transit allow env"
+  grep -q '^CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=/safe/test/lanes.csv$' "$env_file" \
+    || fail "auto-update lost transit lane bindings env"
+  [[ "$output" == *"peer_egress_transit_lane_bindings_file_configured=true"* ]] \
+    || fail "auto-update did not report lane bindings configured"
+  [[ "$output" != *"/safe/test/lanes.csv"* ]] || fail "auto-update leaked lane bindings path"
+  rm -rf "$tmp_dir"
+)
+
+case_peer_egress_env_shell_quotes_lane_bindings_path() (
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum env_file injected_path marker output rc
+  tmp_dir="$(mktemp -d)"
+  old_home="$tmp_dir/home/chimera"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  fake_bin="$tmp_dir/fake-bin"
+  env_file="$xdg_config/chimera/peer-egress.env"
+  marker="$tmp_dir/injection-ran"
+  injected_path="/safe/test/lanes.csv;touch $marker & echo \$HOME"
+  mkdir -p "$old_home/scripts" "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.99"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+
+  set +e
+  output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_HOME="$old_home" \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_PEER_EGRESS_TOKEN=test-token \
+    CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true \
+    CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE="$injected_path" \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "peer env shell quoting install failed: $output"
+  [[ ! -f "$marker" ]] || fail "lane bindings path injection executed during installer source"
+  grep -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" \
+    || fail "shell quoting test lost bound transit allow env"
+  grep -q '^CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=' "$env_file" \
+    || fail "shell quoting test did not write lane bindings env"
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_file"
+  set +a
+  [[ "${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-}" == "$injected_path" ]] \
+    || fail "shell quoted lane bindings path did not round-trip"
+  [[ ! -f "$marker" ]] || fail "lane bindings path injection executed during explicit source"
+  rm -rf "$tmp_dir"
+)
+
+case_auto_update_preserves_quoted_lane_bindings_env() (
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum env_file injected_path marker output rc
+  tmp_dir="$(mktemp -d)"
+  old_home="$tmp_dir/home/chimera"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  fake_bin="$tmp_dir/fake-bin"
+  env_file="$xdg_config/chimera/peer-egress.env"
+  marker="$tmp_dir/quoted-preserve-ran"
+  injected_path="/safe/test/lanes.csv;touch $marker"
+  mkdir -p "$old_home/scripts" "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
+  {
+    printf '%s\n' 'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true'
+    printf 'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=%q\n' "$injected_path"
+  } >"$env_file"
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.99"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+
+  set +e
+  output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_HOME="$old_home" \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_PEER_EGRESS_TOKEN=test-token \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "quoted preserve env install failed: $output"
+  [[ ! -f "$marker" ]] || fail "quoted preserved lane bindings path executed during install"
+  grep -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" \
+    || fail "quoted preserve lost bound transit allow env"
+  grep -q '^CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=' "$env_file" \
+    || fail "quoted preserve did not write lane bindings env"
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_file"
+  set +a
+  [[ "${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-}" == "$injected_path" ]] \
+    || fail "quoted preserved lane bindings path did not round-trip"
+  [[ ! -f "$marker" ]] || fail "quoted preserved lane bindings path executed during explicit source"
+  rm -rf "$tmp_dir"
+)
+
 case_failed_install_restores_previous_release() (
   local tmp_dir old_home archive checksum rc
   tmp_dir="$(mktemp -d)"
@@ -792,6 +1048,9 @@ case_github_invalid_bootstrap_parse_does_not_try_peer_fallback
 case_missing_local_version_blocks_when_update_unavailable
 case_missing_local_version_uses_update_repair
 case_semver_update_order
+case_auto_update_preserves_bound_transit_env
+case_peer_egress_env_shell_quotes_lane_bindings_path
+case_auto_update_preserves_quoted_lane_bindings_env
 case_failed_install_restores_previous_release
 case_failed_launcher_link_restores_previous_release
 case_peer_update_metadata_does_not_execute_peer_bootstrap

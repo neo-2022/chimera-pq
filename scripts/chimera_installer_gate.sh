@@ -149,6 +149,11 @@ rg -n 'gh release view --json tagName' "$ROOT_DIR/.github/workflows/release.yml"
 rg -n 'release assets do not match required set' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_asset_set_guard_missing"
 rg -n 'configure_peer_egress_env "node"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_not_weave_node_first"
 rg -n '^INSTALL_NODE_ROLE="\$\{CHIMERA_INSTALL_NODE_ROLE:-node\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_default_role_not_node"
+rg -n 'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transit_lane_bindings_env"
+rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_shell_safe_env_writer"
+rg -n 'case_auto_update_preserves_bound_transit_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_bound_transit_env_preservation_case"
+rg -n 'case_peer_egress_env_shell_quotes_lane_bindings_path' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_peer_env_shell_quote_case"
+rg -n 'case_auto_update_preserves_quoted_lane_bindings_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_quoted_lane_bindings_preservation_case"
 if rg -n 'configure_peer_egress_env "(vps|laptop)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
   fail "installer_writes_legacy_peer_egress_role"
 fi

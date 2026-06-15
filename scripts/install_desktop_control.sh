@@ -35,6 +35,80 @@ upsert_env_kv() {
   fi
 }
 
+shell_quote_env_value() {
+  local key="${1:?key_required}"
+  local value="${2:-}"
+  if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    echo "error: invalid control character in env value: $key" >&2
+    exit 2
+  fi
+  printf '%q' "$value"
+}
+
+write_env_kv() {
+  local key="${1:?key_required}"
+  local value="${2:-}"
+  printf '%s=%s\n' "$key" "$(shell_quote_env_value "$key" "$value")"
+}
+
+read_existing_peer_env_kv() {
+  local key="${1:?key_required}"
+  [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
+  local raw
+  raw="$(awk -v key="$key" 'index($0, key "=") == 1 { print substr($0, length(key) + 2); exit }' \
+    "$PEER_EGRESS_ENV_FILE" 2>/dev/null || true)"
+  decode_existing_env_rhs "$key" "$raw"
+}
+
+decode_existing_env_rhs() {
+  local key="${1:?key_required}"
+  local raw="${2:-}"
+  [[ -n "$raw" ]] || return 0
+  if printf '%s' "$raw" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    echo "error: invalid control character in existing peer env value: $key" >&2
+    exit 2
+  fi
+  local out="" char rest
+  while [[ -n "$raw" ]]; do
+    char="${raw:0:1}"
+    raw="${raw:1}"
+    if [[ "$char" == "\\" ]]; then
+      [[ -n "$raw" ]] || {
+        echo "error: dangling escape in existing peer env value: $key" >&2
+        exit 2
+      }
+      rest="${raw:0:1}"
+      raw="${raw:1}"
+      out+="$rest"
+    else
+      case "$char" in
+        '$'|'`'|'|'|'&'|'('|')'|'<'|'>'|'{'|'}')
+          echo "error: unsupported shell syntax in existing peer env value: $key" >&2
+          exit 2
+          ;;
+      esac
+      out+="$char"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+normalize_peer_env_bool() {
+  local value="${1:-false}"
+  case "$value" in
+    true|1|yes)
+      printf '%s\n' true
+      ;;
+    false|0|no|"")
+      printf '%s\n' false
+      ;;
+    *)
+      echo "error: invalid boolean value for peer egress config" >&2
+      exit 2
+      ;;
+  esac
+}
+
 generate_runtime_token() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 24
@@ -213,6 +287,12 @@ configure_peer_egress_env() {
   local connections="${CHIMERA_PEER_EGRESS_CONNECTIONS:-8}"
   local aead="${CHIMERA_PEER_EGRESS_AEAD:-aes256gcm}"
   local allow_pool_transit="${CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT:-false}"
+  local previous_allow_bound_transit previous_transit_lane_bindings_file
+  previous_allow_bound_transit="$(read_existing_peer_env_kv CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT)"
+  previous_transit_lane_bindings_file="$(read_existing_peer_env_kv CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE)"
+  local allow_bound_transit="${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT:-${previous_allow_bound_transit:-false}}"
+  local transit_lane_bindings_file="${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-${previous_transit_lane_bindings_file:-}}"
+  allow_bound_transit="$(normalize_peer_env_bool "$allow_bound_transit")"
   if [[ ! "$local_listen" == *:* ]]; then
     local_listen="127.0.0.1:${local_listen}"
   fi
@@ -231,19 +311,23 @@ configure_peer_egress_env() {
   mkdir -p "$(dirname "$PEER_EGRESS_ENV_FILE")"
   mkdir -p "$(dirname "$PEER_EGRESS_STATE_FILE")"
   {
-    printf 'CHIMERA_PEER_EGRESS_MODE=%s\n' "$mode"
-    printf 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=%s\n' "$local_listen"
-    printf 'CHIMERA_PEER_EGRESS_PEER_LISTEN=%s\n' "$peer_listen"
-    printf 'CHIMERA_PEER_EGRESS_STATE_FILE=%s\n' "$PEER_EGRESS_STATE_FILE"
-    printf 'CHIMERA_MESH_PEER_EGRESS_STATE_PATH=%s\n' "$PEER_EGRESS_STATE_FILE"
+    write_env_kv 'CHIMERA_PEER_EGRESS_MODE' "$mode"
+    write_env_kv 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN' "$local_listen"
+    write_env_kv 'CHIMERA_PEER_EGRESS_PEER_LISTEN' "$peer_listen"
+    write_env_kv 'CHIMERA_PEER_EGRESS_STATE_FILE' "$PEER_EGRESS_STATE_FILE"
+    write_env_kv 'CHIMERA_MESH_PEER_EGRESS_STATE_PATH' "$PEER_EGRESS_STATE_FILE"
     if [[ -n "$server" ]]; then
-      printf 'CHIMERA_PEER_EGRESS_SERVER=%s\n' "$server"
+      write_env_kv 'CHIMERA_PEER_EGRESS_SERVER' "$server"
     fi
-    printf 'CHIMERA_PEER_EGRESS_TOKEN=%s\n' "$invite_token"
-    printf 'CHIMERA_PEER_EGRESS_POOL=%s\n' "$pool"
-    printf 'CHIMERA_PEER_EGRESS_CONNECTIONS=%s\n' "$connections"
-    printf 'CHIMERA_PEER_EGRESS_AEAD=%s\n' "$aead"
-    printf 'CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT=%s\n' "$allow_pool_transit"
+    write_env_kv 'CHIMERA_PEER_EGRESS_TOKEN' "$invite_token"
+    write_env_kv 'CHIMERA_PEER_EGRESS_POOL' "$pool"
+    write_env_kv 'CHIMERA_PEER_EGRESS_CONNECTIONS' "$connections"
+    write_env_kv 'CHIMERA_PEER_EGRESS_AEAD' "$aead"
+    write_env_kv 'CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT' "$allow_pool_transit"
+    write_env_kv 'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT' "$allow_bound_transit"
+    if [[ -n "$transit_lane_bindings_file" ]]; then
+      write_env_kv 'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE' "$transit_lane_bindings_file"
+    fi
   } >"$PEER_EGRESS_ENV_FILE"
   chmod 600 "$PEER_EGRESS_ENV_FILE"
   echo "peer_egress_mode=$mode"
@@ -251,6 +335,10 @@ configure_peer_egress_env() {
   echo "peer_egress_peer_listen=$peer_listen"
   echo "peer_egress_state_file=$PEER_EGRESS_STATE_FILE"
   echo "peer_egress_allow_pool_transit=$allow_pool_transit"
+  echo "peer_egress_allow_bound_transit=$allow_bound_transit"
+  if [[ -n "$transit_lane_bindings_file" ]]; then
+    echo "peer_egress_transit_lane_bindings_file_configured=true"
+  fi
   if [[ -n "$server" ]]; then
     echo "peer_egress_server=$server"
   fi
@@ -264,19 +352,19 @@ configure_transparent_runtime_env() {
   local transit_local="${CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL:-${CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL:-127.0.0.1:18135}}"
   mkdir -p "$(dirname "$TRANSPARENT_RUNTIME_ENV_FILE")"
   {
-    printf 'CHIMERA_TRANSPARENT_BIN=%s\n' "${CHIMERA_TRANSPARENT_BIN:-$ROOT_DIR/bin/chimera-transparent-tcp}"
-    printf 'CHIMERA_TRANSPARENT_TCP_LISTEN=%s\n' "$listen"
-    printf 'CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL=%s\n' "$transit_local"
-    printf 'CHIMERA_TRANSPARENT_TCP_DIRECT_MODE=%s\n' "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-auto}"
-    printf 'CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS:-1200}"
-    printf 'CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS:-1800}"
-    printf 'CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS=%s\n' "${CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS:-500}"
-    printf 'CHIMERA_REDIRECT_TABLE=%s\n' "${CHIMERA_REDIRECT_TABLE:-chimera_redirect}"
-    printf 'CHIMERA_REDIRECT_CHAIN=%s\n' "${CHIMERA_REDIRECT_CHAIN:-output}"
-    printf 'CHIMERA_REDIRECT_EXEMPT_UID=%s\n' "${CHIMERA_REDIRECT_EXEMPT_UID:-$exempt_uid}"
-    printf 'CHIMERA_TRANSPARENT_RUNTIME_UID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-0}"
-    printf 'CHIMERA_TRANSPARENT_RUNTIME_GID=%s\n' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-0}"
-    printf 'CHIMERA_RUNNER_USE_SUDO=%s\n' "${CHIMERA_RUNNER_USE_SUDO:-1}"
+    write_env_kv 'CHIMERA_TRANSPARENT_BIN' "${CHIMERA_TRANSPARENT_BIN:-$ROOT_DIR/bin/chimera-transparent-tcp}"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_LISTEN' "$listen"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL' "$transit_local"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_DIRECT_MODE' "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-auto}"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS' "${CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS:-1200}"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS' "${CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS:-1800}"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS' "${CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS:-500}"
+    write_env_kv 'CHIMERA_REDIRECT_TABLE' "${CHIMERA_REDIRECT_TABLE:-chimera_redirect}"
+    write_env_kv 'CHIMERA_REDIRECT_CHAIN' "${CHIMERA_REDIRECT_CHAIN:-output}"
+    write_env_kv 'CHIMERA_REDIRECT_EXEMPT_UID' "${CHIMERA_REDIRECT_EXEMPT_UID:-$exempt_uid}"
+    write_env_kv 'CHIMERA_TRANSPARENT_RUNTIME_UID' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-0}"
+    write_env_kv 'CHIMERA_TRANSPARENT_RUNTIME_GID' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-0}"
+    write_env_kv 'CHIMERA_RUNNER_USE_SUDO' "${CHIMERA_RUNNER_USE_SUDO:-1}"
   } >"$TRANSPARENT_RUNTIME_ENV_FILE"
   chmod 600 "$TRANSPARENT_RUNTIME_ENV_FILE"
   echo "transparent_runtime_listen=$listen"

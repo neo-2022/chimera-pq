@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod model;
+mod multipath_model;
 mod nodes_explain;
 mod nodes_grouping;
 mod nodes_model;
@@ -14,9 +15,12 @@ mod runtime;
 mod weave_contract;
 
 pub use model::{
-    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshMultipathLane,
-    MeshMultipathLaneRole, MeshMultipathMode, MeshMultipathSchedule, MeshPathPlan, MeshPeerHealth,
-    MeshPeerState, PreemptiveRisk, SwitchDecision,
+    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
+    MeshPeerHealth, MeshPeerState, PreemptiveRisk, SwitchDecision,
+};
+pub use multipath_model::{
+    MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode,
+    MeshMultipathSchedule, MeshRouteBindingId,
 };
 pub use nodes_explain::{build_mesh_node_explain, render_mesh_node_explain};
 pub use nodes_grouping::{

@@ -1,4 +1,5 @@
 pub mod handshake;
+pub mod lane_binding;
 pub mod modes;
 pub mod net;
 pub mod node;
@@ -14,6 +15,10 @@ pub mod wire;
 
 pub use handshake::{
     authenticate_peer, establish_secure_peer_client, establish_secure_peer_server,
+};
+pub use lane_binding::{
+    TransitLaneRegistration, load_transit_lane_registrations, parse_transit_lane_registrations,
+    transit_lane_registration_from_mesh_lane, transit_path_binding_from_mesh_lane,
 };
 pub use modes::{
     handle_local_client, laptop_worker, outbound_peer_worker, run_bench, run_download_echo,

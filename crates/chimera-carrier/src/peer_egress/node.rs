@@ -3,8 +3,10 @@ use std::thread;
 use std::time::Duration;
 
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
+use crate::peer_egress::lane_binding::load_transit_lane_registrations;
 use crate::peer_egress::modes::{
     handle_local_client_with_first_byte, outbound_peer_worker_with_next_hop,
+    outbound_transit_lane_registration_worker,
 };
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
@@ -13,7 +15,8 @@ use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::protocol::redacted_log_reason;
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
 use crate::peer_egress::transit::{
-    relay_local_bound_sealed_transit_to_next_hop, relay_local_sealed_transit,
+    BoundPeerTransitPolicy, relay_local_bound_sealed_transit_to_next_hop,
+    relay_local_sealed_transit,
 };
 use crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC;
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
@@ -78,6 +81,10 @@ pub fn run_node(options: Options) -> Result<(), String> {
     let aead = options.aead;
     let peer_pool = new_shared_pool();
     let transit_dispatcher = new_shared_transit_dispatcher();
+    let transit_lane_registrations = match &options.transit_lane_bindings_file {
+        Some(path) => load_transit_lane_registrations(path)?,
+        None => Vec::new(),
+    };
     let ingress_pool = peer_pool.clone();
     thread::spawn(move || {
         for incoming in peer_listener.incoming() {
@@ -103,6 +110,26 @@ pub fn run_node(options: Options) -> Result<(), String> {
         }
     });
 
+    for registration in transit_lane_registrations {
+        let worker = options.clone();
+        let dispatcher = transit_dispatcher.clone();
+        thread::spawn(move || {
+            loop {
+                if let Err(error) = outbound_transit_lane_registration_worker(
+                    &worker,
+                    &registration,
+                    dispatcher.clone(),
+                ) {
+                    eprintln!(
+                        "event=weave_transit_lane_worker_error reason_class={}",
+                        redacted_log_reason(&error)
+                    );
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        });
+    }
+
     if startup_contract.outbound_bootstrap_configured {
         for _ in 0..options.pool {
             let worker = options.clone();
@@ -127,13 +154,14 @@ pub fn run_node(options: Options) -> Result<(), String> {
     }
 
     println!(
-        "chimera_peer_egress=node_ready local={} peer={} resolved_local={} resolved_peer={} outbound_bootstrap_configured={} pool_transit_allowed={} capabilities={}",
+        "chimera_peer_egress=node_ready local={} peer={} resolved_local={} resolved_peer={} outbound_bootstrap_configured={} pool_transit_allowed={} bound_transit_allowed={} capabilities={}",
         startup_contract.local_listen,
         startup_contract.peer_listen,
         resolved_local_listen,
         resolved_peer_listen,
         startup_contract.outbound_bootstrap_configured,
         startup_contract.pool_transit_allowed,
+        startup_contract.bound_transit_allowed,
         startup_contract.capability_names().join(",")
     );
     for incoming in local_listener.incoming() {
@@ -173,12 +201,16 @@ pub fn run_node(options: Options) -> Result<(), String> {
             Ok(())
                 if classify_local_ingress(first[0]) == LocalIngressBranch::BoundSealedTransit =>
             {
-                let bound_pool = peer_pool.clone();
+                let bound_dispatcher = transit_dispatcher.clone();
+                let bound_policy = BoundPeerTransitPolicy::from_bool(options.allow_bound_transit);
                 eprintln!("event=weave_local_ingress_bound_transit_branch");
                 thread::spawn(move || {
-                    if let Err(error) =
-                        relay_local_bound_sealed_transit_to_next_hop(local, bound_pool, first[0])
-                    {
+                    if let Err(error) = relay_local_bound_sealed_transit_to_next_hop(
+                        local,
+                        bound_policy,
+                        Some(bound_dispatcher),
+                        first[0],
+                    ) {
                         eprintln!(
                             "event=weave_local_ingress_bound_transit_error reason_class={}",
                             redacted_log_reason(&error)

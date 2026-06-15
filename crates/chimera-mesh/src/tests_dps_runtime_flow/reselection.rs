@@ -182,7 +182,8 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         node_name: "node-client".to_string(),
         invite_token: None,
     };
-    let payload = "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard";
+    let payload =
+        "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7102";
     let health = [MeshPeerHealth {
         node_id: "node-a".to_string(),
         healthy: true,
@@ -193,11 +194,33 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(plan.multipath_schedule.mode.as_str(), "flow_shard");
     assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 2);
+    assert_eq!(
+        plan.multipath_schedule.carrier_lane_bindings[0].peer_node_id,
+        "node-a"
+    );
+    assert_eq!(
+        plan.multipath_schedule.carrier_lane_bindings[0].carrier_endpoint,
+        "198.51.100.72:443"
+    );
+    assert_eq!(
+        plan.multipath_schedule.carrier_lane_bindings[1].peer_node_id,
+        "node-b"
+    );
+    assert_eq!(
+        plan.multipath_schedule.carrier_lane_bindings[1].carrier_endpoint,
+        "198.51.100.73:443"
+    );
     assert!(
         plan.explain
             .iter()
             .any(|line| line.contains("multipath_schedule_mode=flow_shard"))
     );
+    assert!(plan.explain.iter().any(|line| {
+        line.contains(
+            "multipath_schedule_carrier_binding_contract=carrier_lane_binding_contract_ready",
+        )
+    }));
 }
 
 #[test]

@@ -12,7 +12,7 @@ use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::secure_halves::{
     SecurePeerReader, SecurePeerWriter, split_secure_peer_stream,
 };
-use crate::peer_egress::transit_binding::{BoundTransitRelayFrame, TransitPathBinding};
+use crate::peer_egress::transit_binding::BoundTransitRelayFrame;
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 use crate::peer_egress::wire::{
     PeerMessage, write_bound_sealed_transit_message, write_sealed_transit_message,
@@ -33,6 +33,22 @@ impl PeerTransitPolicy {
             Self::AllowPoolNextHop
         } else {
             Self::DenyPoolNextHop
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundPeerTransitPolicy {
+    DenyBoundNextHop,
+    AllowBoundNextHop,
+}
+
+impl BoundPeerTransitPolicy {
+    pub fn from_bool(allowed: bool) -> Self {
+        if allowed {
+            Self::AllowBoundNextHop
+        } else {
+            Self::DenyBoundNextHop
         }
     }
 }
@@ -114,12 +130,16 @@ pub fn relay_local_bound_sealed_transit(
 
 pub fn relay_local_bound_sealed_transit_to_next_hop(
     mut local: TcpStream,
-    peer_pool: SharedPeerPool,
+    policy: BoundPeerTransitPolicy,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
     first_byte: u8,
 ) -> Result<(), String> {
+    if policy != BoundPeerTransitPolicy::AllowBoundNextHop {
+        return Err("sealed transit next hop denied by policy".to_string());
+    }
     tune_tcp(&local)?;
     let first = read_weave_bound_sealed_transit_frame(&mut local, first_byte)?;
-    let peer = pop_bound_transit_lane_next_hop(&peer_pool, first.binding())?;
+    let peer = pop_bound_transit_dispatch_next_hop(dispatcher, first.binding())?;
     relay_local_bound_sealed_transit_after_first(local, peer, first)
 }
 
@@ -159,36 +179,13 @@ fn relay_local_bound_sealed_transit_after_first(
     }
 }
 
-fn pop_bound_transit_lane_next_hop(
-    peer_pool: &SharedPeerPool,
-    binding: TransitPathBinding,
-) -> Result<SecurePeerStream, String> {
-    let lane_index = usize::from(binding.lane_id().get().saturating_sub(1));
-    peer_pool
-        .try_pop_index(lane_index)?
-        .ok_or_else(|| "sealed transit lane binding next hop unavailable".to_string())
-}
-
 fn pop_bound_transit_dispatch_next_hop(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
-    next_hops: Option<SharedPeerPool>,
-    binding: TransitPathBinding,
+    binding: crate::peer_egress::transit_binding::TransitPathBinding,
 ) -> Result<SecurePeerStream, String> {
-    let mut dispatcher_binding_error = None;
-    if let Some(dispatcher) = dispatcher {
-        match dispatcher.pop_for(binding) {
-            Ok(peer) => return Ok(peer),
-            Err(error) if error.contains("binding unavailable") => {
-                dispatcher_binding_error = Some(error);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-    let pool = next_hops.ok_or_else(|| {
-        dispatcher_binding_error
-            .unwrap_or_else(|| "sealed transit path binding dispatcher unavailable".to_string())
-    })?;
-    pop_bound_transit_lane_next_hop(&pool, binding)
+    let dispatcher = dispatcher
+        .ok_or_else(|| "sealed transit path binding dispatcher unavailable".to_string())?;
+    dispatcher.pop_for(binding)
 }
 
 pub fn forward_peer_sealed_transit_to_next_hop(
@@ -215,15 +212,14 @@ pub fn forward_peer_sealed_transit_to_next_hop(
 
 pub fn forward_bound_peer_sealed_transit_to_next_hop(
     source: SecurePeerStream,
-    policy: PeerTransitPolicy,
+    policy: BoundPeerTransitPolicy,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
-    next_hops: Option<SharedPeerPool>,
     first: BoundTransitRelayFrame,
 ) -> Result<(), String> {
-    if policy != PeerTransitPolicy::AllowPoolNextHop {
+    if policy != BoundPeerTransitPolicy::AllowBoundNextHop {
         return Err("sealed transit next hop denied by policy".to_string());
     }
-    let next_peer = pop_bound_transit_dispatch_next_hop(dispatcher, next_hops, first.binding())?;
+    let next_peer = pop_bound_transit_dispatch_next_hop(dispatcher, first.binding())?;
     forward_peer_sealed_transit_pair(source, next_peer, first.into_frame())
 }
 
@@ -365,612 +361,5 @@ pub fn read_weave_bound_sealed_transit_frame<R: Read>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        PeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop,
-        forward_peer_sealed_transit_to_next_hop, forward_transit_relay_frame,
-        read_weave_bound_sealed_transit_frame, read_weave_sealed_transit_frame,
-        relay_local_bound_sealed_transit, validate_transit_relay_frame,
-    };
-    use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_connect_message};
-    use chimera_session::{Frame, FrameKind};
-    use std::io;
-    use std::io::{Cursor, Read, Write};
-
-    fn encoded_frame(kind: FrameKind, packet_number: u64, payload: &[u8]) -> Vec<u8> {
-        match (Frame {
-            kind,
-            packet_number,
-            payload: payload.to_vec(),
-        })
-        .encode()
-        {
-            Ok(encoded) => encoded,
-            Err(error) => unreachable!("frame must encode: {error}"),
-        }
-    }
-
-    fn binding(route: u64, lane: u16) -> crate::peer_egress::transit_binding::TransitPathBinding {
-        crate::peer_egress::transit_binding::TransitPathBinding::new(
-            crate::peer_egress::transit_binding::TransitRouteId::new(route)
-                .unwrap_or_else(|error| unreachable!("route id must be valid: {error}")),
-            crate::peer_egress::transit_binding::TransitLaneId::new(lane)
-                .unwrap_or_else(|error| unreachable!("lane id must be valid: {error}")),
-        )
-    }
-
-    fn tcp_pair() -> Result<(std::net::TcpStream, std::net::TcpStream), String> {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .map_err(|error| format!("bind test listener failed: {error}"))?;
-        let addr = listener
-            .local_addr()
-            .map_err(|error| format!("read test listener addr failed: {error}"))?;
-        let client = std::net::TcpStream::connect(addr)
-            .map_err(|error| format!("connect test client failed: {error}"))?;
-        let (server, _) = listener
-            .accept()
-            .map_err(|error| format!("accept test server failed: {error}"))?;
-        Ok((client, server))
-    }
-
-    fn test_peer_pair() -> Result<
-        (
-            crate::peer_egress::protocol::SecurePeerStream,
-            crate::peer_egress::protocol::SecurePeerStream,
-        ),
-        String,
-    > {
-        let transcript = chimera_crypto::TranscriptHash::from_messages(&[b"peer-transit-test"]);
-        let secrets = chimera_crypto::derive_traffic_secrets(
-            chimera_crypto::SuiteId(
-                crate::peer_egress::options::AeadSuite::Chacha20Poly1305.suite_id(),
-            ),
-            &transcript,
-            &[11_u8; 32],
-        )
-        .map_err(|error| format!("derive test secrets failed: {error}"))?;
-        let (left, right) = tcp_pair()?;
-        Ok((
-            crate::peer_egress::protocol::SecurePeerStream {
-                stream: left,
-                send_secret: secrets.initiator_to_responder().clone(),
-                recv_secret: secrets.responder_to_initiator().clone(),
-                send_packet: 0,
-                recv_packet: 0,
-                aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
-            },
-            crate::peer_egress::protocol::SecurePeerStream {
-                stream: right,
-                send_secret: secrets.responder_to_initiator().clone(),
-                recv_secret: secrets.initiator_to_responder().clone(),
-                send_packet: 0,
-                recv_packet: 0,
-                aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
-            },
-        ))
-    }
-
-    #[test]
-    fn transit_relay_frame_forwards_unchanged() -> Result<(), String> {
-        let encoded = encoded_frame(FrameKind::Data, 42, b"third-party payload");
-        let frame = validate_transit_relay_frame(&encoded)?;
-        assert_eq!(frame.kind(), FrameKind::Data);
-        assert_eq!(frame.packet_number(), 42);
-        assert_eq!(frame.payload_len(), "third-party payload".len());
-        assert_eq!(frame.sealed_bytes(), encoded.as_slice());
-        let forwarded = forward_transit_relay_frame(&encoded)?;
-        assert_eq!(forwarded, encoded);
-        Ok(())
-    }
-
-    #[test]
-    fn transit_relay_frame_rejects_truncated_input() {
-        let encoded = encoded_frame(FrameKind::Fin, 7, b"opaque");
-        let truncated = &encoded[..encoded.len() - 1];
-        let result = validate_transit_relay_frame(truncated);
-        assert!(result.is_err());
-        assert!(forward_transit_relay_frame(truncated).is_err());
-    }
-
-    #[test]
-    fn transit_relay_frame_debug_redacts_bytes() -> Result<(), String> {
-        let encoded = encoded_frame(FrameKind::Fin, 11, b"closed payload");
-        let frame = validate_transit_relay_frame(&encoded)?;
-        let debug = format!("{frame:?}");
-        assert!(debug.contains("<sealed>"));
-        assert!(!debug.contains("closed payload"));
-        Ok(())
-    }
-
-    #[test]
-    fn transit_relay_reader_preserves_metadata_without_payload_leak() -> Result<(), String> {
-        let encoded = encoded_frame(FrameKind::Data, 99, b"opaque bytes");
-        let mut cursor = Cursor::new(encoded.clone());
-        let first = {
-            let mut byte = [0_u8; 1];
-            cursor
-                .read_exact(&mut byte)
-                .map_err(|error| error.to_string())?;
-            byte[0]
-        };
-        let frame = read_weave_sealed_transit_frame(&mut cursor, first)?;
-        let debug = format!("{frame:?}");
-        assert_eq!(frame.sealed_bytes(), encoded.as_slice());
-        assert!(debug.contains("<sealed>"));
-        assert!(!debug.contains("opaque bytes"));
-        Ok(())
-    }
-
-    #[test]
-    fn bound_transit_relay_reader_preserves_binding_and_sealed_bytes_without_payload_leak()
-    -> Result<(), String> {
-        let encoded = encoded_frame(FrameKind::Data, 100, b"bound opaque bytes");
-        let bound = crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(
-            binding(700, 2),
-            validate_transit_relay_frame(&encoded)?,
-        );
-        let encoded_bound =
-            crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&bound);
-        let mut cursor = Cursor::new(encoded_bound);
-        let first = {
-            let mut byte = [0_u8; 1];
-            cursor
-                .read_exact(&mut byte)
-                .map_err(|error| error.to_string())?;
-            byte[0]
-        };
-        let parsed = read_weave_bound_sealed_transit_frame(&mut cursor, first)?;
-        let debug = format!("{parsed:?}");
-        assert_eq!(parsed.binding(), binding(700, 2));
-        assert_eq!(parsed.frame().sealed_bytes(), encoded.as_slice());
-        assert!(debug.contains("<opaque>"));
-        assert!(debug.contains("<sealed>"));
-        assert!(!debug.contains("bound opaque bytes"));
-        Ok(())
-    }
-
-    #[test]
-    fn bound_transit_relay_reader_rejects_text_without_fallback() {
-        let mut cursor = Cursor::new(b"OK\n".to_vec());
-        let result = read_weave_bound_sealed_transit_frame(
-            &mut cursor,
-            crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC,
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn transit_relay_reader_rejects_bad_version_without_reading_payload() {
-        struct CountingReader {
-            reads: usize,
-        }
-
-        impl Read for CountingReader {
-            fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-                self.reads += 1;
-                Ok(0)
-            }
-        }
-
-        let mut reader = CountingReader { reads: 0 };
-        let result = read_weave_sealed_transit_frame(&mut reader, 0xff);
-        assert!(result.is_err_and(|error| error.contains("version invalid")));
-        assert_eq!(reader.reads, 0);
-    }
-
-    #[test]
-    fn transit_relay_reader_rejects_declared_payload_too_large_without_reading_payload() {
-        struct HeaderOnlyReader {
-            data: Vec<u8>,
-            reads: usize,
-        }
-
-        impl Read for HeaderOnlyReader {
-            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-                self.reads += 1;
-                if self.data.is_empty() {
-                    return Ok(0);
-                }
-                let n = buf.len().min(self.data.len());
-                buf[..n].copy_from_slice(&self.data[..n]);
-                self.data.drain(..n);
-                Ok(n)
-            }
-        }
-
-        let declared = (chimera_session::MAX_PAYLOAD_LEN as u32 + 1).to_be_bytes();
-        let mut header = vec![FrameKind::Data as u8];
-        header.extend_from_slice(&7_u64.to_be_bytes());
-        header.extend_from_slice(&declared);
-        let mut reader = HeaderOnlyReader {
-            data: header,
-            reads: 0,
-        };
-        let result = read_weave_sealed_transit_frame(&mut reader, chimera_session::FRAME_VERSION);
-        assert!(result.is_err_and(|error| error.contains("payload too large")));
-        assert_eq!(reader.reads, 1);
-    }
-
-    #[test]
-    fn peer_sealed_transit_pumps_both_directions_without_connect_parsing() -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (next_writer, mut next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 201, b"closed transit payload");
-        let fin_encoded = encoded_frame(FrameKind::Fin, 202, b"");
-        let reverse_encoded = encoded_frame(FrameKind::Data, 301, b"closed reverse payload");
-        let reverse_fin_encoded = encoded_frame(FrameKind::Fin, 302, b"");
-        source_writer.write_secure_payload(&first_encoded)?;
-        let mut source_reader = source_reader;
-        let first_frame = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::SealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first message: {other:?}")),
-        };
-        let pool = crate::peer_egress::pool::new_shared_pool();
-        pool.push(next_writer)?;
-
-        source_writer.write_secure_payload(&fin_encoded)?;
-        next_reader.write_secure_payload(&reverse_encoded)?;
-        next_reader.write_secure_payload(&reverse_fin_encoded)?;
-        forward_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(pool),
-            first_frame,
-        )?;
-
-        let forwarded_first = next_reader.read_secure_payload()?;
-        let forwarded_fin = next_reader.read_secure_payload()?;
-        let reverse_first = source_writer.read_secure_payload()?;
-        let reverse_fin = source_writer.read_secure_payload()?;
-        assert_eq!(forwarded_first, first_encoded);
-        assert_eq!(forwarded_fin, fin_encoded);
-        assert_eq!(reverse_first, reverse_encoded);
-        assert_eq!(reverse_fin, reverse_fin_encoded);
-        assert!(
-            !String::from_utf8_lossy(&forwarded_first)
-                .to_ascii_uppercase()
-                .contains("CONNECT")
-        );
-        assert!(
-            !String::from_utf8_lossy(&reverse_first)
-                .to_ascii_uppercase()
-                .contains("CONNECT")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn bound_peer_sealed_transit_dispatches_matching_next_hop() -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (next_writer, mut next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 601, b"bound closed transit payload");
-        let fin_encoded = encoded_frame(FrameKind::Fin, 602, b"");
-        let reverse_encoded = encoded_frame(FrameKind::Data, 701, b"bound closed reverse payload");
-        let reverse_fin_encoded = encoded_frame(FrameKind::Fin, 702, b"");
-        let binding = binding(77, 3);
-        let first_frame = validate_transit_relay_frame(&first_encoded)?;
-        let bound_first =
-            crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(binding, first_frame);
-        let bound_payload =
-            crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&bound_first);
-
-        source_writer.write_secure_payload(&bound_payload)?;
-        let mut source_reader = source_reader;
-        let first_bound = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::BoundSealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first bound message: {other:?}")),
-        };
-        let dispatcher = crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher();
-        dispatcher.register(binding, next_writer)?;
-
-        source_writer.write_secure_payload(&fin_encoded)?;
-        next_reader.write_secure_payload(&reverse_encoded)?;
-        next_reader.write_secure_payload(&reverse_fin_encoded)?;
-        forward_bound_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(dispatcher),
-            None,
-            first_bound,
-        )?;
-
-        let forwarded_first = next_reader.read_secure_payload()?;
-        let forwarded_fin = next_reader.read_secure_payload()?;
-        let reverse_first = source_writer.read_secure_payload()?;
-        let reverse_fin = source_writer.read_secure_payload()?;
-        assert_eq!(forwarded_first, first_encoded);
-        assert_eq!(forwarded_fin, fin_encoded);
-        assert_eq!(reverse_first, reverse_encoded);
-        assert_eq!(reverse_fin, reverse_fin_encoded);
-        assert!(
-            !forwarded_first
-                .starts_with(&[crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC,])
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn bound_peer_sealed_transit_uses_lane_pool_when_dispatcher_has_no_binding()
-    -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (first_next_writer, mut first_next_reader) = test_peer_pair()?;
-        let (second_next_writer, mut second_next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 621, b"bound lane payload");
-        let fin_encoded = encoded_frame(FrameKind::Fin, 622, b"");
-        let reverse_fin_encoded = encoded_frame(FrameKind::Fin, 623, b"");
-        let binding = binding(79, 2);
-        let first_frame = validate_transit_relay_frame(&first_encoded)?;
-        let bound_first =
-            crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(binding, first_frame);
-        let bound_payload =
-            crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&bound_first);
-
-        source_writer.write_secure_payload(&bound_payload)?;
-        let mut source_reader = source_reader;
-        let first_bound = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::BoundSealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first bound message: {other:?}")),
-        };
-        let pool = crate::peer_egress::pool::new_shared_pool();
-        pool.push(first_next_writer)?;
-        pool.push(second_next_writer)?;
-
-        source_writer.write_secure_payload(&fin_encoded)?;
-        second_next_reader.write_secure_payload(&reverse_fin_encoded)?;
-        first_next_reader
-            .stream
-            .set_read_timeout(Some(std::time::Duration::from_millis(50)))
-            .map_err(|error| format!("set wrong lane read timeout failed: {error}"))?;
-        forward_bound_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher()),
-            Some(pool),
-            first_bound,
-        )?;
-
-        assert!(first_next_reader.read_secure_payload().is_err());
-        assert_eq!(second_next_reader.read_secure_payload()?, first_encoded);
-        assert_eq!(second_next_reader.read_secure_payload()?, fin_encoded);
-        assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
-        Ok(())
-    }
-
-    #[test]
-    fn bound_peer_sealed_transit_requires_policy_dispatcher_and_known_binding() -> Result<(), String>
-    {
-        let (_source_writer, source_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 801, b"bound closed transit payload");
-        let binding = binding(88, 4);
-        let first = crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(
-            binding,
-            validate_transit_relay_frame(&first_encoded)?,
-        );
-
-        let error = match forward_bound_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::DenyPoolNextHop,
-            None,
-            None,
-            first.clone(),
-        ) {
-            Ok(()) => return Err("bound transit denied by policy must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("denied by policy"));
-
-        let (_source_writer, source_reader) = test_peer_pair()?;
-        let error = match forward_bound_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            None,
-            None,
-            first.clone(),
-        ) {
-            Ok(()) => return Err("bound transit without dispatcher must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("dispatcher unavailable"));
-
-        let (_source_writer, source_reader) = test_peer_pair()?;
-        let dispatcher = crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher();
-        let error = match forward_bound_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(dispatcher),
-            None,
-            first,
-        ) {
-            Ok(()) => return Err("bound transit with unknown binding must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("binding unavailable"));
-        Ok(())
-    }
-
-    #[test]
-    fn local_bound_sealed_transit_rejects_midstream_binding_change() -> Result<(), String> {
-        let (mut local_writer, local_reader) = tcp_pair()?;
-        let (mut peer_writer, peer_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 831, b"first bound lane payload");
-        let changed_encoded = encoded_frame(FrameKind::Data, 832, b"changed bound lane payload");
-        let first_bound = crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(
-            binding(91, 1),
-            validate_transit_relay_frame(&first_encoded)?,
-        );
-        let changed_bound = crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(
-            binding(91, 2),
-            validate_transit_relay_frame(&changed_encoded)?,
-        );
-        let first_payload =
-            crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&first_bound);
-        let changed_payload =
-            crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&changed_bound);
-        let first_byte = first_payload[0];
-        local_writer
-            .write_all(&first_payload[1..])
-            .map_err(|error| format!("write first local bound payload failed: {error}"))?;
-        local_writer
-            .write_all(&changed_payload)
-            .map_err(|error| format!("write changed local bound payload failed: {error}"))?;
-        drop(local_writer);
-
-        let error = match relay_local_bound_sealed_transit(local_reader, peer_reader, first_byte) {
-            Ok(()) => return Err("local bound transit binding change must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("binding changed"));
-        let forwarded = peer_writer.read_secure_payload()?;
-        assert_eq!(forwarded, first_payload);
-        assert!(peer_writer.read_secure_payload().is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn peer_sealed_transit_denies_pool_next_hop_without_policy() -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (next_writer, _next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 401, b"closed transit payload");
-        source_writer.write_secure_payload(&first_encoded)?;
-        let mut source_reader = source_reader;
-        let first_frame = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::SealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first message: {other:?}")),
-        };
-        let pool = crate::peer_egress::pool::new_shared_pool();
-        pool.push(next_writer)?;
-
-        let error = match forward_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::DenyPoolNextHop,
-            Some(pool),
-            first_frame,
-        ) {
-            Ok(()) => return Err("pool transit without policy must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("denied by policy"));
-        Ok(())
-    }
-
-    #[test]
-    fn peer_sealed_transit_rejects_ambiguous_pool_next_hop() -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (first_next_writer, _first_next_reader) = test_peer_pair()?;
-        let (second_next_writer, _second_next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 451, b"closed transit payload");
-        source_writer.write_secure_payload(&first_encoded)?;
-        let mut source_reader = source_reader;
-        let first_frame = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::SealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first message: {other:?}")),
-        };
-        let pool = crate::peer_egress::pool::new_shared_pool();
-        pool.push(first_next_writer)?;
-        pool.push(second_next_writer)?;
-
-        let error = match forward_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(pool),
-            first_frame,
-        ) {
-            Ok(()) => return Err("ambiguous pool transit next hop must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("ambiguous"));
-        Ok(())
-    }
-
-    #[test]
-    fn peer_sealed_transit_rejects_midstream_connect_and_unblocks_reverse() -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (next_writer, mut next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 501, b"closed transit payload");
-        source_writer.write_secure_payload(&first_encoded)?;
-        let mut source_reader = source_reader;
-        let first_frame = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::SealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first message: {other:?}")),
-        };
-        let pool = crate::peer_egress::pool::new_shared_pool();
-        pool.push(next_writer)?;
-        let destination = crate::peer_egress::protocol::Destination {
-            host: "example.org".to_string(),
-            port: 443,
-        };
-        write_connect_message(&mut source_writer, &destination)?;
-
-        let error = match forward_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(pool),
-            first_frame,
-        ) {
-            Ok(()) => return Err("midstream CONNECT in sealed transit must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("connect message"));
-        assert_eq!(next_reader.read_secure_payload()?, first_encoded);
-        assert!(source_writer.read_secure_payload().is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn peer_sealed_transit_rejects_midstream_bound_frame() -> Result<(), String> {
-        let (mut source_writer, source_reader) = test_peer_pair()?;
-        let (next_writer, mut next_reader) = test_peer_pair()?;
-        let first_encoded = encoded_frame(FrameKind::Data, 901, b"closed transit payload");
-        let nested_encoded = encoded_frame(FrameKind::Data, 902, b"nested bound payload");
-        source_writer.write_secure_payload(&first_encoded)?;
-        let mut source_reader = source_reader;
-        let first_frame = match read_peer_message(
-            &mut source_reader,
-            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-        )? {
-            PeerMessage::SealedTransit(frame) => frame,
-            other => return Err(format!("unexpected first message: {other:?}")),
-        };
-        let nested_bound = crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(
-            binding(99, 5),
-            validate_transit_relay_frame(&nested_encoded)?,
-        );
-        let nested_payload =
-            crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&nested_bound);
-        source_writer.write_secure_payload(&nested_payload)?;
-        let pool = crate::peer_egress::pool::new_shared_pool();
-        pool.push(next_writer)?;
-
-        let error = match forward_peer_sealed_transit_to_next_hop(
-            source_reader,
-            PeerTransitPolicy::AllowPoolNextHop,
-            Some(pool),
-            first_frame,
-        ) {
-            Ok(()) => return Err("midstream bound transit frame must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("nested bound transit frame"));
-        assert_eq!(next_reader.read_secure_payload()?, first_encoded);
-        assert!(source_writer.read_secure_payload().is_err());
-        Ok(())
-    }
-}
+#[path = "transit_tests/mod.rs"]
+mod transit_tests;

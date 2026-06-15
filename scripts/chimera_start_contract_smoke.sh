@@ -95,18 +95,23 @@ case "${1:-}" in
           count=$((count + 1))
           printf '%s\n' "$count" >"$count_file"
           if (( count <= 2 )); then
+            echo "active"
             exit 0
           fi
+          echo "failed"
           exit 3
         fi
         ;;
     esac
     if [[ "$mode" == "node_fail" && "${2:-}" == "chimera-gateway.service" ]]; then
+      echo "failed"
       exit 3
     fi
     if [[ "$mode" == "client_fail" && "${2:-}" == "chimera-client.service" ]]; then
+      echo "failed"
       exit 3
     fi
+    echo "active"
     exit 0
     ;;
   stop|list-units|list-unit-files)
@@ -127,10 +132,11 @@ EOF
 	    XDG_CACHE_HOME="$tmp_dir/cache" \
 	    XDG_CONFIG_HOME="$config_dir" \
 	    XDG_RUNTIME_DIR="$runtime_dir" \
-	    CLIENT_CONFIG_FILE="$client_conf" \
-	    CHIMERA_UPDATE_BOOTSTRAP_URL="https://127.0.0.1.invalid/chimera.sh" \
-	    CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=1 \
-	    CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=2 \
+    CLIENT_CONFIG_FILE="$client_conf" \
+    RUNTIME_BOOTSTRAP_SCRIPT="$tmp_dir/no-runtime-bootstrap.sh" \
+    CHIMERA_UPDATE_BOOTSTRAP_URL="http://127.0.0.1:9/chimera.sh" \
+    CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=1 \
+    CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=1 \
 	    CHIMERA_UPDATE_DOWNLOAD_RETRIES=0 \
 	    CHIMERA_AUTOFIX_MAX_TIME=0 \
 	    timeout 20s bash "$install_root/scripts/chimera-sh" -start 2>&1

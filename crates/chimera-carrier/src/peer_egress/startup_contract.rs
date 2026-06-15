@@ -9,6 +9,7 @@ pub struct NodeStartupContract {
     pub peer_listen: String,
     pub outbound_bootstrap_configured: bool,
     pub pool_transit_allowed: bool,
+    pub bound_transit_allowed: bool,
     pub capabilities: Vec<WeaveNodeCapability>,
 }
 
@@ -39,6 +40,11 @@ fn validate_node_startup_contract_with_contract(
         let _ = split_host_port(options.server.trim())
             .map_err(|error| format!("WEAVE node outbound bootstrap invalid: {error}"))?;
     }
+    if options.transit_lane_bindings_file.is_some() && !options.allow_bound_transit {
+        return Err(
+            "WEAVE node sealed transit lane bindings require allow_bound_transit=true".to_string(),
+        );
+    }
     contract
         .validate_symmetric()
         .map_err(|error| format!("WEAVE node symmetric contract invalid: {error}"))?;
@@ -51,6 +57,7 @@ fn validate_node_startup_contract_with_contract(
         peer_listen,
         outbound_bootstrap_configured: !options.server.trim().is_empty(),
         pool_transit_allowed: options.allow_pool_transit,
+        bound_transit_allowed: options.allow_bound_transit,
         capabilities,
     })
 }
@@ -85,6 +92,8 @@ mod tests {
             aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
             reverse_connect: false,
             allow_pool_transit: false,
+            allow_bound_transit: false,
+            transit_lane_bindings_file: None,
         }
     }
 
@@ -97,6 +106,7 @@ mod tests {
         assert_eq!(contract.peer_listen, "0.0.0.0:8443");
         assert!(!contract.outbound_bootstrap_configured);
         assert!(!contract.pool_transit_allowed);
+        assert!(!contract.bound_transit_allowed);
         assert_eq!(
             contract.capability_names(),
             vec![
@@ -125,6 +135,41 @@ mod tests {
         let contract = validate_node_startup_contract(&options)?;
 
         assert!(contract.pool_transit_allowed);
+        assert!(!contract.bound_transit_allowed);
+        Ok(())
+    }
+
+    #[test]
+    fn node_startup_contract_marks_explicit_bound_transit_policy() -> Result<(), String> {
+        let mut options = node_options("peer.example.invalid:8443");
+        options.allow_bound_transit = true;
+        let contract = validate_node_startup_contract(&options)?;
+
+        assert!(!contract.pool_transit_allowed);
+        assert!(contract.bound_transit_allowed);
+        Ok(())
+    }
+
+    #[test]
+    fn node_startup_contract_rejects_lane_bindings_without_bound_transit_policy() {
+        let mut options = node_options("peer.example.invalid:8443");
+        options.transit_lane_bindings_file = Some("/tmp/chimera-test-lanes.csv".to_string());
+
+        let result = validate_node_startup_contract(&options);
+
+        assert!(result.is_err_and(|error| error.contains("allow_bound_transit=true")));
+    }
+
+    #[test]
+    fn node_startup_contract_accepts_lane_bindings_with_bound_transit_policy() -> Result<(), String>
+    {
+        let mut options = node_options("peer.example.invalid:8443");
+        options.allow_bound_transit = true;
+        options.transit_lane_bindings_file = Some("/tmp/chimera-test-lanes.csv".to_string());
+
+        let contract = validate_node_startup_contract(&options)?;
+
+        assert!(contract.bound_transit_allowed);
         Ok(())
     }
 

@@ -70,6 +70,8 @@ pub struct Options {
     pub aead: AeadSuite,
     pub reverse_connect: bool,
     pub allow_pool_transit: bool,
+    pub allow_bound_transit: bool,
+    pub transit_lane_bindings_file: Option<String>,
 }
 
 fn env_value(name: &str) -> Option<String> {
@@ -163,6 +165,12 @@ impl Options {
             .map(|value| parse_bool(&value))
             .transpose()?
             .unwrap_or(false);
+        let mut allow_bound_transit = env_value("CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT")
+            .map(|value| parse_bool(&value))
+            .transpose()?
+            .unwrap_or(false);
+        let mut transit_lane_bindings_file =
+            env_value("CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE");
         let mut index = 0usize;
         while index < args.len() {
             let flag = args[index].as_str();
@@ -211,6 +219,12 @@ impl Options {
                 }
                 "--allow-pool-transit" => {
                     allow_pool_transit = parse_bool(value)?;
+                }
+                "--allow-bound-transit" => {
+                    allow_bound_transit = parse_bool(value)?;
+                }
+                "--transit-lane-bindings-file" => {
+                    transit_lane_bindings_file = Some(value.clone());
                 }
                 "--bench-bytes" => {
                     bench_bytes = parse_positive_usize(value, "bench-bytes")?;
@@ -300,6 +314,8 @@ impl Options {
             aead,
             reverse_connect,
             allow_pool_transit,
+            allow_bound_transit,
+            transit_lane_bindings_file,
         })
     }
 }
@@ -357,246 +373,5 @@ pub fn write_resolved_state_file(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_rejects_empty_token() {
-        let args = vec![
-            "--mode".to_string(),
-            "vps".to_string(),
-            "--local-listen".to_string(),
-            "127.0.0.1:0".to_string(),
-            "--peer-listen".to_string(),
-            "127.0.0.1:0".to_string(),
-            "--token".to_string(),
-            String::new(),
-        ];
-        assert!(Options::parse(&args).is_err());
-    }
-
-    #[test]
-    fn parse_vps_requires_explicit_listeners() {
-        let args = vec![
-            "--mode".to_string(),
-            "vps".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-        ];
-        assert!(Options::parse(&args).is_err());
-    }
-
-    #[test]
-    fn parse_laptop_options() {
-        let args = vec![
-            "--mode".to_string(),
-            "laptop".to_string(),
-            "--server".to_string(),
-            "mesh-node.example.invalid:443".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-        ];
-        let parsed = Options::parse(&args).unwrap_or_else(|error| {
-            unreachable!("options should parse: {error}");
-        });
-        assert_eq!(parsed.mode, Mode::Laptop);
-        assert_eq!(parsed.pool, 8);
-        assert!(!parsed.allow_pool_transit);
-    }
-
-    #[test]
-    fn parse_node_options_requires_ingress_listeners_and_keeps_peer_optional() -> Result<(), String>
-    {
-        let args = vec![
-            "--mode".to_string(),
-            "node".to_string(),
-            "--local-listen".to_string(),
-            "127.0.0.1:18135".to_string(),
-            "--peer-listen".to_string(),
-            "0.0.0.0:8443".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-        ];
-        let parsed = Options::parse(&args)?;
-        assert_eq!(parsed.mode, Mode::Node);
-        assert_eq!(parsed.local_listen, "127.0.0.1:18135");
-        assert_eq!(parsed.peer_listen, "0.0.0.0:8443");
-        assert_eq!(parsed.server, "");
-        assert_eq!(mode_name(&parsed.mode), "node");
-        Ok(())
-    }
-
-    #[test]
-    fn parse_node_options_accepts_outbound_peer_endpoint() -> Result<(), String> {
-        let args = vec![
-            "--mode".to_string(),
-            "weave-node".to_string(),
-            "--local-listen".to_string(),
-            "127.0.0.1:18135".to_string(),
-            "--peer-listen".to_string(),
-            "0.0.0.0:8443".to_string(),
-            "--server".to_string(),
-            "peer.example.invalid:8443".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-        ];
-        let parsed = Options::parse(&args)?;
-        assert_eq!(parsed.mode, Mode::Node);
-        assert_eq!(parsed.server, "peer.example.invalid:8443");
-        Ok(())
-    }
-
-    #[test]
-    fn parse_node_options_accepts_explicit_pool_transit_policy() -> Result<(), String> {
-        let args = vec![
-            "--mode".to_string(),
-            "node".to_string(),
-            "--local-listen".to_string(),
-            "127.0.0.1:18135".to_string(),
-            "--peer-listen".to_string(),
-            "0.0.0.0:8443".to_string(),
-            "--server".to_string(),
-            "peer.example.invalid:8443".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-            "--allow-pool-transit".to_string(),
-            "true".to_string(),
-        ];
-        let parsed = Options::parse(&args)?;
-        assert!(parsed.allow_pool_transit);
-        Ok(())
-    }
-
-    #[test]
-    fn parse_node_rejects_missing_peer_ingress_listener() {
-        let args = vec![
-            "--mode".to_string(),
-            "node".to_string(),
-            "--local-listen".to_string(),
-            "127.0.0.1:18135".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-        ];
-        let error = match Options::parse(&args) {
-            Ok(_) => "node options without peer ingress listener should fail".to_string(),
-            Err(error) => error,
-        };
-        assert!(error.contains("peer-listen"));
-    }
-
-    #[test]
-    fn parse_bench_options() {
-        let args = vec![
-            "--mode".to_string(),
-            "bench".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-            "--bench-bytes".to_string(),
-            "1024".to_string(),
-            "--min-throughput-mib-s".to_string(),
-            "100".to_string(),
-            "--connections".to_string(),
-            "4".to_string(),
-        ];
-        let parsed = Options::parse(&args).unwrap_or_else(|error| {
-            unreachable!("options should parse: {error}");
-        });
-        assert_eq!(parsed.mode, Mode::Bench);
-        assert_eq!(parsed.bench_bytes, 1024);
-        assert_eq!(parsed.min_throughput_mib_s, 100);
-        assert_eq!(parsed.connections, 4);
-    }
-
-    #[test]
-    fn parse_probe_requires_target() {
-        let args = vec![
-            "--mode".to_string(),
-            "probe".to_string(),
-            "--server".to_string(),
-            "127.0.0.1:1".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-        ];
-        assert!(Options::parse(&args).is_err());
-    }
-
-    #[test]
-    fn parse_download_probe_options() {
-        let args = vec![
-            "--mode".to_string(),
-            "download-probe".to_string(),
-            "--server".to_string(),
-            "127.0.0.1:1".to_string(),
-            "--target".to_string(),
-            "node.example.invalid:443".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-            "--connections".to_string(),
-            "2".to_string(),
-        ];
-        let parsed = Options::parse(&args).unwrap_or_else(|error| {
-            unreachable!("options should parse: {error}");
-        });
-        assert_eq!(parsed.mode, Mode::DownloadProbe);
-        assert_eq!(parsed.connections, 2);
-    }
-
-    #[test]
-    fn parse_aead_options() {
-        let args = vec![
-            "--mode".to_string(),
-            "bench".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-            "--aead".to_string(),
-            "aes256gcm".to_string(),
-        ];
-        let parsed = Options::parse(&args).unwrap_or_else(|error| {
-            unreachable!("options should parse: {error}");
-        });
-        assert_eq!(parsed.aead, AeadSuite::Aes256Gcm);
-
-        let mut bad = args;
-        bad[5] = "weak".to_string();
-        assert!(Options::parse(&bad).is_err());
-    }
-
-    #[test]
-    fn parse_rejects_zero_connect_timeout() {
-        let args = vec![
-            "--mode".to_string(),
-            "bench".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-            "--connect-timeout-ms".to_string(),
-            "0".to_string(),
-        ];
-        assert!(Options::parse(&args).is_err());
-    }
-
-    #[test]
-    fn parse_rejects_zero_connections() {
-        let args = vec![
-            "--mode".to_string(),
-            "bench".to_string(),
-            "--token".to_string(),
-            "abc".to_string(),
-            "--connections".to_string(),
-            "0".to_string(),
-        ];
-        assert!(Options::parse(&args).is_err());
-    }
-
-    #[test]
-    fn split_host_port_accepts_valid_target() {
-        let parsed = split_host_port("node.example.invalid:443")
-            .unwrap_or_else(|error| unreachable!("target should parse: {error}"));
-        assert_eq!(parsed, ("node.example.invalid".to_string(), 443));
-    }
-
-    #[test]
-    fn throughput_gate_rejects_slow_path() {
-        assert!(enforce_min_throughput(99.9, 100).is_err());
-        assert!(enforce_min_throughput(100.0, 100).is_ok());
-    }
-}
+#[path = "options_tests/mod.rs"]
+mod options_tests;

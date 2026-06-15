@@ -101,3 +101,73 @@ Runtime/network statement:
 - Local CHIMERA runtime start/stop is not part of this change.
 - Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, laptop and VPS
   settings are out of scope for this source-only planner/model update.
+
+## 2026-06-15 Follow-Up: Carrier Binding Contract Narrowed
+
+Status: partial source-level update.
+
+Evidence:
+
+- `crates/chimera-mesh/src/multipath_model.rs`
+- `crates/chimera-mesh/src/runtime/multipath_schedule.rs`
+- `crates/chimera-mesh/src/runtime/plan_ops_dps_eval.rs`
+- `crates/chimera-mesh/src/tests_multipath_schedule/mod.rs`
+- `crates/chimera-mesh/src/tests_policy_parsers/policy_core.rs`
+
+Decision:
+
+- Multipath lanes are still built for path planning.
+- Live carrier lane bindings are emitted only when control-plane/DPS provides
+  explicit nonzero `mesh_route_binding_id`.
+- The planner no longer derives route binding ids from peer id, endpoint, lane
+  weights or topology. This avoids creating a stable endpoint-derived
+  correlation id.
+
+Verification:
+
+- `cargo test -q -p chimera-mesh`: PASS, 162 tests.
+- `cargo clippy -q -p chimera-mesh --all-targets -- -D warnings`: PASS.
+- `cargo check -q --workspace`: PASS.
+- `bash scripts/anti_monolith_guard.sh`: PASS.
+
+Not closed:
+
+- This is not real-world carrier-bound runtime PASS.
+- GitHub one-command release/update and SSH stand proof on laptop/VPS remain
+  required before shipped-runtime claims.
+
+## 2026-06-15 Follow-Up: Fail-Closed Binding And Reserve Budget
+
+Status: partial source-level update.
+
+Evidence:
+
+- `crates/chimera-mesh/src/multipath_model.rs`
+- `crates/chimera-mesh/src/runtime/multipath_schedule.rs`
+- `crates/chimera-mesh/src/runtime/path_planner.rs`
+- `crates/chimera-mesh/src/runtime/plan_ops.rs`
+- `crates/chimera-mesh/src/runtime/plan_ops_dps_eval.rs`
+- `crates/chimera-mesh/src/tests_multipath_schedule/mod.rs`
+
+Decision:
+
+- Carrier lane binding construction is fail-closed: an internal lane whose
+  peer is not present in selected peers now returns an error instead of
+  silently dropping the binding.
+- Multipath status is truthful: schedules without explicit route binding stay
+  `planner_only_not_carrier_bound`; only schedules with emitted carrier
+  bindings report `carrier_lane_binding_contract_ready`.
+- The planner now carries a separate `transit_capacity_budget_pct` so local
+  traffic reserve is represented as a numeric budget contract, not only as
+  explain text.
+
+Verification so far:
+
+- `cargo check -q -p chimera-mesh`: PASS.
+- `cargo test -q -p chimera-mesh multipath_schedule`: PASS, 12 tests.
+
+Not closed:
+
+- Full source gate and final sub-agent audit are still required before release.
+- Real-world carrier-bound runtime PASS remains unverified until GitHub
+  one-command release/update and SSH stand proof on laptop/VPS.

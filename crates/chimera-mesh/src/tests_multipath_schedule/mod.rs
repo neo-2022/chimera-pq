@@ -1,66 +1,10 @@
-use crate::{
-    MeshDiscoveryRecord, MeshJoinRequest, MeshMultipathLaneRole, MeshMultipathMode, MeshRuntime,
+mod helpers;
+
+use crate::{MeshMultipathLaneRole, MeshMultipathMode};
+use helpers::{
+    assert_active_weight_contract, assert_binding_matches_lane, assert_carrier_binding_contract,
+    explain_has, record, request, runtime_with_peers,
 };
-
-fn request() -> MeshJoinRequest {
-    MeshJoinRequest {
-        namespace: "cef-public".to_string(),
-        node_name: "node-client".to_string(),
-        invite_token: None,
-    }
-}
-
-fn runtime_with_peers(records: Vec<MeshDiscoveryRecord>) -> MeshRuntime {
-    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
-        .unwrap_or_else(|e| unreachable!("runtime bootstrap should succeed: {e}"));
-    runtime
-        .merge_discovery("seed-b", &records)
-        .unwrap_or_else(|e| unreachable!("discovery merge should succeed: {e}"));
-    runtime
-}
-
-fn record(
-    node_id: &str,
-    endpoint: &str,
-    region: &str,
-    load: u8,
-    reliability: u8,
-) -> MeshDiscoveryRecord {
-    MeshDiscoveryRecord {
-        node_id: node_id.to_string(),
-        endpoint: endpoint.to_string(),
-        region: region.to_string(),
-        load_score: load,
-        reliability_score: reliability,
-    }
-}
-
-fn explain_has(plan_explain: &[String], expected: &str) -> bool {
-    plan_explain.iter().any(|line| line.contains(expected))
-}
-
-fn assert_active_weight_contract(plan: &crate::MeshPathPlan) {
-    let active_weight_sum: u16 = plan
-        .multipath_schedule
-        .lanes
-        .iter()
-        .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
-        .map(|lane| lane.weight_pct as u16)
-        .sum();
-    assert_eq!(
-        plan.multipath_schedule.active_weight_sum_pct,
-        active_weight_sum
-    );
-    assert_eq!(active_weight_sum, 100);
-    assert!(
-        plan.multipath_schedule
-            .lanes
-            .iter()
-            .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
-            .all(|lane| lane.weight_pct > 0)
-    );
-    assert!(plan.multipath_schedule.local_traffic_reserve_pct > 0);
-}
 
 #[test]
 fn multipath_schedule_off_uses_single_active_lane() {
@@ -72,7 +16,7 @@ fn multipath_schedule_off_uses_single_active_lane() {
     let plan = runtime
         .plan_path_from_dps_payload(
             &request(),
-            "mesh_allowed_regions=eu;mesh_multipath_mode=off",
+            "mesh_allowed_regions=eu;mesh_multipath_mode=off;mesh_route_binding_id=7001",
         )
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
@@ -92,7 +36,62 @@ fn multipath_schedule_off_uses_single_active_lane() {
     assert!(explain_has(&plan.explain, "multipath_schedule_mode=off"));
     assert!(explain_has(
         &plan.explain,
+        "multipath_schedule_execution_status=carrier_lane_binding_contract_ready"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_carrier_binding_contract=carrier_lane_binding_contract_ready"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_carrier_bindings=1"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_route_binding_configured=true"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_transit_capacity_budget_pct=90"
+    ));
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 1);
+    assert_binding_matches_lane(&plan, 0, "node-a", "198.51.100.31:443");
+    assert_active_weight_contract(&plan);
+    assert_carrier_binding_contract(&plan);
+}
+
+#[test]
+fn multipath_schedule_without_route_binding_id_keeps_carrier_bindings_closed() {
+    let runtime = runtime_with_peers(vec![
+        record("node-a", "198.51.100.31:443", "eu", 20, 90),
+        record("node-b", "198.51.100.32:443", "eu", 22, 91),
+    ]);
+
+    let plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard",
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+
+    assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 0);
+    assert!(plan.multipath_schedule.route_binding_id.is_none());
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_carrier_bindings=0"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_route_binding_configured=false"
+    ));
+    assert!(explain_has(
+        &plan.explain,
         "multipath_schedule_execution_status=planner_only_not_carrier_bound"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_carrier_binding_contract=planner_only_not_carrier_bound"
     ));
     assert_active_weight_contract(&plan);
 }
@@ -107,7 +106,8 @@ fn multipath_schedule_standby_only_keeps_one_active_and_one_standby() {
         "mesh_allowed_regions=eu;",
         "mesh_max_peers=2;",
         "mesh_max_selected_per_region=2;",
-        "mesh_multipath_mode=standby_only"
+        "mesh_multipath_mode=standby_only;",
+        "mesh_route_binding_id=7002"
     );
 
     let plan = runtime
@@ -148,7 +148,11 @@ fn multipath_schedule_standby_only_keeps_one_active_and_one_standby() {
         &plan.explain,
         "multipath_schedule_standby_lanes=1"
     ));
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 2);
+    assert_binding_matches_lane(&plan, 0, "node-a", "198.51.100.31:443");
+    assert_binding_matches_lane(&plan, 1, "node-b", "198.51.100.32:443");
     assert_active_weight_contract(&plan);
+    assert_carrier_binding_contract(&plan);
 }
 
 #[test]
@@ -162,7 +166,7 @@ fn multipath_schedule_flow_shard_uses_multiple_active_lanes() {
     let plan = runtime
         .plan_path_from_dps_payload(
             &request(),
-            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard",
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7003",
         )
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
@@ -198,7 +202,11 @@ fn multipath_schedule_flow_shard_uses_multiple_active_lanes() {
         &plan.explain,
         "multipath_schedule_active_lanes=2"
     ));
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 2);
+    assert_binding_matches_lane(&plan, 0, "node-a", "198.51.100.31:443");
+    assert_binding_matches_lane(&plan, 1, "node-b", "198.51.100.32:443");
     assert_active_weight_contract(&plan);
+    assert_carrier_binding_contract(&plan);
 }
 
 #[test]
@@ -212,7 +220,7 @@ fn multipath_schedule_aggregate_buffered_uses_three_active_lanes() {
     let plan = runtime
         .plan_path_from_dps_payload(
             &request(),
-            "mesh_allowed_regions=eu;mesh_multipath_mode=aggregate_buffered",
+            "mesh_allowed_regions=eu;mesh_multipath_mode=aggregate_buffered;mesh_route_binding_id=7004",
         )
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
@@ -233,7 +241,12 @@ fn multipath_schedule_aggregate_buffered_uses_three_active_lanes() {
         &plan.explain,
         "multipath_schedule_active_lanes=3"
     ));
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 3);
+    assert_binding_matches_lane(&plan, 0, "node-a", "198.51.100.31:443");
+    assert_binding_matches_lane(&plan, 1, "node-b", "198.51.100.32:443");
+    assert_binding_matches_lane(&plan, 2, "node-c", "198.51.100.33:443");
     assert_active_weight_contract(&plan);
+    assert_carrier_binding_contract(&plan);
 }
 
 #[test]
@@ -246,7 +259,7 @@ fn multipath_schedule_prefers_high_reliability_and_low_load_weight() {
     let plan = runtime
         .plan_path_from_dps_payload(
             &request(),
-            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard",
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7005",
         )
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
@@ -269,6 +282,7 @@ fn multipath_schedule_explain_does_not_leak_payload_destination_or_endpoint() {
     let payload = concat!(
         "mesh_allowed_regions=eu;",
         "mesh_multipath_mode=flow_shard;",
+        "mesh_route_binding_id=7006;",
         "non_mesh_note=SECRET_DESTINATION_EXAMPLE"
     );
 
@@ -291,7 +305,7 @@ fn multipath_schedule_explain_does_not_leak_payload_destination_or_endpoint() {
     );
     assert!(
         schedule_explain
-            .contains("multipath_schedule_execution_status=planner_only_not_carrier_bound")
+            .contains("multipath_schedule_execution_status=carrier_lane_binding_contract_ready")
     );
     assert_eq!(
         plan.multipath_schedule.transit_payload_policy,
@@ -309,12 +323,41 @@ fn multipath_schedule_debug_redacts_lane_peer_identity() {
     let plan = runtime
         .plan_path_from_dps_payload(
             &request(),
-            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard",
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7007",
         )
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
     let debug = format!("{:?}", plan.multipath_schedule.lanes);
 
     assert!(!debug.contains("node-sensitive-a"));
     assert!(!debug.contains("node-sensitive-b"));
+    assert!(debug.contains("<redacted>"));
+}
+
+#[test]
+fn multipath_carrier_binding_debug_redacts_peer_identity_and_endpoint() {
+    let runtime = runtime_with_peers(vec![
+        record("node-sensitive-a", "198.51.100.31:443", "eu", 20, 90),
+        record("node-sensitive-b", "198.51.100.32:443", "eu", 22, 91),
+    ]);
+
+    let plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7008",
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+    let debug = format!("{:?}", plan.multipath_schedule.carrier_lane_bindings);
+
+    assert!(!debug.contains("node-sensitive-a"));
+    assert!(!debug.contains("node-sensitive-b"));
+    assert!(!debug.contains("198.51.100.31:443"));
+    assert!(!debug.contains("198.51.100.32:443"));
+    let route_binding_id = plan
+        .multipath_schedule
+        .route_binding_id
+        .as_ref()
+        .unwrap_or_else(|| unreachable!("route binding id should be configured"));
+    assert!(!debug.contains(&route_binding_id.get().to_string()));
+    assert!(debug.contains("<opaque>"));
     assert!(debug.contains("<redacted>"));
 }

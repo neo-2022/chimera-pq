@@ -95,3 +95,87 @@ Runtime/network statement:
 - Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, laptop and VPS
   settings are out of scope for this source-level carrier contract update.
 - This is not a Real-World PASS and not a milestone close.
+
+## 2026-06-15 Follow-Up: Bound Transit Runtime Registration Source
+
+Status: partial source-level update.
+
+Evidence:
+
+- `crates/chimera-carrier/src/peer_egress/lane_binding.rs`
+- `crates/chimera-carrier/src/peer_egress/options.rs`
+- `crates/chimera-carrier/src/peer_egress/modes.rs`
+- `crates/chimera-carrier/src/peer_egress/node.rs`
+- `crates/chimera-carrier/src/peer_egress/transit.rs`
+- `scripts/install_desktop_control.sh`
+
+Decision:
+
+- Added a carrier adapter from mesh carrier lane binding to
+  `TransitPathBinding`, including zero-based mesh lane to nonzero carrier lane
+  conversion.
+- Added a parameterized transit-lane registrations file input through
+  `CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE` /
+  `--transit-lane-bindings-file`.
+- Added separate `allow_bound_transit` policy so enabling bound dispatcher
+  transit does not implicitly enable unbound pool transit.
+- Bound transit still fails closed without a dispatcher and exact registered
+  binding; it does not fall back to `PeerPool`.
+
+Verification:
+
+- `cargo test -q -p chimera-carrier`: PASS, 82 tests.
+- `cargo test -q -p chimera-carrier transit`: PASS, 38 focused tests.
+- `cargo clippy -q -p chimera-carrier --all-targets -- -D warnings`: PASS.
+- `cargo test -q -p chimera-session sealed_transit`: PASS, 3 tests.
+- `cargo fmt --all -- --check`: PASS.
+- `cargo check -q --workspace`: PASS.
+
+Security follow-up resolved:
+
+- Rejected endpoint-derived deterministic route binding id after security
+  review.
+- Rejected coupling bound transit policy to unbound pool transit policy.
+
+Not closed:
+
+- No local runtime was started.
+- New source has not been published as a GitHub release.
+- Laptop/VPS real-world proof remains `not verified` until one-command
+  GitHub install/update deploys this source.
+
+## 2026-06-15 Follow-Up: Policy Gate And One-Command Wiring
+
+Status: partial source-level update.
+
+Evidence:
+
+- `crates/chimera-carrier/src/peer_egress/node.rs`
+- `crates/chimera-carrier/src/peer_egress/startup_contract.rs`
+- `crates/chimera-carrier/src/peer_egress/transit.rs`
+- `scripts/install_desktop_control.sh`
+- `scripts/chimera_installer_gate.sh`
+
+Decision:
+
+- Local bound sealed transit now requires explicit
+  `allow_bound_transit=true`; dispatcher presence alone is not enough.
+- Node startup rejects a transit lane bindings file unless bound transit policy
+  is explicitly enabled.
+- The one-command install path preserves
+  `CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE` into the peer-egress env
+  file when provided, without logging the file path.
+- Installer guard now checks that the lane bindings env wiring exists.
+
+Verification so far:
+
+- `cargo check -q -p chimera-carrier`: PASS.
+- `cargo test -q -p chimera-carrier startup_contract`: PASS, 11 tests.
+- `cargo test -q -p chimera-carrier bound_transit`: PASS, 12 tests.
+
+Not closed:
+
+- Full source gate and final sub-agent audit are still required before release.
+- New source has not been published as a GitHub release.
+- Laptop/VPS real-world proof remains `not verified` until one-command
+  GitHub install/update deploys this source.

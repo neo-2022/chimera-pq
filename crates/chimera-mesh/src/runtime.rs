@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::model::{
-    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshMultipathMode,
-    MeshMultipathSchedule, MeshPathPlan, MeshPeerHealth, MeshPeerState, peer_priority,
+    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
+    MeshPeerHealth, MeshPeerState, peer_priority,
 };
+use crate::multipath_model::{MeshMultipathMode, MeshMultipathSchedule};
 use crate::policy::{
     MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode,
     traffic_class_from_dps_payload, traffic_hints_from_dps_payload,
