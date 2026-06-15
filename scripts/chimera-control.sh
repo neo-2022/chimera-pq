@@ -571,6 +571,85 @@ stop_runner_background() {
   echo "${name}_status=stopped"
 }
 
+valid_nft_identifier() {
+  local value="${1:-}"
+  [[ "$value" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,62}$ ]]
+}
+
+valid_chimera_redirect_table() {
+  local value="${1:-}"
+  valid_nft_identifier "$value" || return 1
+  [[ "$value" == "chimera_redirect" || "$value" == chimera_redirect_* ]]
+}
+
+transparent_redirect_table_name() {
+  local table="${CHIMERA_REDIRECT_TABLE:-}"
+  if [[ -z "$table" && -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+    table="$(awk -F= '/^CHIMERA_REDIRECT_TABLE=/{print $2; exit}' "$TRANSPARENT_RUNTIME_ENV_FILE" 2>/dev/null || true)"
+    table="$(trim_ascii "$table")"
+  fi
+  if [[ -z "$table" ]]; then
+    table="chimera_redirect"
+  fi
+  if ! valid_chimera_redirect_table "$table"; then
+    echo "transparent_redirect_cleanup=fail reason=invalid_chimera_table_name" >&2
+    return 1
+  fi
+  printf '%s\n' "$table"
+}
+
+resolve_nft_command() {
+  local nft_cmd="$NFT_BIN"
+  if [[ -n "$nft_cmd" ]]; then
+    [[ -x "$nft_cmd" ]] || return 127
+    [[ "$(basename "$nft_cmd")" == "nft" ]] || return 127
+    printf '%s\n' "$nft_cmd"
+    return 0
+  fi
+  if command -v nft >/dev/null 2>&1; then
+    command -v nft
+    return 0
+  fi
+  if [[ -x /usr/sbin/nft ]]; then
+    printf '%s\n' "/usr/sbin/nft"
+    return 0
+  fi
+  return 127
+}
+
+run_nft_command() {
+  local nft_cmd
+  nft_cmd="$(resolve_nft_command)" || return 127
+  if (( EUID == 0 )); then
+    "$nft_cmd" "$@"
+  else
+    sudo -n "$nft_cmd" "$@"
+  fi
+}
+
+cleanup_transparent_redirect_rules() {
+  local table output rc
+  table="$(transparent_redirect_table_name)" || return 1
+  if ! resolve_nft_command >/dev/null; then
+    echo "transparent_redirect_cleanup=skipped reason=nft_missing"
+    return 0
+  fi
+  if output="$(run_nft_command delete table inet "$table" 2>&1)"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [[ "$rc" -eq 0 ]]; then
+    echo "transparent_redirect_cleanup=ok table=$table"
+    return 0
+  fi
+  if [[ "$output" == *"No such file"* || "$output" == *"does not exist"* ]]; then
+    return 0
+  fi
+  echo "transparent_redirect_cleanup=fail table=$table reason=nft_delete_failed" >&2
+  return 1
+}
+
 systemd_user_ready() {
   command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1
 }
@@ -1787,9 +1866,15 @@ start_runtime() {
 
 stop_runtime() {
   site_auto_watch_stop >/dev/null 2>&1 || true
+  local cleanup_rc=0
   if systemd_user_ready; then
     systemctl --user stop chimera-client.service >/dev/null 2>&1 || true
     systemctl --user stop chimera-gateway.service >/dev/null 2>&1 || true
+    cleanup_transparent_redirect_rules || cleanup_rc=$?
+    if [[ "$cleanup_rc" -ne 0 ]]; then
+      echo "stop_status=fail mode=systemd_user reason=transparent_redirect_cleanup_failed"
+      return 1
+    fi
     echo "stop_status=ok mode=systemd_user"
     return 0
   fi
@@ -1820,11 +1905,19 @@ stop_runtime() {
       --apply-route true \
       --apply-dns true >/dev/null 2>&1 || true
   fi
+  cleanup_transparent_redirect_rules || cleanup_rc=$?
+  if [[ "$cleanup_rc" -ne 0 ]]; then
+    echo "stop_status=fail mode=direct reason=transparent_redirect_cleanup_failed"
+    return 1
+  fi
   echo "stop_status=ok mode=direct"
 }
 
 restart_runtime() {
-  stop_runtime >/dev/null 2>&1 || true
+  stop_runtime >/dev/null 2>&1 || {
+    echo "restart_status=fail reason=stop_failed"
+    return 1
+  }
   start_runtime
 }
 
@@ -1962,7 +2055,10 @@ ui_mode_dispatch() {
 }
 
 uninstall_runtime() {
-  stop_runtime >/dev/null 2>&1 || true
+  stop_runtime >/dev/null 2>&1 || {
+    echo "uninstall_status=fail reason=stop_failed"
+    return 1
+  }
   if systemd_user_ready; then
     systemctl --user disable --now chimera-gateway.service chimera-client.service >/dev/null 2>&1 || true
   fi
