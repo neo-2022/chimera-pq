@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
 Status: **PASS**
-Generated at (UTC): `2026-05-21T14:43:08Z`
+Generated at (UTC): `2026-06-15T17:07:43Z`
 
 Checks:
 - Baseline freeze: `true`
@@ -39,19 +39,15 @@ Checks:
 - Runtime policy precedence smoke (`exact>suffix + dns-binding`): `true`
 - Runtime forced-stop rollback smoke (`recover without graceful down`): `true`
 - Runtime probe-access smoke (`batch targets + totals/threshold report`): `true`
-- Runtime real-world probe smoke (`direct/proxy snapshot only`): `true`
+- Runtime real-world probe smoke (`transparent datapath snapshot only`): `true`
 - Runtime real-world direct probe ok: `true`
-- Runtime real-world proxy listener detected: `false`
-- Runtime real-world proxy probe attempted: `false`
-- Runtime real-world proxy probe ok: `false`
-- Runtime real-world proxy selected from candidates: `false`
-- Runtime real-world proxy candidates: `socks5h://127.0.0.1:11080,http://127.0.0.1:1080`
-- Runtime real-world proxy probe error: `proxy_listener_not_found`
-- Runtime real-world proxy blocked targets total: `0`
-- Runtime real-world proxy blocked targets ok: `0`
-- Runtime real-world proxy blocked targets failed: `0`
+- Runtime real-world datapath probe attempted: `true`
+- Runtime real-world datapath probe ok: `true`
+- Runtime real-world datapath probe error: `none`
+- Runtime real-world datapath targets total: `3`
+- Runtime real-world datapath targets ok: `3`
+- Runtime real-world datapath targets failed: `0`
 - Runtime real-world skipped no curl: `false`
-- Runtime real-world skipped no proxy listener: `true`
 - Artifacts refreshed in this run: `true`
 
 Truth boundary:
