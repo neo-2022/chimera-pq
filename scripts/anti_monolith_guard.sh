@@ -7,11 +7,19 @@ cd "$ROOT_DIR"
 # Hard limits: if any file grows beyond limit, guard fails.
 # Format: <path>:<max_lines>
 LIMITS=(
+  "crates/chimera-bootstrap/src/main.rs:260"
+  "crates/chimera-bootstrap/src/peer_update/mod.rs:80"
+  "crates/chimera-bootstrap/src/peer_update/metadata.rs:160"
+  "crates/chimera-bootstrap/src/peer_update/metadata_tests.rs:220"
+  "crates/chimera-bootstrap/src/peer_update/server.rs:500"
+  "crates/chimera-bootstrap/src/peer_update/server_tests.rs:260"
   "crates/chimera-mesh/src/runtime.rs:450"
   "crates/chimera-mesh/src/policy.rs:800"
   "crates/chimera-mesh/src/policy_parse.rs:220"
   "crates/chimera-mesh/src/model.rs:300"
   "crates/chimera-mesh/src/preemptive.rs:200"
+  "scripts/chimera-sh:260"
+  "scripts/chimera-update.sh:550"
 )
 
 FAILED=0

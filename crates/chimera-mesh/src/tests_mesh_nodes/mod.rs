@@ -30,6 +30,7 @@ fn test_node(
         node_id: MeshNodeId::new(id),
         endpoint: format!("{id}.test:443"),
         invite_token: None,
+        update_bootstrap_url: None,
         country,
         status,
         latency_ms: Some(50.0),

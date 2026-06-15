@@ -1,7 +1,8 @@
-# Trusted peer bootstrap URLs for CHIMERA update fallback.
+# Trusted peer metadata URLs for CHIMERA update fallback.
 #
 # One URL per line. Use only peers you already trust operationally.
-# The launcher normalizes each entry to /chimera.sh.
+# The launcher normalizes each entry to /metadata.json and does not execute
+# a peer bootstrap script during peer fallback.
 #
 # Examples:
 # http://peer.example:18179

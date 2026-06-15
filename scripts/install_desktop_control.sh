@@ -324,6 +324,7 @@ rm -f "$APPLICATIONS_DIR/chimera-control.desktop"
 chmod +x \
   "$ROOT_DIR/scripts/chimera-control.sh" \
   "$ROOT_DIR/scripts/chimera-sh" \
+  "$ROOT_DIR/scripts/chimera-update.sh" \
   "$ROOT_DIR/scripts/chimera.sh" \
   "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" \
   "$ROOT_DIR/scripts/chimera-control-tray.sh" \

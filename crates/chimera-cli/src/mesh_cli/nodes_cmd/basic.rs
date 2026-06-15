@@ -143,6 +143,33 @@ pub(crate) fn selected_node_invite_token(inventory: &MeshNodesInventory) -> Opti
         .and_then(|node| node.invite_token.as_deref())
 }
 
+pub(crate) fn selected_node_update_bootstrap_url(inventory: &MeshNodesInventory) -> Option<&str> {
+    let selected_id = inventory
+        .current_node
+        .as_ref()
+        .or(inventory.pinned_node.as_ref())?;
+    inventory
+        .nodes
+        .iter()
+        .find(|node| node.node_id == *selected_id)
+        .and_then(|node| node.update_bootstrap_url.as_deref())
+}
+
+pub(crate) fn node_update_bootstrap_url_for_args<'a>(
+    args: &[String],
+    inventory: &'a MeshNodesInventory,
+) -> Result<Option<&'a str>, String> {
+    if crate::mesh_cli::nodes_selection::has_direct_selector(args) {
+        let id = resolve_node_id_selector(args, inventory)?;
+        return Ok(inventory
+            .nodes
+            .iter()
+            .find(|node| node.node_id.0 == id)
+            .and_then(|node| node.update_bootstrap_url.as_deref()));
+    }
+    Ok(selected_node_update_bootstrap_url(inventory))
+}
+
 pub(super) fn selected_endpoint(_args: &[String], inventory: &MeshNodesInventory) -> i32 {
     if let Some(reason) = inventory.restricted_reason.as_deref() {
         eprintln!("mesh nodes selected-endpoint error: restricted mode ({reason})");
@@ -155,6 +182,32 @@ pub(super) fn selected_endpoint(_args: &[String], inventory: &MeshNodesInventory
         }
         None => {
             eprintln!("mesh nodes selected-endpoint error: no selected node");
+            2
+        }
+    }
+}
+
+pub(super) fn selected_update_bootstrap_url(
+    args: &[String],
+    inventory: &MeshNodesInventory,
+) -> i32 {
+    if let Some(reason) = inventory.restricted_reason.as_deref() {
+        eprintln!("mesh nodes selected-update-bootstrap-url error: restricted mode ({reason})");
+        return 2;
+    }
+    match node_update_bootstrap_url_for_args(args, inventory) {
+        Err(error) => {
+            eprintln!("mesh nodes selected-update-bootstrap-url error: {error}");
+            2
+        }
+        Ok(Some(url)) => {
+            println!("{url}");
+            0
+        }
+        Ok(None) => {
+            eprintln!(
+                "mesh nodes selected-update-bootstrap-url error: no selected node update_bootstrap_url"
+            );
             2
         }
     }

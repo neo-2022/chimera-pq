@@ -89,9 +89,11 @@ jobs:
           (cd target && sha256sum -c chimera-pq-release.tar.gz.sha256)
           tar -tzf target/chimera-pq-release.tar.gz > target/chimera-release-contents.txt
           grep -q '^chimera-release/bin/chimera-cli$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/bin/chimera-bootstrap$' target/chimera-release-contents.txt
           grep -q '^chimera-release/bin/chimera-peer-egress$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/chimera.sh$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/chimera-sh$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/scripts/chimera-update.sh$' target/chimera-release-contents.txt
 
       - name: Publish GitHub Release Latest Assets
         shell: bash

@@ -80,10 +80,10 @@ verify_checksum_required() {
 }
 
 link_launchers() {
-  mkdir -p "${LOCAL_BIN}"
-  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera"
-  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera.sh"
-  ln -sfn "${CHIMERA_HOME}/scripts/chimera-sh" "${LOCAL_BIN}/chimera-sh"
+  mkdir -p "${LOCAL_BIN}" || return 1
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera" || return 1
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera.sh" || return 1
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera-sh" "${LOCAL_BIN}/chimera-sh" || return 1
 }
 
 restore_previous_release() {
@@ -142,7 +142,13 @@ install_prepared_release_tree() {
     return "$install_rc"
   fi
 
-  link_launchers
+  if ! link_launchers; then
+    restore_previous_release "$backup_home" "$had_previous"
+    if [[ "$had_previous" == "1" ]]; then
+      link_launchers || true
+    fi
+    return 1
+  fi
   [[ -n "$backup_home" ]] && rm -rf "$backup_home"
 }
 

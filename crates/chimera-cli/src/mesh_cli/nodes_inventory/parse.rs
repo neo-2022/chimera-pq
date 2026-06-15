@@ -70,8 +70,8 @@ pub(super) fn parse_cli_nodes(args: &[String]) -> Result<Vec<MeshNode>, String> 
 
 fn parse_cli_node(raw: &str) -> Result<MeshNode, String> {
     let parts = raw.split('@').collect::<Vec<_>>();
-    if parts.len() != 12 {
-        return Err("node record must have 12 @-separated fields".to_string());
+    if parts.len() != 12 && parts.len() != 13 {
+        return Err("node record must have 12 or 13 @-separated fields".to_string());
     }
     build_node(
         parts[0],
@@ -93,6 +93,7 @@ fn parse_cli_node(raw: &str) -> Result<MeshNode, String> {
         parts[10],
         parts[11],
         None,
+        parts.get(12).copied(),
         "cli_node_record",
     )
 }
@@ -129,6 +130,7 @@ fn parse_config_node(raw: &RawConfig, id: &str) -> Result<MeshNode, String> {
         raw.get(&format!("{prefix}observation_count"))
             .unwrap_or("0"),
         invite_token,
+        raw.get(&format!("{prefix}update_bootstrap_url")),
         raw.get(&format!("{prefix}explain_reason"))
             .unwrap_or("config_node_record"),
     )
@@ -155,6 +157,7 @@ pub(super) fn build_node(
     consecutive_failures: &str,
     observation_count: &str,
     invite_token: Option<&str>,
+    update_bootstrap_url: Option<&str>,
     explain_reason: &str,
 ) -> Result<MeshNode, String> {
     let country_code = country_code_raw.to_ascii_uppercase();
@@ -180,6 +183,10 @@ pub(super) fn build_node(
         node_id: MeshNodeId::new(id),
         endpoint: endpoint.to_string(),
         invite_token: invite_token
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        update_bootstrap_url: update_bootstrap_url
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string),
@@ -274,6 +281,7 @@ fn is_allowed_node_field(field: &str) -> bool {
             | "consecutive_failures"
             | "observation_count"
             | "invite_token"
+            | "update_bootstrap_url"
             | "explain_reason"
     )
 }

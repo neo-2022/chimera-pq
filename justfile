@@ -527,9 +527,14 @@ runtime-apply-route-smoke-selfcheck:
     test -x scripts/runtime_apply_route_smoke.sh
     bash -n scripts/runtime_apply_route_smoke.sh
     rg -q 'unshare -Urn' scripts/runtime_apply_route_smoke.sh
+    rg -q 'ip tuntap add dev chimera-probe0 mode tun' scripts/runtime_apply_route_smoke.sh
     rg -q 'apply_attempt_ok' scripts/runtime_apply_route_smoke.sh
     rg -q 'policy_rule_ok' scripts/runtime_apply_route_smoke.sh
     rg -q 'rollback_ok' scripts/runtime_apply_route_smoke.sh
+    rg -q 'skipped_no_tun' scripts/runtime_apply_route_smoke.sh
+    rg -q 'counts_for_release' scripts/runtime_apply_route_smoke.sh
+    rg -q 'tun_permission_unavailable' scripts/runtime_apply_route_smoke.sh
+    ! rg -q 'falls back to host network path' scripts/runtime_apply_route_smoke.sh
     rg -q 'route-policy true' scripts/runtime_apply_route_smoke.sh
     rg -q 'route-table 60001' scripts/runtime_apply_route_smoke.sh
     rg -q 'route-rule-priority 12000' scripts/runtime_apply_route_smoke.sh
@@ -540,9 +545,13 @@ runtime-apply-route-existing-tun-smoke-selfcheck:
     test -x scripts/runtime_apply_route_existing_tun_smoke.sh
     bash -n scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'unshare -Urn' scripts/runtime_apply_route_existing_tun_smoke.sh
+    rg -q 'ip tuntap add dev chimera-probe0 mode tun' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'ip tuntap add dev chimera-pre0 mode tun' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -Fq 'rg -q "\"tun_applied\":false"' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'preexisting_tun_used' scripts/runtime_apply_route_existing_tun_smoke.sh
+    rg -q 'counts_for_release' scripts/runtime_apply_route_existing_tun_smoke.sh
+    rg -q 'skip_reason' scripts/runtime_apply_route_existing_tun_smoke.sh
+    ! rg -q 'falls back to host network path' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'route-table 60002' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'route-rule-priority 12010' scripts/runtime_apply_route_existing_tun_smoke.sh
 
@@ -550,9 +559,13 @@ runtime-apply-route-multi-cidr-smoke-selfcheck:
     test -x scripts/runtime_apply_route_multi_cidr_smoke.sh
     bash -n scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'unshare -Urn' scripts/runtime_apply_route_multi_cidr_smoke.sh
+    rg -q 'ip tuntap add dev chimera-probe1 mode tun' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'apply_attempt_ok' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'policy_rule_ok' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'rollback_ok' scripts/runtime_apply_route_multi_cidr_smoke.sh
+    rg -q 'counts_for_release' scripts/runtime_apply_route_multi_cidr_smoke.sh
+    rg -q 'skip_reason' scripts/runtime_apply_route_multi_cidr_smoke.sh
+    ! rg -q 'falls back to host network path' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'route-policy true' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q '203.0.113.0/24,198.51.100.0/24' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'route-table 60011' scripts/runtime_apply_route_multi_cidr_smoke.sh
@@ -681,6 +694,8 @@ ship-readiness-selfcheck:
     rg -q '"reality_ship_sync_guard":true' scripts/ship_readiness.sh
     rg -q '^deny:' justfile
     rg -q 'crates/chimera-mesh/src/policy_parse.rs:220' scripts/anti_monolith_guard.sh
+    rg -q 'crates/chimera-bootstrap/src/main.rs:260' scripts/anti_monolith_guard.sh
+    rg -q 'scripts/chimera-sh:260' scripts/anti_monolith_guard.sh
     rg -q 'bash scripts/cargo_deny_guard.sh' justfile
     test -x scripts/cargo_deny_guard.sh
     bash -n scripts/cargo_deny_guard.sh
@@ -692,7 +707,11 @@ ship-readiness-selfcheck:
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'runtime_real_world_datapath_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'runtime_real_world_datapath_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'snapshot integrity gate, not a real-world closure claim' scripts/ship_readiness.sh
+    rg -q 'Target failures remain visible' scripts/ship_readiness.sh
+    rg -Fq '$((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed))' scripts/ship_readiness.sh
     rg -q 'GENERATED_AT_UTC=' scripts/ship_readiness.sh
+    line_status="$(rg -n '^status="fail"$' scripts/ship_readiness.sh | tail -n 1 | cut -d: -f1)"; line_generated="$(rg -n '^GENERATED_AT_UTC=' scripts/ship_readiness.sh | tail -n 1 | cut -d: -f1)"; line_write="$(rg -n '^cat > docs/SHIP_READINESS_REPORT.json <<REPORT$' scripts/ship_readiness.sh | cut -d: -f1)"; test -n "$line_status" && test -n "$line_generated" && test -n "$line_write" && test "$line_status" -lt "$line_generated" && test "$line_generated" -lt "$line_write"
     rg -Fq '"generated_at":"${GENERATED_AT_UTC}"' scripts/ship_readiness.sh
     rg -Fq 'Generated at (UTC): \`${GENERATED_AT_UTC}\`' scripts/ship_readiness.sh
     rg -q 'docs/benchmark_latest.json' scripts/ship_readiness.sh
@@ -1437,10 +1456,13 @@ json-message-contract-check:
     rg -q '"kind":"runtime_apply_route_existing_tun_smoke"' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"apply_attempt_ok":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"preexisting_tun_used":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
+    rg -q '"counts_for_release":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"rollback_ok":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"kind":"runtime_apply_route_multi_cidr_smoke"' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
-    (rg -q '"apply_attempt_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json && rg -q '"policy_rule_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json) || rg -q '"skipped_no_tun":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
+    rg -q '"apply_attempt_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
+    rg -q '"policy_rule_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
+    rg -q '"counts_for_release":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"rollback_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_ROUTE_POLICY_VALIDATION_SMOKE.json
     rg -q '"kind":"runtime_route_policy_validation_smoke"' docs/RUNTIME_ROUTE_POLICY_VALIDATION_SMOKE.json
@@ -1762,11 +1784,14 @@ ship-report-contract-check:
     rg -q '"network_state":"modified"' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"apply_attempt_ok":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"preexisting_tun_used":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
+    rg -q '"counts_for_release":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"rollback_ok":true' docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"kind":"runtime_apply_route_multi_cidr_smoke"' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"network_state":"modified"' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
-    (rg -q '"apply_attempt_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json && rg -q '"policy_rule_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json) || rg -q '"skipped_no_tun":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
+    rg -q '"apply_attempt_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
+    rg -q '"policy_rule_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
+    rg -q '"counts_for_release":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"rollback_ok":true' docs/RUNTIME_APPLY_ROUTE_MULTI_CIDR_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_ROUTE_POLICY_VALIDATION_SMOKE.json
     rg -q '"kind":"runtime_route_policy_validation_smoke"' docs/RUNTIME_ROUTE_POLICY_VALIDATION_SMOKE.json
@@ -1878,6 +1903,8 @@ ship-nonregression-guard-selfcheck:
     rg -q 'ship nonregression guard: PASS' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'truth_boundary mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'release_ok mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'counts_for_release' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'route multi-cidr skipped_no_tun is not releasable' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_nonregression_guard.rs

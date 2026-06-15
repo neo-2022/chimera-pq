@@ -194,6 +194,7 @@ pub struct MeshNode {
     pub node_id: MeshNodeId,
     pub endpoint: String,
     pub invite_token: Option<String>,
+    pub update_bootstrap_url: Option<String>,
     pub country: MeshNodeCountry,
     pub status: MeshNodeStatus,
     pub latency_ms: Option<f64>,
@@ -213,6 +214,9 @@ impl MeshNode {
         validate_endpoint_config_value(&self.endpoint)?;
         if let Some(invite_token) = self.invite_token.as_deref() {
             validate_non_empty_label(invite_token, "mesh node invite_token")?;
+        }
+        if let Some(update_bootstrap_url) = self.update_bootstrap_url.as_deref() {
+            validate_update_bootstrap_url(update_bootstrap_url)?;
         }
         self.country.validate()?;
         validate_optional_non_negative("latency_ms", self.latency_ms)?;
@@ -378,6 +382,35 @@ fn validate_endpoint_config_value(endpoint: &str) -> Result<(), String> {
     }
     if endpoint.chars().any(char::is_whitespace) {
         return Err("mesh node endpoint contains whitespace".to_string());
+    }
+    Ok(())
+}
+
+fn validate_update_bootstrap_url(url: &str) -> Result<(), String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("mesh node update_bootstrap_url is empty".to_string());
+    }
+    if url != trimmed {
+        return Err("mesh node update_bootstrap_url contains surrounding spaces".to_string());
+    }
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("mesh node update_bootstrap_url must be http(s)".to_string());
+    }
+    if url.contains('"')
+        || url.contains('\'')
+        || url.contains('\r')
+        || url.contains('\n')
+        || url.contains('\t')
+        || url.contains('`')
+        || url.contains('$')
+        || url.contains('@')
+        || url.contains('?')
+        || url.contains('#')
+        || url.contains('\\')
+        || url.chars().any(char::is_whitespace)
+    {
+        return Err("mesh node update_bootstrap_url contains invalid characters".to_string());
     }
     Ok(())
 }

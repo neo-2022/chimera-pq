@@ -252,6 +252,7 @@ fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, S
     let node_id = json_string(record, &["node_id", "id"])?;
     let endpoint = json_string(record, &["endpoint"])?;
     let invite_token = json_optional_string(record, &["invite_token"]);
+    let update_bootstrap_url = json_optional_string(record, &["update_bootstrap_url"]);
     let country_code =
         json_string_default(record, &["country_code"], MeshNodeCountry::UNKNOWN_CODE);
     let country_name =
@@ -291,6 +292,7 @@ fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, S
         &consecutive_failures,
         &observation_count,
         invite_token.as_deref(),
+        update_bootstrap_url.as_deref(),
         &explain_reason,
     )
 }

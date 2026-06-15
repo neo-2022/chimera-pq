@@ -216,13 +216,22 @@ Peer update fallback:
   an already-installed CHIMERA can try trusted peer bootstrap URLs from:
   - `CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS`
   - `${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_peer_bootstrap_urls.list`
+  For `chimera-sh -connect <peer>`, peer fallback is narrowed to the
+  `update_bootstrap_url` of the selected peer. The general peer list is not a
+  silent substitute for a different selected peer.
 - Each peer entry may be the peer base URL, `/metadata.json`, `/chimera.sh`,
   `/chimera-pq-release.tar.gz`, or `/chimera-pq-release.tar.gz.sha256`;
-  the launcher normalizes it to `/chimera.sh`.
-- A peer source is used only if its bootstrap metadata reports a newer version.
-  The update still downloads the archive and checksum, verifies checksum before
-  extraction, writes installed version/checksum metadata, and re-runs the
-  original command after install.
+  the launcher normalizes it to the peer metadata endpoint. The peer bootstrap
+  script is not executed or parsed as a trust source during peer fallback.
+- A peer source is used only if `/metadata.json` reports
+  `kind=chimera_peer_update_metadata`, `status=ok`, a newer semver version, the
+  canonical same-origin archive/checksum URLs, and a 64-hex `sha256` value.
+  The update still downloads the archive and checksum, verifies that metadata
+  sha equals the checksum file before extraction, writes installed
+  version/checksum metadata, and re-runs the original command after install.
+- Peer fallback is allowed only when GitHub Latest is unreachable. If GitHub
+  responds with invalid metadata, bad version, invalid checksum, or an
+  inconsistent source, CHIMERA fails closed and does not try a peer substitute.
 - If GitHub and all trusted peers are unreachable, CHIMERA keeps the installed
   version and emits `chimera_update=unavailable`; network outage alone is not
   a release block.

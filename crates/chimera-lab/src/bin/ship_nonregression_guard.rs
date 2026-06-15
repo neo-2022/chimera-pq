@@ -59,6 +59,7 @@ fn main() {
         require_field(&rt_route, "network_state", "modified");
         require_bool_field(&rt_route, "apply_attempt_ok", true);
         require_bool_field(&rt_route, "rollback_ok", true);
+        require_bool_field(&rt_route, "counts_for_release", true);
     }
     if get_bool(&ship, "runtime_apply_route_multi_cidr_smoke_ok") {
         require_field(&rt_route_multi, "status", "ok");
@@ -69,11 +70,11 @@ fn main() {
         );
         require_field(&rt_route_multi, "network_state", "modified");
         require_bool_field(&rt_route_multi, "rollback_ok", true);
-        let applied = get_bool(&rt_route_multi, "apply_attempt_ok")
-            && get_bool(&rt_route_multi, "policy_rule_ok");
-        let skipped = get_bool(&rt_route_multi, "skipped_no_tun");
-        if !applied && !skipped {
-            fail("ship nonregression guard: route multi-cidr neither applied nor skipped");
+        require_bool_field(&rt_route_multi, "apply_attempt_ok", true);
+        require_bool_field(&rt_route_multi, "policy_rule_ok", true);
+        require_bool_field(&rt_route_multi, "counts_for_release", true);
+        if get_bool(&rt_route_multi, "skipped_no_tun") {
+            fail("ship nonregression guard: route multi-cidr skipped_no_tun is not releasable");
         }
     }
     if get_bool(&ship, "runtime_forced_stop_rollback_smoke_ok") {
@@ -237,14 +238,53 @@ fn eq_str_cross(
 }
 
 fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), String> {
-    let attempted = get_bool(ship, "runtime_real_world_datapath_probe_attempted");
-    let ok_flag = get_bool(ship, "runtime_real_world_datapath_probe_ok");
-    let skipped_no_curl = get_bool(ship, "runtime_real_world_skipped_no_curl");
-    let error = get_str(ship, "runtime_real_world_datapath_probe_error");
-    let total = get_i64(ship, "runtime_real_world_datapath_targets_total");
-    let ok = get_i64(ship, "runtime_real_world_datapath_targets_ok");
-    let failed = get_i64(ship, "runtime_real_world_datapath_targets_failed");
-    if ![
+    let legacy_mode = !ship.contains_key("runtime_real_world_datapath_probe_attempted")
+        && !ship.contains_key("runtime_real_world_datapath_probe_ok")
+        && !ship.contains_key("runtime_real_world_datapath_probe_error")
+        && !ship.contains_key("runtime_real_world_datapath_targets_total")
+        && !ship.contains_key("runtime_real_world_datapath_targets_ok")
+        && !ship.contains_key("runtime_real_world_datapath_targets_failed");
+
+    let attempted = if legacy_mode {
+        get_bool(ship, "runtime_real_world_proxy_probe_attempted")
+    } else {
+        get_bool(ship, "runtime_real_world_datapath_probe_attempted")
+    };
+    let ok_flag = if legacy_mode {
+        get_bool(ship, "runtime_real_world_proxy_probe_ok")
+    } else {
+        get_bool(ship, "runtime_real_world_datapath_probe_ok")
+    };
+    let skipped_no_curl = if legacy_mode {
+        get_bool(ship, "runtime_real_world_skipped_no_proxy_listener")
+    } else {
+        get_bool(ship, "runtime_real_world_skipped_no_curl")
+    };
+    let error = if legacy_mode {
+        get_str(ship, "runtime_real_world_proxy_probe_error")
+    } else {
+        get_str(ship, "runtime_real_world_datapath_probe_error")
+    };
+    let total = if legacy_mode {
+        get_i64(ship, "runtime_real_world_proxy_blocked_targets_total")
+    } else {
+        get_i64(ship, "runtime_real_world_datapath_targets_total")
+    };
+    let ok = if legacy_mode {
+        get_i64(ship, "runtime_real_world_proxy_blocked_targets_ok")
+    } else {
+        get_i64(ship, "runtime_real_world_datapath_targets_ok")
+    };
+    let failed = if legacy_mode {
+        get_i64(ship, "runtime_real_world_proxy_blocked_targets_failed")
+    } else {
+        get_i64(ship, "runtime_real_world_datapath_targets_failed")
+    };
+    if legacy_mode {
+        if !["none", "proxy_listener_not_found", "unknown"].contains(&error) {
+            return Err("datapath error value is invalid".to_string());
+        }
+    } else if ![
         "none",
         "curl_not_found",
         "datapath_target_failed",

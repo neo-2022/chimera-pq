@@ -31,6 +31,7 @@ mesh.node.nl.loss_pct = 0.0
 mesh.node.nl.success_rate_5m = 98
 mesh.node.nl.success_rate_1h = 98
 mesh.node.nl.observation_count = 10
+mesh.node.nl.update_bootstrap_url = http://node-nl.example:18179/chimera.sh
 mesh.node.x.endpoint = ${CHIMERA_X_ENDPOINT}
 mesh.node.x.country_code = ZZ
 mesh.node.x.status = checking
@@ -44,12 +45,57 @@ mesh.node.x.status = checking
         Some("nl")
     );
     assert_eq!(inventory.autoconnect_enabled, Some(true));
+    assert_eq!(
+        inventory
+            .nodes
+            .iter()
+            .find(|node| node.node_id.0 == "nl")
+            .and_then(|node| node.update_bootstrap_url.as_deref()),
+        Some("http://node-nl.example:18179/chimera.sh")
+    );
     assert!(
         inventory
             .nodes
             .iter()
             .any(|node| node.country.country_name == MeshNodeCountry::UNKNOWN_NAME)
     );
+}
+
+#[test]
+fn nodes_inventory_rejects_bad_update_bootstrap_url() {
+    let text = r#"
+mesh.nodes.ids = de
+mesh.node.de.endpoint = ${CHIMERA_DE_ENDPOINT}
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.update_bootstrap_url = file:///tmp/chimera.sh
+"#;
+
+    let error = parse_inventory_config_text(text)
+        .err()
+        .unwrap_or_else(|| unreachable!("bad update_bootstrap_url must fail"));
+
+    assert!(error.contains("update_bootstrap_url"));
+}
+
+#[test]
+fn nodes_inventory_rejects_update_bootstrap_url_userinfo() {
+    let text = "\
+mesh.nodes.ids = de
+mesh.node.de.endpoint = 127.0.0.1:1111
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.observation_count = 10
+mesh.node.de.update_bootstrap_url = http://user@node-de.example:18179/chimera.sh
+";
+
+    let error = parse_inventory_config_text(text)
+        .err()
+        .unwrap_or_else(|| unreachable!("userinfo update_bootstrap_url must fail"));
+
+    assert!(error.contains("update_bootstrap_url"));
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use super::nodes_cmd::mesh_nodes_command;
+use super::nodes_cmd::node_update_bootstrap_url_for_args;
 use super::nodes_cmd::selected_node_endpoint;
 use super::nodes_inventory::load_mesh_nodes_inventory;
 use super::nodes_selection::{build_selection_entries, render_selection_prompt};
@@ -113,6 +114,134 @@ fn selected_endpoint_prefers_current_then_pinned() {
     let inventory = super::nodes_inventory::parse_inventory_config_text(&text)
         .unwrap_or_else(|err| unreachable!("{err}"));
     assert_eq!(selected_node_endpoint(&inventory), Some(endpoint.as_str()));
+}
+
+#[test]
+fn selected_update_bootstrap_url_uses_connect_selector_over_current() {
+    let text = "\
+mesh.nodes.ids = de,nl
+mesh.nodes.current = de
+mesh.nodes.pinned = de
+mesh.node.de.endpoint = 127.0.0.1:1111
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.observation_count = 10
+mesh.node.de.update_bootstrap_url = http://node-de.example:18179/chimera.sh
+mesh.node.nl.endpoint = 127.0.0.1:2222
+mesh.node.nl.country_code = NL
+mesh.node.nl.country_name = Netherlands
+mesh.node.nl.status = healthy
+mesh.node.nl.observation_count = 10
+mesh.node.nl.update_bootstrap_url = http://node-nl.example:18179/chimera.sh
+";
+    let inventory = super::nodes_inventory::parse_inventory_config_text(text)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    let args = vec!["nl".to_string()];
+
+    assert_eq!(
+        node_update_bootstrap_url_for_args(&args, &inventory),
+        Ok(Some("http://node-nl.example:18179/chimera.sh"))
+    );
+}
+
+#[test]
+fn selected_update_bootstrap_url_command_uses_positional_or_id_selector() {
+    let de_listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind de listener failed: {err}"));
+    let nl_listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind nl listener failed: {err}"));
+    let de_addr = de_listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read de addr failed: {err}"));
+    let nl_addr = nl_listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read nl addr failed: {err}"));
+    let mut config_path = std::env::temp_dir();
+    config_path.push(format!("chimera_mesh_update_url_cfg_{}.conf", random_u64()));
+    let config = format!(
+        "\
+mesh.nodes.ids = de,nl
+mesh.nodes.current = de
+mesh.nodes.pinned = de
+mesh.node.de.endpoint = {de_addr}
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.observation_count = 10
+mesh.node.de.update_bootstrap_url = http://node-de.example:18179/chimera.sh
+mesh.node.nl.endpoint = {nl_addr}
+mesh.node.nl.country_code = NL
+mesh.node.nl.country_name = Netherlands
+mesh.node.nl.status = healthy
+mesh.node.nl.observation_count = 10
+mesh.node.nl.update_bootstrap_url = http://node-nl.example:18179/chimera.sh
+"
+    );
+    fs::write(&config_path, config)
+        .unwrap_or_else(|err| unreachable!("write config failed: {err}"));
+
+    let positional_args = vec![
+        "selected-update-bootstrap-url".to_string(),
+        "--config".to_string(),
+        config_path.display().to_string(),
+        "nl".to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&positional_args), 0);
+
+    let id_args = vec![
+        "selected-update-bootstrap-url".to_string(),
+        "--config".to_string(),
+        config_path.display().to_string(),
+        "--id".to_string(),
+        "nl".to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&id_args), 0);
+    let _ = fs::remove_file(config_path);
+}
+
+#[test]
+fn selected_update_bootstrap_url_unknown_selector_does_not_fall_back_to_current() {
+    let text = "\
+mesh.nodes.ids = de
+mesh.nodes.current = de
+mesh.node.de.endpoint = 127.0.0.1:1111
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.observation_count = 10
+mesh.node.de.update_bootstrap_url = http://node-de.example:18179/chimera.sh
+";
+    let inventory = super::nodes_inventory::parse_inventory_config_text(text)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    let args = vec!["unknown".to_string()];
+
+    assert_eq!(
+        node_update_bootstrap_url_for_args(&args, &inventory),
+        Ok(None)
+    );
+}
+
+#[test]
+fn cli_node_record_can_carry_update_bootstrap_url() {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind listener failed: {err}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read addr failed: {err}"));
+    let args = vec![
+        "--node".to_string(),
+        format!(
+            "nl@{}@NL@Netherlands@healthy@12@1@0.0@99@99@0@10@http://node-nl.example:18179/chimera.sh",
+            addr
+        ),
+    ];
+    let inventory = load_mesh_nodes_inventory(&args).unwrap_or_else(|err| unreachable!("{err}"));
+
+    assert_eq!(
+        inventory.nodes[0].update_bootstrap_url.as_deref(),
+        Some("http://node-nl.example:18179/chimera.sh")
+    );
 }
 
 fn random_u64() -> u64 {

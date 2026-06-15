@@ -17,8 +17,19 @@ set +e
 apply_ok=false
 rollback_ok=true
 preexisting_tun_used=false
+skipped_no_tun=false
+skip_reason="none"
+status="fail"
+network_state="not_modified"
+counts_for_release=false
 
-if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
+write_artifact() {
+  local notes="${1:?notes_required}"
+  json="{\"status\":\"${status}\",\"kind\":\"runtime_apply_route_existing_tun_smoke\",\"message_en\":\"Runtime apply route with pre-existing TUN smoke executed.\",\"message_ru\":\"Smoke-проверка runtime apply route с предсозданным TUN выполнена.\",\"network_state\":\"${network_state}\",\"apply_attempt_ok\":${apply_ok},\"preexisting_tun_used\":${preexisting_tun_used},\"rollback_ok\":${rollback_ok},\"skipped_no_tun\":${skipped_no_tun},\"skip_reason\":\"${skip_reason}\",\"counts_for_release\":${counts_for_release},\"notes\":\"${notes}\"}"
+  printf "%s\n" "$json" > docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
+}
+
+if unshare -Urn bash -ceu "ip tuntap add dev chimera-probe0 mode tun; ip link delete dev chimera-probe0" >/dev/null 2>&1; then
   unshare -Urn bash -ceu '
     ip tuntap add dev chimera-pre0 mode tun
     ip link set dev chimera-pre0 up
@@ -60,13 +71,24 @@ if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
   if [[ $rc -eq 0 ]]; then
     apply_ok=true
     preexisting_tun_used=true
+    status="ok"
+    network_state="modified"
+    counts_for_release=true
   else
     rollback_ok=false
   fi
 else
-  rc=0
+  skipped_no_tun=true
+  skip_reason="tun_permission_unavailable"
+  status="skipped"
 fi
 set -e
 
-json="{\"status\":\"ok\",\"kind\":\"runtime_apply_route_existing_tun_smoke\",\"message_en\":\"Runtime apply route with pre-existing TUN smoke executed.\",\"message_ru\":\"Smoke-проверка runtime apply route с предсозданным TUN выполнена.\",\"network_state\":\"modified\",\"apply_attempt_ok\":${apply_ok},\"preexisting_tun_used\":${preexisting_tun_used},\"rollback_ok\":${rollback_ok},\"notes\":\"Uses unshare user+net namespace; skipped when unavailable.\"}"
-printf "%s\n" "$json" > docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json
+write_artifact "Uses unshare user+net namespace with a real TUN creation probe; host network fallback is forbidden."
+
+if [[ "$status" != "ok" ]]; then
+  echo "runtime apply route existing-TUN smoke: ${status} (${skip_reason})" >&2
+  exit 1
+fi
+
+echo "runtime apply route existing-TUN smoke: PASS"

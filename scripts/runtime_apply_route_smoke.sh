@@ -17,8 +17,19 @@ set +e
 apply_ok=false
 rollback_ok=true
 policy_rule_ok=false
+skipped_no_tun=false
+skip_reason="none"
+status="fail"
+network_state="not_modified"
+counts_for_release=false
 
-if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
+write_artifact() {
+  local notes="${1:?notes_required}"
+  json="{\"status\":\"${status}\",\"kind\":\"runtime_apply_route_smoke\",\"message_en\":\"Runtime apply route smoke executed.\",\"message_ru\":\"Smoke-проверка runtime apply route выполнена.\",\"network_state\":\"${network_state}\",\"apply_attempt_ok\":${apply_ok},\"policy_rule_ok\":${policy_rule_ok},\"rollback_ok\":${rollback_ok},\"skipped_no_tun\":${skipped_no_tun},\"skip_reason\":\"${skip_reason}\",\"counts_for_release\":${counts_for_release},\"notes\":\"${notes}\"}"
+  printf "%s\n" "$json" > docs/RUNTIME_APPLY_ROUTE_SMOKE.json
+}
+
+if unshare -Urn bash -ceu "ip tuntap add dev chimera-probe0 mode tun; ip link delete dev chimera-probe0" >/dev/null 2>&1; then
   unshare -Urn bash -ceu '
     cargo run -q -p chimera-cli -- up \
       --state-file /tmp/chimera_runtime_route_state.json \
@@ -52,39 +63,24 @@ if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
   if [[ $rc -eq 0 ]]; then
     apply_ok=true
     policy_rule_ok=true
+    status="ok"
+    network_state="modified"
+    counts_for_release=true
   else
     rollback_ok=false
   fi
 else
-  cargo run -q -p chimera-cli -- up \
-    --state-file /tmp/chimera_runtime_route_state.json \
-    --config /tmp/chimera_client_route_smoke.conf \
-    --skip-connect-check true \
-    --apply-tun true \
-    --tun-name chimera-smoke0 \
-    --tun-local-cidr 10.99.0.2/30 \
-    --tun-peer-cidr 10.99.0.1/30 \
-    --apply-route true \
-    --route-cidr 203.0.113.0/24 \
-    --route-policy true \
-    --route-table 60001 \
-    --route-rule-priority 12000
-  rc=$?
-  if [[ $rc -eq 0 ]]; then
-    apply_ok=true
-    rg -q "\"network_state\":\"modified\"" /tmp/chimera_runtime_route_state.json
-    rg -q "\"route_policy\":true" /tmp/chimera_runtime_route_state.json
-    rg -q "\"route_table\":\"60001\"" /tmp/chimera_runtime_route_state.json
-    rg -q "\"route_rule_priority\":\"12000\"" /tmp/chimera_runtime_route_state.json
-    cargo run -q -p chimera-cli -- down --state-file /tmp/chimera_runtime_route_state.json || rollback_ok=false
-    test ! -f /tmp/chimera_runtime_route_state.json || rollback_ok=false
-  else
-    if [[ -f /tmp/chimera_runtime_route_state.json ]]; then
-      cargo run -q -p chimera-cli -- down --state-file /tmp/chimera_runtime_route_state.json || rollback_ok=false
-    fi
-  fi
+  skipped_no_tun=true
+  skip_reason="tun_permission_unavailable"
+  status="skipped"
 fi
 set -e
 
-json="{\"status\":\"ok\",\"kind\":\"runtime_apply_route_smoke\",\"message_en\":\"Runtime apply route smoke executed.\",\"message_ru\":\"Smoke-проверка runtime apply route выполнена.\",\"network_state\":\"modified\",\"apply_attempt_ok\":${apply_ok},\"policy_rule_ok\":${policy_rule_ok},\"rollback_ok\":${rollback_ok},\"notes\":\"Uses unshare user+net namespace automatically when available; falls back to host network path otherwise.\"}"
-printf "%s\n" "$json" > docs/RUNTIME_APPLY_ROUTE_SMOKE.json
+write_artifact "Uses unshare user+net namespace with a real TUN creation probe; host network fallback is forbidden."
+
+if [[ "$status" != "ok" ]]; then
+  echo "runtime apply route smoke: ${status} (${skip_reason})" >&2
+  exit 1
+fi
+
+echo "runtime apply route smoke: PASS"

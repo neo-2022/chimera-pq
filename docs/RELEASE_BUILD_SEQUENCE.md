@@ -31,9 +31,17 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera-pq-release.tar.gz.sha256`
 9. Verify the peer-update fallback contract remains update-only:
    - `chimera-sh` checks GitHub Latest first;
-   - configured peer bootstrap URLs are tried only as fallback for already
-     installed CHIMERA;
-   - the peer path still verifies the release checksum before extraction;
+   - peer fallback is tried only after GitHub Latest is unreachable, not after
+     invalid GitHub metadata/checksum/source;
+   - configured peer URLs are tried only as fallback for already installed
+     CHIMERA;
+   - `chimera-sh -connect <peer>` uses only that selected peer's
+     `update_bootstrap_url` as peer fallback, not the general peer list;
+   - the peer path reads `/metadata.json`, verifies `kind`, `status`,
+     same-origin archive/checksum URLs and `sha256`, and does not execute the
+     peer bootstrap script as a trust source;
+   - the peer path verifies the release checksum before extraction and matches
+     metadata `sha256` to the checksum file;
    - if no trusted update source is reachable, CHIMERA keeps the installed
      version and emits `chimera_update=unavailable`;
    - peer update evidence is not used as first-install stand proof.

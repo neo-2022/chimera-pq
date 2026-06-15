@@ -246,7 +246,7 @@ fn ordered_nodes(inventory: &MeshNodesInventory, filter: &MeshNodeListFilter) ->
         .collect()
 }
 
-fn has_direct_selector(args: &[String]) -> bool {
+pub(crate) fn has_direct_selector(args: &[String]) -> bool {
     super::nodes_inventory::extract_flag_value(args, "--id").is_some()
         || extract_positional_selector(args).is_some()
 }

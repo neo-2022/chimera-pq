@@ -76,10 +76,10 @@ verify_archive_checksum() {
 link_launchers() {
   local chimera_home="${1:?chimera_home_required}"
   local local_bin="${2:?local_bin_required}"
-  mkdir -p "$local_bin"
-  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera"
-  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera.sh"
-  ln -sfn "$chimera_home/scripts/chimera-sh" "$local_bin/chimera-sh"
+  mkdir -p "$local_bin" || return 1
+  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera" || return 1
+  ln -sfn "$chimera_home/scripts/chimera.sh" "$local_bin/chimera.sh" || return 1
+  ln -sfn "$chimera_home/scripts/chimera-sh" "$local_bin/chimera-sh" || return 1
 }
 
 restore_previous_release() {
@@ -146,7 +146,13 @@ install_release_archive() {
     return "$install_rc"
   fi
 
-  link_launchers "$chimera_home" "$local_bin"
+  if ! link_launchers "$chimera_home" "$local_bin"; then
+    restore_previous_release "$chimera_home" "$backup_home" "$had_previous"
+    if [[ "$had_previous" == "1" ]]; then
+      link_launchers "$chimera_home" "$local_bin" || true
+    fi
+    return 1
+  fi
   [[ -n "$backup_home" ]] && rm -rf "$backup_home"
 
   echo "chimera_install=ok version=$VERSION home=$chimera_home"

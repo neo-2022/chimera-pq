@@ -12,14 +12,28 @@ run_case() {
   local case_name="$1"
   local client_ready="$2"
   local systemctl_mode="$3"
-  local tmp_dir systemctl_dir cache_dir config_dir runtime_dir client_conf output rc
+  local tmp_dir systemctl_dir cache_dir config_dir runtime_dir client_conf output rc install_root
 
   tmp_dir="$(mktemp -d)"
   systemctl_dir="$tmp_dir/bin"
   cache_dir="$tmp_dir/cache/chimera"
   config_dir="$tmp_dir/config/chimera"
   runtime_dir="$tmp_dir/runtime"
+  install_root="$tmp_dir/chimera-release"
   mkdir -p "$systemctl_dir" "$cache_dir" "$config_dir" "$runtime_dir"
+  mkdir -p "$install_root/scripts" "$install_root/bin" "$install_root/configs" "$install_root/deploy/systemd-user" "$install_root/deploy/desktop"
+  cp "$ROOT_DIR/scripts/chimera-sh" "$install_root/scripts/chimera-sh"
+  cp "$ROOT_DIR/scripts/chimera-update.sh" "$install_root/scripts/chimera-update.sh"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  cp "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" "$install_root/scripts/chimera_runtime_bootstrap.sh"
+  cp "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" "$install_root/deploy/systemd-user/chimera-gateway.service"
+  cp "$ROOT_DIR/deploy/systemd-user/chimera-client.service" "$install_root/deploy/systemd-user/chimera-client.service"
+  cp "$ROOT_DIR/deploy/desktop/chimera-control-gui.desktop" "$install_root/deploy/desktop/chimera-control-gui.desktop"
+  cp "$ROOT_DIR/configs/client.example.conf" "$install_root/configs/client.example.conf"
+  cp "$ROOT_DIR/configs/gateway.example.conf" "$install_root/configs/gateway.example.conf"
+  printf '%s\n' "0.1.86" >"$install_root/.chimera_release_version"
+  printf '%064d\n' 1 >"$install_root/.chimera_release_bundle.sha256"
 
   client_conf="$tmp_dir/client.conf"
   if [[ "$client_ready" == "1" ]]; then
@@ -108,16 +122,16 @@ EOF
 
   set +e
   output="$(
-    PATH="$systemctl_dir:$PATH" \
-    HOME="$tmp_dir/home" \
-    XDG_CACHE_HOME="$tmp_dir/cache" \
-    XDG_CONFIG_HOME="$config_dir" \
-    XDG_RUNTIME_DIR="$runtime_dir" \
-    CLIENT_CONFIG_FILE="$client_conf" \
-    CHIMERA_AUTO_UPDATE_ENABLED=0 \
-    CHIMERA_AUTOFIX_MAX_TIME=0 \
-    bash "$ROOT_DIR/scripts/chimera-sh" -start 2>&1
-  )"
+	    PATH="$systemctl_dir:$PATH" \
+	    HOME="$tmp_dir/home" \
+	    XDG_CACHE_HOME="$tmp_dir/cache" \
+	    XDG_CONFIG_HOME="$config_dir" \
+	    XDG_RUNTIME_DIR="$runtime_dir" \
+	    CLIENT_CONFIG_FILE="$client_conf" \
+	    CHIMERA_UPDATE_BOOTSTRAP_URL="https://127.0.0.1.invalid/chimera.sh" \
+	    CHIMERA_AUTOFIX_MAX_TIME=0 \
+	    bash "$install_root/scripts/chimera-sh" -start 2>&1
+	  )"
   rc=$?
   set -e
 

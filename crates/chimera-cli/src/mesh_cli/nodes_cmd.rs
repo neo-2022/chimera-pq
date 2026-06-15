@@ -14,6 +14,8 @@ use super::nodes_inventory::load_mesh_nodes_inventory;
 use super::nodes_render::{render_best, render_nodes_list};
 
 #[cfg(test)]
+pub(crate) use basic::node_update_bootstrap_url_for_args;
+#[cfg(test)]
 pub(crate) use basic::selected_node_endpoint;
 #[cfg(test)]
 pub(crate) use guard::{proof_pq_strict_enabled, verify_chimera_proof, verify_guard_challenge};
@@ -56,6 +58,7 @@ pub(crate) fn mesh_nodes_command(args: &[String]) -> i32 {
         "connect" => basic::connect_node(rest, &inventory, &policy),
         "select" => basic::select_node(rest, &inventory, &policy),
         "selected-endpoint" => basic::selected_endpoint(rest, &inventory),
+        "selected-update-bootstrap-url" => basic::selected_update_bootstrap_url(rest, &inventory),
         "selected-invite-token" => basic::selected_invite_token(rest, &inventory),
         "pin" => basic::pin_node(rest, &inventory, &policy),
         "unpin" => basic::unpin_node(rest, &inventory, &policy),
@@ -78,5 +81,5 @@ pub(crate) fn mesh_nodes_command(args: &[String]) -> i32 {
 }
 
 fn usage() -> &'static str {
-    "usage: chimera mesh nodes <list|best|explain|connect|select|selected-endpoint|selected-invite-token|pin|unpin|autoconnect|auto-unblock|guard-listen|state|advertise|re-enroll|re-enroll-prepare|re-enroll-submit|probe> [--config path] [--self-node-id <id>] [--runtime-state <file>] [--namespace <name>] [--json] [--proof-token <token>] [--proof-token-classic <token>] [--proof-token-pq <token>] [--proof-key-id <id>] [--proof-pq-key-id <id>] [--bind <host:port>] [--once] [--discovery-url http(s)://...] [--probe-timeout-ms n] [--node <id@endpoint@country_code@country_name@status@latency_ms@jitter_ms@loss_pct@success5m@success1h@failures@observations>] [--country DE,NL] [--status healthy,checking] [--available-only] [--search text] [--id node_id] [--new-node-id <id>] [--request <file>] [--out <file>] [--key-out <file>] [--register <file>] [--key <file>] [--state-out <file>] [--activation-out <file>]"
+    "usage: chimera mesh nodes <list|best|explain|connect|select|selected-endpoint|selected-update-bootstrap-url|selected-invite-token|pin|unpin|autoconnect|auto-unblock|guard-listen|state|advertise|re-enroll|re-enroll-prepare|re-enroll-submit|probe> [--config path] [--self-node-id <id>] [--runtime-state <file>] [--namespace <name>] [--json] [--proof-token <token>] [--proof-token-classic <token>] [--proof-token-pq <token>] [--proof-key-id <id>] [--proof-pq-key-id <id>] [--bind <host:port>] [--once] [--discovery-url http(s)://...] [--probe-timeout-ms n] [--node <id@endpoint@country_code@country_name@status@latency_ms@jitter_ms@loss_pct@success5m@success1h@failures@observations[@update_bootstrap_url]>] [--country DE,NL] [--status healthy,checking] [--available-only] [--search text] [--id node_id] [--new-node-id <id>] [--request <file>] [--out <file>] [--key-out <file>] [--register <file>] [--key <file>] [--state-out <file>] [--activation-out <file>]"
 }

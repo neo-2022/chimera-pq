@@ -38,7 +38,6 @@ fn main() {
     let reality_obj = reality
         .as_object()
         .unwrap_or_else(|| fail("ship readiness json guard: reality root is not object"));
-
     require_str_eq(report_obj, "status", "ok");
     require_str_eq(report_obj, "kind", "ship_readiness_report");
     require_bool_eq(report_obj, "release_ok", true);
@@ -77,12 +76,11 @@ fn main() {
         require_step_true(report_obj, key);
     }
 
-    let ints = [
+    for key in [
         "runtime_real_world_datapath_targets_total",
         "runtime_real_world_datapath_targets_ok",
         "runtime_real_world_datapath_targets_failed",
-    ];
-    for key in ints {
+    ] {
         if report_obj
             .get(key)
             .and_then(Value::as_i64)

@@ -74,8 +74,9 @@ cp -p "${ROOT_DIR}/scripts/chimera-control-tray.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control-launcher.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera_runtime_bootstrap.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-runner.sh" "${RELEASE_DIR}/scripts/"
-cp -p "${ROOT_DIR}/scripts/chimera-sh" "${RELEASE_DIR}/scripts/" 2>/dev/null || true
-cp -p "${ROOT_DIR}/scripts/chimera.sh" "${RELEASE_DIR}/scripts/" 2>/dev/null || true
+cp -p "${ROOT_DIR}/scripts/chimera-sh" "${RELEASE_DIR}/scripts/"
+cp -p "${ROOT_DIR}/scripts/chimera-update.sh" "${RELEASE_DIR}/scripts/"
+cp -p "${ROOT_DIR}/scripts/chimera.sh" "${RELEASE_DIR}/scripts/"
 
 sed -i \
   -e "s|^VERSION=.*|VERSION=\"${RELEASE_VERSION}\"|" \
@@ -94,6 +95,11 @@ BUNDLE_SHA256="$(sha256sum "${ROOT_DIR}/target/${LATEST_ARCHIVE_NAME}" | cut -d'
 printf '%s  %s\n' "${BUNDLE_SHA256}" "${LATEST_ARCHIVE_NAME}" > "${ROOT_DIR}/target/${LATEST_CHECKSUM_NAME}"
 cp -p "${ROOT_DIR}/target/${LATEST_CHECKSUM_NAME}" "${ROOT_DIR}/target/chimera-release.sha256"
 (cd "${ROOT_DIR}/target" && sha256sum -c "${LATEST_CHECKSUM_NAME}")
+tar -tzf "${ROOT_DIR}/target/${LATEST_ARCHIVE_NAME}" > "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/bin/chimera-bootstrap$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/chimera-update\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 
 echo "build_release: done"
 echo "  archive:   target/${ARCHIVE_NAME}"
