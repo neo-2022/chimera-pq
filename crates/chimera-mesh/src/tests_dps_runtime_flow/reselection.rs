@@ -152,6 +152,104 @@ fn runtime_reselection_plan_with_health_from_dps_payload_builds_route() {
         .unwrap_or("");
     assert!(!dps_consistency_summary.is_empty());
     assert!(dps_degraded_summary.ends_with(dps_consistency_summary));
+    assert_eq!(plan.multipath_schedule.mode.as_str(), "off");
+    assert_eq!(plan.multipath_schedule.active_lane_count, 1);
+}
+
+#[test]
+fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_schedule() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.72:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 95,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.73:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 22,
+            reliability_score: 94,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let payload = "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard";
+    let health = [MeshPeerHealth {
+        node_id: "node-a".to_string(),
+        healthy: true,
+        cooldown_active: false,
+    }];
+    let plan = runtime
+        .reselection_plan_with_health_from_dps_payload(&req, payload, &health)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(plan.multipath_schedule.mode.as_str(), "flow_shard");
+    assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("multipath_schedule_mode=flow_shard"))
+    );
+}
+
+#[test]
+fn runtime_reselection_dps_applies_aggregate_schedule_without_explicit_limits() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.74:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 95,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.75:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 22,
+            reliability_score: 94,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-c".to_string(),
+            endpoint: "198.51.100.76:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 24,
+            reliability_score: 93,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let payload = "mesh_allowed_regions=eu;mesh_multipath_mode=aggregate_buffered";
+    let plan = runtime
+        .reselection_plan_with_health_from_dps_payload(&req, payload, &[])
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(plan.selected_peers.len(), 3);
+    assert_eq!(plan.multipath_schedule.mode.as_str(), "aggregate_buffered");
+    assert_eq!(plan.multipath_schedule.active_lane_count, 3);
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("effective_max_peers=3"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("effective_max_selected_per_region=3"))
+    );
 }
 
 #[test]

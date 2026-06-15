@@ -76,9 +76,8 @@ pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut Mes
         if !has_mesh_policy_key(payload, "mesh_max_selected_per_region") {
             policy.max_selected_per_region = match mode {
                 MultipathMode::Off | MultipathMode::StandbyOnly => 1,
-                MultipathMode::FlowShard | MultipathMode::AggregateBuffered => {
-                    policy.max_selected_per_region.max(2)
-                }
+                MultipathMode::FlowShard => policy.max_selected_per_region.max(2),
+                MultipathMode::AggregateBuffered => policy.max_selected_per_region.max(3),
             };
         }
     }

@@ -101,9 +101,11 @@ pub fn run_node(options: Options) -> Result<(), String> {
             let outbound_pool = peer_pool.clone();
             thread::spawn(move || {
                 loop {
-                    if let Err(error) =
-                        outbound_peer_worker_with_next_hop(&worker, Some(outbound_pool.clone()))
-                    {
+                    if let Err(error) = outbound_peer_worker_with_next_hop(
+                        &worker,
+                        Some(outbound_pool.clone()),
+                        None,
+                    ) {
                         eprintln!(
                             "event=weave_outbound_peer_worker_error reason_class={}",
                             redacted_log_reason(&error)

@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::model::{
-    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerState, peer_priority,
+    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshMultipathMode,
+    MeshMultipathSchedule, MeshPathPlan, MeshPeerHealth, MeshPeerState, peer_priority,
 };
 use crate::policy::{
-    MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, traffic_class_from_dps_payload,
-    traffic_hints_from_dps_payload,
+    MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode,
+    traffic_class_from_dps_payload, traffic_hints_from_dps_payload,
 };
 use crate::preemptive::{
     evaluate_shadow_runtime_decision, format_confirmation_tuning, format_profile_tuning_thresholds,
@@ -19,6 +19,7 @@ mod connect_retry_profile;
 mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;
+mod multipath_schedule;
 mod path_planner;
 mod path_planner_finalize;
 mod path_planner_recovery;
@@ -51,6 +52,9 @@ mod table_consistency;
 use candidate_filter::collect_candidates;
 use dps_payload_explain::annotate_dps_payload_explain;
 pub use join_mode::evaluate_join_mode;
+use multipath_schedule::{
+    build_multipath_schedule, replace_multipath_schedule, schedule_mode_from_multipath_hint,
+};
 use selection_policy::{normalize_region_key, validate_runtime_node_id, validate_source_name};
 use selection_profile::{
     effective_target_distinct_regions, profile_label, resolve_path_profile,

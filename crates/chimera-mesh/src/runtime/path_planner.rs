@@ -116,11 +116,14 @@ impl MeshRuntime {
             &mut explain,
         )?;
         append_standby_shadow_explain(&selected_peers, &mut explain);
+        let multipath_schedule = build_multipath_schedule(&selected_peers, MeshMultipathMode::Off);
+        multipath_schedule::append_multipath_schedule_explain(&mut explain, &multipath_schedule);
 
         Ok(MeshPathPlan {
             namespace: self.namespace.clone(),
             join_mode,
             selected_peers,
+            multipath_schedule,
             explain,
         })
     }

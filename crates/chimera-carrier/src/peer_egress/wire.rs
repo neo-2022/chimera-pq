@@ -2,11 +2,17 @@ use core::fmt;
 
 use crate::peer_egress::protocol::{Destination, SecurePeerStream, parse_peer_connect_destination};
 use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_frame};
+#[cfg(test)]
+use crate::peer_egress::transit_binding::encode_bound_transit_relay_frame;
+use crate::peer_egress::transit_binding::{
+    BOUND_TRANSIT_MAGIC, BoundTransitRelayFrame, validate_bound_transit_relay_frame,
+};
 
 pub(crate) enum PeerMessage {
     Connect(Destination),
     AckOk,
     SealedTransit(TransitRelayFrame),
+    BoundSealedTransit(BoundTransitRelayFrame),
 }
 
 impl fmt::Debug for PeerMessage {
@@ -19,6 +25,10 @@ impl fmt::Debug for PeerMessage {
             Self::AckOk => f.write_str("PeerMessage::AckOk"),
             Self::SealedTransit(frame) => f
                 .debug_struct("PeerMessage::SealedTransit")
+                .field("frame", frame)
+                .finish(),
+            Self::BoundSealedTransit(frame) => f
+                .debug_struct("PeerMessage::BoundSealedTransit")
                 .field("frame", frame)
                 .finish(),
         }
@@ -54,10 +64,21 @@ pub(crate) fn write_sealed_transit_message(
     peer.write_secure_payload(frame.sealed_bytes())
 }
 
+#[cfg(test)]
+pub(crate) fn write_bound_sealed_transit_message(
+    peer: &mut SecurePeerStream,
+    frame: &BoundTransitRelayFrame,
+) -> Result<(), String> {
+    peer.write_secure_payload(&encode_bound_transit_relay_frame(frame))
+}
+
 pub(crate) fn parse_peer_payload(
     payload: Vec<u8>,
     max_line_len: usize,
 ) -> Result<PeerMessage, String> {
+    if payload.first() == Some(&BOUND_TRANSIT_MAGIC) {
+        return validate_bound_transit_relay_frame(&payload).map(PeerMessage::BoundSealedTransit);
+    }
     if payload.first() == Some(&chimera_session::FRAME_VERSION) {
         return validate_transit_relay_frame(&payload).map(PeerMessage::SealedTransit);
     }
@@ -78,8 +99,8 @@ pub(crate) fn parse_peer_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        PeerMessage, parse_peer_payload, read_peer_message, write_ack_ok, write_connect_message,
-        write_sealed_transit_message,
+        PeerMessage, parse_peer_payload, read_peer_message, write_ack_ok,
+        write_bound_sealed_transit_message, write_connect_message, write_sealed_transit_message,
     };
     use chimera_session::{Frame, FrameKind};
 
@@ -191,6 +212,34 @@ mod tests {
     }
 
     #[test]
+    fn peer_payload_classifies_bound_sealed_transit_without_payload_debug_leak()
+    -> Result<(), String> {
+        let encoded = encoded_frame(FrameKind::Data, 27, b"bound third-party payload");
+        let frame = crate::peer_egress::transit::validate_transit_relay_frame(&encoded)?;
+        let binding = crate::peer_egress::transit_binding::TransitPathBinding::new(
+            crate::peer_egress::transit_binding::TransitRouteId::new(7)?,
+            crate::peer_egress::transit_binding::TransitLaneId::new(2)?,
+        );
+        let bound =
+            crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(binding, frame);
+        let payload = crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&bound);
+        let message = parse_peer_payload(payload, 512)?;
+        let debug = format!("{message:?}");
+
+        match message {
+            PeerMessage::BoundSealedTransit(frame) => {
+                assert_eq!(frame.binding(), binding);
+                assert_eq!(frame.frame().sealed_bytes(), encoded.as_slice());
+            }
+            other => return Err(format!("unexpected message: {other:?}")),
+        }
+        assert!(debug.contains("<opaque>"));
+        assert!(debug.contains("<sealed>"));
+        assert!(!debug.contains("bound third-party payload"));
+        Ok(())
+    }
+
+    #[test]
     fn peer_payload_rejects_malformed_sealed_transit_without_text_fallback() {
         let mut encoded = encoded_frame(FrameKind::Data, 18, b"opaque");
         encoded.truncate(encoded.len() - 1);
@@ -200,6 +249,23 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("transit frame"));
+    }
+
+    #[test]
+    fn peer_payload_rejects_malformed_bound_transit_without_text_fallback() {
+        let payload = vec![
+            crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC,
+            b'O',
+            b'K',
+            b'\n',
+        ];
+
+        let error = match parse_peer_payload(payload, 512) {
+            Ok(message) => unreachable!("malformed bound transit frame must fail: {message:?}"),
+            Err(error) => error,
+        };
+        assert!(error.contains("bound sealed transit"));
+        assert!(!error.contains("OK"));
     }
 
     #[test]
@@ -233,6 +299,37 @@ mod tests {
             }
             other => return Err(format!("unexpected transit message: {other:?}")),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn peer_wire_messages_round_trip_bound_sealed_transit() -> Result<(), String> {
+        let (mut left, mut right) = test_peer_pair()?;
+        let encoded = encoded_frame(FrameKind::Data, 44, b"bound sealed round trip");
+        let frame = crate::peer_egress::transit::validate_transit_relay_frame(&encoded)?;
+        let binding = crate::peer_egress::transit_binding::TransitPathBinding::new(
+            crate::peer_egress::transit_binding::TransitRouteId::new(9)?,
+            crate::peer_egress::transit_binding::TransitLaneId::new(3)?,
+        );
+        let bound =
+            crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(binding, frame);
+
+        write_bound_sealed_transit_message(&mut left, &bound)?;
+        let message = read_peer_message(
+            &mut right,
+            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
+        )?;
+        let debug = format!("{message:?}");
+        match message {
+            PeerMessage::BoundSealedTransit(frame) => {
+                assert_eq!(frame.binding(), binding);
+                assert_eq!(frame.frame().sealed_bytes(), encoded.as_slice());
+            }
+            other => return Err(format!("unexpected bound transit message: {other:?}")),
+        }
+        assert!(!debug.contains("bound sealed round trip"));
+        assert!(!debug.contains("route_id: 9"));
+        assert!(!debug.contains("lane_id: 3"));
         Ok(())
     }
 }

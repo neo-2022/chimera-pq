@@ -58,10 +58,77 @@ pub struct MeshPeerState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MeshMultipathMode {
+    Off,
+    StandbyOnly,
+    FlowShard,
+    AggregateBuffered,
+}
+
+impl MeshMultipathMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::StandbyOnly => "standby_only",
+            Self::FlowShard => "flow_shard",
+            Self::AggregateBuffered => "aggregate_buffered",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MeshMultipathLaneRole {
+    Active,
+    Standby,
+}
+
+impl MeshMultipathLaneRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Standby => "standby",
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct MeshMultipathLane {
+    pub lane_id: usize,
+    pub peer_node_id: String,
+    pub role: MeshMultipathLaneRole,
+    pub weight_pct: u8,
+}
+
+impl std::fmt::Debug for MeshMultipathLane {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MeshMultipathLane")
+            .field("lane_id", &self.lane_id)
+            .field("peer_node_id", &"<redacted>")
+            .field("role", &self.role)
+            .field("weight_pct", &self.weight_pct)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeshMultipathSchedule {
+    pub mode: MeshMultipathMode,
+    pub lanes: Vec<MeshMultipathLane>,
+    pub active_lane_count: usize,
+    pub standby_lane_count: usize,
+    pub active_weight_sum_pct: u16,
+    pub local_traffic_reserve_pct: u8,
+    pub fairness_policy: String,
+    pub execution_status: String,
+    pub transit_payload_policy: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeshPathPlan {
     pub namespace: String,
     pub join_mode: MeshJoinMode,
     pub selected_peers: Vec<MeshPeerState>,
+    pub multipath_schedule: MeshMultipathSchedule,
     pub explain: Vec<String>,
 }
 

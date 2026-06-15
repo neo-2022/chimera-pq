@@ -229,6 +229,122 @@ fn runtime_failover_plan_from_dps_payload_builds_replacement() {
     assert!(plan.explain.iter().any(|line| {
         line.contains("dps_payload_standby_summary=") && line.contains("stage_source=")
     }));
+    assert_eq!(plan.multipath_schedule.mode.as_str(), "off");
+    assert_eq!(plan.multipath_schedule.active_lane_count, 1);
+}
+
+#[test]
+fn runtime_failover_plan_from_dps_payload_applies_multipath_schedule() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-failed".to_string(),
+            endpoint: "198.51.100.62:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 10,
+            reliability_score: 95,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.63:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 94,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.64:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 22,
+            reliability_score: 93,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let event = MeshFailoverEvent {
+        failed_node_id: "node-failed".to_string(),
+        reason: "probe_timeout".to_string(),
+    };
+    let payload = "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard";
+    let plan = runtime
+        .failover_plan_from_dps_payload(&req, payload, &event)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(plan.selected_peers.len(), 2);
+    assert_eq!(plan.multipath_schedule.mode.as_str(), "flow_shard");
+    assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("multipath_schedule_mode=flow_shard"))
+    );
+}
+
+#[test]
+fn runtime_failover_plan_from_dps_payload_applies_aggregate_schedule_without_explicit_limits() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-failed".to_string(),
+            endpoint: "198.51.100.65:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 10,
+            reliability_score: 96,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.66:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 95,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.67:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 22,
+            reliability_score: 94,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-c".to_string(),
+            endpoint: "198.51.100.68:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 24,
+            reliability_score: 93,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let event = MeshFailoverEvent {
+        failed_node_id: "node-failed".to_string(),
+        reason: "probe_timeout".to_string(),
+    };
+    let payload = "mesh_allowed_regions=eu;mesh_multipath_mode=aggregate_buffered";
+    let plan = runtime
+        .failover_plan_from_dps_payload(&req, payload, &event)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(plan.selected_peers.len(), 3);
+    assert_eq!(plan.multipath_schedule.mode.as_str(), "aggregate_buffered");
+    assert_eq!(plan.multipath_schedule.active_lane_count, 3);
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("effective_max_peers=3"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("effective_max_selected_per_region=3"))
+    );
 }
 
 #[test]

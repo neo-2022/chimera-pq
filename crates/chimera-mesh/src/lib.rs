@@ -14,8 +14,9 @@ mod runtime;
 mod weave_contract;
 
 pub use model::{
-    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerState, PreemptiveRisk, SwitchDecision,
+    MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshMultipathLane,
+    MeshMultipathLaneRole, MeshMultipathMode, MeshMultipathSchedule, MeshPathPlan, MeshPeerHealth,
+    MeshPeerState, PreemptiveRisk, SwitchDecision,
 };
 pub use nodes_explain::{build_mesh_node_explain, render_mesh_node_explain};
 pub use nodes_grouping::{
@@ -63,6 +64,8 @@ mod tests_dps_runtime_flow;
 mod tests_failover_health;
 #[cfg(test)]
 mod tests_mesh_nodes;
+#[cfg(test)]
+mod tests_multipath_schedule;
 #[cfg(test)]
 mod tests_peer_table_policy;
 #[cfg(test)]

@@ -20,7 +20,11 @@ use crate::peer_egress::protocol::{
     SecurePeerStream, read_line_limited, read_native_connect_destination,
     redacted_destination_label, redacted_log_reason,
 };
-use crate::peer_egress::transit::{PeerTransitPolicy, forward_peer_sealed_transit_to_next_hop};
+use crate::peer_egress::transit::{
+    PeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop,
+    forward_peer_sealed_transit_to_next_hop,
+};
+use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 use crate::peer_egress::wire::{
     PeerMessage, read_peer_message, write_ack_ok, write_connect_message,
 };
@@ -72,7 +76,7 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                         let pool = r_pool.clone();
                         let policy = peer_transit_policy;
                         thread::spawn(move || {
-                            if let Err(error) = handle_reverse_peer(peer, policy, pool) {
+                            if let Err(error) = handle_reverse_peer(peer, policy, pool, None) {
                                 eprintln!(
                                     "event=reverse_peer_error reason_class={}",
                                     redacted_log_reason(&error)
@@ -153,11 +157,15 @@ pub fn handle_reverse_peer(
     mut peer: SecurePeerStream,
     policy: PeerTransitPolicy,
     pool: SharedPeerPool,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
 ) -> Result<(), String> {
     let destination = match read_peer_message(&mut peer, 512)? {
         PeerMessage::Connect(destination) => destination,
         PeerMessage::SealedTransit(frame) => {
             return forward_peer_sealed_transit_to_next_hop(peer, policy, Some(pool), frame);
+        }
+        PeerMessage::BoundSealedTransit(frame) => {
+            return forward_bound_peer_sealed_transit_to_next_hop(peer, policy, dispatcher, frame);
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
     };
@@ -257,12 +265,13 @@ pub fn laptop_worker(options: &Options) -> Result<(), String> {
 }
 
 pub fn outbound_peer_worker(options: &Options) -> Result<(), String> {
-    outbound_peer_worker_with_next_hop(options, None)
+    outbound_peer_worker_with_next_hop(options, None, None)
 }
 
 pub fn outbound_peer_worker_with_next_hop(
     options: &Options,
     next_hops: Option<SharedPeerPool>,
+    next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
 ) -> Result<(), String> {
     let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
         .map_err(|error| format!("connect outbound peer failed: {error}"))?;
@@ -281,6 +290,14 @@ pub fn outbound_peer_worker_with_next_hop(
                 peer,
                 PeerTransitPolicy::from_bool(options.allow_pool_transit),
                 next_hops,
+                frame,
+            );
+        }
+        PeerMessage::BoundSealedTransit(frame) => {
+            return forward_bound_peer_sealed_transit_to_next_hop(
+                peer,
+                PeerTransitPolicy::from_bool(options.allow_pool_transit),
+                next_hop_dispatcher,
                 frame,
             );
         }
@@ -345,6 +362,9 @@ fn require_peer_ack(peer: &mut SecurePeerStream) -> Result<(), String> {
         PeerMessage::AckOk => Ok(()),
         PeerMessage::Connect(_) => Err("peer returned unexpected connect request".to_string()),
         PeerMessage::SealedTransit(_) => Err("peer returned unexpected transit frame".to_string()),
+        PeerMessage::BoundSealedTransit(_) => {
+            Err("peer returned unexpected bound transit frame".to_string())
+        }
     }
 }
 

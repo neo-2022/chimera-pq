@@ -67,24 +67,24 @@ client_log="$cache_root/chimera/chimera_client.service.log"
 mode="__MODE__"
 count_dir="${TMPDIR:-/tmp}/chimera-start-contract-counts"
 mkdir -p "$count_dir"
-case "\${1:-}" in
+case "${1:-}" in
   --user)
     shift
     ;;
 esac
-case "\${1:-}" in
+case "${1:-}" in
   show-environment|daemon-reload)
     exit 0
     ;;
   start)
-    if [[ ! -f "\$gateway_log" || ! -f "\$client_log" ]]; then
+    if [[ ! -f "$gateway_log" || ! -f "$client_log" ]]; then
       exit 209
     fi
     exit 0
     ;;
   is-active)
     local_unit="${2:-}"
-    case "\$mode" in
+    case "$mode" in
       node_flap)
         if [[ "$local_unit" == "chimera-gateway.service" ]]; then
           count_file="$count_dir/node_flap.count"
