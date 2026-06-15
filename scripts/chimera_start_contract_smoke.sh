@@ -129,12 +129,16 @@ EOF
 	    XDG_RUNTIME_DIR="$runtime_dir" \
 	    CLIENT_CONFIG_FILE="$client_conf" \
 	    CHIMERA_UPDATE_BOOTSTRAP_URL="https://127.0.0.1.invalid/chimera.sh" \
+	    CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=1 \
+	    CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=2 \
+	    CHIMERA_UPDATE_DOWNLOAD_RETRIES=0 \
 	    CHIMERA_AUTOFIX_MAX_TIME=0 \
-	    bash "$install_root/scripts/chimera-sh" -start 2>&1
+	    timeout 20s bash "$install_root/scripts/chimera-sh" -start 2>&1
 	  )"
   rc=$?
   set -e
 
+  [[ "$rc" -ne 124 ]] || fail "$case_name: launcher start timed out before contract result"
   [[ "$rc" -ne 0 ]] || fail "$case_name: expected non-zero exit"
   [[ "$output" == *"start_status=fail"* ]] || fail "$case_name: missing fail status"
   [[ "$output" != *"start_status=ok"* ]] || fail "$case_name: false ok status leaked"

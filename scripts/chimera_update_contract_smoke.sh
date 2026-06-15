@@ -23,6 +23,168 @@ case_update_sources_unreachable_continues() (
   [[ "$output" == *"chimera_update=unavailable"* ]] || fail "missing unavailable diagnostic"
 )
 
+case_update_download_uses_bounded_bootstrap_timeouts() (
+  local tmp_dir helper out record
+  tmp_dir="$(mktemp -d)"
+  helper="$tmp_dir/chimera-bootstrap"
+  out="$tmp_dir/out"
+  record="$tmp_dir/record"
+  cat >"$helper" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+out=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --output)
+      out="${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+printf 'connect=%s max=%s http_proxy=%s https_proxy=%s\n' \
+  "${CHIMERA_BOOTSTRAP_CONNECT_TIMEOUT_SEC:-}" \
+  "${CHIMERA_BOOTSTRAP_DOWNLOAD_TIMEOUT_SEC:-}" \
+  "${HTTP_PROXY:-unset}" \
+  "${HTTPS_PROXY:-unset}" >"__RECORD__"
+printf '%s\n' ok >"$out"
+EOF
+  sed -i "s|__RECORD__|$record|g" "$helper"
+  chmod +x "$helper"
+
+  HTTP_PROXY=http://proxy.invalid \
+  HTTPS_PROXY=http://proxy.invalid \
+  CHIMERA_BOOTSTRAP_BIN="$helper" \
+  CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=2 \
+  CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=4 \
+  UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=2 \
+  UPDATE_DOWNLOAD_MAX_TIME_SEC=4 \
+    download_url_to_file "http://example.invalid/chimera.sh" "$out" >/dev/null 2>&1 \
+      || fail "bounded bootstrap download should succeed through helper"
+
+  [[ -f "$out" ]] || fail "bounded bootstrap download did not create output"
+  [[ "$(cat "$record")" == *"connect=2"* ]] || fail "bootstrap connect timeout not passed"
+  [[ "$(cat "$record")" == *"max=4"* ]] || fail "bootstrap download timeout not passed"
+  [[ "$(cat "$record")" == *"http_proxy=unset"* ]] || fail "bootstrap HTTP proxy was not cleared"
+  [[ "$(cat "$record")" == *"https_proxy=unset"* ]] || fail "bootstrap HTTPS proxy was not cleared"
+  rm -rf "$tmp_dir"
+)
+
+case_update_download_uses_bounded_curl_args() (
+  local tmp_dir fake_bin out record
+  tmp_dir="$(mktemp -d)"
+  fake_bin="$tmp_dir/bin"
+  out="$tmp_dir/out"
+  record="$tmp_dir/record"
+  mkdir -p "$fake_bin"
+  cat >"$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'args=%s\nhttp_proxy=%s\nhttps_proxy=%s\n' "$*" "${HTTP_PROXY:-unset}" "${HTTPS_PROXY:-unset}" >"__RECORD__"
+out=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -o)
+      out="${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+printf '%s\n' ok >"$out"
+EOF
+  sed -i "s|__RECORD__|$record|g" "$fake_bin/curl"
+  chmod +x "$fake_bin/curl"
+
+  HTTP_PROXY=http://proxy.invalid \
+  HTTPS_PROXY=http://proxy.invalid \
+  CHIMERA_BOOTSTRAP_BIN="$tmp_dir/missing-bootstrap" \
+  PATH="$fake_bin:$PATH" \
+  CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=2 \
+  CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=4 \
+  CHIMERA_UPDATE_DOWNLOAD_RETRIES=1 \
+  UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=2 \
+  UPDATE_DOWNLOAD_MAX_TIME_SEC=4 \
+  UPDATE_DOWNLOAD_RETRIES=1 \
+    download_url_to_file "http://example.invalid/chimera.sh" "$out" >/dev/null 2>&1 \
+      || fail "bounded curl download should succeed through fake curl"
+
+  [[ "$(cat "$record")" == *"--retry 1"* ]] || fail "curl retry bound missing"
+  [[ "$(cat "$record")" == *"--connect-timeout 2"* ]] || fail "curl connect timeout bound missing"
+  [[ "$(cat "$record")" == *"--max-time 4"* ]] || fail "curl max time bound missing"
+  [[ "$(cat "$record")" == *"http_proxy=unset"* ]] || fail "curl HTTP proxy was not cleared"
+  [[ "$(cat "$record")" == *"https_proxy=unset"* ]] || fail "curl HTTPS proxy was not cleared"
+  rm -rf "$tmp_dir"
+)
+
+case_update_download_timeout_bounds_slow_helper() (
+  local tmp_dir helper fake_bin out start elapsed rc
+  tmp_dir="$(mktemp -d)"
+  helper="$tmp_dir/chimera-bootstrap"
+  fake_bin="$tmp_dir/bin"
+  out="$tmp_dir/out"
+  mkdir -p "$fake_bin"
+  cat >"$helper" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+sleep 5
+EOF
+  chmod +x "$helper"
+  cat >"$fake_bin/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/wget" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$fake_bin/curl" "$fake_bin/wget"
+
+  start="$(date +%s)"
+  set +e
+  ROOT_DIR="$ROOT_DIR" \
+  CHIMERA_BOOTSTRAP_BIN="$helper" \
+  CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=1 \
+  CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=1 \
+  PATH="$fake_bin:$PATH" \
+    timeout 4s bash -lc '
+      source "$ROOT_DIR/scripts/chimera-sh"
+      download_url_to_file "http://example.invalid/chimera.sh" "$1"
+    ' bash "$out" >/dev/null 2>&1
+  rc=$?
+  set -e
+  elapsed=$(( $(date +%s) - start ))
+
+  [[ "$rc" -ne 0 ]] || fail "slow helper should not succeed"
+  [[ ! -f "$out" ]] || fail "slow helper should not create output"
+  [[ "$elapsed" -lt 4 ]] || fail "slow helper was not bounded"
+  rm -rf "$tmp_dir"
+)
+
+case_newer_release_with_unreachable_checksum_blocks() (
+  read_local_runtime_version() { printf '%s\n' 0.1.0; }
+  read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
+  load_update_peer_bootstrap_urls_for_args() { return 0; }
+  read_release_metadata_from_source() {
+    printf '%s\n%s\n%s\n' \
+      0.1.99 \
+      http://github.invalid/chimera-pq-release.tar.gz \
+      http://github.invalid/chimera-pq-release.tar.gz.sha256
+  }
+  remote_archive_sha256() { return 2; }
+
+  local output rc
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  [[ "$rc" -ne 0 ]] || fail "confirmed newer release with unreachable checksum must block start"
+  [[ "$output" == *"reason=checksum_unreachable"* ]] || fail "missing checksum unreachable diagnostic"
+  [[ "$output" != *"chimera_update=unavailable"* ]] || fail "confirmed newer release was downgraded to soft outage"
+)
+
 case_update_required_install_failure_blocks() (
   read_local_runtime_version() { printf '%s\n' 0.1.0; }
   read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
@@ -557,6 +719,10 @@ EOF
 )
 
 case_update_sources_unreachable_continues
+case_update_download_uses_bounded_bootstrap_timeouts
+case_update_download_uses_bounded_curl_args
+case_update_download_timeout_bounds_slow_helper
+case_newer_release_with_unreachable_checksum_blocks
 case_update_required_install_failure_blocks
 case_github_install_failure_is_not_masked_by_peer_noop
 case_github_invalid_does_not_try_peer_fallback

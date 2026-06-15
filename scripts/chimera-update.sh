@@ -2,6 +2,9 @@
 
 UPDATE_BOOTSTRAP_URL="${CHIMERA_UPDATE_BOOTSTRAP_URL:-https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh}"
 UPDATE_PEER_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_peer_bootstrap_urls.list}"
+UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC="${CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC:-3}"
+UPDATE_DOWNLOAD_MAX_TIME_SEC="${CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC:-8}"
+UPDATE_DOWNLOAD_RETRIES="${CHIMERA_UPDATE_DOWNLOAD_RETRIES:-0}"
 RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
 RUNTIME_BUNDLE_SHA_FILE="$ROOT_DIR/.chimera_release_bundle.sha256"
 INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
@@ -135,25 +138,76 @@ cache_buster_url() {
   fi
 }
 
+positive_integer_or_default() {
+  local value="${1:-}"
+  local default_value="${2:?default_required}"
+  if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+non_negative_integer_or_default() {
+  local value="${1:-}"
+  local default_value="${2:?default_required}"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+update_connect_timeout_sec() {
+  positive_integer_or_default "$UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC" 3
+}
+
+update_max_time_sec() {
+  positive_integer_or_default "$UPDATE_DOWNLOAD_MAX_TIME_SEC" 8
+}
+
+update_retries() {
+  non_negative_integer_or_default "$UPDATE_DOWNLOAD_RETRIES" 0
+}
+
+run_update_download_command() {
+  local max_time_sec
+  max_time_sec="$(update_max_time_sec)"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${max_time_sec}s" "$@"
+  else
+    "$@"
+  fi
+}
+
 download_url_to_file() {
   local url="${1:?url_required}"
   local dest="${2:?dest_required}"
   local bootstrap_bin="${CHIMERA_BOOTSTRAP_BIN:-${ROOT_DIR}/bin/chimera-bootstrap}"
+  local connect_timeout_sec max_time_sec retries
+  connect_timeout_sec="$(update_connect_timeout_sec)"
+  max_time_sec="$(update_max_time_sec)"
+  retries="$(update_retries)"
   if [[ -x "$bootstrap_bin" ]]; then
-    if "$bootstrap_bin" download --url "$url" --output "$dest"; then
+    if run_update_download_command \
+      env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+        CHIMERA_BOOTSTRAP_CONNECT_TIMEOUT_SEC="$connect_timeout_sec" \
+        CHIMERA_BOOTSTRAP_DOWNLOAD_TIMEOUT_SEC="$max_time_sec" \
+        "$bootstrap_bin" download --url "$url" --output "$dest"
+    then
       return 0
     fi
   fi
   if command -v curl >/dev/null 2>&1; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 "$url" -o "$dest"
+      curl -fsSL --retry "$retries" --connect-timeout "$connect_timeout_sec" --max-time "$max_time_sec" "$url" -o "$dest"
     then
       return 0
     fi
   fi
   if command -v wget >/dev/null 2>&1; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      wget -qO "$dest" "$url"
+      wget -qO "$dest" --tries=1 --timeout="$connect_timeout_sec" --read-timeout="$max_time_sec" "$url"
     then
       return 0
     fi
@@ -310,14 +364,26 @@ install_update_from_release_metadata() {
   local local_sha="${7:-}"
   shift 7 || true
   local -a original_args=("$@")
-  local remote_sha remote_sha_rc install_role installer installed_version installed_sha
+  local remote_sha remote_sha_rc install_role installer installed_version installed_sha remote_newer=0
+
+  if is_remote_newer "$local_version" "$remote_version"; then
+    remote_newer=1
+  elif [[ "$local_version" != "$remote_version" ]]; then
+    return 0
+  fi
 
   if remote_sha="$(remote_archive_sha256 "$remote_archive_url" "$remote_checksum_url")"; then
     :
   else
     remote_sha_rc=$?
     case "$remote_sha_rc" in
-      2) return 2 ;;
+      2)
+        if [[ "$remote_newer" -ne 0 ]]; then
+          echo "chimera_update=verify_failed source=$source_name latest_version=$remote_version action=block reason=checksum_unreachable" >&2
+          return 3
+        fi
+        return 2
+        ;;
       *)
         echo "chimera_update=source_invalid source=$source_name latest_version=$remote_version action=block reason=invalid_checksum" >&2
         return 3
@@ -329,12 +395,12 @@ install_update_from_release_metadata() {
     return 3
   fi
 
-  if ! is_remote_newer "$local_version" "$remote_version"; then
-    if [[ "$local_version" == "$remote_version" && -z "$local_sha" ]]; then
+  if [[ "$remote_newer" -eq 0 ]]; then
+    if [[ -z "$local_sha" ]]; then
       echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=none latest_sha=$remote_sha action=block reason=local_checksum_missing" >&2
       return 3
     fi
-    if [[ "$local_version" == "$remote_version" && -n "$local_sha" && "$local_sha" != "$remote_sha" ]]; then
+    if [[ "$local_sha" != "$remote_sha" ]]; then
       echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=$local_sha latest_sha=$remote_sha action=block reason=same_version_checksum_mismatch" >&2
       return 3
     fi

@@ -13,6 +13,8 @@ type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 mod peer_update;
 
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const DOWNLOAD_CONNECT_TIMEOUT_ENV: &str = "CHIMERA_BOOTSTRAP_CONNECT_TIMEOUT_SEC";
+const DOWNLOAD_TIMEOUT_ENV: &str = "CHIMERA_BOOTSTRAP_DOWNLOAD_TIMEOUT_SEC";
 
 fn main() {
     if let Err(err) = run() {
@@ -125,10 +127,12 @@ fn download_to_file(url: &str, output: &Path) -> Result<()> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
+    let connect_timeout = timeout_from_env(DOWNLOAD_CONNECT_TIMEOUT_ENV, DOWNLOAD_TIMEOUT);
+    let download_timeout = timeout_from_env(DOWNLOAD_TIMEOUT_ENV, DOWNLOAD_TIMEOUT);
     let agent = ureq::AgentBuilder::new()
-        .timeout_connect(DOWNLOAD_TIMEOUT)
-        .timeout_read(DOWNLOAD_TIMEOUT)
-        .timeout_write(DOWNLOAD_TIMEOUT)
+        .timeout_connect(connect_timeout)
+        .timeout_read(download_timeout)
+        .timeout_write(download_timeout)
         .build();
     let resp = agent.get(url).call()?;
     let mut reader = resp.into_reader();
@@ -136,6 +140,15 @@ fn download_to_file(url: &str, output: &Path) -> Result<()> {
     io::copy(&mut reader, &mut file)?;
     file.flush()?;
     Ok(())
+}
+
+fn timeout_from_env(name: &str, default: Duration) -> Duration {
+    env::var(name)
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map(Duration::from_secs)
+        .unwrap_or(default)
 }
 
 fn verify_sha256(file: &Path, expected_hex: &str) -> Result<()> {
