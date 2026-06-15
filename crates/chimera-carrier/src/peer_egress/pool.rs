@@ -44,6 +44,20 @@ impl PeerPool {
         Ok(peers.pop_front())
     }
 
+    pub fn try_pop_index(
+        &self,
+        zero_based_index: usize,
+    ) -> Result<Option<SecurePeerStream>, String> {
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|_| "peer pool lock poisoned".to_string())?;
+        if zero_based_index >= peers.len() {
+            return Ok(None);
+        }
+        Ok(peers.remove(zero_based_index))
+    }
+
     pub fn try_pop_unique(&self) -> Result<UniquePeerPop, String> {
         let mut peers = self
             .peers
@@ -141,6 +155,19 @@ mod tests {
         ));
         assert!(pool.try_pop()?.is_some());
         assert!(pool.try_pop()?.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn try_pop_index_removes_only_selected_lane_candidate() -> Result<(), String> {
+        let pool = PeerPool::default();
+        pool.push(test_peer_stream())?;
+        pool.push(test_peer_stream())?;
+
+        assert!(pool.try_pop_index(1)?.is_some());
+        assert!(pool.try_pop_index(1)?.is_none());
+        assert!(pool.try_pop_index(0)?.is_some());
+        assert!(pool.try_pop_index(0)?.is_none());
         Ok(())
     }
 }

@@ -5,7 +5,8 @@ use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_fram
 
 pub const BOUND_TRANSIT_MAGIC: u8 = 0x80;
 const BOUND_TRANSIT_VERSION: u8 = 1;
-const BOUND_TRANSIT_HEADER_LEN: usize = 1 + 1 + 8 + 2;
+pub const BOUND_TRANSIT_HEADER_LEN: usize = 1 + 1 + 8 + 2;
+pub const BOUND_TRANSIT_HEADER_REST_LEN: usize = BOUND_TRANSIT_HEADER_LEN - 1;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TransitRouteId(NonZeroU64);

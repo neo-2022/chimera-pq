@@ -2,10 +2,9 @@ use core::fmt;
 
 use crate::peer_egress::protocol::{Destination, SecurePeerStream, parse_peer_connect_destination};
 use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_frame};
-#[cfg(test)]
-use crate::peer_egress::transit_binding::encode_bound_transit_relay_frame;
 use crate::peer_egress::transit_binding::{
-    BOUND_TRANSIT_MAGIC, BoundTransitRelayFrame, validate_bound_transit_relay_frame,
+    BOUND_TRANSIT_MAGIC, BoundTransitRelayFrame, encode_bound_transit_relay_frame,
+    validate_bound_transit_relay_frame,
 };
 
 pub(crate) enum PeerMessage {
@@ -64,7 +63,6 @@ pub(crate) fn write_sealed_transit_message(
     peer.write_secure_payload(frame.sealed_bytes())
 }
 
-#[cfg(test)]
 pub(crate) fn write_bound_sealed_transit_message(
     peer: &mut SecurePeerStream,
     frame: &BoundTransitRelayFrame,

@@ -165,7 +165,13 @@ pub fn handle_reverse_peer(
             return forward_peer_sealed_transit_to_next_hop(peer, policy, Some(pool), frame);
         }
         PeerMessage::BoundSealedTransit(frame) => {
-            return forward_bound_peer_sealed_transit_to_next_hop(peer, policy, dispatcher, frame);
+            return forward_bound_peer_sealed_transit_to_next_hop(
+                peer,
+                policy,
+                dispatcher,
+                Some(pool),
+                frame,
+            );
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
     };
@@ -298,6 +304,7 @@ pub fn outbound_peer_worker_with_next_hop(
                 peer,
                 PeerTransitPolicy::from_bool(options.allow_pool_transit),
                 next_hop_dispatcher,
+                next_hops,
                 frame,
             );
         }

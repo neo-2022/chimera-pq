@@ -26,7 +26,8 @@ pub use pool::PeerPool;
 pub use protocol::{Destination, SecurePeerStream};
 pub use transit::{
     TransitRelayFrame, forward_bound_peer_sealed_transit_to_next_hop, forward_transit_relay_frame,
-    read_weave_sealed_transit_frame, relay_local_sealed_transit, validate_transit_relay_frame,
+    read_weave_bound_sealed_transit_frame, read_weave_sealed_transit_frame,
+    relay_local_bound_sealed_transit, relay_local_sealed_transit, validate_transit_relay_frame,
 };
 pub use transit_binding::{
     BoundTransitRelayFrame, TransitLaneId, TransitPathBinding, TransitRouteId,

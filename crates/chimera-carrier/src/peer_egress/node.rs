@@ -12,17 +12,24 @@ use crate::peer_egress::pool::{SharedPeerPool, UniquePeerPop, new_shared_pool};
 use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::protocol::redacted_log_reason;
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
-use crate::peer_egress::transit::relay_local_sealed_transit;
+use crate::peer_egress::transit::{
+    relay_local_bound_sealed_transit_to_next_hop, relay_local_sealed_transit,
+};
+use crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC;
+use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalIngressBranch {
     SealedTransit,
+    BoundSealedTransit,
     NativeConnect,
 }
 
 fn classify_local_ingress(first_byte: u8) -> LocalIngressBranch {
     if first_byte == chimera_session::FRAME_VERSION {
         LocalIngressBranch::SealedTransit
+    } else if first_byte == BOUND_TRANSIT_MAGIC {
+        LocalIngressBranch::BoundSealedTransit
     } else {
         LocalIngressBranch::NativeConnect
     }
@@ -70,6 +77,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
     let token = options.token.clone();
     let aead = options.aead;
     let peer_pool = new_shared_pool();
+    let transit_dispatcher = new_shared_transit_dispatcher();
     let ingress_pool = peer_pool.clone();
     thread::spawn(move || {
         for incoming in peer_listener.incoming() {
@@ -99,12 +107,13 @@ pub fn run_node(options: Options) -> Result<(), String> {
         for _ in 0..options.pool {
             let worker = options.clone();
             let outbound_pool = peer_pool.clone();
+            let outbound_dispatcher = transit_dispatcher.clone();
             thread::spawn(move || {
                 loop {
                     if let Err(error) = outbound_peer_worker_with_next_hop(
                         &worker,
                         Some(outbound_pool.clone()),
-                        None,
+                        Some(outbound_dispatcher.clone()),
                     ) {
                         eprintln!(
                             "event=weave_outbound_peer_worker_error reason_class={}",
@@ -156,6 +165,22 @@ pub fn run_node(options: Options) -> Result<(), String> {
                     if let Err(error) = relay_local_sealed_transit(local, peer, first[0]) {
                         eprintln!(
                             "event=weave_local_ingress_transit_error reason_class={}",
+                            redacted_log_reason(&error)
+                        );
+                    }
+                });
+            }
+            Ok(())
+                if classify_local_ingress(first[0]) == LocalIngressBranch::BoundSealedTransit =>
+            {
+                let bound_pool = peer_pool.clone();
+                eprintln!("event=weave_local_ingress_bound_transit_branch");
+                thread::spawn(move || {
+                    if let Err(error) =
+                        relay_local_bound_sealed_transit_to_next_hop(local, bound_pool, first[0])
+                    {
+                        eprintln!(
+                            "event=weave_local_ingress_bound_transit_error reason_class={}",
                             redacted_log_reason(&error)
                         );
                     }
@@ -240,6 +265,14 @@ mod tests {
         assert_eq!(
             classify_local_ingress(LOCAL_MAGIC[0]),
             LocalIngressBranch::NativeConnect
+        );
+    }
+
+    #[test]
+    fn bound_transit_branch_is_reserved_for_bound_transit_magic() {
+        assert_eq!(
+            classify_local_ingress(crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC),
+            LocalIngressBranch::BoundSealedTransit
         );
     }
 
