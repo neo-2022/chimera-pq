@@ -198,6 +198,66 @@ case_update_required_install_failure_blocks() (
   [[ "$output" != *"chimera_update=unavailable"* ]] || fail "unexpected outage diagnostic for real update failure"
 )
 
+case_confirmed_update_missing_local_installer_blocks() (
+  local tmp_dir old_root test_root output rc
+  tmp_dir="$(mktemp -d)"
+  old_root="$ROOT_DIR"
+  test_root="$tmp_dir/root"
+  mkdir -p "$test_root/scripts"
+  ROOT_DIR="$test_root"
+  remote_archive_sha256() {
+    printf '%s\n' "3333333333333333333333333333333333333333333333333333333333333333"
+  }
+
+  output="$(install_update_from_release_metadata \
+    peer \
+    0.1.99 \
+    http://peer.invalid/chimera-pq-release.tar.gz \
+    http://peer.invalid/chimera-pq-release.tar.gz.sha256 \
+    "" \
+    0.1.0 \
+    deadbeef \
+    -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -ne 0 ]] || fail "missing local installer should block confirmed update"
+  [[ "$output" == *"reason=missing_local_installer"* ]] || fail "missing local installer diagnostic absent"
+  [[ "$output" == *"action=block"* ]] || fail "missing local installer was not blocking"
+  rm -rf "$tmp_dir"
+)
+
+case_peer_confirmed_update_failure_blocks_start() (
+  read_local_runtime_version() { printf '%s\n' 0.1.0; }
+  read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github) return 2 ;;
+      peer)
+        printf '%s\n%s\n%s\n' \
+          0.1.99 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *) return 2 ;;
+    esac
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  install_update_from_release_metadata() {
+    [[ "${1:-}" == "peer" ]] || return 2
+    echo "chimera_update=install_failed source=peer latest_version=${2:-unknown} action=block reason=missing_local_installer" >&2
+    return 3
+  }
+
+  local output rc
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  [[ "$rc" -ne 0 ]] || fail "peer confirmed update install failure should block start"
+  [[ "$output" == *"reason=missing_local_installer"* ]] || fail "missing peer install failure diagnostic"
+  [[ "$output" != *"chimera_update=unavailable"* ]] || fail "peer install failure was downgraded to soft outage"
+)
+
 case_github_install_failure_is_not_masked_by_peer_noop() (
   read_local_runtime_version() { printf '%s\n' 0.1.0; }
   read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
@@ -724,6 +784,8 @@ case_update_download_uses_bounded_curl_args
 case_update_download_timeout_bounds_slow_helper
 case_newer_release_with_unreachable_checksum_blocks
 case_update_required_install_failure_blocks
+case_confirmed_update_missing_local_installer_blocks
+case_peer_confirmed_update_failure_blocks_start
 case_github_install_failure_is_not_masked_by_peer_noop
 case_github_invalid_does_not_try_peer_fallback
 case_github_invalid_bootstrap_parse_does_not_try_peer_fallback

@@ -422,7 +422,9 @@ install_update_from_release_metadata() {
       echo "chimera_update=verify_failed source=$source_name expected_version=$remote_version installed_version=${installed_version:-unknown} expected_sha=$remote_sha installed_sha=${installed_sha:-none} action=block" >&2
       return 3
     fi
-    rerun_after_update "${original_args[@]}"
+    if rerun_after_update "${original_args[@]}"; then
+      return 0
+    fi
   fi
 
   return 3
@@ -481,17 +483,33 @@ auto_update_if_needed() {
 
   local update_rc peer_bootstrap_url normalized_peer_url update_failed=0 update_source_unavailable=0
 
-  if try_update_from_bootstrap_source "github" "$UPDATE_BOOTSTRAP_URL" "$local_version" "$local_sha" "${original_args[@]}"; then
-    if [[ "$update_failed" -eq 0 ]]; then
+  set +e
+  try_update_from_bootstrap_source "github" "$UPDATE_BOOTSTRAP_URL" "$local_version" "$local_sha" "${original_args[@]}"
+  update_rc=$?
+  set -e
+  case "$update_rc" in
+    0)
       return 0
-    fi
-  else
+      ;;
+    2)
+      update_source_unavailable=1
+      ;;
+    3)
+      update_failed=1
+      return 1
+      ;;
+  esac
+
+  while IFS= read -r peer_bootstrap_url; do
+    normalized_peer_url="$(normalize_update_bootstrap_url "$peer_bootstrap_url" || true)"
+    [[ -n "$normalized_peer_url" ]] || continue
+    set +e
+    try_update_from_bootstrap_source "peer" "$normalized_peer_url" "$local_version" "$local_sha" "${original_args[@]}"
     update_rc=$?
+    set -e
     case "$update_rc" in
       0)
-        if [[ "$update_failed" -eq 0 ]]; then
-          return 0
-        fi
+        return 0
         ;;
       2)
         update_source_unavailable=1
@@ -499,31 +517,6 @@ auto_update_if_needed() {
       3)
         update_failed=1
         return 1
-        ;;
-    esac
-  fi
-
-  while IFS= read -r peer_bootstrap_url; do
-    normalized_peer_url="$(normalize_update_bootstrap_url "$peer_bootstrap_url" || true)"
-    [[ -n "$normalized_peer_url" ]] || continue
-    if try_update_from_bootstrap_source "peer" "$normalized_peer_url" "$local_version" "$local_sha" "${original_args[@]}"; then
-      if [[ "$update_failed" -eq 0 ]]; then
-        return 0
-      fi
-      continue
-    fi
-    update_rc=$?
-    case "$update_rc" in
-      0)
-        if [[ "$update_failed" -eq 0 ]]; then
-          return 0
-        fi
-        ;;
-      2)
-        update_source_unavailable=1
-        ;;
-      3)
-        update_failed=1
         ;;
     esac
   done < <(load_update_peer_bootstrap_urls_for_args "${original_args[@]}")

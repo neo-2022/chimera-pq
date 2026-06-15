@@ -91,6 +91,7 @@ jobs:
           grep -q '^chimera-release/bin/chimera-cli$' target/chimera-release-contents.txt
           grep -q '^chimera-release/bin/chimera-bootstrap$' target/chimera-release-contents.txt
           grep -q '^chimera-release/bin/chimera-peer-egress$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/scripts/install_release\.sh$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/chimera.sh$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/chimera-sh$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/chimera-update.sh$' target/chimera-release-contents.txt

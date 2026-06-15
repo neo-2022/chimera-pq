@@ -69,6 +69,7 @@ cp -p "${ROOT_DIR}/deploy/desktop/chimera-control-gui.desktop" "${RELEASE_DIR}/d
 
 echo "build_release: copying scripts"
 cp -p "${ROOT_DIR}/scripts/install_desktop_control.sh" "${RELEASE_DIR}/scripts/"
+cp -p "${ROOT_DIR}/scripts/install_release.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control-tray.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control-launcher.sh" "${RELEASE_DIR}/scripts/"
@@ -97,6 +98,7 @@ cp -p "${ROOT_DIR}/target/${LATEST_CHECKSUM_NAME}" "${ROOT_DIR}/target/chimera-r
 (cd "${ROOT_DIR}/target" && sha256sum -c "${LATEST_CHECKSUM_NAME}")
 tar -tzf "${ROOT_DIR}/target/${LATEST_ARCHIVE_NAME}" > "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/bin/chimera-bootstrap$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/install_release\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-update\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
