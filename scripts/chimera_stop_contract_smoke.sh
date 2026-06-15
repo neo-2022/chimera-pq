@@ -135,6 +135,7 @@ run_control_case() {
     XDG_CONFIG_HOME="$config_dir" \
     XDG_RUNTIME_DIR="$runtime_dir" \
     NFT_BIN="$bin_dir/nft" \
+    CHIMERA_ALLOW_TEST_NFT_BIN=1 \
     CHIMERA_UPDATE_FIRST_CHECKED=1 \
     timeout 10s bash "$install_root/scripts/chimera-control.sh" "$control_cmd" 2>&1
   )"

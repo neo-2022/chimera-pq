@@ -601,17 +601,22 @@ transparent_redirect_table_name() {
 resolve_nft_command() {
   local nft_cmd="$NFT_BIN"
   if [[ -n "$nft_cmd" ]]; then
-    [[ -x "$nft_cmd" ]] || return 127
-    [[ "$(basename "$nft_cmd")" == "nft" ]] || return 127
+    if [[ "${CHIMERA_ALLOW_TEST_NFT_BIN:-0}" != "1" ]]; then
+      case "$nft_cmd" in
+        /usr/sbin/nft|/usr/bin/nft) ;;
+        *) return 127 ;;
+      esac
+    fi
+    [[ -x "$nft_cmd" && "$(basename "$nft_cmd")" == "nft" ]] || return 127
     printf '%s\n' "$nft_cmd"
-    return 0
-  fi
-  if command -v nft >/dev/null 2>&1; then
-    command -v nft
     return 0
   fi
   if [[ -x /usr/sbin/nft ]]; then
     printf '%s\n' "/usr/sbin/nft"
+    return 0
+  fi
+  if [[ -x /usr/bin/nft ]]; then
+    printf '%s\n' "/usr/bin/nft"
     return 0
   fi
   return 127

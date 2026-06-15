@@ -88,6 +88,18 @@ rg -n 'run_rejects_non_nft_override_case' "$ROOT_DIR/scripts/chimera_stop_contra
 rg -n 'restart_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_restart_failure_guard"
 rg -n 'uninstall_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_uninstall_failure_guard"
 rg -n 'valid_chimera_redirect_table' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_chimera_redirect_table_ownership_guard"
+resolve_nft_block="$(
+  awk '
+    /^resolve_nft_command\(\) \{/ { in_fn = 1 }
+    in_fn { print }
+    in_fn && /^}/ { exit }
+  ' "$ROOT_DIR/scripts/chimera-control.sh"
+)"
+printf '%s\n' "$resolve_nft_block" | rg -n 'CHIMERA_ALLOW_TEST_NFT_BIN' >/dev/null || fail "control_missing_test_only_nft_override_guard"
+printf '%s\n' "$resolve_nft_block" | rg -n '/usr/sbin/nft|/usr/bin/nft' >/dev/null || fail "control_missing_system_nft_allowlist"
+if printf '%s\n' "$resolve_nft_block" | rg -n 'command -v nft' >/dev/null; then
+  fail "control_uses_path_nft_resolution"
+fi
 rg -n 'CHIMERA_BOOTSTRAP_CONNECT_TIMEOUT_SEC' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev/null || fail "bootstrap_missing_connect_timeout_env"
 rg -n 'CHIMERA_BOOTSTRAP_DOWNLOAD_TIMEOUT_SEC' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev/null || fail "bootstrap_missing_download_timeout_env"
 rg -n 'url = "2"' "$ROOT_DIR/crates/chimera-bootstrap/Cargo.toml" >/dev/null || fail "peer_metadata_missing_url_parser_dependency"
