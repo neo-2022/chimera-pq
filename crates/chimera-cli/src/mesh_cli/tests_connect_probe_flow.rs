@@ -18,6 +18,7 @@ fn base_options() -> MeshRouteExplainOptions {
         peers: vec!["n1@127.0.0.1:1@eu@20@90".to_string()],
         json_output: true,
         out_path: None,
+        transit_lane_bindings_out_path: None,
     }
 }
 

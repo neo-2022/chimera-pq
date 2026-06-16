@@ -165,6 +165,17 @@ mod tests {
     }
 
     #[test]
+    fn node_startup_contract_rejects_lane_bindings_with_pool_transit_only() {
+        let mut options = node_options("peer.example.invalid:8443");
+        options.allow_pool_transit = true;
+        options.transit_lane_bindings_file = Some("/tmp/chimera-test-lanes.csv".to_string());
+
+        let result = validate_node_startup_contract(&options);
+
+        assert!(result.is_err_and(|error| error.contains("allow_bound_transit=true")));
+    }
+
+    #[test]
     fn node_startup_contract_accepts_lane_bindings_with_bound_transit_policy() -> Result<(), String>
     {
         let mut options = node_options("peer.example.invalid:8443");

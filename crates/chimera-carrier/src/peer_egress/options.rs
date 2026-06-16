@@ -342,6 +342,9 @@ pub fn split_host_port(target: &str) -> Result<(String, u16), String> {
     if host.trim().is_empty() {
         return Err("target host is empty".to_string());
     }
+    if host.contains(',') {
+        return Err("target host contains comma".to_string());
+    }
     let port = port_raw
         .parse::<u16>()
         .map_err(|_| "target port is invalid".to_string())?;

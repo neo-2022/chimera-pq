@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use chimera_carrier::peer_egress::write_transit_lane_registrations_from_mesh_plan;
 use chimera_mesh::{
     MeshFailoverEvent, MeshJoinRequest, MeshPathPolicy, MeshPeerHealth, MeshPeerTablePolicy,
     MeshRuntime,
@@ -95,6 +96,8 @@ mod tests_options_parse_flag_shape;
 #[cfg(test)]
 mod tests_options_parse_json_flag;
 #[cfg(test)]
+mod tests_options_parse_lane_export;
+#[cfg(test)]
 mod tests_options_parse_missing_values;
 #[cfg(test)]
 mod tests_options_parse_missing_values_required;
@@ -119,6 +122,7 @@ use route_explain_error_consts::{
     STAGE_DISCOVERY_MERGE, STAGE_FAILOVER_PLAN, STAGE_HEALTH_STATE_UPDATE, STAGE_OPTIONS_PARSE,
     STAGE_PEER_SPEC, STAGE_PEER_TABLE_POLICY, STAGE_PLAN_PATH, STAGE_POLICY_PARSE,
     STAGE_RESELECTION_PLAN, STAGE_RUNTIME_BOOTSTRAP, STAGE_SIMULATION_INPUT,
+    STAGE_TRANSIT_LANE_BINDINGS_EXPORT,
 };
 use route_explain_meta::ROUTE_EXPLAIN_CONTRACT_VERSION;
 use route_explain_output::build_mesh_route_explain_output;
@@ -220,18 +224,17 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
         node_name: options.node_name.clone(),
         invite_token: options.invite_token.clone(),
     };
-    let policy = match MeshPathPolicy::from_dps_payload(&options.policy_payload) {
-        Ok(value) => value,
-        Err(error) => return emit_route_explain_error(&options, STAGE_POLICY_PARSE, &error),
-    };
-    let initial = match runtime.plan_path(&request, &policy) {
+    if let Err(error) = MeshPathPolicy::from_dps_payload(&options.policy_payload) {
+        return emit_route_explain_error(&options, STAGE_POLICY_PARSE, &error);
+    }
+    let initial = match runtime.plan_path_from_dps_payload(&request, &options.policy_payload) {
         Ok(value) => value,
         Err(error) => return emit_route_explain_error(&options, STAGE_PLAN_PATH, &error),
     };
     let failover_selected = if let Some(failed_node) = options.failed_node_id.as_deref() {
-        match runtime.failover_plan(
+        match runtime.failover_plan_from_dps_payload(
             &request,
-            &policy,
+            &options.policy_payload,
             &MeshFailoverEvent {
                 failed_node_id: failed_node.to_string(),
                 reason: "cli_manual_failover".to_string(),
@@ -256,7 +259,11 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
         }]) {
             return emit_route_explain_error(&options, STAGE_HEALTH_STATE_UPDATE, &error);
         }
-        match runtime.reselection_plan_with_health(&request, &policy, &[]) {
+        match runtime.reselection_plan_with_health_from_dps_payload(
+            &request,
+            &options.policy_payload,
+            &[],
+        ) {
             Ok(plan) => plan
                 .selected_peers
                 .first()
@@ -283,6 +290,11 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
     {
         eprintln!("mesh route explain write failed: {error}");
         return 1;
+    }
+    if let Some(path) = options.transit_lane_bindings_out_path.as_deref()
+        && let Err(error) = write_transit_lane_registrations_from_mesh_plan(&initial, path)
+    {
+        return emit_route_explain_error(&options, STAGE_TRANSIT_LANE_BINDINGS_EXPORT, &error);
     }
     if options.json_output {
         println!("{}", output.json);

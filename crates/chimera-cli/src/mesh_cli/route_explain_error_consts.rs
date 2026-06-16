@@ -20,6 +20,7 @@ pub(crate) const ACTION_INSPECT_DISCOVERY_INPUT: &str = "inspect_discovery_input
 pub(crate) const ACTION_INSPECT_FAILOVER_INPUT: &str = "inspect_failover_input";
 pub(crate) const ACTION_INSPECT_HEALTH_INPUTS: &str = "inspect_health_inputs";
 pub(crate) const ACTION_INSPECT_RUNTIME_BOOTSTRAP: &str = "inspect_runtime_bootstrap";
+pub(crate) const ACTION_EXPORT_TRANSIT_BINDINGS: &str = "export_transit_bindings";
 pub(crate) const ACTION_INSPECT_ERROR: &str = "inspect_error";
 
 pub(crate) const RESOLUTION_CHECK_PEER_SPEC_FORMAT: &str = "check_peer_spec_format";
@@ -30,6 +31,7 @@ pub(crate) const RESOLUTION_INSPECT_DISCOVERY_RECORDS: &str = "inspect_discovery
 pub(crate) const RESOLUTION_INSPECT_FAILOVER_EVENT: &str = "inspect_failover_event";
 pub(crate) const RESOLUTION_INSPECT_HEALTH_STATE: &str = "inspect_health_state";
 pub(crate) const RESOLUTION_INSPECT_RUNTIME_NAMESPACE: &str = "inspect_runtime_namespace";
+pub(crate) const RESOLUTION_CHECK_MULTIPATH_ROUTE_BINDING: &str = "check_multipath_route_binding";
 pub(crate) const RESOLUTION_INSPECT_ERROR_DETAILS: &str = "inspect_error_details";
 
 pub(crate) const STAGE_PEER_SPEC: &str = "peer_spec";
@@ -43,3 +45,4 @@ pub(crate) const STAGE_FAILOVER_PLAN: &str = "failover_plan";
 pub(crate) const STAGE_HEALTH_STATE_UPDATE: &str = "health_state_update";
 pub(crate) const STAGE_RESELECTION_PLAN: &str = "reselection_plan";
 pub(crate) const STAGE_RUNTIME_BOOTSTRAP: &str = "runtime_bootstrap";
+pub(crate) const STAGE_TRANSIT_LANE_BINDINGS_EXPORT: &str = "transit_lane_bindings_export";

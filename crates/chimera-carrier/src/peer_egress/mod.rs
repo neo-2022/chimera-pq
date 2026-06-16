@@ -21,7 +21,9 @@ pub use handshake::{
 };
 pub use lane_binding::{
     TransitLaneRegistration, load_transit_lane_registrations, parse_transit_lane_registrations,
-    transit_lane_registration_from_mesh_lane, transit_path_binding_from_mesh_lane,
+    render_transit_lane_registrations, render_transit_lane_registrations_from_mesh_plan,
+    transit_lane_registration_from_mesh_lane, transit_lane_registrations_from_mesh_plan,
+    transit_path_binding_from_mesh_lane, write_transit_lane_registrations_from_mesh_plan,
 };
 pub use modes::{
     handle_local_client, laptop_worker, outbound_peer_worker, run_bench, run_download_echo,

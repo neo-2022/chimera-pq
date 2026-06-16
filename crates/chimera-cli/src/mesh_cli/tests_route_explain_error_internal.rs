@@ -35,6 +35,7 @@ fn route_explain_error_json_escapes_user_fields() {
         peers: vec!["n1@198.51.100.1:443@eu@20@90".to_string()],
         json_output: true,
         out_path: None,
+        transit_lane_bindings_out_path: None,
     };
 
     let json = build_route_explain_error_json(&options, ERROR_STAGE_PLAN_PATH, "zero \"eligible\"");

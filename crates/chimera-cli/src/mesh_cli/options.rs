@@ -15,6 +15,7 @@ pub(crate) struct MeshRouteExplainOptions {
     pub(crate) peers: Vec<String>,
     pub(crate) json_output: bool,
     pub(crate) out_path: Option<String>,
+    pub(crate) transit_lane_bindings_out_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +72,7 @@ pub(crate) fn parse_mesh_route_explain_options(
     let mut peers: Vec<String> = Vec::new();
     let mut json_output = false;
     let mut out_path = None;
+    let mut transit_lane_bindings_out_path = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -159,6 +161,11 @@ pub(crate) fn parse_mesh_route_explain_options(
                 &mut out_path,
                 parse_non_empty_arg_value(flag, value)?,
             )?,
+            "--transit-lane-bindings-out" => set_once(
+                "--transit-lane-bindings-out",
+                &mut transit_lane_bindings_out_path,
+                parse_non_empty_arg_value(flag, value)?,
+            )?,
             _ => return Err(format!("unknown flag '{flag}'")),
         }
         i += 2;
@@ -192,6 +199,7 @@ pub(crate) fn parse_mesh_route_explain_options(
         peers,
         json_output,
         out_path,
+        transit_lane_bindings_out_path,
     })
 }
 

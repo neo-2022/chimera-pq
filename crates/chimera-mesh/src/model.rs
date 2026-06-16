@@ -164,6 +164,9 @@ fn validate_host_and_port(host: &str, port_raw: &str) -> Result<(), String> {
     if host != host.trim() {
         return Err("mesh discovery endpoint host contains surrounding spaces".to_string());
     }
+    if host.contains(',') {
+        return Err("mesh discovery endpoint host contains comma".to_string());
+    }
     if host.chars().any(char::is_whitespace) {
         return Err("mesh discovery endpoint host contains whitespace".to_string());
     }
@@ -180,6 +183,29 @@ fn validate_host_and_port(host: &str, port_raw: &str) -> Result<(), String> {
         return Err("mesh discovery endpoint port must be > 0".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MeshDiscoveryRecord;
+
+    #[test]
+    fn mesh_discovery_endpoint_rejects_comma() {
+        let record = MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.10,443".to_string(),
+            region: "eu".to_string(),
+            load_score: 10,
+            reliability_score: 90,
+        };
+
+        let error = match record.validate() {
+            Ok(_) => return panic!("comma in endpoint must be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("comma"));
+    }
 }
 
 fn validate_label_field(value: &str, label: &str) -> Result<(), String> {

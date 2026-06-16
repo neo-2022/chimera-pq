@@ -47,6 +47,7 @@ fn mesh_route_explain_operator_cross_contract_consistent_for_internal_error_stag
         peers: vec!["n1@198.51.100.1:443@eu@20@90".to_string()],
         json_output: true,
         out_path: None,
+        transit_lane_bindings_out_path: None,
     };
 
     let error_cases = [
