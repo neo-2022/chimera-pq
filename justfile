@@ -361,6 +361,19 @@ peer-egress-perf-smoke-selfcheck:
     cargo test -q -p chimera-carrier --bin chimera-peer-egress
     cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode bench --token bench --pool 8 --bench-bytes 16777216 | rg -q 'chimera_peer_egress_bench=pass'
 
+peer-egress-transit-proof-selfcheck:
+    cargo test -q -p chimera-carrier peer_egress::proof
+    cargo test -q -p chimera-carrier options_tests::proof
+    cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode bench --token bench --transit-payload-bytes 64 2>&1 | rg -q 'transit proof flags are only valid in transit inject modes'
+    CHIMERA_PEER_EGRESS_TRANSIT_PAYLOAD_BYTES=bad cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode node --token token 2>&1 | rg -q 'node mode requires --local-listen'
+    rg -q 'sealed-transit-inject' crates/chimera-carrier/src/peer_egress/options_mode.rs
+    rg -q 'bound-transit-inject' crates/chimera-carrier/src/peer_egress/options_mode.rs
+    rg -q 'chimera_peer_egress_sealed_transit_inject=ok' crates/chimera-carrier/src/peer_egress/proof.rs
+    rg -q 'chimera_peer_egress_bound_transit_inject=ok' crates/chimera-carrier/src/peer_egress/proof.rs
+    rg -q 'BoundTransitRelayFrame' crates/chimera-carrier/src/peer_egress/proof.rs
+    rg -q 'Mode::SealedTransitInject' crates/chimera-carrier/src/bin/chimera-peer-egress.rs
+    rg -q 'Mode::BoundTransitInject' crates/chimera-carrier/src/bin/chimera-peer-egress.rs
+
 runtime-real-world-probe-smoke:
     bash scripts/runtime_real_world_probe_smoke.sh
 
@@ -686,6 +699,8 @@ ship-readiness-selfcheck:
     rg -q 'just runtime-forced-stop-rollback-smoke' scripts/ship_readiness.sh
     rg -q 'just mesh-cli-recovery-schema-guard-selfcheck' scripts/ship_readiness.sh
     rg -q 'just mesh-cli-recovery-schema-guard' scripts/ship_readiness.sh
+    rg -q '^peer-egress-transit-proof-selfcheck:' justfile
+    just peer-egress-transit-proof-selfcheck
     rg -q '"runtime_forced_stop_rollback_smoke_ok":' scripts/ship_readiness.sh
     rg -q '"runtime_apply_route_multi_cidr_smoke_ok":' scripts/ship_readiness.sh
     rg -q '"runtime_forced_stop_rollback_smoke_selfcheck":true' scripts/ship_readiness.sh
@@ -708,7 +723,8 @@ ship-readiness-selfcheck:
     rg -q 'runtime_real_world_datapath_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'runtime_real_world_datapath_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'snapshot integrity gate, not a real-world closure claim' scripts/ship_readiness.sh
-    rg -q 'Target failures remain visible' scripts/ship_readiness.sh
+    rg -q 'Direct/external target failures remain visible' scripts/ship_readiness.sh
+    ! rg -q 'runtime_real_world_direct_probe_ok.*== "true".*runtime_real_world_probe_smoke_ok=true' scripts/ship_readiness.sh
     rg -Fq '$((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed))' scripts/ship_readiness.sh
     rg -q 'GENERATED_AT_UTC=' scripts/ship_readiness.sh
     line_status="$(rg -n '^status="fail"$' scripts/ship_readiness.sh | tail -n 1 | cut -d: -f1)"; line_generated="$(rg -n '^GENERATED_AT_UTC=' scripts/ship_readiness.sh | tail -n 1 | cut -d: -f1)"; line_write="$(rg -n '^cat > docs/SHIP_READINESS_REPORT.json <<REPORT$' scripts/ship_readiness.sh | cut -d: -f1)"; test -n "$line_status" && test -n "$line_generated" && test -n "$line_write" && test "$line_status" -lt "$line_generated" && test "$line_generated" -lt "$line_write"
@@ -1871,6 +1887,9 @@ ship-readiness-json-guard-selfcheck:
     rg -q 'datapath probe ok with failed targets' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'validate_direct_probe_visibility' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'direct_probe_failure_is_allowed_when_snapshot_gate_is_still_visible' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'direct_probe_failure_rejects_hidden_snapshot_failure' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
 
 ship-readiness-freshness-guard:
     bash scripts/ship_readiness_freshness_guard.sh docs/SHIP_READINESS_REPORT.json 1800

@@ -3,7 +3,7 @@
 use std::env;
 
 use chimera_carrier::peer_egress::options::Options;
-use chimera_carrier::peer_egress::{modes, node};
+use chimera_carrier::peer_egress::{modes, node, proof};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -26,6 +26,12 @@ fn main() {
         }
         chimera_carrier::peer_egress::options::Mode::DownloadProbe => {
             modes::run_download_probe(options)
+        }
+        chimera_carrier::peer_egress::options::Mode::SealedTransitInject => {
+            proof::run_sealed_transit_inject(options)
+        }
+        chimera_carrier::peer_egress::options::Mode::BoundTransitInject => {
+            proof::run_bound_transit_inject(options)
         }
     };
     if let Err(error) = result {

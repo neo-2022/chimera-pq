@@ -107,6 +107,9 @@ fn main() {
             ));
         }
     }
+    if let Err(msg) = validate_direct_probe_visibility(report_obj) {
+        fail(&msg);
+    }
 
     let probe_error = report_obj
         .get("runtime_real_world_datapath_probe_error")
@@ -324,6 +327,26 @@ fn validate_runtime_datapath_logic(
     Ok(())
 }
 
+fn validate_direct_probe_visibility(
+    report_obj: &serde_json::Map<String, Value>,
+) -> Result<(), String> {
+    let direct_ok = report_obj
+        .get("runtime_real_world_direct_probe_ok")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| "ship readiness json guard: invalid direct probe field".to_string())?;
+    let snapshot_ok = report_obj
+        .get("runtime_real_world_probe_smoke_ok")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| "ship readiness json guard: invalid snapshot smoke field".to_string())?;
+    if !direct_ok && !snapshot_ok {
+        return Err(
+            "ship readiness json guard: direct probe failure must remain visible without failing snapshot integrity gate"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 fn fail(msg: &str) -> ! {
     eprintln!("{msg}");
     std::process::exit(1);
@@ -331,7 +354,7 @@ fn fail(msg: &str) -> ! {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_runtime_datapath_logic;
+    use super::{validate_direct_probe_visibility, validate_runtime_datapath_logic};
     use serde_json::{Map, Value, json};
 
     fn base_report_obj() -> serde_json::Map<String, Value> {
@@ -374,6 +397,16 @@ mod tests {
     }
 
     #[test]
+    fn runtime_datapath_logic_accepts_visible_direct_probe_failure() {
+        let mut payload = base_report_obj();
+        payload.insert(
+            "runtime_real_world_direct_probe_ok".to_string(),
+            json!(false),
+        );
+        assert!(validate_runtime_datapath_logic(&payload).is_ok());
+    }
+
+    #[test]
     fn runtime_datapath_logic_rejects_totals_mismatch() {
         let mut payload = base_report_obj();
         payload.insert(
@@ -403,5 +436,34 @@ mod tests {
         let res = validate_runtime_datapath_logic(&payload);
         assert!(res.is_err());
         assert!(res.err().is_some_and(|e| e.contains("must be attempted")));
+    }
+
+    #[test]
+    fn direct_probe_failure_is_allowed_when_snapshot_gate_is_still_visible() {
+        let mut payload = Map::new();
+        payload.insert(
+            "runtime_real_world_direct_probe_ok".to_string(),
+            json!(false),
+        );
+        payload.insert("runtime_real_world_probe_smoke_ok".to_string(), json!(true));
+
+        assert!(validate_direct_probe_visibility(&payload).is_ok());
+    }
+
+    #[test]
+    fn direct_probe_failure_rejects_hidden_snapshot_failure() {
+        let mut payload = Map::new();
+        payload.insert(
+            "runtime_real_world_direct_probe_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_probe_smoke_ok".to_string(),
+            json!(false),
+        );
+
+        let res = validate_direct_probe_visibility(&payload);
+        assert!(res.is_err());
+        assert!(res.err().is_some_and(|e| e.contains("must remain visible")));
     }
 }

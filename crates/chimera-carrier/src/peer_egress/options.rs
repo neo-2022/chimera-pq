@@ -1,5 +1,9 @@
 use std::env;
 
+use crate::peer_egress::options_mode::parse_mode;
+pub use crate::peer_egress::options_mode::{Mode, mode_name};
+use crate::peer_egress::options_proof::TransitProofOptions;
+
 pub const HANDSHAKE_MAGIC: &[u8] = b"CHIMERA-PEER-EGRESS/1\n";
 pub const LOCAL_MAGIC: &[u8] = b"CHIMERA-LOCAL/1\n";
 pub const MAX_TOKEN_LEN: usize = 256;
@@ -10,18 +14,6 @@ pub const SECURE_AES256GCM_SUITE_ID: u16 = 0xEE03;
 pub const SECURE_PLAINTEXT_CHUNK_LEN: usize = 1024 * 1024;
 pub const SECURE_MAX_CIPHERTEXT_LEN: usize = SECURE_PLAINTEXT_CHUNK_LEN + 32;
 pub const TCP_BUFFER_BYTES: usize = 4 * 1024 * 1024;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Mode {
-    Node,
-    Vps,
-    Laptop,
-    Bench,
-    Echo,
-    Probe,
-    DownloadEcho,
-    DownloadProbe,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AeadSuite {
@@ -72,6 +64,10 @@ pub struct Options {
     pub allow_pool_transit: bool,
     pub allow_bound_transit: bool,
     pub transit_lane_bindings_file: Option<String>,
+    pub transit_payload_bytes: usize,
+    pub transit_packet_number: u64,
+    pub transit_route_id: Option<u64>,
+    pub transit_lane_index: Option<usize>,
 }
 
 fn env_value(name: &str) -> Option<String> {
@@ -171,6 +167,7 @@ impl Options {
             .unwrap_or(false);
         let mut transit_lane_bindings_file =
             env_value("CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE");
+        let mut transit_proof_args: Vec<(String, String)> = Vec::new();
         let mut index = 0usize;
         while index < args.len() {
             let flag = args[index].as_str();
@@ -179,21 +176,7 @@ impl Options {
                 .ok_or_else(|| format!("missing value for {flag}"))?;
             match flag {
                 "--mode" => {
-                    mode = Some(match value.as_str() {
-                        "node" | "weave-node" => Mode::Node,
-                        "vps" => Mode::Vps,
-                        "laptop" => Mode::Laptop,
-                        "bench" => Mode::Bench,
-                        "echo" => Mode::Echo,
-                        "probe" => Mode::Probe,
-                        "download-echo" => Mode::DownloadEcho,
-                        "download-probe" => Mode::DownloadProbe,
-                        _ => {
-                            return Err(
-                                "mode must be node, vps, laptop, bench, echo, probe, download-echo, or download-probe".to_string()
-                            );
-                        }
-                    });
+                    mode = Some(parse_mode(value)?);
                 }
                 "--local-listen" => local_listen = Some(value.clone()),
                 "--peer-listen" => peer_listen = Some(value.clone()),
@@ -226,6 +209,9 @@ impl Options {
                 "--transit-lane-bindings-file" => {
                     transit_lane_bindings_file = Some(value.clone());
                 }
+                flag if TransitProofOptions::is_flag(flag) => {
+                    transit_proof_args.push((flag.to_string(), value.clone()));
+                }
                 "--bench-bytes" => {
                     bench_bytes = parse_positive_usize(value, "bench-bytes")?;
                 }
@@ -233,10 +219,26 @@ impl Options {
             }
             index += 2;
         }
-        if token.is_empty() || token.len() > MAX_TOKEN_LEN || token.contains('\n') {
+        let mode = mode.ok_or_else(|| "missing --mode".to_string())?;
+        let transit_proof = if matches!(mode, Mode::SealedTransitInject | Mode::BoundTransitInject)
+        {
+            let mut transit_proof = TransitProofOptions::from_env()?;
+            for (flag, value) in &transit_proof_args {
+                transit_proof.apply_flag(flag, value)?;
+            }
+            transit_proof
+        } else if transit_proof_args.is_empty() {
+            TransitProofOptions::default()
+        } else {
+            return Err("transit proof flags are only valid in transit inject modes".to_string());
+        };
+        let token_required = !matches!(mode, Mode::SealedTransitInject | Mode::BoundTransitInject);
+        if token_required && token.is_empty() {
             return Err("token must be non-empty, <=256 bytes, and single-line".to_string());
         }
-        let mode = mode.ok_or_else(|| "missing --mode".to_string())?;
+        if !token.is_empty() && (token.len() > MAX_TOKEN_LEN || token.contains('\n')) {
+            return Err("token must be non-empty, <=256 bytes, and single-line".to_string());
+        }
         let (local_listen, peer_listen, server) = match mode {
             Mode::Node => (
                 required_value(
@@ -289,6 +291,14 @@ impl Options {
                     "probe mode requires --server or CHIMERA_PEER_EGRESS_SERVER",
                 )?,
             ),
+            Mode::SealedTransitInject | Mode::BoundTransitInject => (
+                local_listen.unwrap_or_default(),
+                peer_listen.unwrap_or_default(),
+                required_value(
+                    server,
+                    "transit inject mode requires --server or CHIMERA_PEER_EGRESS_SERVER",
+                )?,
+            ),
         };
         let target = if matches!(mode, Mode::Probe | Mode::DownloadProbe) {
             required_value(
@@ -298,6 +308,7 @@ impl Options {
         } else {
             target.unwrap_or_default()
         };
+        transit_proof.validate_for_mode(&mode)?;
         Ok(Self {
             mode,
             local_listen,
@@ -316,20 +327,11 @@ impl Options {
             allow_pool_transit,
             allow_bound_transit,
             transit_lane_bindings_file,
+            transit_payload_bytes: transit_proof.payload_bytes,
+            transit_packet_number: transit_proof.packet_number,
+            transit_route_id: transit_proof.route_id,
+            transit_lane_index: transit_proof.lane_index,
         })
-    }
-}
-
-pub fn mode_name(mode: &Mode) -> &'static str {
-    match mode {
-        Mode::Node => "node",
-        Mode::Vps => "vps",
-        Mode::Laptop => "laptop",
-        Mode::Bench => "bench",
-        Mode::Echo => "echo",
-        Mode::Probe => "probe",
-        Mode::DownloadEcho => "download-echo",
-        Mode::DownloadProbe => "download-probe",
     }
 }
 

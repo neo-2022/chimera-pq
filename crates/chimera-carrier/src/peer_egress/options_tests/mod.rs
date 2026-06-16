@@ -1,5 +1,7 @@
 use super::*;
 
+mod proof;
+
 #[test]
 fn parse_rejects_empty_token() {
     let args = vec![

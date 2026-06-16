@@ -4,7 +4,10 @@ pub mod modes;
 pub mod net;
 pub mod node;
 pub mod options;
+pub(crate) mod options_mode;
+pub(crate) mod options_proof;
 pub mod pool;
+pub mod proof;
 pub mod protocol;
 pub(crate) mod secure_halves;
 pub mod startup_contract;
@@ -26,8 +29,10 @@ pub use modes::{
 };
 pub use net::{connect_tcp, pipe_plain_with_secure_peer, pipe_secure_peer_with_plain, tune_tcp};
 pub use node::run_node;
-pub use options::{AeadSuite, Mode, Options};
+pub use options::{AeadSuite, Options};
+pub use options_mode::{Mode, mode_name};
 pub use pool::PeerPool;
+pub use proof::{run_bound_transit_inject, run_sealed_transit_inject};
 pub use protocol::{Destination, SecurePeerStream};
 pub use transit::{
     TransitRelayFrame, forward_bound_peer_sealed_transit_to_next_hop, forward_transit_relay_frame,

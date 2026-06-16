@@ -94,6 +94,10 @@ mod tests {
             allow_pool_transit: false,
             allow_bound_transit: false,
             transit_lane_bindings_file: None,
+            transit_payload_bytes: 64,
+            transit_packet_number: 1,
+            transit_route_id: None,
+            transit_lane_index: None,
         }
     }
 

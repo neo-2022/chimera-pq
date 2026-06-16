@@ -78,6 +78,10 @@ pub fn run_bench(options: Options) -> Result<(), String> {
         allow_pool_transit: false,
         allow_bound_transit: false,
         transit_lane_bindings_file: None,
+        transit_payload_bytes: 64,
+        transit_packet_number: 1,
+        transit_route_id: None,
+        transit_lane_index: None,
     };
     for _ in 0..options.pool {
         let worker = worker_options.clone();

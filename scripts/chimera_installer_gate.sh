@@ -157,7 +157,7 @@ rg -n 'case_auto_update_preserves_quoted_lane_bindings_env' "$ROOT_DIR/scripts/c
 if rg -n 'configure_peer_egress_env "(vps|laptop)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
   fail "installer_writes_legacy_peer_egress_role"
 fi
-rg -n '"node" \| "weave-node" => Mode::Node' "$ROOT_DIR/crates/chimera-carrier/src/peer_egress/options.rs" >/dev/null || fail "peer_egress_missing_node_mode"
+rg -n '"node" \| "weave-node" => Ok\(Mode::Node\)' "$ROOT_DIR/crates/chimera-carrier/src/peer_egress/options_mode.rs" >/dev/null || fail "peer_egress_missing_node_mode"
 rg -n 'Mode::Node => node::run_node' "$ROOT_DIR/crates/chimera-carrier/src/bin/chimera-peer-egress.rs" >/dev/null || fail "peer_egress_binary_not_dispatching_node_mode"
 rg -n 'remote release checksum is required for URL install' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_url_checksum_not_required"
 rg -n 'verify_checksum_required' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_missing_checksum_verification"

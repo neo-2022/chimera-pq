@@ -142,8 +142,9 @@ if rg -q '"status":"ok"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json && rg -q '"kin
     cargo run -q -p chimera-lab --bin runtime_real_world_probe_env -- docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json
   )"
   # This is a snapshot integrity gate, not a real-world closure claim.
-  # Target failures remain visible in the datapath fields and truth boundary.
-  if [[ "$runtime_real_world_skipped_no_curl" == "false" && "$runtime_real_world_direct_probe_ok" == "true" && "$runtime_real_world_datapath_probe_attempted" == "true" && "$runtime_real_world_datapath_targets_total" -gt 0 && $((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed)) -eq "$runtime_real_world_datapath_targets_total" ]]; then
+  # Direct/external target failures remain visible in the report fields and
+  # truth boundary; they must not be hidden as a source/release regression.
+  if [[ "$runtime_real_world_skipped_no_curl" == "false" && "$runtime_real_world_datapath_probe_attempted" == "true" && "$runtime_real_world_datapath_targets_total" -gt 0 && $((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed)) -eq "$runtime_real_world_datapath_targets_total" ]]; then
     runtime_real_world_probe_smoke_ok=true
   fi
 fi
