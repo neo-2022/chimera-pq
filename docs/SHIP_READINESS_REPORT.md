@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
 Status: **PASS (LAB/SOURCE GATE ONLY)**
-Generated at (UTC): `2026-06-16T17:40:24Z`
+Generated at (UTC): `2026-06-16T18:19:14Z`
 
 Checks:
 - Baseline freeze: `true`
@@ -39,6 +39,10 @@ Checks:
 - Runtime policy precedence smoke (`exact>suffix + dns-binding`): `true`
 - Runtime forced-stop rollback smoke (`recover without graceful down`): `true`
 - Runtime probe-access smoke (`batch targets + totals/threshold report`): `true`
+- Runtime probe-access mode: `ci_snapshot`
+- Runtime probe-access live external probe: `false`
+- Runtime probe-access SSH stand required for live probe: `true`
+- Runtime probe-access ci-snapshot targets ok: `true`
 - Runtime real-world probe smoke (`transparent datapath snapshot only`): `true`
 - Runtime real-world probe mode: `ci_snapshot`
 - Runtime real-world live external probe: `false`

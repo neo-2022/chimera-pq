@@ -302,18 +302,29 @@ fn command_exists(name: &str) -> bool {
 }
 
 fn run_curl_plain(url: &str, timeout_sec: u64) -> bool {
-    Command::new("curl")
-        .arg("--silent")
+    let mut cmd = Command::new("curl");
+    cmd.arg("--silent")
         .arg("--show-error")
         .arg("--location")
+        .arg("--noproxy")
+        .arg("*")
         .arg("--max-time")
         .arg(timeout_sec.to_string())
         .arg("--output")
-        .arg("/dev/null")
-        .arg(url)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+        .arg("/dev/null");
+    for key in [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+    ] {
+        cmd.env_remove(key);
+    }
+    cmd.arg(url).status().map(|s| s.success()).unwrap_or(false)
 }
 
 fn parse_datapath_targets(csv: &str) -> Vec<String> {

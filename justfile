@@ -80,16 +80,39 @@ route-explain-json:
     cargo run -p chimera-cli -- route explain example.org --json --out docs/route_explain_latest.json
 
 probe-access-smoke:
-    cargo run -p chimera-cli -- probe access --url-file configs/probe_targets.example.txt --timeout-sec 3 --fail-threshold 1 --json --out docs/probe_access_latest.json
+    probe_mode="${CHIMERA_PROBE_ACCESS_MODE:-${CHIMERA_REAL_WORLD_PROBE_MODE:-live}}"; \
+      case "$probe_mode" in \
+        live) \
+          cargo run -p chimera-cli -- probe access --url-file configs/probe_targets.example.txt --timeout-sec 3 --fail-threshold 1 --json --out docs/probe_access_latest.json ;; \
+        ci_snapshot) \
+          probe_tmp="$(mktemp -d)"; \
+          trap 'rm -rf "$probe_tmp"' EXIT; \
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'for arg in "$@"; do' '  case "$arg" in' '    http://chimera-ci-snapshot.local/*|https://chimera-ci-snapshot.local/*) exit 0 ;;' '  esac' 'done' 'exit 7' > "$probe_tmp/curl"; \
+          chmod +x "$probe_tmp/curl"; \
+          printf '%s\n' 'https://chimera-ci-snapshot.local/ok' 'http://chimera-ci-snapshot.local/failover' > "$probe_tmp/targets.txt"; \
+          PATH="$probe_tmp:$PATH" cargo run -p chimera-cli -- probe access --url-file "$probe_tmp/targets.txt" --timeout-sec 3 --fail-threshold 0 --json --out docs/probe_access_latest.json ;; \
+        *) \
+          echo "probe-access-smoke: invalid CHIMERA_PROBE_ACCESS_MODE/CHIMERA_REAL_WORLD_PROBE_MODE: $probe_mode" >&2; exit 2 ;; \
+      esac
 
 probe-access-smoke-selfcheck:
     test -f configs/probe_targets.example.txt
     rg -q '^https://example.org$' configs/probe_targets.example.txt
     rg -q '^https://www.youtube.com$' configs/probe_targets.example.txt
-    cargo run -q -p chimera-cli -- probe access --url-file configs/probe_targets.example.txt --timeout-sec 2 --fail-threshold 10 --json --out /tmp/chimera_probe_access_smoke.json
+    rg -q 'CHIMERA_PROBE_ACCESS_MODE' justfile
+    rg -q 'CHIMERA_REAL_WORLD_PROBE_MODE' justfile
+    rg -q 'chimera-ci-snapshot.local' justfile
+    rg -q 'PATH="\$probe_tmp:\$PATH"' justfile
+    probe_tmp="$(mktemp -d)"; \
+      trap 'rm -rf "$probe_tmp"' EXIT; \
+      printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'for arg in "$@"; do' '  case "$arg" in' '    http://chimera-ci-snapshot.local/*|https://chimera-ci-snapshot.local/*) exit 0 ;;' '  esac' 'done' 'exit 7' > "$probe_tmp/curl"; \
+      chmod +x "$probe_tmp/curl"; \
+      printf '%s\n' 'https://chimera-ci-snapshot.local/ok' 'http://chimera-ci-snapshot.local/failover' > "$probe_tmp/targets.txt"; \
+      PATH="$probe_tmp:$PATH" cargo run -q -p chimera-cli -- probe access --url-file "$probe_tmp/targets.txt" --timeout-sec 2 --fail-threshold 0 --json --out /tmp/chimera_probe_access_smoke.json
     rg -q '"kind":"probe_access"' /tmp/chimera_probe_access_smoke.json
     rg -Fq '"targets":[' /tmp/chimera_probe_access_smoke.json
     rg -Fq '"totals":{' /tmp/chimera_probe_access_smoke.json
+    rg -q 'chimera-ci-snapshot.local' /tmp/chimera_probe_access_smoke.json
     rm -f /tmp/chimera_probe_access_smoke.json
 
 chimera-path-proof:
@@ -488,7 +511,11 @@ probe-access-env-selfcheck:
     rg -q '^#!\[forbid\(unsafe_code\)\]$' crates/chimera-lab/src/bin/probe_access_env.rs
     rg -q 'usage: probe_access_env <json_path>' crates/chimera-lab/src/bin/probe_access_env.rs
     rg -q 'runtime_probe_access_smoke_ok' crates/chimera-lab/src/bin/probe_access_env.rs
+    rg -q 'runtime_probe_access_mode' crates/chimera-lab/src/bin/probe_access_env.rs
+    rg -q 'runtime_probe_access_live_external_probe' crates/chimera-lab/src/bin/probe_access_env.rs
+    rg -q 'runtime_probe_access_ci_snapshot_targets_ok' crates/chimera-lab/src/bin/probe_access_env.rs
     rg -q 'exports_ok_when_contract_is_green' crates/chimera-lab/src/bin/probe_access_env.rs
+    rg -q 'exports_ci_snapshot_metadata_when_requested' crates/chimera-lab/src/bin/probe_access_env.rs
     rg -q 'exports_false_when_threshold_exceeded' crates/chimera-lab/src/bin/probe_access_env.rs
     cargo test -q -p chimera-lab --bin probe_access_env
 
@@ -752,9 +779,19 @@ ship-readiness-selfcheck:
     rg -q 'runtime_real_world_probe_mode' scripts/ship_readiness.sh
     rg -q 'runtime_real_world_live_external_probe' scripts/ship_readiness.sh
     rg -q 'runtime_real_world_ssh_stand_required_for_live_probe' scripts/ship_readiness.sh
+    rg -q 'runtime_probe_access_mode' scripts/ship_readiness.sh
+    rg -q 'runtime_probe_access_live_external_probe' scripts/ship_readiness.sh
+    rg -q 'runtime_probe_access_ssh_stand_required_for_live_probe' scripts/ship_readiness.sh
+    rg -q 'runtime_probe_access_ci_snapshot_targets_ok' scripts/ship_readiness.sh
     rg -q 'ci_snapshot' scripts/ship_readiness.sh
     rg -q 'snapshot integrity gate, not a real-world closure claim' scripts/ship_readiness.sh
     rg -q 'Direct/external target failures remain visible' scripts/ship_readiness.sh
+    rg -q -- '--noproxy' crates/chimera-cli/src/main.rs
+    rg -q -- '--noproxy' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q '"HTTP_PROXY"' crates/chimera-cli/src/main.rs
+    rg -q 'env_remove\(key\)' crates/chimera-cli/src/main.rs
+    rg -q '"HTTP_PROXY"' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'env_remove\(key\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     ! rg -q 'runtime_real_world_direct_probe_ok.*== "true".*runtime_real_world_probe_smoke_ok=true' scripts/ship_readiness.sh
     rg -Fq '$((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed))' scripts/ship_readiness.sh
     rg -q 'GENERATED_AT_UTC=' scripts/ship_readiness.sh
@@ -1711,6 +1748,8 @@ ship-report-contract-check:
     just release-pack-schema-guard
     just ship-structure-guard-selfcheck
     just ship-structure-guard
+    just probe-access-ship-guard-selfcheck
+    just probe-access-ship-guard
     just ship-nonregression-guard-selfcheck
     just ship-nonregression-guard
     just ship-readiness-json-guard-selfcheck
@@ -1750,6 +1789,11 @@ ship-report-contract-check:
     rg -q '"runtime_datapath_multiflow_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_policy_precedence_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_forced_stop_rollback_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_probe_access_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_probe_access_mode":"(live|ci_snapshot)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_probe_access_live_external_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_probe_access_ssh_stand_required_for_live_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_probe_access_ci_snapshot_targets_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_mode":"(live|ci_snapshot)"' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_live_external_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
@@ -1894,6 +1938,10 @@ ship-report-contract-check:
     rg -q 'Mesh auto adaptive trace:' docs/SHIP_READINESS_REPORT.md
     rg -q 'CEF phase1 smoke:' docs/REPORT_PACK.md
     rg -q 'Truth boundary:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime probe-access mode:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime probe-access live external probe:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime probe-access SSH stand required for live probe:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime probe-access ci-snapshot targets ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe attempted:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe error:' docs/SHIP_READINESS_REPORT.md
@@ -1931,6 +1979,18 @@ ship-readiness-json-guard-selfcheck:
     rg -q 'validate_direct_probe_visibility' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'direct_probe_failure_is_allowed_when_snapshot_gate_is_still_visible' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'direct_probe_failure_rejects_hidden_snapshot_failure' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+
+probe-access-ship-guard:
+    cargo run -q -p chimera-lab --bin probe_access_ship_guard -- docs/SHIP_READINESS_REPORT.json docs/probe_access_latest.json
+
+probe-access-ship-guard-selfcheck:
+    test -f crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q '^#!\[forbid\(unsafe_code\)\]$' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'invalid runtime_probe_access_mode' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'ci_snapshot probe access requires snapshot-safe targets' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'probe access ship guard: PASS' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'rejects_ci_snapshot_with_external_targets' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    cargo test -q -p chimera-lab --bin probe_access_ship_guard
 
 ship-readiness-freshness-guard:
     bash scripts/ship_readiness_freshness_guard.sh docs/SHIP_READINESS_REPORT.json 1800

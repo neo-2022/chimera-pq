@@ -46,6 +46,14 @@ fn main() {
     require_bool_eq(report_obj, "mesh_route_explain_ok", true);
     require_bool_eq(report_obj, "mesh_auto_adaptive_ok", true);
     require_bool_eq(report_obj, "runtime_real_world_probe_smoke_ok", true);
+    require_bool_eq(report_obj, "runtime_probe_access_smoke_ok", true);
+    let probe_access_mode = report_obj
+        .get("runtime_probe_access_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if !["live", "ci_snapshot"].contains(&probe_access_mode) {
+        fail("ship readiness json guard: invalid runtime_probe_access_mode");
+    }
     let probe_mode = report_obj
         .get("runtime_real_world_probe_mode")
         .and_then(Value::as_str)
@@ -123,6 +131,9 @@ fn main() {
         "runtime_real_world_skipped_no_curl",
         "runtime_real_world_live_external_probe",
         "runtime_real_world_ssh_stand_required_for_live_probe",
+        "runtime_probe_access_live_external_probe",
+        "runtime_probe_access_ssh_stand_required_for_live_probe",
+        "runtime_probe_access_ci_snapshot_targets_ok",
     ] {
         if report_obj.get(key).and_then(Value::as_bool).is_none() {
             fail(&format!(
@@ -168,6 +179,16 @@ fn main() {
     require_md_contains(
         &report_md_raw,
         "Runtime real-world datapath targets failed:",
+    );
+    require_md_contains(&report_md_raw, "Runtime probe-access mode:");
+    require_md_contains(&report_md_raw, "Runtime probe-access live external probe:");
+    require_md_contains(
+        &report_md_raw,
+        "Runtime probe-access SSH stand required for live probe:",
+    );
+    require_md_contains(
+        &report_md_raw,
+        "Runtime probe-access ci-snapshot targets ok:",
     );
     require_md_contains(&report_md_raw, "Mesh route explain:");
     require_md_contains(&report_md_raw, "Mesh auto adaptive trace:");

@@ -701,6 +701,8 @@ fn run_curl_probe(url: &str, timeout_seconds: u64) -> Result<bool, String> {
         let mut cmd = Command::new("curl");
         cmd.arg("-sS")
             .arg("-L")
+            .arg("--noproxy")
+            .arg("*")
             .arg("--output")
             .arg("/dev/null")
             .arg("--max-time")
@@ -709,6 +711,18 @@ fn run_curl_probe(url: &str, timeout_seconds: u64) -> Result<bool, String> {
             .arg(&timeout_arg)
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        for key in [
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "NO_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+            "no_proxy",
+        ] {
+            cmd.env_remove(key);
+        }
         cmd.arg(url);
         let status = cmd
             .status()

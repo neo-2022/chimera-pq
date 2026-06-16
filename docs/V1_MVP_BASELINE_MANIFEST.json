@@ -17,12 +17,12 @@
     ,{
       "path": "docs/benchmark_latest.json",
       "size_bytes": 548,
-      "sha256": "759e78848af9c8c7b547cf7a2c1dd154a851b5a035efd5494a3ab537bbf8f033"
+      "sha256": "f542ad764c048552e5687461dceed281c1ed4231e6a1d3478072d9039adba1fa"
     }
     ,{
       "path": "docs/benchmark_baseline.json",
       "size_bytes": 548,
-      "sha256": "759e78848af9c8c7b547cf7a2c1dd154a851b5a035efd5494a3ab537bbf8f033"
+      "sha256": "f542ad764c048552e5687461dceed281c1ed4231e6a1d3478072d9039adba1fa"
     }
     ,{
       "path": "docs/BENCHMARK_REGRESSION_GATE.json",

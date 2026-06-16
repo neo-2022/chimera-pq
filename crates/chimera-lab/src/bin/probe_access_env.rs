@@ -4,6 +4,8 @@ use serde_json::Value;
 use std::env;
 use std::fs;
 
+const CI_SNAPSHOT_HOST: &str = "chimera-ci-snapshot.local";
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -60,6 +62,13 @@ fn render_exports(parsed: &Value) -> Vec<String> {
         .and_then(|o| o.get("all"))
         .and_then(Value::as_i64)
         .unwrap_or(0);
+    let mode = resolve_probe_mode(parsed);
+    let ci_snapshot = mode == "ci_snapshot";
+    let ci_snapshot_targets_ok = if ci_snapshot {
+        targets_all_match_host(parsed, CI_SNAPSHOT_HOST)
+    } else {
+        false
+    };
 
     let smoke_ok = kind_ok
         && status_ok
@@ -69,12 +78,30 @@ fn render_exports(parsed: &Value) -> Vec<String> {
         && failed_total >= 0
         && fail_threshold >= 0
         && !threshold_exceeded
-        && failed_total <= fail_threshold;
+        && failed_total <= fail_threshold
+        && (!ci_snapshot || ci_snapshot_targets_ok);
 
     vec![
         format!(
             "runtime_probe_access_smoke_ok={}",
             if smoke_ok { "true" } else { "false" }
+        ),
+        format!("runtime_probe_access_mode='{mode}'"),
+        format!(
+            "runtime_probe_access_live_external_probe={}",
+            if ci_snapshot { "false" } else { "true" }
+        ),
+        format!(
+            "runtime_probe_access_ssh_stand_required_for_live_probe={}",
+            if ci_snapshot { "true" } else { "false" }
+        ),
+        format!(
+            "runtime_probe_access_ci_snapshot_targets_ok={}",
+            if ci_snapshot_targets_ok {
+                "true"
+            } else {
+                "false"
+            }
         ),
         format!("runtime_probe_access_failed_total={failed_total}"),
         format!("runtime_probe_access_fail_threshold={fail_threshold}"),
@@ -83,6 +110,53 @@ fn render_exports(parsed: &Value) -> Vec<String> {
             if threshold_exceeded { "true" } else { "false" }
         ),
     ]
+}
+
+fn resolve_probe_mode(parsed: &Value) -> &'static str {
+    if targets_all_match_host(parsed, CI_SNAPSHOT_HOST) {
+        "ci_snapshot"
+    } else {
+        "live"
+    }
+}
+
+fn targets_all_match_host(parsed: &Value, host: &str) -> bool {
+    parsed
+        .get("targets")
+        .and_then(Value::as_array)
+        .map(|targets| {
+            !targets.is_empty()
+                && targets.iter().all(|target| {
+                    target
+                        .get("url")
+                        .and_then(Value::as_str)
+                        .is_some_and(|url| url_has_host(url, host))
+                })
+        })
+        .unwrap_or(false)
+}
+
+fn url_has_host(url: &str, expected_host: &str) -> bool {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return false;
+    };
+    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
+        return false;
+    }
+    let authority = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .rsplit('@')
+        .next()
+        .unwrap_or_default();
+    let host = authority
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    host == expected_host
 }
 
 #[cfg(test)]
@@ -106,6 +180,49 @@ mod tests {
         assert!(
             got.iter()
                 .any(|l| l == "runtime_probe_access_failed_total=0")
+        );
+        assert!(got.iter().any(|l| l == "runtime_probe_access_mode='live'"));
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_live_external_probe=true")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_ci_snapshot_targets_ok=false")
+        );
+    }
+
+    #[test]
+    fn exports_ci_snapshot_metadata_when_requested() {
+        let got = render_exports(&json!({
+            "status":"ok",
+            "kind":"probe_access",
+            "network_state":"not_modified",
+            "totals":{"all":2,"failed_total":0,"fail_threshold":0,"threshold_exceeded":false},
+            "targets":[
+                {"url":"https://chimera-ci-snapshot.local/ok"},
+                {"url":"http://chimera-ci-snapshot.local/failover"}
+            ]
+        }));
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_smoke_ok=true")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_mode='ci_snapshot'")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_live_external_probe=false")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_ssh_stand_required_for_live_probe=true")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_probe_access_ci_snapshot_targets_ok=true")
         );
     }
 
