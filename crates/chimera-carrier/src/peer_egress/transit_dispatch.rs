@@ -72,6 +72,8 @@ mod tests {
     use crate::peer_egress::options::AeadSuite;
     use crate::peer_egress::protocol::SecurePeerStream;
     use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
+    use std::sync::Barrier;
+    use std::thread;
 
     fn binding(route: u64, lane: u16) -> TransitPathBinding {
         TransitPathBinding::new(
@@ -143,21 +145,52 @@ mod tests {
         let dispatcher = TransitNextHopDispatcher::default();
         let binding = binding(7, 1);
 
-        for _ in 0..3 {
-            dispatcher.register(binding, test_peer_stream()?)?;
-            assert!(dispatcher.contains_binding(binding)?);
+        dispatcher.register(binding, test_peer_stream()?)?;
+        assert!(dispatcher.contains_binding(binding)?);
 
-            let error = match dispatcher.register(binding, test_peer_stream()?) {
-                Ok(()) => return Err("occupied binding must fail before claim".to_string()),
-                Err(error) => error,
-            };
-            assert!(error.contains("ambiguous"));
+        let claimed_peer = dispatcher.pop_for(binding)?;
+        drop(claimed_peer);
+        assert!(!dispatcher.contains_binding(binding)?);
 
-            let claimed_peer = dispatcher.pop_for(binding)?;
-            drop(claimed_peer);
-            assert!(!dispatcher.contains_binding(binding)?);
+        dispatcher.register(binding, test_peer_stream()?)?;
+        assert!(dispatcher.contains_binding(binding)?);
+        let claimed_again = dispatcher.pop_for(binding)?;
+        drop(claimed_again);
+        assert!(dispatcher.pop_for(binding).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_allows_only_one_concurrent_claim_for_binding() -> Result<(), String> {
+        let dispatcher = std::sync::Arc::new(TransitNextHopDispatcher::default());
+        let binding = binding(9, 1);
+        dispatcher.register(binding, test_peer_stream()?)?;
+
+        let barrier = std::sync::Arc::new(Barrier::new(3));
+        let mut handles = Vec::new();
+        for _ in 0..2 {
+            let dispatcher = dispatcher.clone();
+            let barrier = barrier.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                dispatcher.pop_for(binding).is_ok()
+            }));
         }
 
+        barrier.wait();
+        let successes = handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .map_err(|_| "claim thread panicked".to_string())
+            })
+            .collect::<Result<Vec<bool>, String>>()?
+            .into_iter()
+            .filter(|claimed| *claimed)
+            .count();
+
+        assert_eq!(successes, 1);
         assert!(dispatcher.pop_for(binding).is_err());
         Ok(())
     }

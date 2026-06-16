@@ -38,9 +38,7 @@ fn classify_local_ingress(first_byte: u8) -> LocalIngressBranch {
     }
 }
 
-fn pop_unique_local_transit_next_hop(
-    peer_pool: &SharedPeerPool,
-) -> Result<SecurePeerStream, String> {
+fn pop_next_local_transit_next_hop(peer_pool: &SharedPeerPool) -> Result<SecurePeerStream, String> {
     match peer_pool.try_pop_unique()? {
         UniquePeerPop::Ready(peer) => Ok(peer),
         UniquePeerPop::Unavailable => Err("sealed local transit next hop unavailable".to_string()),
@@ -178,7 +176,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
                     LocalIngressBranch::SealedTransit
                 ) =>
             {
-                let peer = match pop_unique_local_transit_next_hop(&peer_pool) {
+                let peer = match pop_next_local_transit_next_hop(&peer_pool) {
                     Ok(peer) => peer,
                     Err(error) => {
                         eprintln!(
@@ -249,7 +247,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LocalIngressBranch, classify_local_ingress, pop_unique_local_transit_next_hop};
+    use super::{LocalIngressBranch, classify_local_ingress, pop_next_local_transit_next_hop};
     use crate::peer_egress::options::AeadSuite;
     use crate::peer_egress::options::LOCAL_MAGIC;
     use crate::peer_egress::pool::new_shared_pool;
@@ -319,7 +317,7 @@ mod tests {
     #[test]
     fn local_sealed_transit_requires_available_next_hop() -> Result<(), String> {
         let pool = new_shared_pool();
-        let error = match pop_unique_local_transit_next_hop(&pool) {
+        let error = match pop_next_local_transit_next_hop(&pool) {
             Ok(_) => return Err("missing local transit next hop must fail".to_string()),
             Err(error) => error,
         };
@@ -331,7 +329,7 @@ mod tests {
     fn local_sealed_transit_accepts_single_next_hop() -> Result<(), String> {
         let pool = new_shared_pool();
         pool.push(test_peer_stream()?)?;
-        let peer = pop_unique_local_transit_next_hop(&pool)?;
+        let peer = pop_next_local_transit_next_hop(&pool)?;
         drop(peer);
         assert!(pool.try_pop()?.is_none());
         Ok(())
@@ -342,7 +340,7 @@ mod tests {
         let pool = new_shared_pool();
         pool.push(test_peer_stream()?)?;
         pool.push(test_peer_stream()?)?;
-        let error = match pop_unique_local_transit_next_hop(&pool) {
+        let error = match pop_next_local_transit_next_hop(&pool) {
             Ok(_) => return Err("ambiguous local transit next hop must fail".to_string()),
             Err(error) => error,
         };

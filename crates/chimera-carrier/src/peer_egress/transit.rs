@@ -200,9 +200,7 @@ pub fn forward_peer_sealed_transit_to_next_hop(
     let pool = next_hops.ok_or_else(|| "sealed transit next hop unavailable".to_string())?;
     let next_peer = match pool.try_pop_unique()? {
         UniquePeerPop::Ready(peer) => peer,
-        UniquePeerPop::Unavailable => {
-            return Err("sealed transit next hop unavailable".to_string());
-        }
+        UniquePeerPop::Unavailable => return Err("sealed transit next hop unavailable".to_string()),
         UniquePeerPop::Ambiguous => {
             return Err("sealed transit next hop ambiguous without path binding".to_string());
         }

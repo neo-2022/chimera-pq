@@ -183,8 +183,8 @@ fn peer_sealed_transit_denies_pool_next_hop_without_policy() -> Result<(), Strin
 #[test]
 fn peer_sealed_transit_rejects_ambiguous_pool_next_hop() -> Result<(), String> {
     let (mut source_writer, source_reader) = test_peer_pair()?;
-    let (first_next_writer, _first_next_reader) = test_peer_pair()?;
-    let (second_next_writer, _second_next_reader) = test_peer_pair()?;
+    let (first_next_writer, mut first_next_reader) = test_peer_pair()?;
+    let (second_next_writer, mut second_next_reader) = test_peer_pair()?;
     let first_encoded = encoded_frame(FrameKind::Data, 451, b"closed transit payload");
     source_writer.write_secure_payload(&first_encoded)?;
     let mut source_reader = source_reader;
@@ -209,6 +209,8 @@ fn peer_sealed_transit_rejects_ambiguous_pool_next_hop() -> Result<(), String> {
         Err(error) => error,
     };
     assert!(error.contains("ambiguous"));
+    assert!(first_next_reader.read_secure_payload().is_err());
+    assert!(second_next_reader.read_secure_payload().is_err());
     Ok(())
 }
 
