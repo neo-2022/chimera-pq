@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 START_EPOCH="$(date +%s)"
 
+just benchmark-regression-check
 just baseline-freeze
 just cleanroom-handoff-check
-just benchmark-regression-check
 just cef-track-report
 just cef-track-guard
 just cef-track-sync-guard

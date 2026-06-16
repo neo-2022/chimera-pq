@@ -694,6 +694,7 @@ ship-readiness-selfcheck:
     rg -q 'just rust-no-hardcode-guard' scripts/ship_readiness.sh
     rg -q 'just cef-phase1-smoke' scripts/ship_readiness.sh
     rg -q 'just benchmark-regression-check' scripts/ship_readiness.sh
+    line_bench=$(grep -n '^just benchmark-regression-check$' scripts/ship_readiness.sh | cut -d: -f1); line_baseline=$(grep -n '^just baseline-freeze$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); test -n "$line_bench" && test -n "$line_baseline" && test -n "$line_cleanroom" && test "$line_bench" -lt "$line_baseline" && test "$line_baseline" -lt "$line_cleanroom"
     rg -q 'just cef-track-report' scripts/ship_readiness.sh
     rg -q 'just cef-track-guard' scripts/ship_readiness.sh
     rg -q 'just cef-track-sync-guard' scripts/ship_readiness.sh
@@ -769,6 +770,7 @@ ship-readiness-selfcheck:
     rg -q 'ship-readiness-json-guard' justfile
     rg -q 'ship-readiness-freshness-guard-selfcheck' justfile
     rg -q 'ship-readiness-freshness-guard' justfile
+    awk '/^ship-report-contract-check:/{in_recipe=1; next} /^[[:alnum:]_-]+:/{in_recipe=0} in_recipe && /just baseline-verify/{found=1} END{exit found ? 0 : 1}' justfile
     rg -q 'json-no-dupe-guard-selfcheck' justfile
     rg -q 'json-no-dupe-guard' justfile
 
@@ -1715,6 +1717,7 @@ ship-report-contract-check:
     just ship-readiness-json-guard
     just ship-readiness-freshness-guard-selfcheck
     just ship-readiness-freshness-guard
+    just baseline-verify
     test -f docs/CEF_TRACK_REPORT.json
     test -f docs/benchmark_baseline.json
     test -f docs/benchmark_latest.json
