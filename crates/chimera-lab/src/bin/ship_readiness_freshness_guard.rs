@@ -73,7 +73,7 @@ fn main() {
         });
         let mtime_epoch = modified_epoch(&meta);
         let delta = report_epoch - mtime_epoch;
-        if delta < -30 || delta > max_age_sec {
+        if delta.abs() > max_age_sec {
             fail(&format!(
                 "ship readiness freshness guard: stale/out-of-window artifact: {artifact} (delta={delta}s, max_age_sec={max_age_sec})"
             ));

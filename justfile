@@ -1940,6 +1940,7 @@ ship-readiness-freshness-guard-selfcheck:
     rg -q 'ship readiness freshness guard: PASS' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     rg -q 'missing required artifact' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     rg -q 'stale/out-of-window artifact' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
+    rg -Fq 'delta.abs() > max_age_sec' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
 
 ship-nonregression-guard:
     bash scripts/ship_nonregression_guard.sh \
