@@ -185,29 +185,6 @@ fn validate_host_and_port(host: &str, port_raw: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::MeshDiscoveryRecord;
-
-    #[test]
-    fn mesh_discovery_endpoint_rejects_comma() {
-        let record = MeshDiscoveryRecord {
-            node_id: "node-a".to_string(),
-            endpoint: "198.51.100.10,443".to_string(),
-            region: "eu".to_string(),
-            load_score: 10,
-            reliability_score: 90,
-        };
-
-        let error = match record.validate() {
-            Ok(_) => return panic!("comma in endpoint must be rejected"),
-            Err(error) => error,
-        };
-
-        assert!(error.contains("comma"));
-    }
-}
-
 fn validate_label_field(value: &str, label: &str) -> Result<(), String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -237,4 +214,26 @@ fn validate_request_name_field(value: &str, label: &str) -> Result<(), String> {
         return Err(format!("{label} contains control whitespace"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MeshDiscoveryRecord;
+
+    #[test]
+    fn mesh_discovery_endpoint_rejects_comma() {
+        let record = MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "bad,host.example:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 10,
+            reliability_score: 90,
+        };
+
+        let result = record.validate();
+        assert!(result.is_err());
+        let error = result.err().unwrap_or_default();
+
+        assert!(error.contains("comma"));
+    }
 }
