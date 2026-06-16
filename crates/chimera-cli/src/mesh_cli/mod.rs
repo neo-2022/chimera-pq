@@ -2,8 +2,8 @@
 
 use chimera_carrier::peer_egress::write_transit_lane_registrations_from_mesh_plan;
 use chimera_mesh::{
-    MeshFailoverEvent, MeshJoinRequest, MeshPathPolicy, MeshPeerHealth, MeshPeerTablePolicy,
-    MeshRuntime,
+    MeshFailoverEvent, MeshJoinRequest, MeshPathPlan, MeshPathPolicy, MeshPeerHealth,
+    MeshPeerTablePolicy, MeshRuntime,
 };
 
 mod connect_probe_cmd;
@@ -231,7 +231,8 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
         Ok(value) => value,
         Err(error) => return emit_route_explain_error(&options, STAGE_PLAN_PATH, &error),
     };
-    let failover_selected = if let Some(failed_node) = options.failed_node_id.as_deref() {
+    let mut transit_lane_bindings_export_plan: &MeshPathPlan = &initial;
+    let failover_plan = if let Some(failed_node) = options.failed_node_id.as_deref() {
         match runtime.failover_plan_from_dps_payload(
             &request,
             &options.policy_payload,
@@ -240,18 +241,20 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
                 reason: "cli_manual_failover".to_string(),
             },
         ) {
-            Ok(plan) => plan
-                .selected_peers
-                .first()
-                .map(|peer| peer.node_id.clone())
-                .unwrap_or_default(),
+            Ok(plan) => Some(plan),
             Err(error) => return emit_route_explain_error(&options, STAGE_FAILOVER_PLAN, &error),
         }
     } else {
-        String::new()
+        None
     };
+    if let Some(plan) = failover_plan.as_ref()
+        && options.transit_lane_bindings_out_path.is_some()
+    {
+        transit_lane_bindings_export_plan = plan;
+    };
+    let failover_selected = selected_peer_node_id(failover_plan.as_ref()).unwrap_or_default();
 
-    let cooldown_selected = if let Some(cooldown_node) = options.cooldown_node_id.as_deref() {
+    let cooldown_plan = if let Some(cooldown_node) = options.cooldown_node_id.as_deref() {
         if let Err(error) = runtime.update_health_state(&[MeshPeerHealth {
             node_id: cooldown_node.to_string(),
             healthy: true,
@@ -264,18 +267,20 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
             &options.policy_payload,
             &[],
         ) {
-            Ok(plan) => plan
-                .selected_peers
-                .first()
-                .map(|peer| peer.node_id.clone())
-                .unwrap_or_default(),
+            Ok(plan) => Some(plan),
             Err(error) => {
                 return emit_route_explain_error(&options, STAGE_RESELECTION_PLAN, &error);
             }
         }
     } else {
-        String::new()
+        None
     };
+    if let Some(plan) = cooldown_plan.as_ref()
+        && options.transit_lane_bindings_out_path.is_some()
+    {
+        transit_lane_bindings_export_plan = plan;
+    };
+    let cooldown_selected = selected_peer_node_id(cooldown_plan.as_ref()).unwrap_or_default();
 
     let output = build_mesh_route_explain_output(MeshRouteExplainRender {
         contract_version: ROUTE_EXPLAIN_CONTRACT_VERSION,
@@ -285,16 +290,17 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
         cooldown_selected: &cooldown_selected,
     });
 
+    if let Some(path) = options.transit_lane_bindings_out_path.as_deref()
+        && let Err(error) =
+            write_transit_lane_registrations_from_mesh_plan(transit_lane_bindings_export_plan, path)
+    {
+        return emit_route_explain_error(&options, STAGE_TRANSIT_LANE_BINDINGS_EXPORT, &error);
+    }
     if let Some(path) = options.out_path.as_deref()
         && let Err(error) = std::fs::write(path, &output.json)
     {
         eprintln!("mesh route explain write failed: {error}");
         return 1;
-    }
-    if let Some(path) = options.transit_lane_bindings_out_path.as_deref()
-        && let Err(error) = write_transit_lane_registrations_from_mesh_plan(&initial, path)
-    {
-        return emit_route_explain_error(&options, STAGE_TRANSIT_LANE_BINDINGS_EXPORT, &error);
     }
     if options.json_output {
         println!("{}", output.json);
@@ -302,6 +308,11 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
         println!("{}", output.text);
     }
     0
+}
+
+fn selected_peer_node_id(plan: Option<&MeshPathPlan>) -> Option<String> {
+    plan.and_then(|plan| plan.selected_peers.first())
+        .map(|peer| peer.node_id.clone())
 }
 
 fn validate_simulation_nodes(

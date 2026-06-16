@@ -184,6 +184,15 @@ pub(crate) fn parse_mesh_route_explain_options(
     if peers.is_empty() {
         return Err("at least one --peer is required".to_string());
     }
+    if transit_lane_bindings_out_path.is_some()
+        && failed_node_id.is_some()
+        && cooldown_node_id.is_some()
+    {
+        return Err(
+            "cannot export transit lane bindings for both --failed-node and --cooldown-node"
+                .to_string(),
+        );
+    }
 
     Ok(MeshRouteExplainOptions {
         namespace,
