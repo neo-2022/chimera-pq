@@ -46,6 +46,24 @@ fn main() {
     require_bool_eq(report_obj, "mesh_route_explain_ok", true);
     require_bool_eq(report_obj, "mesh_auto_adaptive_ok", true);
     require_bool_eq(report_obj, "runtime_real_world_probe_smoke_ok", true);
+    let probe_mode = report_obj
+        .get("runtime_real_world_probe_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if !["live", "ci_snapshot"].contains(&probe_mode) {
+        fail("ship readiness json guard: invalid runtime_real_world_probe_mode");
+    }
+    let ci_snapshot = probe_mode == "ci_snapshot";
+    require_bool_eq(
+        report_obj,
+        "runtime_real_world_live_external_probe",
+        !ci_snapshot,
+    );
+    require_bool_eq(
+        report_obj,
+        "runtime_real_world_ssh_stand_required_for_live_probe",
+        ci_snapshot,
+    );
 
     let generated_at = require_ts_z(report_obj, "generated_at");
 
@@ -59,6 +77,9 @@ fn main() {
         .unwrap_or(false);
     require_bool_eq(truth, "lab_scope_only", true);
     require_bool_eq(truth, "real_world_datapath_closed", real_world_expected);
+    if ci_snapshot && real_world_expected {
+        fail("ship readiness json guard: ci_snapshot cannot close real-world datapath");
+    }
 
     for key in [
         "cef_track_report",
@@ -91,7 +112,7 @@ fn main() {
             ));
         }
     }
-    if let Err(msg) = validate_runtime_datapath_logic(report_obj) {
+    if let Err(msg) = validate_runtime_datapath_logic(report_obj, probe_mode) {
         fail(&msg);
     }
 
@@ -100,6 +121,8 @@ fn main() {
         "runtime_real_world_datapath_probe_ok",
         "runtime_real_world_direct_probe_ok",
         "runtime_real_world_skipped_no_curl",
+        "runtime_real_world_live_external_probe",
+        "runtime_real_world_ssh_stand_required_for_live_probe",
     ] {
         if report_obj.get(key).and_then(Value::as_bool).is_none() {
             fail(&format!(
@@ -107,7 +130,7 @@ fn main() {
             ));
         }
     }
-    if let Err(msg) = validate_direct_probe_visibility(report_obj) {
+    if let Err(msg) = validate_direct_probe_visibility(report_obj, probe_mode) {
         fail(&msg);
     }
 
@@ -119,6 +142,7 @@ fn main() {
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "ci_snapshot",
         "unknown",
     ]
     .contains(&probe_error)
@@ -128,6 +152,10 @@ fn main() {
 
     require_md_contains(&report_md_raw, "CEF track sync guard:");
     require_md_contains(&report_md_raw, "Truth boundary:");
+    require_md_contains(&report_md_raw, "Status: **PASS (LAB/SOURCE GATE ONLY)**");
+    if report_md_raw.lines().any(|line| line == "Status: **PASS**") {
+        fail("ship readiness json guard: markdown status must be lab/source scoped");
+    }
     require_md_contains(
         &report_md_raw,
         &format!(
@@ -146,6 +174,12 @@ fn main() {
     require_md_contains(
         &report_md_raw,
         "Runtime real-world datapath probe attempted:",
+    );
+    require_md_contains(&report_md_raw, "Runtime real-world probe mode:");
+    require_md_contains(&report_md_raw, "Runtime real-world live external probe:");
+    require_md_contains(
+        &report_md_raw,
+        "Runtime real-world SSH stand required for live probe:",
     );
     require_md_contains(&report_md_raw, "Runtime real-world datapath probe error:");
 
@@ -260,6 +294,7 @@ fn require_ordered_lines(md: &str, expected: &[&str]) {
 
 fn validate_runtime_datapath_logic(
     report_obj: &serde_json::Map<String, Value>,
+    probe_mode: &str,
 ) -> Result<(), String> {
     let total = report_obj
         .get("runtime_real_world_datapath_targets_total")
@@ -292,6 +327,7 @@ fn validate_runtime_datapath_logic(
         .get("runtime_real_world_datapath_probe_error")
         .and_then(Value::as_str)
         .unwrap_or("");
+    let ci_snapshot = probe_mode == "ci_snapshot";
 
     if attempted && total <= 0 {
         return Err(
@@ -309,6 +345,26 @@ fn validate_runtime_datapath_logic(
     }
     if skipped_no_curl && attempted {
         return Err("ship readiness json guard: no curl but datapath attempted".to_string());
+    }
+    if ci_snapshot {
+        if attempted || ok_flag || skipped_no_curl {
+            return Err(
+                "ship readiness json guard: ci_snapshot cannot report live probe attempt"
+                    .to_string(),
+            );
+        }
+        if total != 0 || ok != 0 || failed != 0 {
+            return Err(
+                "ship readiness json guard: ci_snapshot must have zero datapath totals".to_string(),
+            );
+        }
+        if probe_error != "ci_snapshot" {
+            return Err(
+                "ship readiness json guard: ci_snapshot requires ci_snapshot error marker"
+                    .to_string(),
+            );
+        }
+        return Ok(());
     }
     if !skipped_no_curl && !attempted {
         return Err(
@@ -329,11 +385,21 @@ fn validate_runtime_datapath_logic(
 
 fn validate_direct_probe_visibility(
     report_obj: &serde_json::Map<String, Value>,
+    probe_mode: &str,
 ) -> Result<(), String> {
     let direct_ok = report_obj
         .get("runtime_real_world_direct_probe_ok")
         .and_then(Value::as_bool)
         .ok_or_else(|| "ship readiness json guard: invalid direct probe field".to_string())?;
+    if probe_mode == "ci_snapshot" {
+        if direct_ok {
+            return Err(
+                "ship readiness json guard: ci_snapshot cannot report direct probe success"
+                    .to_string(),
+            );
+        }
+        return Ok(());
+    }
     let snapshot_ok = report_obj
         .get("runtime_real_world_probe_smoke_ok")
         .and_then(Value::as_bool)
@@ -393,7 +459,7 @@ mod tests {
     #[test]
     fn runtime_datapath_logic_accepts_valid_payload() {
         let payload = base_report_obj();
-        assert!(validate_runtime_datapath_logic(&payload).is_ok());
+        assert!(validate_runtime_datapath_logic(&payload, "live").is_ok());
     }
 
     #[test]
@@ -403,7 +469,7 @@ mod tests {
             "runtime_real_world_direct_probe_ok".to_string(),
             json!(false),
         );
-        assert!(validate_runtime_datapath_logic(&payload).is_ok());
+        assert!(validate_runtime_datapath_logic(&payload, "live").is_ok());
     }
 
     #[test]
@@ -413,7 +479,7 @@ mod tests {
             "runtime_real_world_datapath_targets_failed".to_string(),
             json!(1),
         );
-        let res = validate_runtime_datapath_logic(&payload);
+        let res = validate_runtime_datapath_logic(&payload, "live");
         assert!(res.is_err());
         assert!(res.err().is_some_and(|e| e.contains("totals mismatch")));
     }
@@ -433,7 +499,7 @@ mod tests {
             "runtime_real_world_datapath_targets_ok".to_string(),
             json!(0),
         );
-        let res = validate_runtime_datapath_logic(&payload);
+        let res = validate_runtime_datapath_logic(&payload, "live");
         assert!(res.is_err());
         assert!(res.err().is_some_and(|e| e.contains("must be attempted")));
     }
@@ -447,7 +513,7 @@ mod tests {
         );
         payload.insert("runtime_real_world_probe_smoke_ok".to_string(), json!(true));
 
-        assert!(validate_direct_probe_visibility(&payload).is_ok());
+        assert!(validate_direct_probe_visibility(&payload, "live").is_ok());
     }
 
     #[test]
@@ -462,8 +528,56 @@ mod tests {
             json!(false),
         );
 
-        let res = validate_direct_probe_visibility(&payload);
+        let res = validate_direct_probe_visibility(&payload, "live");
         assert!(res.is_err());
         assert!(res.err().is_some_and(|e| e.contains("must remain visible")));
+    }
+
+    #[test]
+    fn runtime_datapath_logic_accepts_ci_snapshot_contract() {
+        let mut payload = Map::new();
+        payload.insert(
+            "runtime_real_world_datapath_targets_total".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_targets_ok".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_targets_failed".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_probe_attempted".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_probe_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_skipped_no_curl".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_probe_error".to_string(),
+            json!("ci_snapshot"),
+        );
+        assert!(validate_runtime_datapath_logic(&payload, "ci_snapshot").is_ok());
+    }
+
+    #[test]
+    fn direct_probe_success_is_rejected_for_ci_snapshot() {
+        let mut payload = Map::new();
+        payload.insert(
+            "runtime_real_world_direct_probe_ok".to_string(),
+            json!(true),
+        );
+        payload.insert("runtime_real_world_probe_smoke_ok".to_string(), json!(true));
+
+        let res = validate_direct_probe_visibility(&payload, "ci_snapshot");
+        assert!(res.is_err());
+        assert!(res.err().is_some_and(|e| e.contains("ci_snapshot")));
     }
 }

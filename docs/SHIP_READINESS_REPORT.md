@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
-Status: **PASS**
-Generated at (UTC): `2026-06-16T00:30:34Z`
+Status: **PASS (LAB/SOURCE GATE ONLY)**
+Generated at (UTC): `2026-06-16T16:56:46Z`
 
 Checks:
 - Baseline freeze: `true`
@@ -40,12 +40,15 @@ Checks:
 - Runtime forced-stop rollback smoke (`recover without graceful down`): `true`
 - Runtime probe-access smoke (`batch targets + totals/threshold report`): `true`
 - Runtime real-world probe smoke (`transparent datapath snapshot only`): `true`
-- Runtime real-world direct probe ok: `true`
-- Runtime real-world datapath probe attempted: `true`
-- Runtime real-world datapath probe ok: `true`
-- Runtime real-world datapath probe error: `none`
-- Runtime real-world datapath targets total: `3`
-- Runtime real-world datapath targets ok: `3`
+- Runtime real-world probe mode: `ci_snapshot`
+- Runtime real-world live external probe: `false`
+- Runtime real-world SSH stand required for live probe: `true`
+- Runtime real-world direct probe ok: `false`
+- Runtime real-world datapath probe attempted: `false`
+- Runtime real-world datapath probe ok: `false`
+- Runtime real-world datapath probe error: `ci_snapshot`
+- Runtime real-world datapath targets total: `0`
+- Runtime real-world datapath targets ok: `0`
 - Runtime real-world datapath targets failed: `0`
 - Runtime real-world skipped no curl: `false`
 - Artifacts refreshed in this run: `true`

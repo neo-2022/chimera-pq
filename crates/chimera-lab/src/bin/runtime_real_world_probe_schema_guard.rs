@@ -43,6 +43,9 @@ fn validate_probe(data: &Value) -> Result<(), String> {
         "kind",
         "message_en",
         "message_ru",
+        "probe_mode",
+        "live_external_probe",
+        "ssh_stand_required_for_live_probe",
         "direct_url",
         "datapath_targets",
         "direct_probe_ok",
@@ -78,12 +81,36 @@ fn validate_probe(data: &Value) -> Result<(), String> {
     if get_str(obj, "network_state") != "not_modified" {
         return Err("probe network_state mismatch".to_string());
     }
-    for key in ["direct_url", "datapath_targets"] {
-        if get_str(obj, key).trim().is_empty() {
-            return Err(format!("probe string is empty: {key}"));
+    let probe_mode = get_str(obj, "probe_mode");
+    if !["live", "ci_snapshot"].contains(&probe_mode) {
+        return Err("probe mode invalid".to_string());
+    }
+    let ci_snapshot = probe_mode == "ci_snapshot";
+    if obj.get("live_external_probe").and_then(Value::as_bool) != Some(!ci_snapshot) {
+        return Err("probe live_external_probe mismatch".to_string());
+    }
+    if obj
+        .get("ssh_stand_required_for_live_probe")
+        .and_then(Value::as_bool)
+        != Some(ci_snapshot)
+    {
+        return Err("probe ssh_stand_required_for_live_probe mismatch".to_string());
+    }
+
+    if ci_snapshot {
+        for key in ["direct_url", "datapath_targets"] {
+            if !get_str(obj, key).is_empty() {
+                return Err(format!("ci snapshot string must be empty: {key}"));
+            }
+        }
+    } else {
+        for key in ["direct_url", "datapath_targets"] {
+            if get_str(obj, key).trim().is_empty() {
+                return Err(format!("probe string is empty: {key}"));
+            }
         }
     }
-    if !is_supported_probe_url(get_str(obj, "direct_url")) {
+    if !ci_snapshot && !is_supported_probe_url(get_str(obj, "direct_url")) {
         return Err("probe direct_url must use http/https".to_string());
     }
 
@@ -92,6 +119,8 @@ fn validate_probe(data: &Value) -> Result<(), String> {
         "datapath_probe_ok",
         "datapath_probe_attempted",
         "skipped_no_curl",
+        "live_external_probe",
+        "ssh_stand_required_for_live_probe",
     ] {
         if !obj.get(key).is_some_and(Value::is_boolean) {
             return Err(format!("probe bool type mismatch: {key}"));
@@ -136,6 +165,7 @@ fn validate_probe(data: &Value) -> Result<(), String> {
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "ci_snapshot",
         "unknown",
     ]
     .into_iter()
@@ -162,7 +192,17 @@ fn validate_probe(data: &Value) -> Result<(), String> {
             return Err("skipped_no_curl requires curl_not_found".to_string());
         }
     }
-    if !skipped_no_curl && !datapath_probe_attempted {
+    if ci_snapshot {
+        if get_bool(obj, "direct_probe_ok") || datapath_probe_ok || datapath_probe_attempted {
+            return Err("ci snapshot cannot report live probe success or attempt".to_string());
+        }
+        if skipped_no_curl {
+            return Err("ci snapshot must not masquerade as missing curl".to_string());
+        }
+        if get_str(obj, "datapath_probe_error") != "ci_snapshot" {
+            return Err("ci snapshot requires ci_snapshot error marker".to_string());
+        }
+    } else if !skipped_no_curl && !datapath_probe_attempted {
         return Err("datapath probe must be attempted when curl is available".to_string());
     }
     if datapath_probe_attempted && get_str(obj, "datapath_probe_error") == "curl_not_found" {
@@ -326,6 +366,9 @@ mod tests {
             "kind":"runtime_real_world_probe_smoke",
             "message_en":"ok",
             "message_ru":"ok",
+            "probe_mode":"live",
+            "live_external_probe": true,
+            "ssh_stand_required_for_live_probe": false,
             "direct_url":"https://direct.example",
             "datapath_targets":"https://target1.example,https://target2.example",
             "direct_probe_ok": true,
@@ -349,6 +392,34 @@ mod tests {
     #[test]
     fn validate_probe_accepts_valid_payload() {
         let payload = base_probe();
+        assert!(validate_probe(&payload).is_ok());
+    }
+
+    #[test]
+    fn validate_probe_accepts_ci_snapshot_payload() {
+        let payload = json!({
+            "status":"ok",
+            "kind":"runtime_real_world_probe_smoke",
+            "message_en":"ok",
+            "message_ru":"ok",
+            "probe_mode":"ci_snapshot",
+            "live_external_probe": false,
+            "ssh_stand_required_for_live_probe": true,
+            "direct_url":"",
+            "datapath_targets":"",
+            "direct_probe_ok": false,
+            "datapath_probe_ok": false,
+            "datapath_probe_attempted": false,
+            "datapath_probe_error":"ci_snapshot",
+            "direct_timeout_sec": 8,
+            "datapath_timeout_sec": 12,
+            "datapath_targets_total": 0,
+            "datapath_targets_ok": 0,
+            "datapath_targets_failed": 0,
+            "datapath_target_results":[],
+            "skipped_no_curl": false,
+            "network_state":"not_modified"
+        });
         assert!(validate_probe(&payload).is_ok());
     }
 

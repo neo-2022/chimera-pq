@@ -8,6 +8,8 @@ use std::process::Command;
 
 const DEFAULT_DIRECT_TIMEOUT_SEC: u64 = 8;
 const DEFAULT_DATAPATH_TIMEOUT_SEC: u64 = 12;
+const MODE_LIVE: &str = "live";
+const MODE_CI_SNAPSHOT: &str = "ci_snapshot";
 
 fn main() {
     let config_path = env::var("CHIMERA_REAL_WORLD_CONFIG")
@@ -16,44 +18,52 @@ fn main() {
 
     let out_json = resolve_setting("CHIMERA_REAL_WORLD_OUT_JSON", &file_cfg)
         .unwrap_or_else(|| "docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json".to_string());
-    let Some(direct_url) = resolve_non_empty_setting("CHIMERA_REAL_WORLD_DIRECT_URL", &file_cfg)
-    else {
-        eprintln!(
-            "runtime real-world probe: missing CHIMERA_REAL_WORLD_DIRECT_URL in env or {config_path}"
-        );
-        std::process::exit(2);
+    let probe_mode = resolve_probe_mode(&file_cfg);
+    let direct_url = if probe_mode == MODE_CI_SNAPSHOT {
+        String::new()
+    } else {
+        let Some(value) = resolve_non_empty_setting("CHIMERA_REAL_WORLD_DIRECT_URL", &file_cfg)
+        else {
+            eprintln!(
+                "runtime real-world probe: missing CHIMERA_REAL_WORLD_DIRECT_URL in env or {config_path}"
+            );
+            std::process::exit(2);
+        };
+        if !is_supported_probe_url(&value) {
+            eprintln!(
+                "runtime real-world probe: invalid CHIMERA_REAL_WORLD_DIRECT_URL (expected http/https): {value}"
+            );
+            std::process::exit(2);
+        }
+        value
     };
-    if !is_supported_probe_url(&direct_url) {
-        eprintln!(
-            "runtime real-world probe: invalid CHIMERA_REAL_WORLD_DIRECT_URL (expected http/https): {direct_url}"
-        );
-        std::process::exit(2);
-    }
 
-    let Some(datapath_targets_csv_raw) =
-        resolve_non_empty_setting("CHIMERA_REAL_WORLD_DATAPATH_TARGETS", &file_cfg)
-    else {
-        eprintln!(
-            "runtime real-world probe: missing CHIMERA_REAL_WORLD_DATAPATH_TARGETS in env or {config_path}"
-        );
-        std::process::exit(2);
+    let datapath_targets = if probe_mode == MODE_CI_SNAPSHOT {
+        Vec::new()
+    } else {
+        let Some(datapath_targets_csv_raw) =
+            resolve_non_empty_setting("CHIMERA_REAL_WORLD_DATAPATH_TARGETS", &file_cfg)
+        else {
+            eprintln!(
+                "runtime real-world probe: missing CHIMERA_REAL_WORLD_DATAPATH_TARGETS in env or {config_path}"
+            );
+            std::process::exit(2);
+        };
+        let values = parse_datapath_targets(&datapath_targets_csv_raw);
+        if values.is_empty() {
+            eprintln!(
+                "runtime real-world probe: CHIMERA_REAL_WORLD_DATAPATH_TARGETS has no valid targets after normalization"
+            );
+            std::process::exit(2);
+        }
+        if let Some(invalid) = values.iter().find(|target| !is_supported_probe_url(target)) {
+            eprintln!(
+                "runtime real-world probe: invalid datapath target URL (expected http/https): {invalid}"
+            );
+            std::process::exit(2);
+        }
+        values
     };
-    let datapath_targets = parse_datapath_targets(&datapath_targets_csv_raw);
-    if datapath_targets.is_empty() {
-        eprintln!(
-            "runtime real-world probe: CHIMERA_REAL_WORLD_DATAPATH_TARGETS has no valid targets after normalization"
-        );
-        std::process::exit(2);
-    }
-    if let Some(invalid) = datapath_targets
-        .iter()
-        .find(|target| !is_supported_probe_url(target))
-    {
-        eprintln!(
-            "runtime real-world probe: invalid datapath target URL (expected http/https): {invalid}"
-        );
-        std::process::exit(2);
-    }
     let datapath_targets_csv = format_datapath_targets_csv(&datapath_targets);
 
     let direct_timeout_sec = parse_u64_setting_with_min(
@@ -68,7 +78,6 @@ fn main() {
         DEFAULT_DATAPATH_TIMEOUT_SEC,
         1,
     );
-
     let have_curl = command_exists("curl");
     let mut direct_probe_ok = false;
     let mut datapath_probe_ok = false;
@@ -80,7 +89,9 @@ fn main() {
     let mut datapath_targets_failed = 0usize;
     let mut datapath_target_rows: Vec<(String, bool)> = Vec::new();
 
-    if !have_curl {
+    if probe_mode == MODE_CI_SNAPSHOT {
+        datapath_probe_error = MODE_CI_SNAPSHOT.to_string();
+    } else if !have_curl {
         skipped_no_curl = true;
         datapath_probe_error = "curl_not_found".to_string();
     } else {
@@ -120,6 +131,22 @@ fn main() {
     out.push_str("{\"status\":\"ok\",\"kind\":\"runtime_real_world_probe_smoke\",");
     out.push_str("\"message_en\":\"Real-world transparent datapath probe snapshot collected.\",");
     out.push_str("\"message_ru\":\"Снимок проверки прозрачного datapath собран.\",");
+    out.push_str("\"probe_mode\":\"");
+    out.push_str(&escape_json(&probe_mode));
+    out.push_str("\",");
+    out.push_str("\"live_external_probe\":");
+    out.push_str(if probe_mode == MODE_LIVE {
+        "true"
+    } else {
+        "false"
+    });
+    out.push_str(",\"ssh_stand_required_for_live_probe\":");
+    out.push_str(if probe_mode == MODE_LIVE {
+        "false"
+    } else {
+        "true"
+    });
+    out.push(',');
     out.push_str("\"direct_url\":\"");
     out.push_str(&escape_json(&direct_url));
     out.push_str("\",\"datapath_targets\":\"");
@@ -157,6 +184,27 @@ fn main() {
         std::process::exit(1);
     }
     println!("runtime real-world probe smoke: PASS");
+}
+
+fn resolve_probe_mode(file_cfg: &std::collections::BTreeMap<String, String>) -> String {
+    let raw = resolve_non_empty_setting("CHIMERA_REAL_WORLD_PROBE_MODE", file_cfg);
+    match select_probe_mode(raw) {
+        Ok(mode) => mode,
+        Err(raw) => {
+            eprintln!(
+                "runtime real-world probe: invalid CHIMERA_REAL_WORLD_PROBE_MODE value, expected live or ci_snapshot, got: {raw}"
+            );
+            std::process::exit(2);
+        }
+    }
+}
+
+fn select_probe_mode(raw: Option<String>) -> Result<String, String> {
+    let mode = raw.unwrap_or_else(|| MODE_LIVE.to_string());
+    match mode.as_str() {
+        MODE_LIVE | MODE_CI_SNAPSHOT => Ok(mode),
+        _ => Err(mode),
+    }
 }
 
 fn resolve_setting(
@@ -356,7 +404,7 @@ fn escape_json(input: &str) -> String {
 mod tests {
     use super::{
         extract_authority, format_datapath_targets_csv, is_supported_probe_url,
-        parse_datapath_targets, resolve_non_empty_setting,
+        parse_datapath_targets, resolve_non_empty_setting, select_probe_mode,
     };
     use std::collections::BTreeMap;
 
@@ -405,6 +453,19 @@ mod tests {
         );
         assert_eq!(resolve_non_empty_setting("B", &cfg), None);
         assert_eq!(resolve_non_empty_setting("C", &cfg), None);
+    }
+
+    #[test]
+    fn resolve_probe_mode_defaults_to_live() {
+        assert_eq!(select_probe_mode(None), Ok("live".to_string()));
+    }
+
+    #[test]
+    fn resolve_probe_mode_accepts_ci_snapshot() {
+        assert_eq!(
+            select_probe_mode(Some("ci_snapshot".to_string())),
+            Ok("ci_snapshot".to_string())
+        );
     }
 
     #[test]

@@ -26,6 +26,10 @@ fn main() {
     let runtime_route_file_ok = route.is_some();
     let runtime_forced_file_ok = forced.is_some();
 
+    let runtime_probe_mode = probe_str(&probe, "probe_mode");
+    let runtime_probe_live_external_probe = probe_bool(&probe, "live_external_probe");
+    let runtime_probe_ssh_stand_required_for_live_probe =
+        probe_bool(&probe, "ssh_stand_required_for_live_probe");
     let runtime_probe_direct_ok = probe_bool(&probe, "direct_probe_ok");
     let runtime_probe_datapath_ok = probe_bool(&probe, "datapath_probe_ok");
     let runtime_probe_datapath_attempted = probe_bool(&probe, "datapath_probe_attempted");
@@ -56,7 +60,10 @@ fn main() {
         .and_then(|r| r.get("down_state_clean").and_then(Value::as_bool))
         .unwrap_or(false);
 
-    let runtime_probe_path_ok = runtime_probe_direct_ok
+    let runtime_probe_path_ok = runtime_probe_mode == "live"
+        && runtime_probe_live_external_probe
+        && !runtime_probe_ssh_stand_required_for_live_probe
+        && runtime_probe_direct_ok
         && runtime_probe_datapath_ok
         && runtime_probe_datapath_attempted
         && runtime_probe_datapath_targets_total > 0
@@ -80,6 +87,9 @@ fn main() {
       "md_claim_closed":md_claim_closed,
       "md_claim_partial_not_closed":md_claim_partial,
       "runtime_probe_file_ok":runtime_probe_file_ok,
+      "runtime_probe_mode":runtime_probe_mode,
+      "runtime_probe_live_external_probe":runtime_probe_live_external_probe,
+      "runtime_probe_ssh_stand_required_for_live_probe":runtime_probe_ssh_stand_required_for_live_probe,
       "runtime_probe_direct_ok":runtime_probe_direct_ok,
       "runtime_probe_datapath_ok":runtime_probe_datapath_ok,
       "runtime_probe_datapath_attempted":runtime_probe_datapath_attempted,

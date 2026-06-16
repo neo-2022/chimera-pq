@@ -380,9 +380,18 @@ runtime-real-world-probe-smoke:
 runtime-real-world-probe-smoke-selfcheck:
     test -x scripts/runtime_real_world_probe_smoke.sh
     bash -n scripts/runtime_real_world_probe_smoke.sh
+    rg -q 'probe_mode="\$\{CHIMERA_REAL_WORLD_PROBE_MODE:-live\}"' scripts/runtime_real_world_probe_smoke.sh
+    rg -q 'live|ci_snapshot' scripts/runtime_real_world_probe_smoke.sh
+    rg -q 'invalid CHIMERA_REAL_WORLD_PROBE_MODE' scripts/runtime_real_world_probe_smoke.sh
     rg -q 'cargo run -q -p chimera-lab --bin runtime_real_world_probe' scripts/runtime_real_world_probe_smoke.sh
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'runtime_real_world_probe_smoke' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q '^fn resolve_probe_mode' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'CHIMERA_REAL_WORLD_PROBE_MODE' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'MODE_CI_SNAPSHOT' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'probe_mode' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'live_external_probe' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn resolve_non_empty_setting' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn format_datapath_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn is_supported_probe_url' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
@@ -403,6 +412,10 @@ runtime-real-world-probe-smoke-selfcheck:
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q '^fn normalize_datapath_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'normalize_datapath_probe_error_allows_only_known_values' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_probe_mode' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_live_external_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'ci_snapshot' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q '^fn normalize_datapath_target_totals' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'normalize_datapath_target_totals_clamps_negative_and_overflow' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
 
@@ -415,6 +428,10 @@ runtime-real-world-probe-schema-guard-selfcheck:
     rg -q 'cargo run -q -p chimera-lab --bin runtime_real_world_probe_schema_guard --' scripts/runtime_real_world_probe_schema_guard.sh
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'probe keys mismatch' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'probe_mode' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'live_external_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_accepts_ci_snapshot_payload' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'probe string is empty:' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'probe direct_url must use http/https' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'datapath target totals mismatch' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
@@ -488,6 +505,9 @@ reality-audit-refresh-selfcheck:
     rg -q 'runtime_probe_datapath_attempted' crates/chimera-lab/src/bin/reality_audit_refresh.rs
     rg -q 'runtime_probe_datapath_targets_failed' crates/chimera-lab/src/bin/reality_audit_refresh.rs
     rg -q 'runtime_probe_datapath_error' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_mode' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_live_external_probe' crates/chimera-lab/src/bin/reality_audit_refresh.rs
+    rg -q 'runtime_probe_ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/reality_audit_refresh.rs
     rg -q 'runtime_probe_path_ok' crates/chimera-lab/src/bin/reality_audit_refresh.rs
 
 reality-audit-schema-guard:
@@ -503,6 +523,9 @@ reality-audit-schema-guard-selfcheck:
     rg -q 'real_world_datapath_closed mismatch' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe_datapath_targets totals mismatch' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe_datapath_error invalid' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe_mode invalid' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe ci_snapshot cannot report live probe success' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'accepts_ci_snapshot_without_reality_closure' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe no curl but datapath attempted' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
@@ -721,7 +744,14 @@ ship-readiness-selfcheck:
     rg -q 'runtime_real_world_probe_env' scripts/ship_readiness.sh
     test -f crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'runtime_real_world_datapath_probe_error' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_probe_mode' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_live_external_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
     rg -q 'runtime_real_world_datapath_targets_total' crates/chimera-lab/src/bin/runtime_real_world_probe_env.rs
+    rg -q 'runtime_real_world_probe_mode' scripts/ship_readiness.sh
+    rg -q 'runtime_real_world_live_external_probe' scripts/ship_readiness.sh
+    rg -q 'runtime_real_world_ssh_stand_required_for_live_probe' scripts/ship_readiness.sh
+    rg -q 'ci_snapshot' scripts/ship_readiness.sh
     rg -q 'snapshot integrity gate, not a real-world closure claim' scripts/ship_readiness.sh
     rg -q 'Direct/external target failures remain visible' scripts/ship_readiness.sh
     ! rg -q 'runtime_real_world_direct_probe_ok.*== "true".*runtime_real_world_probe_smoke_ok=true' scripts/ship_readiness.sh
@@ -1718,9 +1748,12 @@ ship-report-contract-check:
     rg -q '"runtime_policy_precedence_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_forced_stop_rollback_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_probe_mode":"(live|ci_snapshot)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_live_external_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_ssh_stand_required_for_live_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_datapath_probe_attempted":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_datapath_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_datapath_probe_error":"(none|curl_not_found|datapath_target_failed|unknown)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_datapath_probe_error":"(none|curl_not_found|datapath_target_failed|ci_snapshot|unknown)"' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_direct_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_skipped_no_curl":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"artifacts_fresh":true' docs/SHIP_READINESS_REPORT.json
@@ -1880,6 +1913,7 @@ ship-readiness-json-guard-selfcheck:
     test -f crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'ship readiness json guard: PASS' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'missing truth_boundary' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'markdown status must be lab/source scoped' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'invalid CEF line order' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'runtime real-world totals mismatch' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath probe attempted with empty totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
@@ -1887,6 +1921,10 @@ ship-readiness-json-guard-selfcheck:
     rg -q 'datapath probe ok with failed targets' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'invalid runtime_real_world_probe_mode' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'ci_snapshot cannot close real-world datapath' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'ci_snapshot cannot report direct probe success' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'runtime_datapath_logic_accepts_ci_snapshot_contract' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'validate_direct_probe_visibility' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'direct_probe_failure_is_allowed_when_snapshot_gate_is_still_visible' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'direct_probe_failure_rejects_hidden_snapshot_failure' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
@@ -1932,6 +1970,8 @@ ship-nonregression-guard-selfcheck:
     rg -q 'datapath not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath error value is invalid' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath totals mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'probe mode value is invalid' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'ci_snapshot cannot report live probe attempt' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
 
 reality-truth-guard:
     bash scripts/reality_truth_guard.sh \

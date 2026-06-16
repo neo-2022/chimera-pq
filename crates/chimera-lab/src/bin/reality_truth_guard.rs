@@ -61,6 +61,19 @@ fn main() {
         &probe,
         "direct_probe_ok",
     );
+    eq_str_cross(&reality, "runtime_probe_mode", &probe, "probe_mode");
+    eq_bool_cross(
+        &reality,
+        "runtime_probe_live_external_probe",
+        &probe,
+        "live_external_probe",
+    );
+    eq_bool_cross(
+        &reality,
+        "runtime_probe_ssh_stand_required_for_live_probe",
+        &probe,
+        "ssh_stand_required_for_live_probe",
+    );
     eq_bool_cross(
         &reality,
         "runtime_probe_datapath_attempted",
@@ -103,6 +116,24 @@ fn main() {
         "runtime_real_world_direct_probe_ok",
         &reality,
         "runtime_probe_direct_ok",
+    );
+    eq_str_cross(
+        &ship,
+        "runtime_real_world_probe_mode",
+        &reality,
+        "runtime_probe_mode",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_live_external_probe",
+        &reality,
+        "runtime_probe_live_external_probe",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_ssh_stand_required_for_live_probe",
+        &reality,
+        "runtime_probe_ssh_stand_required_for_live_probe",
     );
     eq_bool_cross(
         &ship,
@@ -240,6 +271,7 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "ci_snapshot",
         "unknown",
     ]
     .contains(&error)
@@ -248,6 +280,36 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
     }
     if ok + failed != total {
         return Err("reality truth guard: datapath totals mismatch".to_string());
+    }
+    let probe_mode = ship
+        .get("runtime_real_world_probe_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if !["live", "ci_snapshot"].contains(&probe_mode) {
+        return Err("reality truth guard: probe mode value is invalid".to_string());
+    }
+    let ci_snapshot = probe_mode == "ci_snapshot";
+    if get_bool(ship, "runtime_real_world_live_external_probe") == ci_snapshot {
+        return Err("reality truth guard: live external probe flag mismatch".to_string());
+    }
+    if get_bool(ship, "runtime_real_world_ssh_stand_required_for_live_probe") != ci_snapshot {
+        return Err("reality truth guard: ssh stand required flag mismatch".to_string());
+    }
+    if ci_snapshot {
+        if attempted || ok_flag || skipped_no_curl {
+            return Err(
+                "reality truth guard: ci_snapshot cannot report live probe attempt".to_string(),
+            );
+        }
+        if total != 0 || ok != 0 || failed != 0 {
+            return Err("reality truth guard: ci_snapshot must have zero totals".to_string());
+        }
+        if error != "ci_snapshot" {
+            return Err(
+                "reality truth guard: ci_snapshot requires ci_snapshot error marker".to_string(),
+            );
+        }
+        return Ok(());
     }
     if skipped_no_curl && attempted {
         return Err("reality truth guard: no curl but datapath attempted".to_string());
@@ -284,6 +346,15 @@ mod tests {
 
     fn base_ship() -> Map<String, Value> {
         let mut m = Map::new();
+        m.insert("runtime_real_world_probe_mode".to_string(), json!("live"));
+        m.insert(
+            "runtime_real_world_live_external_probe".to_string(),
+            json!(true),
+        );
+        m.insert(
+            "runtime_real_world_ssh_stand_required_for_live_probe".to_string(),
+            json!(false),
+        );
         m.insert(
             "runtime_real_world_datapath_probe_attempted".to_string(),
             json!(true),

@@ -81,13 +81,13 @@ fn emit_string(
 
 fn normalize_datapath_probe_error(value: &str) -> &str {
     match value {
-        "none" | "curl_not_found" | "datapath_target_failed" | "unknown" => value,
+        "none" | "curl_not_found" | "datapath_target_failed" | "ci_snapshot" | "unknown" => value,
         _ => "unknown",
     }
 }
 
 fn render_exports(parsed: &Value) -> Vec<String> {
-    let mut out = Vec::with_capacity(8);
+    let mut out = Vec::with_capacity(11);
     let totals = normalize_datapath_target_totals(
         parsed
             .get("datapath_targets_total")
@@ -108,6 +108,27 @@ fn render_exports(parsed: &Value) -> Vec<String> {
         "direct_probe_ok",
         "runtime_real_world_direct_probe_ok",
         false,
+    );
+    emit_string(
+        &mut out,
+        parsed,
+        "probe_mode",
+        "runtime_real_world_probe_mode",
+        "unknown",
+    );
+    emit_bool(
+        &mut out,
+        parsed,
+        "live_external_probe",
+        "runtime_real_world_live_external_probe",
+        false,
+    );
+    emit_bool(
+        &mut out,
+        parsed,
+        "ssh_stand_required_for_live_probe",
+        "runtime_real_world_ssh_stand_required_for_live_probe",
+        true,
     );
     emit_bool(
         &mut out,
@@ -204,6 +225,14 @@ mod tests {
         );
         assert!(
             got.iter()
+                .any(|l| l == "runtime_real_world_probe_mode='unknown'")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_live_external_probe=false")
+        );
+        assert!(
+            got.iter()
                 .any(|l| l == "runtime_real_world_datapath_probe_error='unknown'")
         );
         assert!(
@@ -216,6 +245,9 @@ mod tests {
     fn maps_present_fields() {
         let got = render_exports(&json!({
             "direct_probe_ok": true,
+            "probe_mode": "ci_snapshot",
+            "live_external_probe": false,
+            "ssh_stand_required_for_live_probe": true,
             "datapath_probe_attempted": true,
             "datapath_probe_ok": false,
             "datapath_probe_error": "datapath_target_failed",
@@ -227,6 +259,14 @@ mod tests {
         assert!(
             got.iter()
                 .any(|l| l == "runtime_real_world_direct_probe_ok=true")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_probe_mode='ci_snapshot'")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_ssh_stand_required_for_live_probe=true")
         );
         assert!(
             got.iter()
@@ -268,6 +308,7 @@ mod tests {
             normalize_datapath_probe_error("datapath_target_failed"),
             "datapath_target_failed"
         );
+        assert_eq!(normalize_datapath_probe_error("ci_snapshot"), "ci_snapshot");
         assert_eq!(normalize_datapath_probe_error("unknown"), "unknown");
         assert_eq!(normalize_datapath_probe_error("something_else"), "unknown");
     }

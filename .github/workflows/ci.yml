@@ -53,6 +53,8 @@ jobs:
         run: cargo run -p chimera-lab --bin chimera-lab -- mvp-spec-check --json --out docs/mvp_spec_check_latest.json
 
       - name: Ship Readiness Full Gate
+        env:
+          CHIMERA_REAL_WORLD_PROBE_MODE: ci_snapshot
         run: just ship-readiness
 
       - name: Upload MVP/Ship Reports

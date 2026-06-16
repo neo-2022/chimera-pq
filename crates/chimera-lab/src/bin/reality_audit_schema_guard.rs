@@ -32,6 +32,9 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "md_claim_closed",
         "md_claim_partial_not_closed",
         "runtime_probe_file_ok",
+        "runtime_probe_mode",
+        "runtime_probe_live_external_probe",
+        "runtime_probe_ssh_stand_required_for_live_probe",
         "runtime_probe_direct_ok",
         "runtime_probe_datapath_ok",
         "runtime_probe_datapath_attempted",
@@ -70,6 +73,8 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "md_claim_closed",
         "md_claim_partial_not_closed",
         "runtime_probe_file_ok",
+        "runtime_probe_live_external_probe",
+        "runtime_probe_ssh_stand_required_for_live_probe",
         "runtime_probe_direct_ok",
         "runtime_probe_datapath_ok",
         "runtime_probe_datapath_attempted",
@@ -107,6 +112,7 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "ci_snapshot",
         "unknown",
     ]
     .contains(&datapath_error)
@@ -116,10 +122,36 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
     let datapath_attempted = get_bool(data, "runtime_probe_datapath_attempted");
     let datapath_ok = get_bool(data, "runtime_probe_datapath_ok");
     let skipped_no_curl = get_bool(data, "runtime_probe_skipped_no_curl");
+    let probe_mode = get_str(data, "runtime_probe_mode");
+    if !["live", "ci_snapshot"].contains(&probe_mode) {
+        return Err("runtime_probe_mode invalid".to_string());
+    }
+    let ci_snapshot = probe_mode == "ci_snapshot";
+    if get_bool(data, "runtime_probe_live_external_probe") == ci_snapshot {
+        return Err("runtime_probe_live_external_probe mismatch".to_string());
+    }
+    if get_bool(data, "runtime_probe_ssh_stand_required_for_live_probe") != ci_snapshot {
+        return Err("runtime_probe_ssh_stand_required_for_live_probe mismatch".to_string());
+    }
     if skipped_no_curl && datapath_attempted {
         return Err("runtime_probe no curl but datapath attempted".to_string());
     }
-    if !skipped_no_curl && !datapath_attempted {
+    if ci_snapshot {
+        if get_bool(data, "runtime_probe_direct_ok") || datapath_ok || datapath_attempted {
+            return Err("runtime_probe ci_snapshot cannot report live probe success".to_string());
+        }
+        if skipped_no_curl {
+            return Err(
+                "runtime_probe ci_snapshot must not masquerade as missing curl".to_string(),
+            );
+        }
+        if datapath_error != "ci_snapshot" {
+            return Err("runtime_probe ci_snapshot requires ci_snapshot error marker".to_string());
+        }
+        if total != 0 || ok != 0 || failed != 0 {
+            return Err("runtime_probe ci_snapshot must have zero target totals".to_string());
+        }
+    } else if !skipped_no_curl && !datapath_attempted {
         return Err("runtime_probe datapath must be attempted when curl is available".to_string());
     }
     if datapath_attempted && datapath_error == "curl_not_found" {
@@ -138,7 +170,10 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         return Err("runtime_probe datapath failed without error marker".to_string());
     }
 
-    let runtime_probe_path_ok = get_bool(data, "runtime_probe_direct_ok")
+    let runtime_probe_path_ok = probe_mode == "live"
+        && get_bool(data, "runtime_probe_live_external_probe")
+        && !get_bool(data, "runtime_probe_ssh_stand_required_for_live_probe")
+        && get_bool(data, "runtime_probe_direct_ok")
         && datapath_ok
         && datapath_attempted
         && total > 0
@@ -221,6 +256,12 @@ mod tests {
         m.insert("md_claim_closed".to_string(), json!(false));
         m.insert("md_claim_partial_not_closed".to_string(), json!(true));
         m.insert("runtime_probe_file_ok".to_string(), json!(true));
+        m.insert("runtime_probe_mode".to_string(), json!("live"));
+        m.insert("runtime_probe_live_external_probe".to_string(), json!(true));
+        m.insert(
+            "runtime_probe_ssh_stand_required_for_live_probe".to_string(),
+            json!(false),
+        );
         m.insert("runtime_probe_direct_ok".to_string(), json!(true));
         m.insert("runtime_probe_datapath_ok".to_string(), json!(true));
         m.insert("runtime_probe_datapath_attempted".to_string(), json!(true));
@@ -272,5 +313,36 @@ mod tests {
             res.err()
                 .is_some_and(|e| e.contains("datapath_error invalid"))
         );
+    }
+
+    #[test]
+    fn accepts_ci_snapshot_without_reality_closure() {
+        let mut payload = base();
+        payload.insert("runtime_probe_mode".to_string(), json!("ci_snapshot"));
+        payload.insert(
+            "runtime_probe_live_external_probe".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_probe_ssh_stand_required_for_live_probe".to_string(),
+            json!(true),
+        );
+        payload.insert("runtime_probe_direct_ok".to_string(), json!(false));
+        payload.insert("runtime_probe_datapath_ok".to_string(), json!(false));
+        payload.insert("runtime_probe_datapath_attempted".to_string(), json!(false));
+        payload.insert(
+            "runtime_probe_datapath_error".to_string(),
+            json!("ci_snapshot"),
+        );
+        payload.insert("runtime_probe_datapath_targets_total".to_string(), json!(0));
+        payload.insert("runtime_probe_datapath_targets_ok".to_string(), json!(0));
+        payload.insert(
+            "runtime_probe_datapath_targets_failed".to_string(),
+            json!(0),
+        );
+        payload.insert("runtime_evidence_closed".to_string(), json!(false));
+        payload.insert("real_world_datapath_closed".to_string(), json!(false));
+
+        assert!(validate_reality_audit(&payload).is_ok());
     }
 }

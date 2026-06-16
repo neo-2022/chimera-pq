@@ -89,6 +89,24 @@ fn main() {
         require_field(&rt_probe, "status", "ok");
         require_field(&rt_probe, "kind", "runtime_real_world_probe_smoke");
         require_field(&rt_probe, "network_state", "not_modified");
+        eq_str_cross(
+            &ship,
+            "runtime_real_world_probe_mode",
+            &rt_probe,
+            "probe_mode",
+        );
+        eq_bool_cross(
+            &ship,
+            "runtime_real_world_live_external_probe",
+            &rt_probe,
+            "live_external_probe",
+        );
+        eq_bool_cross(
+            &ship,
+            "runtime_real_world_ssh_stand_required_for_live_probe",
+            &rt_probe,
+            "ssh_stand_required_for_live_probe",
+        );
         eq_bool_cross(
             &ship,
             "runtime_real_world_datapath_probe_attempted",
@@ -288,6 +306,7 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "ci_snapshot",
         "unknown",
     ]
     .contains(&error)
@@ -296,6 +315,32 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
     }
     if ok + failed != total {
         return Err("datapath totals mismatch".to_string());
+    }
+    let probe_mode = get_str(ship, "runtime_real_world_probe_mode");
+    if !["live", "ci_snapshot"].contains(&probe_mode) {
+        return Err("probe mode value is invalid".to_string());
+    }
+    let ci_snapshot = probe_mode == "ci_snapshot";
+    if get_bool(ship, "runtime_real_world_live_external_probe") == ci_snapshot {
+        return Err("live external probe flag mismatch".to_string());
+    }
+    if get_bool(ship, "runtime_real_world_ssh_stand_required_for_live_probe") != ci_snapshot {
+        return Err("ssh stand required flag mismatch".to_string());
+    }
+    if ci_snapshot {
+        if attempted || ok_flag || skipped_no_curl {
+            return Err("ci_snapshot cannot report live probe attempt".to_string());
+        }
+        if total != 0 || ok != 0 || failed != 0 {
+            return Err("ci_snapshot must have zero datapath totals".to_string());
+        }
+        if error != "ci_snapshot" {
+            return Err("ci_snapshot requires ci_snapshot error marker".to_string());
+        }
+        if get_bool(ship, "runtime_real_world_direct_probe_ok") {
+            return Err("ci_snapshot cannot report direct probe success".to_string());
+        }
+        return Ok(());
     }
     if skipped_no_curl && attempted {
         return Err("no curl but datapath attempted".to_string());
