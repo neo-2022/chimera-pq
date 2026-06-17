@@ -4,6 +4,7 @@ use chimera_mesh::{
 };
 
 use crate::mesh_cli::nodes_inventory::{MeshNodesInventory, extract_flag_value};
+use crate::mesh_cli::probe_redaction::{endpoint_label, peer_label, public_node_label};
 
 use super::filter::parse_filter;
 use super::guard::{proof_pq_strict_enabled, verify_chimera_proof};
@@ -208,14 +209,14 @@ pub(super) fn probe_all(args: &[String], inventory: &MeshNodesInventory) -> i32 
                     report.selected_peers.len(),
                     report.attempts.len(),
                     if report.connected_peer.is_empty() {
-                        "none"
+                        "none".to_string()
                     } else {
-                        report.connected_peer.as_str()
+                        peer_label(&report, &report.connected_peer)
                     },
                     if report.connected_endpoint.is_empty() {
-                        "none"
+                        "none".to_string()
                     } else {
-                        report.connected_endpoint.as_str()
+                        endpoint_label(&report, &report.connected_endpoint)
                     }
                 );
             }
@@ -279,7 +280,10 @@ pub(super) fn auto_unblock(args: &[String], inventory: &MeshNodesInventory) -> i
                 eprintln!("mesh nodes auto-unblock error: persist runtime state failed: {error}");
                 return 1;
             }
-            println!("auto_unblock=ok node_id={}", best.node_id);
+            println!(
+                "auto_unblock=ok node_id={}",
+                public_node_label(&best.node_id.0)
+            );
             return 0;
         }
     }

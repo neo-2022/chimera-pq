@@ -75,7 +75,7 @@ fn nodes_probe_all_json_snapshot_stable() {
         explain: Vec::new(),
     };
     let json = render_probe_all_json(&report);
-    let expected = "{\"kind\":\"mesh_nodes_probe_all\",\"status\":\"ok\",\"contract_version\":1,\"network_state\":\"not_modified\",\"success\":true,\"selected\":1,\"attempts_count\":1,\"connected_peer\":\"de\",\"connected_endpoint\":\"127.0.0.1:443\",\"attempts\":[{\"peer_id\":\"de\",\"endpoint\":\"127.0.0.1:443\",\"success\":true,\"error\":\"\"}]}";
+    let expected = "{\"kind\":\"mesh_nodes_probe_all\",\"status\":\"ok\",\"contract_version\":1,\"network_state\":\"not_modified\",\"success\":true,\"selected\":1,\"attempts_count\":1,\"connected_peer\":\"peer#1\",\"connected_endpoint\":\"endpoint#1:<redacted>\",\"attempts\":[{\"peer_id\":\"peer#1\",\"endpoint\":\"endpoint#1:<redacted>\",\"success\":true,\"error\":\"\"}]}";
     assert_eq!(json, expected);
 }
 
@@ -97,7 +97,7 @@ fn nodes_state_view_json_snapshot_stable() {
     let args = vec!["--config".to_string(), config_path.display().to_string()];
     let inventory = load_mesh_nodes_inventory(&args).unwrap_or_else(|err| unreachable!("{err}"));
     let json = render_state_view_json(&inventory);
-    let expected = "{\"kind\":\"mesh_nodes_runtime_state_view\",\"status\":\"ok\",\"contract_version\":1,\"network_state\":\"not_modified\",\"current_node_id\":\"de\",\"pinned_node_id\":\"\",\"autoconnect\":true,\"restricted_mode\":false,\"restricted_reason\":\"\"}";
+    let expected = "{\"kind\":\"mesh_nodes_runtime_state_view\",\"status\":\"ok\",\"contract_version\":1,\"network_state\":\"not_modified\",\"current_node_id\":\"<redacted>\",\"pinned_node_id\":\"\",\"autoconnect\":true,\"restricted_mode\":false,\"restricted_reason\":\"\"}";
     assert_eq!(json, expected);
     let _ = fs::remove_file(config_path);
 }

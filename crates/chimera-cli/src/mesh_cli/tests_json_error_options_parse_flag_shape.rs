@@ -92,7 +92,7 @@ fn mesh_route_explain_json_options_parse_namespace_fallback_is_unknown_when_next
     );
     assert_options_parse_error_contract(&parsed, "unexpected positional argument 'node-client'");
     assert_eq!(parsed["namespace"].as_str().unwrap_or_default(), "unknown");
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "node-client");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn mesh_route_explain_json_options_parse_node_fallback_is_unknown_when_next_toke
         parsed["namespace"].as_str().unwrap_or_default(),
         "cef-public"
     );
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn mesh_route_explain_json_options_parse_namespace_fallback_is_unknown_when_valu
     );
     assert_options_parse_error_contract(&parsed, "missing --node");
     assert_eq!(parsed["namespace"].as_str().unwrap_or_default(), "unknown");
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 }
 
 #[test]
@@ -149,7 +149,7 @@ fn mesh_route_explain_json_options_parse_node_fallback_is_unknown_when_value_is_
         parsed["namespace"].as_str().unwrap_or_default(),
         "cef-public"
     );
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 }
 
 #[test]

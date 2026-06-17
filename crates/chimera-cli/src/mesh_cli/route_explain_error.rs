@@ -1,4 +1,5 @@
 use super::options::MeshRouteExplainOptions;
+use super::probe_redaction::redact_public_diagnostic_text;
 use super::route_explain_envelope::insert_route_explain_envelope;
 use super::route_explain_error_consts::*;
 use super::route_explain_integrity::build_route_explain_contract_integrity;
@@ -109,7 +110,7 @@ pub(crate) fn build_route_explain_error_json_with_identity(
         node_name,
     );
     insert_json(&mut object, "error_stage", error_stage);
-    insert_json(&mut object, "error", error);
+    insert_json(&mut object, "error", &redact_public_diagnostic_text(error));
     insert_error_operator_json(&mut object, &operator, error_stage, profile.action);
     insert_error_diagnostics_json(&mut object, &diagnostics);
     insert_error_recovery_json(&mut object, profile.action);

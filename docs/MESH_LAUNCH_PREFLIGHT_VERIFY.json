@@ -1,1 +1,1 @@
-{"status":"ready","all_ready":true,"vps_ready":true,"laptop_ready":true,"namespace":"cef-public","network_state":"not_modified","blockers":[]}
+{"status":"blocked","all_ready":false,"vps_ready":false,"laptop_ready":false,"namespace":"cef-public","network_state":"not_modified","blockers":["vps_report_not_ready","laptop_report_not_ready"]}

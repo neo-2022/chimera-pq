@@ -133,11 +133,11 @@ mod tests {
             "timeout_ms":1200,
             "ready_for_real_launch":true,
             "blockers":[],
-            "selected_peers":["n1"],
-            "connected_peer":"n1",
-            "connected_endpoint":"127.0.0.1:443",
+            "selected_peers":["peer#1"],
+            "connected_peer":"peer#1",
+            "connected_endpoint":"endpoint#1:<redacted>",
             "connect_probe_success":true,
-            "attempts":[{"peer_id":"n1","endpoint":"127.0.0.1:443","success":true,"error":""}],
+            "attempts":[{"peer_id":"peer#1","endpoint":"endpoint#1:<redacted>","success":true,"error":""}],
             "explain":["ok"]
         })
     }

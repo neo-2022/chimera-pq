@@ -315,7 +315,7 @@ fn mesh_route_explain_json_options_parse_contract_matrix() {
     );
     assert_options_parse_error_contract(&parsed, "missing --namespace");
     assert_eq!(parsed["namespace"].as_str().unwrap_or_default(), "unknown");
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "node-client");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 
     let parsed = run_route_explain_json(
         vec![
@@ -332,7 +332,7 @@ fn mesh_route_explain_json_options_parse_contract_matrix() {
         parsed["namespace"].as_str().unwrap_or_default(),
         "cef-public"
     );
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 
     let parsed = run_route_explain_json(
         vec![
@@ -344,7 +344,7 @@ fn mesh_route_explain_json_options_parse_contract_matrix() {
     );
     assert_options_parse_error_contract(&parsed, "missing --namespace");
     assert_eq!(parsed["namespace"].as_str().unwrap_or_default(), "unknown");
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 
     let parsed = run_route_explain_json(
         vec![
@@ -360,7 +360,7 @@ fn mesh_route_explain_json_options_parse_contract_matrix() {
     );
     assert_options_parse_error_contract(&parsed, "blank value for flag '--namespace'");
     assert_eq!(parsed["namespace"].as_str().unwrap_or_default(), "unknown");
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "node-client");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 
     let parsed = run_route_explain_json(
         vec![
@@ -379,7 +379,7 @@ fn mesh_route_explain_json_options_parse_contract_matrix() {
         parsed["namespace"].as_str().unwrap_or_default(),
         "cef-public"
     );
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 
     let parsed = run_route_explain_json(
         vec![
@@ -395,5 +395,5 @@ fn mesh_route_explain_json_options_parse_contract_matrix() {
     );
     assert_options_parse_error_contract(&parsed, "blank value for flag '--namespace'");
     assert_eq!(parsed["namespace"].as_str().unwrap_or_default(), "unknown");
-    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "unknown");
+    assert_eq!(parsed["node"].as_str().unwrap_or_default(), "<redacted>");
 }

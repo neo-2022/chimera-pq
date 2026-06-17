@@ -23,7 +23,7 @@ fn assert_required_case_with_identity(
     case_id: &str,
     expected_stage: &str,
     expected_namespace: &str,
-    expected_node: &str,
+    expected_public_node: &str,
     args: Vec<String>,
 ) {
     let connect_id = format!("parity_{case_id}_connect");
@@ -48,11 +48,11 @@ fn assert_required_case_with_identity(
         "launch wrong namespace for {case_id}"
     );
     assert_eq!(
-        connect["node"], expected_node,
+        connect["node"], expected_public_node,
         "connect wrong node for {case_id}"
     );
     assert_eq!(
-        launch["node"], expected_node,
+        launch["node"], expected_public_node,
         "launch wrong node for {case_id}"
     );
 }

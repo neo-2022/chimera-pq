@@ -30,13 +30,13 @@ Fields:
 - `success` (bool)
 - `selected` (number)
 - `attempts_count` (number)
-- `connected_peer` (string; `none` if empty)
-- `connected_endpoint` (string; `none` if empty)
+- `connected_peer` (redacted string; `peer#N`, `<redacted>`, or `none` if empty)
+- `connected_endpoint` (redacted string; `endpoint#N:<redacted>`, `<redacted>`, or `none` if empty)
 - `attempts` (array of objects):
-  - `peer_id` (string)
-  - `endpoint` (string)
+  - `peer_id` (redacted string; `peer#N` or `<redacted>`)
+  - `endpoint` (redacted string; `endpoint#N:<redacted>` or `<redacted>`)
   - `success` (bool)
-  - `error` (string)
+  - `error` (redacted string)
 
 Example:
 
@@ -49,12 +49,12 @@ Example:
   "success": true,
   "selected": 1,
   "attempts_count": 1,
-  "connected_peer": "de",
-  "connected_endpoint": "127.0.0.1:443",
+  "connected_peer": "peer#1",
+  "connected_endpoint": "endpoint#1:<redacted>",
   "attempts": [
     {
-      "peer_id": "de",
-      "endpoint": "127.0.0.1:443",
+      "peer_id": "peer#1",
+      "endpoint": "endpoint#1:<redacted>",
       "success": true,
       "error": ""
     }
@@ -67,8 +67,8 @@ Example:
 `kind = "mesh_nodes_runtime_state_view"`
 
 Fields:
-- `current_node_id` (string)
-- `pinned_node_id` (string)
+- `current_node_id` (redacted string; `<redacted>` or empty)
+- `pinned_node_id` (redacted string; `<redacted>` or empty)
 - `autoconnect` (bool or null)
 - `restricted_mode` (bool)
 - `restricted_reason` (string)
@@ -81,8 +81,8 @@ Example:
   "status": "ok",
   "contract_version": 1,
   "network_state": "not_modified",
-  "current_node_id": "de",
-  "pinned_node_id": "de",
+  "current_node_id": "<redacted>",
+  "pinned_node_id": "<redacted>",
   "autoconnect": true,
   "restricted_mode": false,
   "restricted_reason": ""
@@ -100,7 +100,7 @@ Fields:
 - `network_state` (`not_modified`)
 - `stage` (string)
 - `action` (string)
-- `message` (string)
+- `message` (redacted string)
 
 Example:
 

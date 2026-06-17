@@ -14,11 +14,11 @@ cleanup() {
 trap cleanup EXIT
 
 cat >"$VPS_JSON" <<'EOF'
-{"status":"ready","network_state":"not_modified","namespace":"cef-public","node":"node-a","timeout_ms":1200,"ready_for_real_launch":true,"blockers":[],"selected_peers":["node-b"],"connected_peer":"node-b","connected_endpoint":"127.0.0.1:443","connect_probe_success":true,"attempts":[{"peer_id":"node-b","endpoint":"127.0.0.1:443","success":true,"error":""}],"explain":["connect probe reached node-b via endpoint 127.0.0.1:443"]}
+{"status":"ready","network_state":"not_modified","namespace":"cef-public","node":"<redacted>","timeout_ms":1200,"ready_for_real_launch":true,"blockers":[],"selected_peers":["peer#1"],"connected_peer":"peer#1","connected_endpoint":"endpoint#1:<redacted>","connect_probe_success":true,"attempts":[{"peer_id":"peer#1","endpoint":"endpoint#1:<redacted>","success":true,"error":""}],"explain":["connect_probe_connected_peer=peer#1","connect_probe_connected_endpoint=endpoint#1:<redacted>"]}
 EOF
 
 cat >"$LAPTOP_JSON" <<'EOF'
-{"status":"ready","network_state":"not_modified","namespace":"cef-public","node":"node-b","timeout_ms":1200,"ready_for_real_launch":true,"blockers":[],"selected_peers":["node-a"],"connected_peer":"node-a","connected_endpoint":"127.0.0.1:443","connect_probe_success":true,"attempts":[{"peer_id":"node-a","endpoint":"127.0.0.1:443","success":true,"error":""}],"explain":["connect probe reached node-a via endpoint 127.0.0.1:443"]}
+{"status":"ready","network_state":"not_modified","namespace":"cef-public","node":"<redacted>","timeout_ms":1200,"ready_for_real_launch":true,"blockers":[],"selected_peers":["peer#1"],"connected_peer":"peer#1","connected_endpoint":"endpoint#1:<redacted>","connect_probe_success":true,"attempts":[{"peer_id":"peer#1","endpoint":"endpoint#1:<redacted>","success":true,"error":""}],"explain":["connect_probe_connected_peer=peer#1","connect_probe_connected_endpoint=endpoint#1:<redacted>"]}
 EOF
 
 cargo run -q -p chimera-cli -- mesh launch-preflight-verify \

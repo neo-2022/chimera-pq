@@ -31,7 +31,7 @@ fn mesh_route_explain_json_escapes_user_controlled_fields() {
     );
 
     assert_eq!(parsed["namespace"], "cef\"public");
-    assert_eq!(parsed["node"], "node\"client");
+    assert_eq!(parsed["node"], "<redacted>");
     assert_eq!(parsed["network_state"], expected_network_state());
 }
 

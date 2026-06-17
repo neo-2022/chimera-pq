@@ -132,10 +132,10 @@ fn launch_preflight_json_ready_shape() {
         .as_array()
         .unwrap_or_else(|| unreachable!("blockers should be array"));
     assert!(blockers.is_empty());
-    assert_eq!(parsed["connected_peer"].as_str().unwrap_or(""), "n1");
+    assert_eq!(parsed["connected_peer"].as_str().unwrap_or(""), "peer#1");
     assert_eq!(
         parsed["connected_endpoint"].as_str().unwrap_or(""),
-        format!("127.0.0.1:{}", addr.port())
+        "endpoint#1:<redacted>"
     );
 }
 
@@ -176,7 +176,7 @@ fn launch_preflight_json_rejects_duplicate_peer_node_ids() {
     );
     assert_eq!(
         parsed["error"].as_str().unwrap_or(""),
-        "duplicate peer node_id 'n1' in --peer set"
+        "duplicate peer node_id <redacted> in --peer set"
     );
 }
 
@@ -227,7 +227,7 @@ fn launch_preflight_json_matches_connect_probe_payload_on_blocked_probe() {
         normalized_explain_lines(&launch),
         normalized_explain_lines(&connect)
     );
-    let expected = expected_launch_payload_from_connect(&connect, "node-client", 25);
+    let expected = expected_launch_payload_from_connect(&connect, "<redacted>", 25);
     assert_eq!(canonicalize_launch_payload(&launch), expected);
 }
 
@@ -285,7 +285,7 @@ fn launch_preflight_json_matches_connect_probe_payload_on_ready_probe() {
         normalized_explain_lines(&launch),
         normalized_explain_lines(&connect)
     );
-    let expected = expected_launch_payload_from_connect(&connect, "node-client", 500);
+    let expected = expected_launch_payload_from_connect(&connect, "<redacted>", 500);
     assert_eq!(canonicalize_launch_payload(&launch), expected);
 }
 
@@ -313,7 +313,7 @@ fn launch_preflight_json_uses_clamped_timeout_projection_when_timeout_zero() {
     let launch =
         run_mesh_subcommand_json("launch-preflight", args, 1, "launch_preflight_timeout_zero");
 
-    let expected = expected_launch_payload_from_connect(&connect, "node-client", 1);
+    let expected = expected_launch_payload_from_connect(&connect, "<redacted>", 1);
     assert_eq!(canonicalize_launch_payload(&launch), expected);
 }
 
@@ -343,6 +343,6 @@ fn launch_preflight_json_uses_default_timeout_projection_when_timeout_missing() 
         "launch_preflight_timeout_default",
     );
 
-    let expected = expected_launch_payload_from_connect(&connect, "node-client", 1200);
+    let expected = expected_launch_payload_from_connect(&connect, "<redacted>", 1200);
     assert_eq!(canonicalize_launch_payload(&launch), expected);
 }

@@ -49,7 +49,7 @@ fn route_explain_error_json_escapes_user_fields() {
         ROUTE_EXPLAIN_CONTRACT_FAMILY
     );
     assert_eq!(parsed["namespace"], "cef\"public");
-    assert_eq!(parsed["node"], "node\"client");
+    assert_eq!(parsed["node"], "<redacted>");
     assert_eq!(parsed["error_stage"], ERROR_STAGE_PLAN_PATH);
     assert_eq!(parsed["error"], "zero \"eligible\"");
     assert_eq!(

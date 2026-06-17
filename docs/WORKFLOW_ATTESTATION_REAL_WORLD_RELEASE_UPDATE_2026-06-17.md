@@ -76,6 +76,30 @@ Known blocker themes from the council before this attestation:
 - VPS SSH preflight: reachable, has `curl`, `tar`, `sha256sum`.
 - SSH to GitHub on default port 22 timed out in this environment.
 - SSH authentication to GitHub over `ssh.github.com:443` succeeded.
+- Source gate PASS after public diagnostics redaction:
+  - `cargo fmt --all -- --check`
+  - `cargo check -q --workspace`
+  - `cargo test -q --workspace`
+  - `cargo clippy -q --workspace --all-targets -- -D warnings`
+- Release contract/source guards PASS:
+  - `bash scripts/anti_monolith_guard.sh`
+  - `just rust-no-hardcode-guard`
+  - `bash scripts/chimera_installer_gate.sh`
+  - `bash scripts/chimera_update_contract_smoke.sh`
+  - `bash scripts/chimera_start_contract_smoke.sh`
+  - `bash scripts/chimera_stop_contract_smoke.sh`
+  - mesh route/preflight public artifact guards
+  - `CHIMERA_REAL_WORLD_PROBE_MODE=ci_snapshot just ship-readiness`
+- Defects found and fixed during source gate:
+  - old public error tests expected raw `node`; updated expected public node to
+    `<redacted>`;
+  - `probe_redaction.rs` exceeded anti-monolith line limit; test code moved to
+    `probe_redaction_tests.rs`;
+  - guard test fixture used real VPS IP as a negative leak example; replaced
+    with non-stand example host.
+- Current `docs/SHIP_READINESS_REPORT.json` is lab/source scoped:
+  `status_scope=lab_source_gate_only`, `runtime_real_world_probe_mode=ci_snapshot`,
+  `runtime_real_world_datapath_probe_ok=false`.
 
 ## Not Closed Yet
 

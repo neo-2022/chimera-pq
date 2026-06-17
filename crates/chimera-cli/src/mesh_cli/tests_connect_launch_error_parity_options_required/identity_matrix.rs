@@ -218,7 +218,7 @@ fn connect_and_launch_error_contracts_match_on_error_identity_fallback_matrix() 
             "identity_missing_namespace",
             "options_parse",
             "unknown",
-            "node-client",
+            "<redacted>",
             vec![
                 "--node".to_string(),
                 "node-client".to_string(),
@@ -232,7 +232,7 @@ fn connect_and_launch_error_contracts_match_on_error_identity_fallback_matrix() 
             "identity_missing_node",
             "options_parse",
             "cef-public",
-            "unknown",
+            "<redacted>",
             vec![
                 "--namespace".to_string(),
                 "cef-public".to_string(),
@@ -246,7 +246,7 @@ fn connect_and_launch_error_contracts_match_on_error_identity_fallback_matrix() 
             "identity_missing_both",
             "options_parse",
             "unknown",
-            "unknown",
+            "<redacted>",
             vec![
                 "--policy-payload".to_string(),
                 "allow=mesh;mesh_max_peers=1;mesh_min_reliability=80".to_string(),
@@ -285,7 +285,7 @@ fn connect_and_launch_error_contracts_match_on_error_identity_preserve_matrix() 
                 "1".to_string(),
             ],
             "cef-stage",
-            "edge-node-7",
+            "<redacted>",
         ),
         (
             "identity_preserve_with_extra_flags",
@@ -303,16 +303,16 @@ fn connect_and_launch_error_contracts_match_on_error_identity_preserve_matrix() 
                 "-z".to_string(),
             ],
             "cef-prod",
-            "node-a",
+            "<redacted>",
         ),
     ];
 
-    for (case_id, args, expected_namespace, expected_node) in cases {
+    for (case_id, args, expected_namespace, expected_public_node) in cases {
         assert_required_case_with_identity(
             case_id,
             "options_parse",
             expected_namespace,
-            expected_node,
+            expected_public_node,
             args,
         );
     }

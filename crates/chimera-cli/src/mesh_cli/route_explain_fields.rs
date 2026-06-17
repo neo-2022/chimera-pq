@@ -1,3 +1,4 @@
+use super::probe_redaction::{public_diagnostic_node_label, redact_public_diagnostic_text};
 use super::route_explain_contract::{
     bool_text, compact_field_value, explain_value, explain_value_any,
     format_consistency_source_matrix, infer_dps_plan_setup_match_source,
@@ -16,67 +17,63 @@ use super::route_explain_types::{MeshRouteExplainFields, MeshRouteExplainRender}
 pub(crate) fn collect_mesh_route_explain_fields(
     render: MeshRouteExplainRender<'_>,
 ) -> MeshRouteExplainFields {
-    let initial_selected =
-        first_public_selected_peer(&render.initial.explain).unwrap_or_else(|| {
-            if render.initial.selected_peers.is_empty() {
-                "none".to_string()
-            } else {
-                "peer#1".to_string()
-            }
-        });
+    let public_explain = render
+        .initial
+        .explain
+        .iter()
+        .map(|line| redact_public_diagnostic_text(line))
+        .collect::<Vec<_>>();
+    let initial_selected = first_public_selected_peer(&public_explain).unwrap_or_else(|| {
+        if render.initial.selected_peers.is_empty() {
+            "none".to_string()
+        } else {
+            "peer#1".to_string()
+        }
+    });
     let preemptive_degraded_path =
-        explain_value(&render.initial.explain, "preemptive_shadow_degraded_path=")
-            .unwrap_or("false");
-    let preemptive_degraded_reason = explain_value(
-        &render.initial.explain,
-        "preemptive_shadow_degraded_reason=",
-    )
-    .unwrap_or("none");
+        explain_value(&public_explain, "preemptive_shadow_degraded_path=").unwrap_or("false");
+    let preemptive_degraded_reason =
+        explain_value(&public_explain, "preemptive_shadow_degraded_reason=").unwrap_or("none");
     let preemptive_shadow_switch_candidate_confidence = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_switch_candidate_confidence=",
     )
-    .or_else(|| {
-        explain_value(
-            &render.initial.explain,
-            "preemptive_shadow_switch_confidence=",
-        )
-    })
+    .or_else(|| explain_value(&public_explain, "preemptive_shadow_switch_confidence="))
     .unwrap_or("0.0000");
     let preemptive_shadow_switch_confidence_gate_min = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_switch_confidence_gate_min=",
     )
     .unwrap_or("0.0000");
     let preemptive_shadow_switch_confidence_gate_passed = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_switch_confidence_gate_passed=",
     )
     .unwrap_or("false");
     let preemptive_shadow_switch_candidate_sample_age_ticks = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_switch_candidate_sample_age_ticks=",
     )
     .unwrap_or("unknown");
     let preemptive_shadow_switch_confidence_summary = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_switch_confidence_summary=",
     )
     .unwrap_or("conf=0.0000;min=0.0000;passed=false;sample_age_ticks=unknown");
     let preemptive_shadow_switch_block_reason_chain = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_switch_block_reason_chain=",
     )
     .unwrap_or("reason=none;guard=none;source=none");
     let preemptive_shadow_candidate_readiness_summary = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "preemptive_shadow_candidate_readiness_summary=",
     )
     .unwrap_or("eligible=0;switch_valid=false;health_blocked=0;confidence_gate_passed=false;sample_age_ticks=unknown");
-    let auto_recovery = project_auto_recovery(&render.initial.explain);
-    let pressure = collect_pressure_fields(&render.initial.explain);
+    let auto_recovery = project_auto_recovery(&public_explain);
+    let pressure = collect_pressure_fields(&public_explain);
     let plan_setup_discovery_table_compact = explain_value_any(
-        &render.initial.explain,
+        &public_explain,
         &[
             "plan_setup_discovery_table_compact=",
             "status_plan_setup_discovery_table_compact=",
@@ -86,33 +83,33 @@ pub(crate) fn collect_mesh_route_explain_fields(
         "join_mode:Unknown;sources:0;entries_after:0;consistency_gate:unknown;degraded:false",
     );
     let dps_payload_plan_setup_compact_consistency = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "dps_payload_plan_setup_compact_consistency=",
     )
     .unwrap_or("gate_match:unknown;degraded_match:unknown");
     let dps_payload_preemptive_shadow_compact = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "dps_payload_preemptive_shadow_compact=",
     )
     .unwrap_or(
         "pri=0.00;stage=none;trigger=none;degraded=false;consistency_gate=unknown;setup_consistency=gate_match:unknown;degraded_match:unknown",
     );
     let dps_payload_setup_compact_consistency_match = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "dps_payload_setup_compact_consistency_match=",
     )
     .unwrap_or("false");
     let dps_payload_setup_compact_consistency_match_source =
-        infer_dps_setup_match_source(&render.initial.explain);
+        infer_dps_setup_match_source(&public_explain);
     let dps_payload_plan_setup_compact_consistency_match = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "dps_payload_plan_setup_discovery_table_compact_consistency_match=",
     )
     .unwrap_or("false");
     let dps_payload_plan_setup_compact_consistency_match_source =
-        infer_dps_plan_setup_match_source(&render.initial.explain);
+        infer_dps_plan_setup_match_source(&public_explain);
     let plan_setup_discovery_table_compact_consistency = explain_value_any(
-        &render.initial.explain,
+        &public_explain,
         &[
             "plan_setup_discovery_table_compact_consistency=",
             "status_plan_setup_discovery_table_compact_consistency=",
@@ -120,7 +117,7 @@ pub(crate) fn collect_mesh_route_explain_fields(
     )
     .unwrap_or("gate_match:unknown;degraded_match:unknown");
     let plan_setup_discovery_table_compact_consistency_match = explain_value_any(
-        &render.initial.explain,
+        &public_explain,
         &[
             "plan_setup_discovery_table_compact_consistency_match=",
             "status_plan_setup_discovery_table_compact_consistency_match=",
@@ -133,13 +130,13 @@ pub(crate) fn collect_mesh_route_explain_fields(
         ))
     });
     let plan_setup_discovery_table_compact_consistency_match_source =
-        infer_plan_setup_match_source(&render.initial.explain);
+        infer_plan_setup_match_source(&public_explain);
     let status_plan_setup_compact_consistency_match_source =
-        infer_status_plan_setup_match_source(&render.initial.explain);
+        infer_status_plan_setup_match_source(&public_explain);
     let status_setup_compact_consistency_match_source =
-        infer_status_setup_match_source(&render.initial.explain);
+        infer_status_setup_match_source(&public_explain);
     let setup_compact_consistency_match = explain_value(
-        &render.initial.explain,
+        &public_explain,
         "dps_payload_setup_compact_consistency_match=",
     )
     .unwrap_or_else(|| {
@@ -147,9 +144,9 @@ pub(crate) fn collect_mesh_route_explain_fields(
             dps_payload_plan_setup_compact_consistency,
         ))
     });
-    let setup_compact_consistency_match_source = infer_setup_match_source(&render.initial.explain);
+    let setup_compact_consistency_match_source = infer_setup_match_source(&public_explain);
     let status_preemptive_shadow_compact =
-        explain_value(&render.initial.explain, "status_preemptive_shadow_compact=").unwrap_or("");
+        explain_value(&public_explain, "status_preemptive_shadow_compact=").unwrap_or("");
     let status_shadow_setup_match_source_from_compact =
         compact_field_value(status_preemptive_shadow_compact, "setup_match_source")
             .unwrap_or("unknown");
@@ -177,7 +174,7 @@ pub(crate) fn collect_mesh_route_explain_fields(
         dps_shadow_setup_match_source_from_compact,
     ]);
     let table_runtime_consistency_gate = explain_value_any(
-        &render.initial.explain,
+        &public_explain,
         &[
             "peer_table_runtime_consistency_gate=",
             "status_table_runtime_consistency_gate=",
@@ -221,18 +218,14 @@ pub(crate) fn collect_mesh_route_explain_fields(
     let connect_recovery_projection =
         build_connect_recovery_projection(&route_explain_operator_summary.action);
     let selected_peer_connect_retry_plan =
-        explain_value(&render.initial.explain, "selected_peer_connect_retry_plan=")
-            .unwrap_or("none");
-    let selected_peer_connect_backoff_profile = explain_value(
-        &render.initial.explain,
-        "selected_peer_connect_backoff_profile=",
-    )
-    .unwrap_or("none");
+        explain_value(&public_explain, "selected_peer_connect_retry_plan=").unwrap_or("none");
+    let selected_peer_connect_backoff_profile =
+        explain_value(&public_explain, "selected_peer_connect_backoff_profile=").unwrap_or("none");
 
     MeshRouteExplainFields {
         contract_version: render.contract_version.to_string(),
         namespace: render.options.namespace.clone(),
-        node_name: render.options.node_name.clone(),
+        node_name: public_diagnostic_node_label(&render.options.node_name),
         join_mode: render.initial.join_mode.clone(),
         initial_selected,
         failover_selected: render.failover_selected.to_string(),
@@ -329,7 +322,7 @@ pub(crate) fn collect_mesh_route_explain_fields(
         selection_pressure_reason: pressure.selection_reason.to_string(),
         selected_peer_connect_retry_plan: selected_peer_connect_retry_plan.to_string(),
         selected_peer_connect_backoff_profile: selected_peer_connect_backoff_profile.to_string(),
-        explain: render.initial.explain.join(" | "),
+        explain: public_explain.join(" | "),
     }
 }
 

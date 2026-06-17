@@ -466,15 +466,15 @@ pub(crate) fn render_mesh_auto_adaptive_trace_json() -> String {
         "namespace": "cef-public",
         "plans": {
             "auto_baseline": {
-                "selected_peer": auto_plan.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&auto_plan.explain),
                 "explain": auto_plan.explain,
             },
             "auto_degraded": {
-                "selected_peer": degraded_plan.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&degraded_plan.explain),
                 "explain": degraded_plan.explain,
             },
             "manual_override": {
-                "selected_peer": manual_plan.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&manual_plan.explain),
                 "explain": manual_plan.explain,
             }
         },

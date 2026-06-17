@@ -1,5 +1,9 @@
 use crate::mesh_cli::connect_probe_flow::run_mesh_connect_probe_flow;
 use crate::mesh_cli::options;
+use crate::mesh_cli::probe_redaction::{
+    endpoint_label, peer_label, public_diagnostic_node_label, redact_explain_line,
+    redact_public_diagnostic_text, selected_peer_labels,
+};
 use crate::mesh_cli::route_explain_error::emit_route_explain_error;
 use crate::mesh_cli::route_explain_error_consts::STAGE_OPTIONS_PARSE;
 use chimera_mesh::MeshConnectProbeReport;
@@ -70,8 +74,7 @@ fn render_launch_preflight_output(
         "connectivity_probe_failed".to_string()
     };
     if json_output {
-        let selected_peers = report
-            .selected_peers
+        let selected_peers = selected_peer_labels(report)
             .iter()
             .map(|v| format!("\"{}\"", escape_json(v)))
             .collect::<Vec<_>>()
@@ -82,10 +85,10 @@ fn render_launch_preflight_output(
             .map(|attempt| {
                 format!(
                     "{{\"peer_id\":\"{}\",\"endpoint\":\"{}\",\"success\":{},\"error\":\"{}\"}}",
-                    escape_json(&attempt.peer_id),
-                    escape_json(&attempt.endpoint),
+                    escape_json(&peer_label(report, &attempt.peer_id)),
+                    escape_json(&endpoint_label(report, &attempt.endpoint)),
                     if attempt.success { "true" } else { "false" },
-                    escape_json(&attempt.error)
+                    escape_json(&redact_public_diagnostic_text(&attempt.error))
                 )
             })
             .collect::<Vec<_>>()
@@ -93,7 +96,8 @@ fn render_launch_preflight_output(
         let explain = report
             .explain
             .iter()
-            .map(|v| format!("\"{}\"", escape_json(v)))
+            .map(|line| redact_explain_line(line, report))
+            .map(|v| format!("\"{}\"", escape_json(&v)))
             .collect::<Vec<_>>()
             .join(",");
         let blockers_json = if blockers.is_empty() {
@@ -109,7 +113,7 @@ fn render_launch_preflight_output(
                 "blocked"
             },
             escape_json(&report.namespace),
-            escape_json(node_name),
+            escape_json(&public_diagnostic_node_label(node_name)),
             timeout_ms,
             if ready_for_real_launch {
                 "true"
@@ -118,8 +122,8 @@ fn render_launch_preflight_output(
             },
             blockers_json,
             selected_peers,
-            escape_json(&report.connected_peer),
-            escape_json(&report.connected_endpoint),
+            escape_json(&peer_label(report, &report.connected_peer)),
+            escape_json(&endpoint_label(report, &report.connected_endpoint)),
             if report.success { "true" } else { "false" },
             attempts,
             explain,
@@ -129,7 +133,10 @@ fn render_launch_preflight_output(
         out.push_str("mesh launch preflight\n");
         out.push_str("network_state: not_modified\n");
         out.push_str(&format!("namespace: {}\n", report.namespace));
-        out.push_str(&format!("node: {}\n", node_name));
+        out.push_str(&format!(
+            "node: {}\n",
+            public_diagnostic_node_label(node_name)
+        ));
         out.push_str(&format!("timeout_ms: {}\n", timeout_ms));
         out.push_str(&format!(
             "ready_for_real_launch: {}\n",
@@ -139,22 +146,28 @@ fn render_launch_preflight_output(
             out.push_str(&format!("blocker: {}\n", blockers));
         }
         out.push_str(&format!("connect_probe_success: {}\n", report.success));
-        out.push_str(&format!("connected_peer: {}\n", report.connected_peer));
+        out.push_str(&format!(
+            "connected_peer: {}\n",
+            peer_label(report, &report.connected_peer)
+        ));
         out.push_str(&format!(
             "connected_endpoint: {}\n",
-            report.connected_endpoint
+            endpoint_label(report, &report.connected_endpoint)
         ));
         out.push_str("attempts:\n");
         for attempt in &report.attempts {
             if attempt.success {
                 out.push_str(&format!(
                     "  - {} {} ok\n",
-                    attempt.peer_id, attempt.endpoint
+                    peer_label(report, &attempt.peer_id),
+                    endpoint_label(report, &attempt.endpoint)
                 ));
             } else {
                 out.push_str(&format!(
                     "  - {} {} fail ({})\n",
-                    attempt.peer_id, attempt.endpoint, attempt.error
+                    peer_label(report, &attempt.peer_id),
+                    endpoint_label(report, &attempt.endpoint),
+                    redact_public_diagnostic_text(&attempt.error)
                 ));
             }
         }

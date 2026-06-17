@@ -14,6 +14,9 @@ mod launch_preflight_verify_cmd;
 mod nodes_inventory;
 mod nodes_render;
 mod options;
+mod probe_redaction;
+#[cfg(test)]
+mod probe_redaction_tests;
 mod route_explain_contract;
 mod route_explain_envelope;
 mod route_explain_error;

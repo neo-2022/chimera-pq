@@ -35,7 +35,10 @@ fn validate_obj(obj: &serde_json::Map<String, Value>) -> Result<(), String> {
     require_str(obj, "explain_contract_version", "mesh_explain_v1")?;
     require_str(obj, "network_state", "not_modified")?;
     require_str(obj, "namespace", "cef-public")?;
-    require_str(obj, "node", "node-client")?;
+    require_str(obj, "node", "<redacted>")?;
+    for (key, value) in obj {
+        require_no_raw_public_value(key, value)?;
+    }
 
     require_non_empty_str(obj, "error_stage")?;
     require_non_empty_str(obj, "error")?;
@@ -81,6 +84,61 @@ fn validate_obj(obj: &serde_json::Map<String, Value>) -> Result<(), String> {
         &expected_projection_key,
     )?;
     Ok(())
+}
+
+fn require_no_raw_public_value(key: &str, value: &Value) -> Result<(), String> {
+    match value {
+        Value::String(text) => {
+            if key == "namespace" {
+                return Ok(());
+            }
+            require_no_raw_public_text(text)
+        }
+        Value::Array(values) => {
+            for item in values {
+                require_no_raw_public_value(key, item)?;
+            }
+            Ok(())
+        }
+        Value::Object(map) => {
+            for (child_key, child_value) in map {
+                require_no_raw_public_value(child_key, child_value)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn require_no_raw_public_text(text: &str) -> Result<(), String> {
+    if text.contains("node-")
+        || text.contains("node_id=")
+        || text.contains("peer_id=")
+        || text.contains("ports=443")
+        || text.contains("ports=8443")
+        || text.contains("127.0.0.1")
+        || text.contains("192.168.")
+        || text.contains("91.124.")
+        || text.contains("198.51.")
+        || text.contains("203.0.113.")
+        || text_contains_socket_hint(text)
+    {
+        return Err("mesh route explain error guard: raw public diagnostic leak".to_string());
+    }
+    Ok(())
+}
+
+fn text_contains_socket_hint(text: &str) -> bool {
+    text.split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | ';' | '"' | '\'' | '[' | ']'))
+        .any(|token| {
+            token.rsplit_once(':').is_some_and(|(host, port)| {
+                port.parse::<u16>().is_ok()
+                    && (host.contains('.')
+                        || host.contains('[')
+                        || host.contains(']')
+                        || host == "localhost")
+            })
+        })
 }
 
 fn require_str<'a>(
@@ -143,7 +201,7 @@ mod tests {
         );
         m.insert("network_state".into(), Value::String("not_modified".into()));
         m.insert("namespace".into(), Value::String("cef-public".into()));
-        m.insert("node".into(), Value::String("node-client".into()));
+        m.insert("node".into(), Value::String("<redacted>".into()));
         m.insert("error_stage".into(), Value::String("policy_parse".into()));
         m.insert(
             "error".into(),

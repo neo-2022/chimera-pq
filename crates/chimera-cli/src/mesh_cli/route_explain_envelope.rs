@@ -1,3 +1,4 @@
+use super::probe_redaction::public_diagnostic_node_label;
 use super::route_explain_json_insert::insert_json;
 use super::route_explain_meta::ROUTE_EXPLAIN_CONTRACT_FAMILY;
 
@@ -18,7 +19,7 @@ pub(crate) fn insert_route_explain_envelope(
     );
     insert_json(object, "explain_contract_version", contract_version);
     insert_json(object, "namespace", namespace);
-    insert_json(object, "node", node);
+    insert_json(object, "node", &public_diagnostic_node_label(node));
 }
 
 #[cfg(test)]
@@ -49,7 +50,7 @@ mod tests {
         );
         assert_eq!(value["explain_contract_version"], "mesh_explain_v1");
         assert_eq!(value["namespace"], "cef-public");
-        assert_eq!(value["node"], "node-client");
+        assert_eq!(value["node"], "<redacted>");
     }
 
     #[test]
@@ -72,6 +73,6 @@ mod tests {
         );
         assert_eq!(value["explain_contract_version"], "mesh_explain_v1");
         assert_eq!(value["namespace"], "cef-public");
-        assert_eq!(value["node"], "node-client");
+        assert_eq!(value["node"], "<redacted>");
     }
 }

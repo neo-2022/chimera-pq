@@ -1,6 +1,9 @@
 use chimera_mesh::MeshConnectProbeReport;
 
 use crate::mesh_cli::nodes_inventory::MeshNodesInventory;
+use crate::mesh_cli::probe_redaction::{
+    endpoint_label, peer_label, public_node_label, redact_public_diagnostic_text,
+};
 
 pub(crate) fn render_nodes_json_error(
     kind: &str,
@@ -19,7 +22,7 @@ pub(crate) fn render_nodes_json_error(
         CONTRACT_VERSION,
         escape_json(stage),
         escape_json(action),
-        escape_json(message),
+        escape_json(&redact_public_diagnostic_text(message)),
         escape_json(&error_signature),
         escape_json(&error_route_key)
     )
@@ -33,10 +36,10 @@ pub(crate) fn render_probe_all_json(report: &MeshConnectProbeReport) -> String {
         .map(|a| {
             format!(
                 "{{\"peer_id\":\"{}\",\"endpoint\":\"{}\",\"success\":{},\"error\":\"{}\"}}",
-                escape_json(&a.peer_id),
-                escape_json(&a.endpoint),
+                escape_json(&peer_label(report, &a.peer_id)),
+                escape_json(&endpoint_label(report, &a.endpoint)),
                 if a.success { "true" } else { "false" },
-                escape_json(&a.error)
+                escape_json(&redact_public_diagnostic_text(&a.error))
             )
         })
         .collect::<Vec<_>>()
@@ -47,15 +50,15 @@ pub(crate) fn render_probe_all_json(report: &MeshConnectProbeReport) -> String {
         if report.success { "true" } else { "false" },
         report.selected_peers.len(),
         report.attempts.len(),
-        escape_json(if report.connected_peer.is_empty() {
-            "none"
+        escape_json(&if report.connected_peer.is_empty() {
+            "none".to_string()
         } else {
-            &report.connected_peer
+            peer_label(report, &report.connected_peer)
         }),
-        escape_json(if report.connected_endpoint.is_empty() {
-            "none"
+        escape_json(&if report.connected_endpoint.is_empty() {
+            "none".to_string()
         } else {
-            &report.connected_endpoint
+            endpoint_label(report, &report.connected_endpoint)
         }),
         attempts
     )
@@ -69,13 +72,13 @@ pub(crate) fn render_state_view_json(inventory: &MeshNodesInventory) -> String {
         inventory
             .current_node
             .as_ref()
-            .map(|v| v.0.as_str())
-            .unwrap_or(""),
+            .map(|v| public_node_label(&v.0))
+            .unwrap_or_default(),
         inventory
             .pinned_node
             .as_ref()
-            .map(|v| v.0.as_str())
-            .unwrap_or(""),
+            .map(|v| public_node_label(&v.0))
+            .unwrap_or_default(),
         match inventory.autoconnect_enabled {
             Some(true) => "true",
             Some(false) => "false",

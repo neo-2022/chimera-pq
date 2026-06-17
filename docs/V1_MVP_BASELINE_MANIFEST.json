@@ -1,6 +1,6 @@
 {
   "kind": "v1_mvp_baseline_manifest",
-  "created_at": "2026-06-16",
+  "created_at": "2026-06-17",
   "scope": "CHIMERA-PQ MVP M5/M6 baseline artifacts",
   "network_state": "not_modified",
   "artifacts": [
@@ -17,7 +17,7 @@
     ,{
       "path": "docs/benchmark_latest.json",
       "size_bytes": 548,
-      "sha256": "0fb47c73bf59120537ce180965efdafeb7142c71994c22df12ee2ded33f2fc8f"
+      "sha256": "199fc4ad8c9da9e283ee8b0957c270f3008b1998ec3f9a697490b493aff95a81"
     }
     ,{
       "path": "docs/benchmark_baseline.json",

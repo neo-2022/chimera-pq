@@ -63,10 +63,14 @@ fn require_phase_and_marker(plans: &serde_json::Map<String, Value>, phase: &str,
     if selected_peer.is_empty() {
         fail("mesh auto adaptive trace guard: selected_peer empty");
     }
+    if !is_public_peer_label(selected_peer) {
+        fail("mesh auto adaptive trace guard: selected_peer is not redacted");
+    }
     let explain = phase_obj
         .get("explain")
         .and_then(Value::as_array)
         .unwrap_or_else(|| fail("mesh auto adaptive trace guard: missing explain"));
+    reject_raw_public_trace_values(explain);
     if !explain.iter().any(|entry| {
         entry
             .as_str()
@@ -75,6 +79,36 @@ fn require_phase_and_marker(plans: &serde_json::Map<String, Value>, phase: &str,
     }) {
         fail("mesh auto adaptive trace guard: explain marker missing");
     }
+}
+
+fn reject_raw_public_trace_values(explain: &[Value]) {
+    for entry in explain {
+        let Some(text) = entry.as_str() else {
+            fail("mesh auto adaptive trace guard: explain entry is not string");
+        };
+        for blocked in [
+            "selected_peer_ids=node-",
+            "selected_peer_endpoints=198.51.",
+            "selected_peer_connect_priority=1:node-",
+            "selected_peer_connect_retry_plan=node-",
+            "preemptive_shadow_switch_target=node-",
+            "standby_shadow_target=node-",
+            "connect_probe_connected_peer=node-",
+            "connect_probe_connected_endpoint=198.51.",
+            "ports=443|8443",
+        ] {
+            if text.contains(blocked) {
+                fail("mesh auto adaptive trace guard: raw peer diagnostic leak");
+            }
+        }
+    }
+}
+
+fn is_public_peer_label(value: &str) -> bool {
+    value
+        .strip_prefix("peer#")
+        .and_then(|suffix| suffix.parse::<usize>().ok())
+        .is_some_and(|index| index > 0)
 }
 
 fn require_str(obj: &serde_json::Map<String, Value>, key: &str, expected: &str) {

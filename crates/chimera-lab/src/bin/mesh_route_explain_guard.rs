@@ -22,7 +22,7 @@ fn main() {
     require_str(obj, "status", "ok");
     require_str(obj, "kind", "mesh_route_explain");
     require_str(obj, "namespace", "cef-public");
-    require_str(obj, "node", "node-client");
+    require_str(obj, "node", "<redacted>");
     require_str(obj, "join_mode", "InvitationOnly");
     require_str(obj, "initial_selected_peer", "peer#1");
     require_str(obj, "failover_selected_peer", "peer#1");
@@ -49,8 +49,63 @@ fn main() {
             fail("mesh route explain guard: raw peer identity leaked");
         }
     }
+    for (key, value) in obj {
+        require_no_raw_public_value(key, value);
+    }
 
     println!("mesh route explain guard: PASS");
+}
+
+fn require_no_raw_public_value(key: &str, value: &Value) {
+    match value {
+        Value::String(text) => {
+            if key == "namespace" {
+                return;
+            }
+            require_no_raw_public_text(text);
+        }
+        Value::Array(values) => {
+            for item in values {
+                require_no_raw_public_value(key, item);
+            }
+        }
+        Value::Object(map) => {
+            for (child_key, child_value) in map {
+                require_no_raw_public_value(child_key, child_value);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn require_no_raw_public_text(text: &str) {
+    if text.contains("node-")
+        || text.contains("node_id=")
+        || text.contains("peer_id=")
+        || text.contains("ports=443")
+        || text.contains("ports=8443")
+        || text.contains("127.0.0.1")
+        || text.contains("192.168.")
+        || text.contains("91.124.")
+        || text.contains("198.51.")
+        || text.contains("203.0.113.")
+        || text_contains_socket_hint(text)
+    {
+        fail("mesh route explain guard: raw public diagnostic leak");
+    }
+}
+
+fn text_contains_socket_hint(text: &str) -> bool {
+    text.split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | ';' | '"' | '\'' | '[' | ']'))
+        .any(|token| {
+            token.rsplit_once(':').is_some_and(|(host, port)| {
+                port.parse::<u16>().is_ok()
+                    && (host.contains('.')
+                        || host.contains('[')
+                        || host.contains(']')
+                        || host == "localhost")
+            })
+        })
 }
 
 fn require_str(obj: &serde_json::Map<String, Value>, key: &str, expected: &str) {

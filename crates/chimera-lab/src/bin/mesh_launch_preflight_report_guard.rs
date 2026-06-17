@@ -47,8 +47,9 @@ fn validate_obj(obj: &serde_json::Map<String, Value>, expected_role: &str) -> Re
         return Err("mesh launch preflight report guard: namespace is blank".to_string());
     }
     let node = require_str(obj, "node")?;
-    if node.trim().is_empty() {
-        return Err("mesh launch preflight report guard: node is blank".to_string());
+    require_redacted_node_value(node)?;
+    for (key, value) in obj {
+        require_no_raw_public_value(key, value)?;
     }
     if expected_role != "side_a" && expected_role != "side_b" {
         return Err(
@@ -95,12 +96,156 @@ fn validate_obj(obj: &serde_json::Map<String, Value>, expected_role: &str) -> Re
             return Err("mesh launch preflight report guard: blocked report must include connectivity_probe_failed".to_string());
         }
     }
-    let _ = require_array(obj, "selected_peers")?;
-    let _ = require_array(obj, "attempts")?;
-    let _ = require_array(obj, "explain")?;
-    let _ = require_str(obj, "connected_peer")?;
-    let _ = require_str(obj, "connected_endpoint")?;
+    require_redacted_peer_array(obj, "selected_peers")?;
+    require_redacted_attempts(obj)?;
+    require_redacted_explain(obj)?;
+    let connected_peer = require_str(obj, "connected_peer")?;
+    let connected_endpoint = require_str(obj, "connected_endpoint")?;
+    require_redacted_peer_value(connected_peer)?;
+    require_redacted_endpoint_value(connected_endpoint)?;
     Ok(())
+}
+
+fn require_redacted_peer_array(
+    obj: &serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<(), String> {
+    for value in require_array(obj, key)? {
+        require_redacted_peer_value(value.as_str().unwrap_or(""))?;
+    }
+    Ok(())
+}
+
+fn require_redacted_attempts(obj: &serde_json::Map<String, Value>) -> Result<(), String> {
+    for attempt in require_array(obj, "attempts")? {
+        let peer_id = attempt
+            .get("peer_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                "mesh launch preflight report guard: attempt peer_id missing".to_string()
+            })?;
+        let endpoint = attempt
+            .get("endpoint")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                "mesh launch preflight report guard: attempt endpoint missing".to_string()
+            })?;
+        require_redacted_peer_value(peer_id)?;
+        require_redacted_endpoint_value(endpoint)?;
+    }
+    Ok(())
+}
+
+fn require_redacted_explain(obj: &serde_json::Map<String, Value>) -> Result<(), String> {
+    for line in require_array(obj, "explain")? {
+        let text = line.as_str().unwrap_or("");
+        require_no_raw_public_text(text)?;
+        for blocked in [
+            "selected_peer_ids=node-",
+            "selected_peer_endpoints=198.51.",
+            "selected_peer_connect_priority=1:node-",
+            "selected_peer_connect_retry_plan=node-",
+            "preemptive_shadow_switch_target=node-",
+            "standby_shadow_target=node-",
+            "connect_probe_connected_peer=node-",
+            "connect_probe_connected_endpoint=198.51.",
+            "ports=443|8443",
+        ] {
+            if text.contains(blocked) {
+                return Err(
+                    "mesh launch preflight report guard: raw peer diagnostic leak".to_string(),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn require_redacted_node_value(value: &str) -> Result<(), String> {
+    if value == "<redacted>" {
+        return Ok(());
+    }
+    Err("mesh launch preflight report guard: node value is not redacted".to_string())
+}
+
+fn require_redacted_peer_value(value: &str) -> Result<(), String> {
+    if value.is_empty() || value == "none" || value == "<redacted>" || is_public_peer_label(value) {
+        return Ok(());
+    }
+    Err("mesh launch preflight report guard: peer value is not redacted".to_string())
+}
+
+fn require_redacted_endpoint_value(value: &str) -> Result<(), String> {
+    if value.is_empty()
+        || value == "none"
+        || value == "<redacted>"
+        || (value.starts_with("endpoint#") && value.ends_with(":<redacted>"))
+    {
+        return Ok(());
+    }
+    Err("mesh launch preflight report guard: endpoint value is not redacted".to_string())
+}
+
+fn require_no_raw_public_value(key: &str, value: &Value) -> Result<(), String> {
+    match value {
+        Value::String(text) => {
+            if key == "namespace" {
+                return Ok(());
+            }
+            require_no_raw_public_text(text)
+        }
+        Value::Array(values) => {
+            for item in values {
+                require_no_raw_public_value(key, item)?;
+            }
+            Ok(())
+        }
+        Value::Object(map) => {
+            for (child_key, child_value) in map {
+                require_no_raw_public_value(child_key, child_value)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn require_no_raw_public_text(text: &str) -> Result<(), String> {
+    if text.contains("node-")
+        || text.contains("node_id=")
+        || text.contains("peer_id=")
+        || text.contains("ports=443")
+        || text.contains("ports=8443")
+        || text.contains("127.0.0.1")
+        || text.contains("192.168.")
+        || text.contains("91.124.")
+        || text.contains("198.51.")
+        || text.contains("203.0.113.")
+        || text_contains_socket_hint(text)
+    {
+        return Err("mesh launch preflight report guard: raw public diagnostic leak".to_string());
+    }
+    Ok(())
+}
+
+fn text_contains_socket_hint(text: &str) -> bool {
+    text.split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | ';' | '"' | '\'' | '[' | ']'))
+        .any(|token| {
+            token.rsplit_once(':').is_some_and(|(host, port)| {
+                port.parse::<u16>().is_ok()
+                    && (host.contains('.')
+                        || host.contains('[')
+                        || host.contains(']')
+                        || host == "localhost")
+            })
+        })
+}
+
+fn is_public_peer_label(value: &str) -> bool {
+    value
+        .strip_prefix("peer#")
+        .and_then(|suffix| suffix.parse::<usize>().ok())
+        .is_some_and(|index| index > 0)
 }
 
 fn require_str<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> Result<&'a str, String> {
@@ -153,13 +298,13 @@ mod tests {
         m.insert("blockers".into(), Value::Array(vec![]));
         m.insert(
             "selected_peers".into(),
-            Value::Array(vec![Value::String("n1".into())]),
+            Value::Array(vec![Value::String("peer#1".into())]),
         );
         m.insert(
             "attempts".into(),
             Value::Array(vec![serde_json::json!({
-                "peer_id":"n1",
-                "endpoint":"127.0.0.1:443",
+                "peer_id":"peer#1",
+                "endpoint":"endpoint#1:<redacted>",
                 "success":true,
                 "error":""
             })]),
@@ -168,29 +313,58 @@ mod tests {
             "explain".into(),
             Value::Array(vec![Value::String("ok".into())]),
         );
-        m.insert("connected_peer".into(), Value::String("n1".into()));
+        m.insert("connected_peer".into(), Value::String("peer#1".into()));
         m.insert(
             "connected_endpoint".into(),
-            Value::String("127.0.0.1:443".into()),
+            Value::String("endpoint#1:<redacted>".into()),
         );
         m
     }
 
     #[test]
     fn validate_accepts_ready_vps_report() {
-        let m = base_ready("node-a");
+        let m = base_ready("<redacted>");
         assert!(validate_obj(&m, "side_a").is_ok());
     }
 
     #[test]
-    fn validate_accepts_any_non_empty_node_for_role() {
+    fn validate_rejects_raw_node_for_role() {
         let m = base_ready("custom-node-alpha");
+        let err = match validate_obj(&m, "side_a") {
+            Ok(()) => unreachable!("must fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("node value is not redacted"));
+    }
+
+    #[test]
+    fn validate_rejects_raw_endpoint_in_attempt_error() {
+        let mut m = base_ready("<redacted>");
+        m.insert(
+            "attempts".into(),
+            Value::Array(vec![serde_json::json!({
+                "peer_id":"peer#1",
+                "endpoint":"endpoint#1:<redacted>",
+                "success":false,
+                "error":"connect failed host.example:443"
+            })]),
+        );
+        let err = match validate_obj(&m, "side_a") {
+            Ok(()) => unreachable!("must fail"),
+            Err(err) => err,
+        };
+        assert!(err.contains("raw public diagnostic leak"));
+    }
+
+    #[test]
+    fn validate_accepts_redacted_node_for_role() {
+        let m = base_ready("<redacted>");
         assert!(validate_obj(&m, "side_a").is_ok());
     }
 
     #[test]
     fn validate_rejects_unknown_role() {
-        let m = base_ready("custom-node-alpha");
+        let m = base_ready("<redacted>");
         let err = match validate_obj(&m, "desktop") {
             Ok(()) => unreachable!("must fail"),
             Err(err) => err,
@@ -200,7 +374,7 @@ mod tests {
 
     #[test]
     fn validate_rejects_blocked_without_connectivity_blocker() {
-        let mut m = base_ready("node-b");
+        let mut m = base_ready("<redacted>");
         m.insert("status".into(), Value::String("blocked".into()));
         m.insert("ready_for_real_launch".into(), Value::Bool(false));
         m.insert("connect_probe_success".into(), Value::Bool(false));

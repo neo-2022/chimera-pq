@@ -80,18 +80,29 @@ fn connect_probe_json_contract_success_shape() {
 
     assert_eq!(parsed["namespace"].as_str().unwrap_or(""), "cef-public");
     assert_eq!(parsed["success"].as_bool(), Some(true));
-    assert_eq!(parsed["connected_peer"].as_str().unwrap_or(""), "n1");
+    assert_eq!(parsed["connected_peer"].as_str().unwrap_or(""), "peer#1");
     assert_eq!(
         parsed["connected_endpoint"].as_str().unwrap_or(""),
-        format!("127.0.0.1:{}", addr.port())
+        "endpoint#1:<redacted>"
     );
     assert!(parsed["selected_peers"].is_array());
+    assert_eq!(parsed["selected_peers"][0].as_str().unwrap_or(""), "peer#1");
     assert!(parsed["attempts"].is_array());
     assert!(parsed["explain"].is_array());
     let attempts = parsed["attempts"]
         .as_array()
         .unwrap_or_else(|| unreachable!("attempts must be array"));
     assert!(!attempts.is_empty());
+    assert!(attempts.iter().all(|attempt| {
+        attempt["peer_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("peer#")
+            && attempt["endpoint"]
+                .as_str()
+                .unwrap_or("")
+                .ends_with(":<redacted>")
+    }));
     assert!(
         attempts
             .iter()
@@ -136,6 +147,6 @@ fn connect_probe_json_rejects_duplicate_peer_node_ids() {
     );
     assert_eq!(
         parsed["error"].as_str().unwrap_or(""),
-        "duplicate peer node_id 'n1' in --peer set"
+        "duplicate peer node_id <redacted> in --peer set"
     );
 }
