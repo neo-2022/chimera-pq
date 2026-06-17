@@ -1,6 +1,6 @@
 # Workflow Attestation: Bounded GitHub Bootstrap
 
-Status: source_ready_for_release
+Status: installed_release_update_pass
 Date: 2026-06-17
 
 ## ANALYSIS
@@ -113,7 +113,7 @@ PASS:
 
 ## FINAL_AUDIT
 
-Status: not_complete_until_release_and_stand_proof.
+Status: installed_release_update_pass.
 
 Accepted source facts:
 
@@ -121,16 +121,30 @@ Accepted source facts:
 - it does not change WEAVE payload/datapath behavior;
 - no local PC runtime proof was used.
 
+Release/update evidence:
+
+- commit: `ba27481 Require pipefail for GitHub bootstrap install`;
+- tag/release: `v0.1.106`;
+- GitHub release workflow: `27716068760`, conclusion `success`;
+- GitHub Latest: `v0.1.106`;
+- required assets: `chimera.sh`, `chimera-pq-release.tar.gz`,
+  `chimera-pq-release.tar.gz.sha256`;
+- release checksum: `621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97`;
+- laptop one-command install/update: PASS, installed `0.1.106`, checksum match;
+- VPS one-command install/update: PASS, installed `0.1.106`, checksum match;
+- negative pipefail proof: PASS on laptop and VPS, bad bootstrap URL returned
+  nonzero and left installed version unchanged.
+
 Not closed yet:
 
-- new GitHub Release/Latest for this fix;
-- laptop one-command update proof from the new release;
-- VPS one-command update proof from the new release;
-- installed version/checksum proof for the new release.
+- real node-to-node runtime/datapath transit proof;
+- transparent TUN/OS route proof;
+- forced-stop rollback proof for this release.
 
 ## REPORT
 
-Status: partial.
+Status: installed release/update pass; Real-World datapath pass is not closed.
 
-This source fix is ready for commit/release pipeline. It is not a Real-World
-datapath PASS.
+The bounded and pipefail-protected GitHub one-command install/update path is
+published and verified on laptop and VPS. This is not a Real-World datapath
+PASS.
