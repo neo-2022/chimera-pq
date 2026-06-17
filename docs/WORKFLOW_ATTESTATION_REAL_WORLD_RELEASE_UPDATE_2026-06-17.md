@@ -6,10 +6,8 @@ Date: 2026-06-17
 ## Objective
 
 Publish a new GitHub Release/Latest for CHIMERA-PQ and verify the documented
-one-command install/update path over SSH on:
-
-- laptop: `art@192.168.31.21`
-- VPS: `root@91.124.19.180:22`
+one-command install/update path over SSH on the authorized laptop and VPS
+stand hosts.
 
 The stand install/update command must use GitHub Release/Latest:
 
@@ -94,8 +92,8 @@ Updated council finding during this cycle:
 - GitHub API latest before release: `v0.1.98`.
 - `git ls-remote https://github.com/neo-2022/chimera-pq.git refs/tags/v0.1.99`:
   no output, tag absent at the time of checking.
-- Laptop SSH preflight: reachable, has `curl`, `tar`, `sha256sum`.
-- VPS SSH preflight: reachable, has `curl`, `tar`, `sha256sum`.
+- Laptop SSH preflight: `ssh_ok=true`, has `curl`, `tar`, `sha256sum`.
+- VPS SSH preflight: `ssh_ok=true`, has `curl`, `tar`, `sha256sum`.
 - SSH to GitHub on default port 22 timed out in this environment.
 - SSH authentication to GitHub over `ssh.github.com:443` succeeded.
 - Source gate PASS after public diagnostics redaction:

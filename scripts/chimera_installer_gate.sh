@@ -161,6 +161,9 @@ rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/install_desktop_control.sh" >/d
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_shell_safe_env_writer"
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_upsert_env_not_shell_safe"
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_upsert_env_not_shell_safe"
+if rg -n 'awk -v .*quoted_value|awk -v .*line=' "$ROOT_DIR/scripts/install_desktop_control.sh" "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null; then
+  fail "shell_quoted_env_writer_uses_awk_v"
+fi
 rg -n 'case_auto_update_preserves_bound_transit_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_bound_transit_env_preservation_case"
 rg -n 'case_peer_egress_env_shell_quotes_lane_bindings_path' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_peer_env_shell_quote_case"
 rg -n 'case_auto_update_preserves_quoted_lane_bindings_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_quoted_lane_bindings_preservation_case"

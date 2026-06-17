@@ -98,7 +98,7 @@ upsert_env_kv() {
   local file="${1:?file_required}"
   local key="${2:?key_required}"
   local value="${3:-}"
-  local quoted_value tmp_file
+  local quoted_value tmp_file replaced=0 line
   [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
     echo "error: invalid env key: $key" >&2
     exit 2
@@ -107,22 +107,19 @@ upsert_env_kv() {
   mkdir -p "$(dirname "$file")"
   touch "$file"
   tmp_file="$(mktemp)"
-  awk -v key="$key" -v line="${key}=${quoted_value}" '
-    BEGIN { replaced = 0 }
-    index($0, key "=") == 1 {
-      if (!replaced) {
-        print line
-        replaced = 1
-      }
-      next
-    }
-    { print }
-    END {
-      if (!replaced) {
-        print line
-      }
-    }
-  ' "$file" >"$tmp_file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "$key="* ]]; then
+      if [[ "$replaced" -eq 0 ]]; then
+        printf '%s=%s\n' "$key" "$quoted_value"
+        replaced=1
+      fi
+      continue
+    fi
+    printf '%s\n' "$line"
+  done <"$file" >"$tmp_file"
+  if [[ "$replaced" -eq 0 ]]; then
+    printf '%s=%s\n' "$key" "$quoted_value" >>"$tmp_file"
+  fi
   cat "$tmp_file" >"$file"
   rm -f "$tmp_file"
 }
