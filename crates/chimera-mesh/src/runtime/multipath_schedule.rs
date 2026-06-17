@@ -3,20 +3,44 @@ use crate::multipath_model::{
     MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshRouteBindingId,
 };
 
+use super::multipath_weights::{active_lane_weights, capacity_weights_from_relative_weights};
+
 const LOCAL_TRAFFIC_RESERVE_PCT: u8 = 10;
 const TRANSIT_CAPACITY_BUDGET_PCT: u8 = 100 - LOCAL_TRAFFIC_RESERVE_PCT;
 const FAIRNESS_POLICY: &str = "weighted_round_robin_v1";
 const EXECUTION_STATUS_CARRIER_BINDING_READY: &str = "carrier_lane_binding_contract_ready";
 const EXECUTION_STATUS_PLANNER_ONLY_NOT_CARRIER_BOUND: &str = "planner_only_not_carrier_bound";
 const TRANSIT_PAYLOAD_POLICY: &str = "sealed_opaque_only";
+const PLANNER_REBUILD_REASON_INITIAL_PLAN: &str = "initial_plan";
+const PLANNER_REBUILD_REASON_MULTIPATH_HINT_REPLAN: &str = "multipath_hint_replan";
 
 pub(super) fn build_multipath_schedule(
     selected_peers: &[MeshPeerState],
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
 ) -> Result<MeshMultipathSchedule, String> {
+    build_multipath_schedule_with_reason(
+        selected_peers,
+        mode,
+        route_binding_id,
+        PLANNER_REBUILD_REASON_INITIAL_PLAN,
+    )
+}
+
+fn build_multipath_schedule_with_reason(
+    selected_peers: &[MeshPeerState],
+    mode: MeshMultipathMode,
+    route_binding_id: Option<MeshRouteBindingId>,
+    planner_rebuild_reason: &str,
+) -> Result<MeshMultipathSchedule, String> {
     let lanes = build_lanes(selected_peers, &mode);
-    schedule_from_lanes(selected_peers, mode, route_binding_id, lanes)
+    schedule_from_lanes(
+        selected_peers,
+        mode,
+        route_binding_id,
+        lanes,
+        planner_rebuild_reason,
+    )
 }
 
 pub(super) fn replace_multipath_schedule(
@@ -25,8 +49,12 @@ pub(super) fn replace_multipath_schedule(
     route_binding_id: Option<MeshRouteBindingId>,
 ) -> Result<(), String> {
     remove_multipath_schedule_explain(&mut plan.explain);
-    plan.multipath_schedule =
-        build_multipath_schedule(&plan.selected_peers, mode, route_binding_id)?;
+    plan.multipath_schedule = build_multipath_schedule_with_reason(
+        &plan.selected_peers,
+        mode,
+        route_binding_id,
+        PLANNER_REBUILD_REASON_MULTIPATH_HINT_REPLAN,
+    )?;
     append_multipath_schedule_explain(&mut plan.explain, &plan.multipath_schedule);
     Ok(())
 }
@@ -68,6 +96,10 @@ pub(super) fn append_multipath_schedule_explain(
         schedule.active_weight_sum_pct
     ));
     explain.push(format!(
+        "multipath_schedule_active_capacity_sum_pct={}",
+        schedule.active_capacity_sum_pct
+    ));
+    explain.push(format!(
         "multipath_schedule_local_reserve_pct={}",
         schedule.local_traffic_reserve_pct
     ));
@@ -82,6 +114,10 @@ pub(super) fn append_multipath_schedule_explain(
     explain.push(format!(
         "multipath_schedule_transit_payload_policy={}",
         schedule.transit_payload_policy
+    ));
+    explain.push(format!(
+        "multipath_schedule_planner_rebuild_reason={}",
+        schedule.planner_rebuild_reason
     ));
     explain.push(format!(
         "multipath_schedule_lanes={}",
@@ -116,18 +152,25 @@ fn build_active_lanes(
     selected_peers: &[MeshPeerState],
     max_active: usize,
 ) -> Vec<MeshMultipathLane> {
-    let active_peers: Vec<&MeshPeerState> = selected_peers.iter().take(max_active).collect();
+    let active_limit = max_active.min(usize::from(TRANSIT_CAPACITY_BUDGET_PCT));
+    let active_peers: Vec<&MeshPeerState> = selected_peers.iter().take(active_limit).collect();
     let weights = active_lane_weights(&active_peers);
+    let capacity_weights =
+        capacity_weights_from_relative_weights(&weights, TRANSIT_CAPACITY_BUDGET_PCT);
     active_peers
         .into_iter()
         .zip(weights)
+        .zip(capacity_weights)
         .enumerate()
-        .map(|(idx, (peer, weight_pct))| MeshMultipathLane {
-            lane_id: idx,
-            peer_node_id: peer.node_id.clone(),
-            role: MeshMultipathLaneRole::Active,
-            weight_pct,
-        })
+        .map(
+            |(idx, ((peer, weight_pct), capacity_weight_pct))| MeshMultipathLane {
+                lane_id: idx,
+                peer_node_id: peer.node_id.clone(),
+                role: MeshMultipathLaneRole::Active,
+                weight_pct,
+                capacity_weight_pct,
+            },
+        )
         .collect()
 }
 
@@ -139,6 +182,7 @@ fn build_standby_lanes(selected_peers: &[MeshPeerState]) -> Vec<MeshMultipathLan
             peer_node_id: peer.node_id.clone(),
             role: MeshMultipathLaneRole::Standby,
             weight_pct: 0,
+            capacity_weight_pct: 0,
         });
     }
     lanes
@@ -149,6 +193,7 @@ fn schedule_from_lanes(
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
     lanes: Vec<MeshMultipathLane>,
+    planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
     let active_lane_count = lanes
         .iter()
@@ -162,6 +207,11 @@ fn schedule_from_lanes(
         .iter()
         .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
         .map(|lane| lane.weight_pct as u16)
+        .sum();
+    let active_capacity_sum_pct = lanes
+        .iter()
+        .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
+        .map(|lane| lane.capacity_weight_pct as u16)
         .sum();
 
     let carrier_lane_bindings = match route_binding_id.as_ref() {
@@ -184,11 +234,13 @@ fn schedule_from_lanes(
         active_lane_count,
         standby_lane_count,
         active_weight_sum_pct,
+        active_capacity_sum_pct,
         local_traffic_reserve_pct: LOCAL_TRAFFIC_RESERVE_PCT,
         transit_capacity_budget_pct: TRANSIT_CAPACITY_BUDGET_PCT,
         fairness_policy: FAIRNESS_POLICY.to_string(),
         execution_status: execution_status.to_string(),
         transit_payload_policy: TRANSIT_PAYLOAD_POLICY.to_string(),
+        planner_rebuild_reason: planner_rebuild_reason.to_string(),
     })
 }
 
@@ -211,74 +263,10 @@ fn carrier_lane_bindings(
                 carrier_endpoint: peer.endpoint.clone(),
                 role: lane.role.clone(),
                 weight_pct: lane.weight_pct,
+                capacity_weight_pct: lane.capacity_weight_pct,
             })
         })
         .collect()
-}
-
-fn active_lane_weights(active_peers: &[&MeshPeerState]) -> Vec<u8> {
-    if active_peers.is_empty() {
-        return Vec::new();
-    }
-    let scores: Vec<u16> = active_peers
-        .iter()
-        .map(|peer| lane_weight_score(peer))
-        .collect();
-    let total: u16 = scores.iter().sum();
-    if total == 0 {
-        return even_weights(active_peers.len());
-    }
-
-    let mut weights: Vec<u8> = scores
-        .iter()
-        .map(|score| ((*score as usize * 100) / total as usize).max(1) as u8)
-        .collect();
-    normalize_weights_to_100(&mut weights);
-    weights
-}
-
-fn lane_weight_score(peer: &MeshPeerState) -> u16 {
-    let reliability = peer.reliability_score.max(1) as u16;
-    let load_headroom = 100_u16.saturating_sub(peer.load_score as u16).max(1);
-    let selected_score = peer.selection_score.max(0) as u16;
-    reliability
-        .saturating_add(load_headroom)
-        .saturating_add(selected_score / 4)
-        .max(1)
-}
-
-fn even_weights(count: usize) -> Vec<u8> {
-    let base = 100 / count;
-    let remainder = 100 % count;
-    (0..count)
-        .map(|idx| {
-            let extra = usize::from(idx < remainder);
-            (base + extra) as u8
-        })
-        .collect()
-}
-
-fn normalize_weights_to_100(weights: &mut [u8]) {
-    let sum: i16 = weights.iter().map(|weight| *weight as i16).sum();
-    let delta = 100_i16.saturating_sub(sum);
-    if delta == 0 || weights.is_empty() {
-        return;
-    }
-    if delta > 0 {
-        if let Some(first) = weights.first_mut() {
-            *first = first.saturating_add(delta as u8);
-        }
-        return;
-    }
-    let mut remaining = delta.unsigned_abs() as u8;
-    for weight in weights.iter_mut().rev() {
-        if remaining == 0 {
-            break;
-        }
-        let removable = weight.saturating_sub(1).min(remaining);
-        *weight = weight.saturating_sub(removable);
-        remaining = remaining.saturating_sub(removable);
-    }
 }
 
 fn format_schedule_lanes(lanes: &[MeshMultipathLane]) -> String {
@@ -289,10 +277,11 @@ fn format_schedule_lanes(lanes: &[MeshMultipathLane]) -> String {
         .iter()
         .map(|lane| {
             format!(
-                "lane{}:{}:{}",
+                "lane{}:{}:weight={}:capacity={}",
                 lane.lane_id,
                 lane.role.as_str(),
-                lane.weight_pct
+                lane.weight_pct,
+                lane.capacity_weight_pct
             )
         })
         .collect::<Vec<String>>()
@@ -330,6 +319,7 @@ mod tests {
             peer_node_id: "missing-peer".to_string(),
             role: MeshMultipathLaneRole::Active,
             weight_pct: 100,
+            capacity_weight_pct: 90,
         }];
         let route_binding_id = MeshRouteBindingId::new(77)?;
 
@@ -338,6 +328,7 @@ mod tests {
             MeshMultipathMode::FlowShard,
             Some(route_binding_id),
             lanes,
+            "initial_plan",
         ) {
             Ok(_) => {
                 return Err(
@@ -348,6 +339,35 @@ mod tests {
         };
 
         assert!(error.contains("missing selected peer"));
+        Ok(())
+    }
+
+    #[test]
+    fn aggregate_buffered_limits_active_lanes_to_capacity_budget() -> Result<(), String> {
+        let selected_peers = (0..95)
+            .map(|idx| peer(&format!("node-{idx}")))
+            .collect::<Vec<MeshPeerState>>();
+
+        let schedule = super::build_multipath_schedule(
+            &selected_peers,
+            MeshMultipathMode::AggregateBuffered,
+            Some(MeshRouteBindingId::new(78)?),
+        )?;
+
+        assert_eq!(
+            schedule.active_lane_count,
+            schedule.transit_capacity_budget_pct as usize
+        );
+        assert_eq!(
+            schedule.active_capacity_sum_pct,
+            schedule.transit_capacity_budget_pct as u16
+        );
+        assert!(
+            schedule
+                .lanes
+                .iter()
+                .all(|lane| lane.capacity_weight_pct > 0)
+        );
         Ok(())
     }
 }

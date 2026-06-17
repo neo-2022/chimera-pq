@@ -1,3 +1,4 @@
+mod capacity_budget;
 mod helpers;
 
 use crate::{MeshMultipathLaneRole, MeshMultipathMode};
@@ -29,6 +30,7 @@ fn multipath_schedule_off_uses_single_active_lane() {
         MeshMultipathLaneRole::Active
     );
     assert_eq!(plan.multipath_schedule.lanes[0].weight_pct, 100);
+    assert_eq!(plan.multipath_schedule.lanes[0].capacity_weight_pct, 90);
     assert_eq!(
         plan.multipath_schedule.lanes[0].peer_node_id,
         plan.selected_peers[0].node_id
@@ -53,6 +55,14 @@ fn multipath_schedule_off_uses_single_active_lane() {
     assert!(explain_has(
         &plan.explain,
         "multipath_schedule_transit_capacity_budget_pct=90"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_active_capacity_sum_pct=90"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_planner_rebuild_reason=multipath_hint_replan"
     ));
     assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 1);
     assert_binding_matches_lane(&plan, 0, "node-a", "198.51.100.31:443");
@@ -123,11 +133,13 @@ fn multipath_schedule_standby_only_keeps_one_active_and_one_standby() {
         MeshMultipathLaneRole::Active
     );
     assert_eq!(plan.multipath_schedule.lanes[0].weight_pct, 100);
+    assert_eq!(plan.multipath_schedule.lanes[0].capacity_weight_pct, 90);
     assert_eq!(
         plan.multipath_schedule.lanes[1].role,
         MeshMultipathLaneRole::Standby
     );
     assert_eq!(plan.multipath_schedule.lanes[1].weight_pct, 0);
+    assert_eq!(plan.multipath_schedule.lanes[1].capacity_weight_pct, 0);
     assert_eq!(
         plan.multipath_schedule.lanes[0].peer_node_id,
         plan.selected_peers[0].node_id
@@ -274,6 +286,10 @@ fn multipath_schedule_prefers_high_reliability_and_low_load_weight() {
     assert!(
         plan.multipath_schedule.lanes[0].weight_pct > plan.multipath_schedule.lanes[1].weight_pct
     );
+    assert!(
+        plan.multipath_schedule.lanes[0].capacity_weight_pct
+            > plan.multipath_schedule.lanes[1].capacity_weight_pct
+    );
     assert_active_weight_contract(&plan);
 }
 
@@ -306,6 +322,11 @@ fn multipath_schedule_explain_does_not_leak_payload_destination_or_endpoint() {
     assert!(!schedule_explain.contains("198.51.100.32:443"));
     assert!(
         schedule_explain.contains("multipath_schedule_transit_payload_policy=sealed_opaque_only")
+    );
+    assert!(schedule_explain.contains("multipath_schedule_active_capacity_sum_pct=90"));
+    assert!(
+        schedule_explain
+            .contains("multipath_schedule_planner_rebuild_reason=multipath_hint_replan")
     );
     assert!(
         schedule_explain
@@ -366,7 +387,10 @@ fn multipath_schedule_debug_redacts_lane_peer_identity() {
 
     assert!(!debug.contains("node-sensitive-a"));
     assert!(!debug.contains("node-sensitive-b"));
+    assert!(!debug.contains("198.51.100.31:443"));
+    assert!(!debug.contains("198.51.100.32:443"));
     assert!(debug.contains("<redacted>"));
+    assert!(debug.contains("capacity_weight_pct"));
 }
 
 #[test]
@@ -396,4 +420,5 @@ fn multipath_carrier_binding_debug_redacts_peer_identity_and_endpoint() {
     assert!(!debug.contains(&route_binding_id.get().to_string()));
     assert!(debug.contains("<opaque>"));
     assert!(debug.contains("<redacted>"));
+    assert!(debug.contains("capacity_weight_pct"));
 }

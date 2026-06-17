@@ -22,6 +22,7 @@ mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;
 mod multipath_schedule;
+mod multipath_weights;
 mod path_planner;
 mod path_planner_finalize;
 mod path_planner_recovery;

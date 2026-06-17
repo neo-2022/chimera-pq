@@ -230,6 +230,7 @@ mod tests {
             carrier_endpoint: "198.51.100.10:443".to_string(),
             role: MeshMultipathLaneRole::Active,
             weight_pct: 100,
+            capacity_weight_pct: 90,
         }
     }
 

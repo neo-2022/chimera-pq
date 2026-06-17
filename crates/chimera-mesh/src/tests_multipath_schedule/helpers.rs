@@ -52,12 +52,41 @@ pub(super) fn assert_active_weight_contract(plan: &MeshPathPlan) {
         active_weight_sum
     );
     assert_eq!(active_weight_sum, 100);
+    let active_capacity_sum: u16 = plan
+        .multipath_schedule
+        .lanes
+        .iter()
+        .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
+        .map(|lane| lane.capacity_weight_pct as u16)
+        .sum();
+    assert_eq!(
+        plan.multipath_schedule.active_capacity_sum_pct,
+        active_capacity_sum
+    );
+    assert_eq!(
+        active_capacity_sum,
+        plan.multipath_schedule.transit_capacity_budget_pct as u16
+    );
     assert!(
         plan.multipath_schedule
             .lanes
             .iter()
             .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
             .all(|lane| lane.weight_pct > 0)
+    );
+    assert!(
+        plan.multipath_schedule
+            .lanes
+            .iter()
+            .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
+            .all(|lane| lane.capacity_weight_pct > 0)
+    );
+    assert!(
+        plan.multipath_schedule
+            .lanes
+            .iter()
+            .filter(|lane| lane.role == MeshMultipathLaneRole::Standby)
+            .all(|lane| lane.capacity_weight_pct == 0)
     );
     assert!(plan.multipath_schedule.local_traffic_reserve_pct > 0);
     assert_eq!(
@@ -68,6 +97,14 @@ pub(super) fn assert_active_weight_contract(plan: &MeshPathPlan) {
     assert!(
         plan.multipath_schedule.transit_capacity_budget_pct
             < plan.multipath_schedule.active_weight_sum_pct as u8
+    );
+    assert!(
+        plan.multipath_schedule.local_traffic_reserve_pct >= 10,
+        "local traffic reserve must not be silently weakened"
+    );
+    assert!(
+        plan.multipath_schedule.transit_capacity_budget_pct <= 90,
+        "transit budget must not silently consume local reserve"
     );
 }
 
@@ -106,4 +143,5 @@ pub(super) fn assert_binding_matches_lane(
     assert_eq!(binding.carrier_endpoint, endpoint);
     assert_eq!(binding.role, lane.role);
     assert_eq!(binding.weight_pct, lane.weight_pct);
+    assert_eq!(binding.capacity_weight_pct, lane.capacity_weight_pct);
 }

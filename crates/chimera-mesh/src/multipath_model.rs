@@ -40,6 +40,7 @@ pub struct MeshMultipathLane {
     pub peer_node_id: String,
     pub role: MeshMultipathLaneRole,
     pub weight_pct: u8,
+    pub capacity_weight_pct: u8,
 }
 
 impl std::fmt::Debug for MeshMultipathLane {
@@ -49,6 +50,7 @@ impl std::fmt::Debug for MeshMultipathLane {
             .field("peer_node_id", &"<redacted>")
             .field("role", &self.role)
             .field("weight_pct", &self.weight_pct)
+            .field("capacity_weight_pct", &self.capacity_weight_pct)
             .finish()
     }
 }
@@ -82,6 +84,7 @@ pub struct MeshCarrierLaneBinding {
     pub carrier_endpoint: String,
     pub role: MeshMultipathLaneRole,
     pub weight_pct: u8,
+    pub capacity_weight_pct: u8,
 }
 
 impl std::fmt::Debug for MeshCarrierLaneBinding {
@@ -93,6 +96,7 @@ impl std::fmt::Debug for MeshCarrierLaneBinding {
             .field("carrier_endpoint", &"<redacted>")
             .field("role", &self.role)
             .field("weight_pct", &self.weight_pct)
+            .field("capacity_weight_pct", &self.capacity_weight_pct)
             .finish()
     }
 }
@@ -106,9 +110,11 @@ pub struct MeshMultipathSchedule {
     pub active_lane_count: usize,
     pub standby_lane_count: usize,
     pub active_weight_sum_pct: u16,
+    pub active_capacity_sum_pct: u16,
     pub local_traffic_reserve_pct: u8,
     pub transit_capacity_budget_pct: u8,
     pub fairness_policy: String,
     pub execution_status: String,
     pub transit_payload_policy: String,
+    pub planner_rebuild_reason: String,
 }
