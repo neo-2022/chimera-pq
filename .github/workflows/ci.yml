@@ -77,6 +77,7 @@ jobs:
             docs/ARTIFACT_AUDIT.json
             docs/GO_NO_GO.md
             docs/SECOND_MACHINE_REPORT.md
+            docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
             docs/SHIP_READINESS_REPORT.json
             docs/SHIP_READINESS_REPORT.md
             docs/V1_MVP_BASELINE_MANIFEST.json

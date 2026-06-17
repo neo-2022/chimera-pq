@@ -24,7 +24,20 @@ apply_ok=false
 recover_ok=false
 down_ok=false
 namespace_mode="none"
-probe='ip tuntap add dev chimera-stop-probe0 mode tun; ip link delete dev chimera-stop-probe0'
+skipped_no_tun=false
+skip_reason="none"
+status="fail"
+network_state="not_modified"
+counts_for_release=false
+failure_rc=0
+
+write_artifact() {
+  local notes="${1:?notes_required}"
+  json="{\"status\":\"${status}\",\"kind\":\"runtime_forced_stop_rollback_smoke\",\"message_en\":\"Runtime forced-stop rollback smoke executed.\",\"message_ru\":\"Smoke-проверка rollback после forced-stop выполнена.\",\"network_state\":\"${network_state}\",\"apply_attempt_ok\":${apply_ok},\"recover_ok\":${recover_ok},\"down_state_clean\":${down_ok},\"skipped_no_tun\":${skipped_no_tun},\"skip_reason\":\"${skip_reason}\",\"counts_for_release\":${counts_for_release},\"namespace_mode\":\"${namespace_mode}\",\"failure_rc\":${failure_rc},\"notes\":\"${notes}\"}"
+  printf "%s\n" "$json" > docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
+}
+
+probe='ip tuntap add dev chimera-stp0 mode tun; ip link delete dev chimera-stp0'
 if runtime_route_select_netns "$probe"; then
   namespace_mode="$CHIMERA_ROUTE_NETNS_MODE"
   runtime_route_run_netns '
@@ -61,19 +74,29 @@ if runtime_route_select_netns "$probe"; then
     fi
   '
   rc=$?
+  failure_rc=$rc
   if [[ $rc -eq 0 ]]; then
     apply_ok=true
     recover_ok=true
     down_ok=true
+    status="ok"
+    network_state="modified"
+    counts_for_release=true
+  else
+    skip_reason="netns_script_failed"
   fi
+else
+  skipped_no_tun=true
+  skip_reason="tun_permission_unavailable"
+  status="skipped"
+  failure_rc=125
 fi
 set -e
 
-json="{\"status\":\"ok\",\"kind\":\"runtime_forced_stop_rollback_smoke\",\"message_en\":\"Runtime forced-stop rollback smoke executed.\",\"message_ru\":\"Smoke-проверка rollback после forced-stop выполнена.\",\"network_state\":\"modified\",\"apply_attempt_ok\":${apply_ok},\"recover_ok\":${recover_ok},\"down_state_clean\":${down_ok},\"namespace_mode\":\"${namespace_mode}\",\"notes\":\"Uses unshare user+net namespace, or CI-gated sudo net namespace, with a real TUN creation probe; validates recover path without graceful down.\"}"
-printf "%s\n" "$json" > docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
+write_artifact "Uses unshare user+net namespace, or CI-gated sudo net namespace, with a real TUN creation probe; validates recover path without graceful down."
 
-if [[ "$apply_ok" != "true" || "$recover_ok" != "true" || "$down_ok" != "true" ]]; then
-  echo "runtime forced-stop rollback smoke: FAIL" >&2
+if [[ "$status" != "ok" ]]; then
+  echo "runtime forced-stop rollback smoke: ${status} (namespace_mode=${namespace_mode} rc=${failure_rc} reason=${skip_reason})" >&2
   exit 1
 fi
 

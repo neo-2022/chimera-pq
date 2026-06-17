@@ -716,7 +716,7 @@ runtime-forced-stop-rollback-smoke-selfcheck:
     bash -n scripts/runtime_route_netns_lib.sh
     bash -n scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'unshare -Urn' scripts/runtime_route_netns_lib.sh
-    rg -q 'ip tuntap add dev chimera-stop-probe0 mode tun' scripts/runtime_forced_stop_rollback_smoke.sh
+    rg -q 'ip tuntap add dev chimera-stp0 mode tun' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'runtime_route_select_netns' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'CHIMERA_CLI_BIN' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'rollback recover' scripts/runtime_forced_stop_rollback_smoke.sh
@@ -725,6 +725,8 @@ runtime-forced-stop-rollback-smoke-selfcheck:
     rg -q 'apply_attempt_ok' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'recover_ok' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'down_state_clean' scripts/runtime_forced_stop_rollback_smoke.sh
+    rg -q 'failure_rc' scripts/runtime_forced_stop_rollback_smoke.sh
+    rg -q 'counts_for_release' scripts/runtime_forced_stop_rollback_smoke.sh
 
 ship-readiness-selfcheck:
     test -x scripts/ship_readiness.sh
@@ -1984,6 +1986,8 @@ ship-report-contract-check:
     rg -q '"apply_attempt_ok":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
     rg -q '"recover_ok":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
     rg -q '"down_state_clean":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
+    rg -q '"skipped_no_tun":false' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
+    rg -q '"counts_for_release":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
     rg -q '"status":"ok"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json
     rg -q '"kind":"runtime_real_world_probe_smoke"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json
     rg -q '"network_state":"not_modified"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json
@@ -2118,6 +2122,7 @@ ship-nonregression-guard-selfcheck:
     rg -q 'release_ok mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'counts_for_release' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'route multi-cidr skipped_no_tun is not releasable' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'forced-stop skipped_no_tun is not releasable' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_nonregression_guard.rs

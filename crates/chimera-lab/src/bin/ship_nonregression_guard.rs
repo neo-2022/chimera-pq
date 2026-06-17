@@ -84,6 +84,10 @@ fn main() {
         require_bool_field(&rt_forced, "apply_attempt_ok", true);
         require_bool_field(&rt_forced, "recover_ok", true);
         require_bool_field(&rt_forced, "down_state_clean", true);
+        require_bool_field(&rt_forced, "counts_for_release", true);
+        if get_bool(&rt_forced, "skipped_no_tun") {
+            fail("ship nonregression guard: forced-stop skipped_no_tun is not releasable");
+        }
     }
     if get_bool(&ship, "runtime_real_world_probe_smoke_ok") {
         require_field(&rt_probe, "status", "ok");

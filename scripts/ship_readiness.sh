@@ -140,7 +140,7 @@ fi
 if rg -q '"status":"ok"' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json && rg -q '"network_state":"not_modified"' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json && rg -q '"precedence_ok":true' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json && rg -q '"all_matches_ok":true' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json && rg -q '"dns_binding_ok":true' docs/RUNTIME_POLICY_PRECEDENCE_SMOKE.json; then
   runtime_policy_precedence_smoke_ok=true
 fi
-if rg -q '"status":"ok"' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"network_state":"modified"' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"apply_attempt_ok":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"recover_ok":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"down_state_clean":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json; then
+if rg -q '"status":"ok"' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"network_state":"modified"' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"apply_attempt_ok":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"recover_ok":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"down_state_clean":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"skipped_no_tun":false' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json && rg -q '"counts_for_release":true' docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json; then
   runtime_forced_stop_rollback_smoke_ok=true
 fi
 if rg -q '"status":"ok"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json && rg -q '"kind":"runtime_real_world_probe_smoke"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json && rg -q '"network_state":"not_modified"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json; then
