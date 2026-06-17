@@ -43,6 +43,7 @@ Reference reports:
 - `docs/MVP_VERIFY.json`
 - `docs/RELEASE_READINESS_REPORT.json`
 - `docs/benchmark_baseline.json`
+- `docs/benchmark_ci_baseline.json`
 - `docs/benchmark_latest.json`
 - `docs/BENCHMARK_REGRESSION_GATE.json`
 - `docs/SHIP_READINESS_REPORT.json`

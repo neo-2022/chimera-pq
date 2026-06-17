@@ -55,6 +55,7 @@ fn main() {
         "docs/MVP_HANDOFF_CHECKLIST.md",
         "docs/SECOND_MACHINE_REPORT.md",
         "docs/benchmark_baseline.json",
+        "docs/benchmark_ci_baseline.json",
     ];
 
     for artifact in required_artifacts {

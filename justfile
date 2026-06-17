@@ -731,7 +731,9 @@ ship-readiness-selfcheck:
     rg -q 'CHIMERA_ACCEPT_BENCHMARK_BASELINE_REFRESH' scripts/baseline_freeze.sh
     ! rg -q '^cp docs/benchmark_latest.json docs/benchmark_baseline.json$' scripts/baseline_freeze.sh
     awk 'BEGIN{in_fresh=0;in_required=0;fresh=0;required=0} /let fresh_artifacts = \[/{in_fresh=1} /let required_artifacts = \[/{in_fresh=0;in_required=1} in_fresh && /docs\/benchmark_baseline\.json/{fresh=1} in_required && /docs\/benchmark_baseline\.json/{required=1} in_required && /\];/{in_required=0} END{exit (!fresh && required) ? 0 : 1}' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
+    awk 'BEGIN{in_fresh=0;in_required=0;fresh=0;required=0} /let fresh_artifacts = \[/{in_fresh=1} /let required_artifacts = \[/{in_fresh=0;in_required=1} in_fresh && /docs\/benchmark_ci_baseline\.json/{fresh=1} in_required && /docs\/benchmark_ci_baseline\.json/{required=1} in_required && /\];/{in_required=0} END{exit (!fresh && required) ? 0 : 1}' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     ! sed -n '/^for artifact in \\/,/^do$/p' scripts/ship_readiness.sh | rg -q 'docs/benchmark_baseline.json'
+    ! sed -n '/^for artifact in \\/,/^do$/p' scripts/ship_readiness.sh | rg -q 'docs/benchmark_ci_baseline.json'
     rg -q 'just cef-track-report' scripts/ship_readiness.sh
     rg -q 'just cef-track-guard' scripts/ship_readiness.sh
     rg -q 'just cef-track-sync-guard' scripts/ship_readiness.sh
@@ -1493,10 +1495,28 @@ benchmark-regression-check:
 benchmark-regression-selfcheck:
     test -x scripts/benchmark_regression_check.sh
     bash -n scripts/benchmark_regression_check.sh
+    test -x scripts/benchmark_regression_profile_contract_smoke.sh
+    bash -n scripts/benchmark_regression_profile_contract_smoke.sh
     rg -q 'max_attempts=2' scripts/benchmark_regression_check.sh
+    rg -q 'CHIMERA_BENCHMARK_BASELINE_FILE' scripts/benchmark_regression_check.sh
+    rg -q 'CHIMERA_BENCHMARK_BASELINE_PROFILE' scripts/benchmark_regression_check.sh
+    rg -q 'CHIMERA_BENCHMARK_MAX_REGRESSION_PCT' scripts/benchmark_regression_check.sh
+    rg -q 'GITHUB_ACTIONS' scripts/benchmark_regression_check.sh
+    rg -Fq 'invalid benchmark baseline path' scripts/benchmark_regression_check.sh
+    rg -Fq 'missing baseline file' scripts/benchmark_regression_check.sh
+    rg -Fq 'exceeds release gate maximum 20' scripts/benchmark_regression_check.sh
+    ! rg -q 'baseline_file="docs/benchmark_latest.json"' scripts/benchmark_regression_check.sh
+    rg -Fq 'missing local baseline was accepted' scripts/benchmark_regression_profile_contract_smoke.sh
+    rg -Fq '^[0-9]+([.][0-9]+)?$' scripts/benchmark_regression_check.sh
+    rg -Fq '^[A-Za-z0-9_.-]+$' scripts/benchmark_regression_check.sh
+    rg -q 'docs/benchmark_ci_baseline.json' scripts/benchmark_regression_check.sh
+    test -f docs/benchmark_ci_baseline.json
     rg -q 'benchmark-report --baseline' scripts/benchmark_regression_check.sh
     rg -q 'BENCHMARK_REGRESSION_GATE.json' scripts/benchmark_regression_check.sh
     rg -q '"kind":"benchmark_regression_gate"' scripts/benchmark_regression_check.sh
+    rg -q '"baseline_profile":"' scripts/benchmark_regression_check.sh
+    rg -q '"max_regression_pct":' scripts/benchmark_regression_check.sh
+    bash scripts/benchmark_regression_profile_contract_smoke.sh
 
 baseline-verify:
     sha256sum -c docs/V1_MVP_BASELINE.sha256
@@ -1771,6 +1791,7 @@ ship-report-contract-check:
     just baseline-verify
     test -f docs/CEF_TRACK_REPORT.json
     test -f docs/benchmark_baseline.json
+    test -f docs/benchmark_ci_baseline.json
     test -f docs/benchmark_latest.json
     rg -q '"status":"ok"' docs/SHIP_READINESS_REPORT.json
     rg -q '"status_scope":"lab_source_gate_only"' docs/SHIP_READINESS_REPORT.json
@@ -1874,6 +1895,8 @@ ship-report-contract-check:
     rg -q '"kind":"benchmark_regression_gate"' docs/BENCHMARK_REGRESSION_GATE.json
     rg -q '"attempt":' docs/BENCHMARK_REGRESSION_GATE.json
     rg -q '"max_attempts":2' docs/BENCHMARK_REGRESSION_GATE.json
+    rg -q '"max_regression_pct":20' docs/BENCHMARK_REGRESSION_GATE.json
+    rg -q '"baseline_profile":"(local|github_actions|custom)"' docs/BENCHMARK_REGRESSION_GATE.json
     rg -q '"baseline_file":"docs/benchmark_' docs/BENCHMARK_REGRESSION_GATE.json
     rg -q '"output_file":"docs/benchmark_latest.json"' docs/BENCHMARK_REGRESSION_GATE.json
     rg -q '"path": "docs/BENCHMARK_REGRESSION_GATE.json"' docs/V1_MVP_BASELINE_MANIFEST.json
@@ -2053,6 +2076,7 @@ ship-readiness-freshness-guard-selfcheck:
     rg -q 'stale/out-of-window artifact' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     rg -Fq 'delta.abs() > max_age_sec' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     awk 'BEGIN{in_fresh=0;in_required=0;fresh=0;required=0} /let fresh_artifacts = \[/{in_fresh=1} /let required_artifacts = \[/{in_fresh=0;in_required=1} in_fresh && /docs\/benchmark_baseline\.json/{fresh=1} in_required && /docs\/benchmark_baseline\.json/{required=1} in_required && /\];/{in_required=0} END{exit (!fresh && required) ? 0 : 1}' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
+    awk 'BEGIN{in_fresh=0;in_required=0;fresh=0;required=0} /let fresh_artifacts = \[/{in_fresh=1} /let required_artifacts = \[/{in_fresh=0;in_required=1} in_fresh && /docs\/benchmark_ci_baseline\.json/{fresh=1} in_required && /docs\/benchmark_ci_baseline\.json/{required=1} in_required && /\];/{in_required=0} END{exit (!fresh && required) ? 0 : 1}' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
 
 ship-nonregression-guard:
     bash scripts/ship_nonregression_guard.sh \

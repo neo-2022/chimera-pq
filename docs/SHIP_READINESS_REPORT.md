@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
 Status: **PASS (LAB/SOURCE GATE ONLY)**
-Generated at (UTC): `2026-06-17T11:46:45Z`
+Generated at (UTC): `2026-06-17T12:40:18Z`
 
 Checks:
 - Baseline freeze: `true`
@@ -72,6 +72,7 @@ Artifacts:
 - `docs/CEF_PHASE1_SMOKE.json`
 - `docs/BENCHMARK_REGRESSION_GATE.json`
 - `docs/benchmark_baseline.json`
+- `docs/benchmark_ci_baseline.json`
 - `docs/benchmark_latest.json`
 - `docs/RUNTIME_APPLY_DNS_SMOKE.json`
 - `docs/RUNTIME_APPLY_ROUTE_SMOKE.json`

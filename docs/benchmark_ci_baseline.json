@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "message_en": "GitHub Actions benchmark baseline for the hosted CI runner profile.",
+  "message_ru": "Базовая производительность GitHub Actions для профиля hosted CI runner.",
+  "created_at_unix_sec": 1781697150,
+  "baseline_profile": "github_actions",
+  "source": "github_actions_run_27686843976_ship_readiness_failed_log_2026-06-17",
+  "config_smoke": true,
+  "smoke": true,
+  "fuzz_smoke": true,
+  "net_sim": true,
+  "perf_smoke": true,
+  "iterations": 20000,
+  "encode_ops_per_sec": 4550000,
+  "decode_ops_per_sec": 4000000,
+  "encoded_total_bytes": 24280000,
+  "decoded_total_payload_bytes": 24000000,
+  "min_encode_ops": null,
+  "min_decode_ops": null,
+  "net_sim_reconnect_events": 1,
+  "net_sim_dropped": 18,
+  "net_sim_attempts": 100
+}

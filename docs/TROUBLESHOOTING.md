@@ -58,9 +58,11 @@ Fix:
    - `"freshness_check":true` in `steps`
    - `"runtime_apply_route_smoke":true` in `steps`
    - `docs/benchmark_baseline.json` exists
+   - `docs/benchmark_ci_baseline.json` exists
    - `docs/benchmark_latest.json` exists
    - `docs/BENCHMARK_REGRESSION_GATE.json` exists
    - `"status":"ok"` in `docs/BENCHMARK_REGRESSION_GATE.json`
+   - `"baseline_profile":"local"` locally or `"baseline_profile":"github_actions"` in GitHub Actions
    - `"runtime_apply_dns_verified":true` in `docs/RELEASE_READINESS_REPORT.json` (`release_gate`)
    - `"runtime_apply_route_verified":true` in `docs/RELEASE_READINESS_REPORT.json` (`release_gate`)
    - `"runtime_route_policy_validation_verified":true` in `docs/RELEASE_READINESS_REPORT.json` (`release_gate`)
@@ -86,7 +88,8 @@ Symptom:
 
 Cause:
 
-- Normal machine noise.
+- Normal machine noise, or comparing a benchmark result against the wrong
+  machine profile.
 
 Fix:
 
@@ -96,7 +99,8 @@ Fix:
 3. Inspect benchmark gate artifact:
    - `docs/BENCHMARK_REGRESSION_GATE.json`
    - `"status":"ok"` expected for green pipeline
-4. If gates pass, refresh baseline:
+   - `"baseline_profile"` must match the executing profile
+4. If gates pass and the local baseline intentionally changed, refresh baseline:
    - `just baseline-freeze`
 5. Re-verify:
    - `just baseline-verify`

@@ -214,6 +214,9 @@ done
 if [[ ! -f docs/benchmark_baseline.json ]]; then
   artifacts_fresh_ok=false
 fi
+if [[ ! -f docs/benchmark_ci_baseline.json ]]; then
+  artifacts_fresh_ok=false
+fi
 
 status="fail"
 if [[ "$release_ok" == "true" && "$cef_phase1_smoke_ok" == "true" && "$cef_phase1_closed" == "true" && "$network_state_ok" == "true" && "$runtime_apply_smoke_ok" == "true" && "$runtime_apply_route_smoke_ok" == "true" && "$runtime_apply_route_existing_tun_smoke_ok" == "true" && "$runtime_apply_route_multi_cidr_smoke_ok" == "true" && "$runtime_route_policy_validation_smoke_ok" == "true" && "$runtime_route_duplicate_cidr_validation_smoke_ok" == "true" && "$runtime_tun_name_validation_smoke_ok" == "true" && "$runtime_resolv_conf_validation_smoke_ok" == "true" && "$runtime_datapath_multiflow_smoke_ok" == "true" && "$runtime_policy_precedence_smoke_ok" == "true" && "$runtime_forced_stop_rollback_smoke_ok" == "true" && "$runtime_probe_access_smoke_ok" == "true" && "$runtime_real_world_probe_smoke_ok" == "true" && "$mesh_route_explain_ok" == "true" && "$mesh_auto_adaptive_ok" == "true" && "$artifacts_fresh_ok" == "true" && "$cef_gap_map_guard" == "true" ]]; then
@@ -301,6 +304,7 @@ Artifacts:
 - \`docs/CEF_PHASE1_SMOKE.json\`
 - \`docs/BENCHMARK_REGRESSION_GATE.json\`
 - \`docs/benchmark_baseline.json\`
+- \`docs/benchmark_ci_baseline.json\`
 - \`docs/benchmark_latest.json\`
 - \`docs/RUNTIME_APPLY_DNS_SMOKE.json\`
 - \`docs/RUNTIME_APPLY_ROUTE_SMOKE.json\`

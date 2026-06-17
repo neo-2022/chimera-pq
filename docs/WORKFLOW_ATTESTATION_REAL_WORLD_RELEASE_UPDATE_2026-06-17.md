@@ -55,6 +55,19 @@ Known blocker themes from the council before this attestation:
 - SSH stand proof must be collected on both laptop and VPS;
 - source/lab PASS is not Real-World PASS.
 
+Updated council finding during this cycle:
+
+- GitHub CI failure on `de6a680` was traced to `benchmark-regression-check`,
+  not to redaction, TUN, timeout or freshness.
+- The failed GitHub log reported encode regression `41.01%` and `41.93%`
+  against `docs/benchmark_baseline.json`, which is a local-machine baseline.
+- Consensus fix: keep the 20% regression threshold, keep the benchmark gate
+  mandatory, and add an explicit GitHub Actions benchmark profile
+  `docs/benchmark_ci_baseline.json` selected only under `GITHUB_ACTIONS=true`
+  or by explicit `CHIMERA_BENCHMARK_BASELINE_FILE`.
+- Rejected: tagging on red CI, skipping the benchmark gate, or globally raising
+  the allowed regression threshold.
+
 ## Implementation Plan
 
 1. Run source and release contract gates without local CHIMERA runtime launch.
@@ -100,6 +113,9 @@ Known blocker themes from the council before this attestation:
 - Current `docs/SHIP_READINESS_REPORT.json` is lab/source scoped:
   `status_scope=lab_source_gate_only`, `runtime_real_world_probe_mode=ci_snapshot`,
   `runtime_real_world_datapath_probe_ok=false`.
+- GitHub CI run `27686843976`, job `81887559086`, failed at
+  `benchmark-regression-check` with encode regression over the 20% threshold
+  against the local baseline.
 
 ## Not Closed Yet
 

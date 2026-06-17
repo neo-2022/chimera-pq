@@ -6,6 +6,7 @@ artifacts=(
   "docs/RELEASE_READINESS_REPORT.json"
   "docs/benchmark_latest.json"
   "docs/benchmark_baseline.json"
+  "docs/benchmark_ci_baseline.json"
   "docs/BENCHMARK_REGRESSION_GATE.json"
   "docs/MVP_SNAPSHOT.json"
   "docs/REPORT_PACK.json"

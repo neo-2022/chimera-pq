@@ -55,6 +55,7 @@ jobs:
       - name: Ship Readiness Full Gate
         env:
           CHIMERA_REAL_WORLD_PROBE_MODE: ci_snapshot
+          CHIMERA_PROBE_ACCESS_MODE: ci_snapshot
         run: just ship-readiness
 
       - name: Upload MVP/Ship Reports

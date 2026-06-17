@@ -54,6 +54,7 @@ Verify files exist and are updated:
 - `docs/RUNTIME_APPLY_ROUTE_SMOKE.json`
 - `docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json`
 - `docs/benchmark_baseline.json`
+- `docs/benchmark_ci_baseline.json`
 
 ## 5) Baseline Integrity Check
 
@@ -101,6 +102,7 @@ Runtime apply smoke must additionally prove:
 - `"cef_phase1_smoke":true` in `docs/RELEASE_READINESS_REPORT.json` (`artifacts`).
 - `"cef_phase1_smoke":true` in `docs/REPORT_PACK.json`.
 - `"status":"ok"` in `docs/BENCHMARK_REGRESSION_GATE.json`.
+- `"baseline_profile"` in `docs/BENCHMARK_REGRESSION_GATE.json` matches the executing machine profile.
 
 No command in this checklist should change:
 
