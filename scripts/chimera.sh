@@ -193,7 +193,7 @@ case "${1:-}" in
     if [[ -x "$LOCAL_SH" ]]; then
       exec "$LOCAL_SH" -help
     fi
-    echo "usage: curl -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install" >&2
+    echo "usage: curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install" >&2
     exit 2
     ;;
   *)
@@ -201,7 +201,7 @@ case "${1:-}" in
       exec "$LOCAL_SH" "$@"
     fi
     echo "error: CHIMERA is not installed. Run GitHub one-command install first." >&2
-    echo "usage: curl -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install" >&2
+    echo "usage: curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install" >&2
     exit 2
     ;;
 esac

@@ -191,8 +191,12 @@ Required stand flow:
 Canonical stand command:
 
 ```bash
-curl -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install
+curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install
 ```
+
+The outer GitHub bootstrap download must keep these timeout/retry bounds.
+Without them a network stall can hang before the published installer gets a
+chance to run its own bounded downloads and checksum checks.
 
 Required latest release assets:
 

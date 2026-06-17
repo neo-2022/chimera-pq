@@ -61,6 +61,8 @@ rg -n 'CHIMERA_BOOTSTRAP_DOWNLOAD_TIMEOUT_SEC' "$ROOT_DIR/scripts/chimera-update
 rg -n 'wget --no-config .*--tries=1 .*--timeout="\$connect_timeout_sec" .*--read-timeout="\$max_time_sec"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_wget_download_not_bounded"
 rg -n 'curl --disable .*--retry "\$retries" .*--connect-timeout "\$connect_timeout_sec" .*--max-time "\$max_time_sec"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_curl_download_not_bounded"
 rg -n 'curl --disable .*--retry 3 .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_curl_rcfile_not_disabled"
+rg -n 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 .*chimera\.sh' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_usage_not_bounded"
+rg -n 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 .*\$bootstrap_url.* \| bash -s -- -install' "$ROOT_DIR/scripts/chimera_remote_cycle_smoke.sh" >/dev/null || fail "remote_cycle_bootstrap_not_bounded"
 rg -n 'wget --no-config -qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_wget_rcfile_not_disabled"
 rg -n 'curl --disable .*--retry 3 .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_curl_rcfile_not_disabled"
 rg -n 'wget --no-config -qO "\$dest" "\$url"' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_wget_rcfile_not_disabled"
