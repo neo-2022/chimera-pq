@@ -450,6 +450,7 @@ pub(crate) fn render_mesh_auto_adaptive_trace_json() -> String {
         max_selected_per_region: 1,
         min_distinct_regions: 1,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let manual_plan = match mesh_runtime.plan_path(&req, &manual_policy) {

@@ -301,6 +301,7 @@ pub struct MeshPathPolicy {
     pub max_selected_per_region: usize,
     pub min_distinct_regions: usize,
     pub path_profile_override: Option<MeshPathProfile>,
+    pub multipath_mode: Option<MultipathMode>,
     pub connect_fallback_ports: Vec<u16>,
 }
 
@@ -316,6 +317,7 @@ impl MeshPathPolicy {
             max_selected_per_region: 1,
             min_distinct_regions: 1,
             path_profile_override: None,
+            multipath_mode: None,
             connect_fallback_ports: vec![443, 8443],
         }
     }
@@ -398,6 +400,7 @@ impl MeshPathPolicy {
         let mut max_selected_per_region: Option<usize> = None;
         let mut min_distinct_regions: Option<usize> = None;
         let mut path_profile_override: Option<MeshPathProfile> = None;
+        let mut multipath_mode: Option<MultipathMode> = None;
         let mut connect_fallback_ports: Option<Vec<u16>> = None;
         let mut seen_mesh_keys = BTreeSet::new();
 
@@ -457,7 +460,7 @@ impl MeshPathPolicy {
                     let _ = TrafficClass::from_dps_value(value)?;
                 }
                 "mesh_multipath_mode" => {
-                    let _ = MultipathMode::from_dps_value(value)?;
+                    multipath_mode = Some(MultipathMode::from_dps_value(value)?);
                 }
                 "mesh_continuity_policy" => {
                     let _ = ContinuityPolicy::from_dps_value(value)?;
@@ -490,6 +493,7 @@ impl MeshPathPolicy {
             max_selected_per_region.unwrap_or(policy.max_selected_per_region);
         policy.min_distinct_regions = min_distinct_regions.unwrap_or(policy.min_distinct_regions);
         policy.path_profile_override = path_profile_override;
+        policy.multipath_mode = multipath_mode;
         policy.connect_fallback_ports =
             connect_fallback_ports.unwrap_or(policy.connect_fallback_ports);
         policy.validate()?;

@@ -36,6 +36,7 @@ fn plan_manual_override_disables_health_filtering() {
         max_selected_per_region: 1,
         min_distinct_regions: 1,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

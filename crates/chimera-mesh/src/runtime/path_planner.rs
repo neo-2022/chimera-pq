@@ -116,8 +116,11 @@ impl MeshRuntime {
             &mut explain,
         )?;
         append_standby_shadow_explain(&selected_peers, &mut explain);
-        let multipath_schedule =
-            build_multipath_schedule(&selected_peers, MeshMultipathMode::Off, None)?;
+        let multipath_mode = policy
+            .multipath_mode
+            .map(schedule_mode_from_multipath_hint)
+            .unwrap_or(MeshMultipathMode::Off);
+        let multipath_schedule = build_multipath_schedule(&selected_peers, multipath_mode, None)?;
         multipath_schedule::append_multipath_schedule_explain(&mut explain, &multipath_schedule);
 
         Ok(MeshPathPlan {

@@ -43,6 +43,7 @@ fn planning_prefers_diverse_regions_before_filling_duplicates() {
         max_selected_per_region: 1,
         min_distinct_regions: 1,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime
@@ -143,6 +144,7 @@ fn planning_respects_max_selected_per_region_cap() {
         max_selected_per_region: 2,
         min_distinct_regions: 1,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

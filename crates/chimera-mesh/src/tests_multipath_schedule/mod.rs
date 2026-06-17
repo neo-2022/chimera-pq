@@ -1,4 +1,5 @@
 mod capacity_budget;
+mod direct_planning;
 mod helpers;
 
 use crate::{MeshMultipathLaneRole, MeshMultipathMode};

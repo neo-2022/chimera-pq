@@ -21,6 +21,7 @@ fn path_policy_manual_override_fields_detect_non_default_values() {
         max_selected_per_region: 2,
         min_distinct_regions: 2,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let fields = policy.manual_override_fields();
@@ -46,6 +47,7 @@ fn policy_validate_rejects_region_cap_above_max_peers() {
         max_selected_per_region: 2,
         min_distinct_regions: 1,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     assert!(policy.validate().is_err());

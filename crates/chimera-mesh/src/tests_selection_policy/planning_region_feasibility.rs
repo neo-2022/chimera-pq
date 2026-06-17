@@ -36,6 +36,7 @@ fn planning_marks_when_min_distinct_regions_not_met() {
         max_selected_per_region: 2,
         min_distinct_regions: 2,
         path_profile_override: None,
+        multipath_mode: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

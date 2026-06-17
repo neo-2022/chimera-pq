@@ -1,4 +1,4 @@
-use crate::{MeshPathPolicy, MeshPathProfile};
+use crate::{MeshPathPolicy, MeshPathProfile, MultipathMode};
 
 #[test]
 fn policy_from_dps_payload_parses_and_validates() {
@@ -67,6 +67,14 @@ fn policy_from_dps_payload_parses_connect_fallback_ports() {
     let payload = "allow=mesh;mesh_max_peers=1;mesh_max_selected_per_region=1;mesh_connect_fallback_ports=9443,443,8443,443";
     let policy = MeshPathPolicy::from_dps_payload(payload).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(policy.connect_fallback_ports, vec![9443, 443, 8443]);
+}
+
+#[test]
+fn policy_from_dps_payload_preserves_multipath_mode_for_direct_planning() {
+    let payload =
+        "allow=mesh;mesh_max_peers=2;mesh_max_selected_per_region=2;mesh_multipath_mode=flow_shard";
+    let policy = MeshPathPolicy::from_dps_payload(payload).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(policy.multipath_mode, Some(MultipathMode::FlowShard));
 }
 
 #[test]
