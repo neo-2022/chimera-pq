@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/runtime_route_netns_lib.sh"
 
 printf '%s\n' \
   'carrier.profile = in-memory' \
@@ -16,13 +17,18 @@ printf '%s\n' \
 state_file="/tmp/chimera_runtime_forced_stop_state.json"
 rm -f "$state_file"
 
+runtime_route_build_cli
+
 set +e
 apply_ok=false
 recover_ok=false
 down_ok=false
-if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
-  unshare -Urn bash -ceu '
-    cargo run -q -p chimera-cli -- up \
+namespace_mode="none"
+probe='ip tuntap add dev chimera-stop-probe0 mode tun; ip link delete dev chimera-stop-probe0'
+if runtime_route_select_netns "$probe"; then
+  namespace_mode="$CHIMERA_ROUTE_NETNS_MODE"
+  runtime_route_run_netns '
+    "$CHIMERA_CLI_BIN" up \
       --state-file /tmp/chimera_runtime_forced_stop_state.json \
       --config /tmp/chimera_client_forced_stop_smoke.conf \
       --skip-connect-check true \
@@ -42,7 +48,7 @@ if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
     ip route show table 60010 | rg -q "198.18.0.0/15 dev chimera-stop0"
 
     # Simulate forced-stop path: no graceful down between apply and recover.
-    cargo run -q -p chimera-cli -- rollback recover --state-file /tmp/chimera_runtime_forced_stop_state.json
+    "$CHIMERA_CLI_BIN" rollback recover --state-file /tmp/chimera_runtime_forced_stop_state.json
     test ! -f /tmp/chimera_runtime_forced_stop_state.json
     if ip rule show | rg -q "to 198.18.0.0/15.*lookup 60010"; then
       exit 41
@@ -60,34 +66,10 @@ if unshare -Urn bash -ceu "ip link show >/dev/null" >/dev/null 2>&1; then
     recover_ok=true
     down_ok=true
   fi
-else
-  cargo run -q -p chimera-cli -- up \
-    --state-file "$state_file" \
-    --config /tmp/chimera_client_forced_stop_smoke.conf \
-    --skip-connect-check true \
-    --apply-tun true \
-    --tun-name chimera-stop0 \
-    --tun-local-cidr 10.90.0.2/30 \
-    --tun-peer-cidr 10.90.0.1/30 \
-    --apply-route true \
-    --route-cidr 198.18.0.0/15 \
-    --route-policy true \
-    --route-table 60010 \
-    --route-rule-priority 12100
-  rc=$?
-  if [[ $rc -eq 0 ]]; then
-    apply_ok=true
-    rg -q "\"network_state\":\"modified\"" "$state_file"
-    cargo run -q -p chimera-cli -- rollback recover --state-file "$state_file"
-    if [[ ! -f "$state_file" ]]; then
-      recover_ok=true
-    fi
-    down_ok=true
-  fi
 fi
 set -e
 
-json="{\"status\":\"ok\",\"kind\":\"runtime_forced_stop_rollback_smoke\",\"message_en\":\"Runtime forced-stop rollback smoke executed.\",\"message_ru\":\"Smoke-проверка rollback после forced-stop выполнена.\",\"network_state\":\"modified\",\"apply_attempt_ok\":${apply_ok},\"recover_ok\":${recover_ok},\"down_state_clean\":${down_ok},\"notes\":\"Uses unshare user+net namespace when available; validates recover path without graceful down.\"}"
+json="{\"status\":\"ok\",\"kind\":\"runtime_forced_stop_rollback_smoke\",\"message_en\":\"Runtime forced-stop rollback smoke executed.\",\"message_ru\":\"Smoke-проверка rollback после forced-stop выполнена.\",\"network_state\":\"modified\",\"apply_attempt_ok\":${apply_ok},\"recover_ok\":${recover_ok},\"down_state_clean\":${down_ok},\"namespace_mode\":\"${namespace_mode}\",\"notes\":\"Uses unshare user+net namespace, or CI-gated sudo net namespace, with a real TUN creation probe; validates recover path without graceful down.\"}"
 printf "%s\n" "$json" > docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json
 
 if [[ "$apply_ok" != "true" || "$recover_ok" != "true" || "$down_ok" != "true" ]]; then

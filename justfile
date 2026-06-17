@@ -712,8 +712,13 @@ runtime-policy-precedence-smoke-selfcheck:
 
 runtime-forced-stop-rollback-smoke-selfcheck:
     test -x scripts/runtime_forced_stop_rollback_smoke.sh
+    test -f scripts/runtime_route_netns_lib.sh
+    bash -n scripts/runtime_route_netns_lib.sh
     bash -n scripts/runtime_forced_stop_rollback_smoke.sh
-    rg -q 'unshare -Urn' scripts/runtime_forced_stop_rollback_smoke.sh
+    rg -q 'unshare -Urn' scripts/runtime_route_netns_lib.sh
+    rg -q 'ip tuntap add dev chimera-stop-probe0 mode tun' scripts/runtime_forced_stop_rollback_smoke.sh
+    rg -q 'runtime_route_select_netns' scripts/runtime_forced_stop_rollback_smoke.sh
+    rg -q 'CHIMERA_CLI_BIN' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'rollback recover' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'route-table 60010' scripts/runtime_forced_stop_rollback_smoke.sh
     rg -q 'route-rule-priority 12100' scripts/runtime_forced_stop_rollback_smoke.sh
