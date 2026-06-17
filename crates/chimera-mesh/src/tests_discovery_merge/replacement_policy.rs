@@ -80,12 +80,12 @@ fn merge_discovery_respects_replacement_score_delta_policy() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_stability=node-a:u3:r1:h1:d0"))
+            .any(|line| line.contains("selected_peer_stability=peer#1:u3:r1:h1:d0"))
     );
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_effective_replacement_thresholds=node-a:5"))
+            .any(|line| line.contains("selected_effective_replacement_thresholds=peer#1:5"))
     );
     assert!(
         plan.explain
@@ -98,12 +98,12 @@ fn merge_discovery_respects_replacement_score_delta_policy() {
             .any(|line| line.contains("effective_replacement_threshold_max=5"))
     );
     assert!(plan.explain.iter().any(|line| line.contains(
-        "selected_replacement_decisions=node-a:replace1:hold1:churn_block0:threshold_block1"
+        "selected_replacement_decisions=peer#1:replace1:hold1:churn_block0:threshold_block1"
     )));
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_replacement_budget_remaining=node-a:7"))
+            .any(|line| line.contains("selected_replacement_budget_remaining=peer#1:7"))
     );
     assert!(
         plan.explain
@@ -219,12 +219,12 @@ fn merge_discovery_uses_degraded_replacement_threshold() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_stability=node-a:u2:r1:h0:d1"))
+            .any(|line| line.contains("selected_peer_stability=peer#1:u2:r1:h0:d1"))
     );
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_effective_replacement_thresholds=node-a:1"))
+            .any(|line| line.contains("selected_effective_replacement_thresholds=peer#1:1"))
     );
     assert!(
         plan.explain
@@ -237,12 +237,12 @@ fn merge_discovery_uses_degraded_replacement_threshold() {
             .any(|line| line.contains("effective_replacement_threshold_max=1"))
     );
     assert!(plan.explain.iter().any(|line| line.contains(
-        "selected_replacement_decisions=node-a:replace1:hold0:churn_block0:threshold_block0"
+        "selected_replacement_decisions=peer#1:replace1:hold0:churn_block0:threshold_block0"
     )));
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_replacement_budget_remaining=node-a:7"))
+            .any(|line| line.contains("selected_replacement_budget_remaining=peer#1:7"))
     );
     assert!(
         plan.explain
@@ -358,12 +358,12 @@ fn merge_discovery_respects_max_replacements_per_window() {
         .plan_path(&req, &policy)
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(plan.explain.iter().any(|line| line.contains(
-        "selected_replacement_decisions=node-a:replace1:hold1:churn_block1:threshold_block0"
+        "selected_replacement_decisions=peer#1:replace1:hold1:churn_block1:threshold_block0"
     )));
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_replacement_budget_remaining=node-a:0"))
+            .any(|line| line.contains("selected_replacement_budget_remaining=peer#1:0"))
     );
     assert!(
         plan.explain

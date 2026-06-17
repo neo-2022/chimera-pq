@@ -711,7 +711,13 @@ ship-readiness-selfcheck:
     test -x scripts/ship_readiness.sh
     bash -n scripts/ship_readiness.sh
     rg -q 'artifacts_fresh' scripts/ship_readiness.sh
-    rg -q 'freshness_check' scripts/ship_readiness.sh
+    rg -q '"status_scope":"lab_source_gate_only"' scripts/ship_readiness.sh
+    rg -q 'fresh_checked_artifacts_ok' scripts/ship_readiness.sh
+    rg -q 'baseline_control_required' scripts/ship_readiness.sh
+    rg -q 'Fresh checked artifacts in this run' scripts/ship_readiness.sh
+    rg -q 'Benchmark baseline control present' scripts/ship_readiness.sh
+    ! rg -q 'Artifacts refreshed in this run' scripts/ship_readiness.sh
+    rg -Fq '"freshness_check":${artifacts_fresh_ok}' scripts/ship_readiness.sh
     rg -q 'runtime_apply_route_smoke_selfcheck' scripts/ship_readiness.sh
     rg -q 'runtime_apply_route_multi_cidr_smoke_selfcheck' scripts/ship_readiness.sh
     rg -q 'runtime_apply_route_multi_cidr_smoke' scripts/ship_readiness.sh
@@ -722,6 +728,10 @@ ship-readiness-selfcheck:
     rg -q 'just cef-phase1-smoke' scripts/ship_readiness.sh
     rg -q 'just benchmark-regression-check' scripts/ship_readiness.sh
     line_bench=$(grep -n '^just benchmark-regression-check$' scripts/ship_readiness.sh | cut -d: -f1); line_baseline=$(grep -n '^just baseline-freeze$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); test -n "$line_bench" && test -n "$line_baseline" && test -n "$line_cleanroom" && test "$line_bench" -lt "$line_baseline" && test "$line_baseline" -lt "$line_cleanroom"
+    rg -q 'CHIMERA_ACCEPT_BENCHMARK_BASELINE_REFRESH' scripts/baseline_freeze.sh
+    ! rg -q '^cp docs/benchmark_latest.json docs/benchmark_baseline.json$' scripts/baseline_freeze.sh
+    awk 'BEGIN{in_fresh=0;in_required=0;fresh=0;required=0} /let fresh_artifacts = \[/{in_fresh=1} /let required_artifacts = \[/{in_fresh=0;in_required=1} in_fresh && /docs\/benchmark_baseline\.json/{fresh=1} in_required && /docs\/benchmark_baseline\.json/{required=1} in_required && /\];/{in_required=0} END{exit (!fresh && required) ? 0 : 1}' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
+    ! sed -n '/^for artifact in \\/,/^do$/p' scripts/ship_readiness.sh | rg -q 'docs/benchmark_baseline.json'
     rg -q 'just cef-track-report' scripts/ship_readiness.sh
     rg -q 'just cef-track-guard' scripts/ship_readiness.sh
     rg -q 'just cef-track-sync-guard' scripts/ship_readiness.sh
@@ -788,6 +798,8 @@ ship-readiness-selfcheck:
     rg -q 'Direct/external target failures remain visible' scripts/ship_readiness.sh
     rg -q -- '--noproxy' crates/chimera-cli/src/main.rs
     rg -q -- '--noproxy' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q -- '--disable' crates/chimera-cli/src/main.rs
+    rg -q -- '--disable' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '"HTTP_PROXY"' crates/chimera-cli/src/main.rs
     rg -q 'env_remove\(key\)' crates/chimera-cli/src/main.rs
     rg -q '"HTTP_PROXY"' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
@@ -1761,6 +1773,7 @@ ship-report-contract-check:
     test -f docs/benchmark_baseline.json
     test -f docs/benchmark_latest.json
     rg -q '"status":"ok"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"status_scope":"lab_source_gate_only"' docs/SHIP_READINESS_REPORT.json
     rg -q '"kind":"ship_readiness_report"' docs/SHIP_READINESS_REPORT.json
     test "$(rg -c '"generated_at":"' docs/SHIP_READINESS_REPORT.json)" -eq 1
     rg -q '"generated_at":"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"' docs/SHIP_READINESS_REPORT.json
@@ -1803,6 +1816,8 @@ ship-report-contract-check:
     rg -q '"runtime_real_world_datapath_probe_error":"(none|curl_not_found|datapath_target_failed|ci_snapshot|unknown)"' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_direct_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_skipped_no_curl":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"fresh_checked_artifacts_ok":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"baseline_control_required":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"artifacts_fresh":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"baseline_freeze":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"cleanroom_handoff_check":true' docs/SHIP_READINESS_REPORT.json
@@ -1963,10 +1978,17 @@ ship-readiness-json-guard-selfcheck:
     rg -q 'cargo run -q -p chimera-lab --bin ship_readiness_json_guard --' scripts/ship_readiness_json_guard.sh
     test -f crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'ship readiness json guard: PASS' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'status_scope' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'Fresh checked artifacts in this run' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'Benchmark baseline control present' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'markdown must not claim every artifact refreshed' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'missing truth_boundary' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'markdown status must be lab/source scoped' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'invalid CEF line order' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'runtime real-world totals mismatch' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'invalid fresh_checked_artifacts_ok' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'require_step_eq' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'step mismatch' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath probe attempted with empty totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath probe not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath probe ok with failed targets' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
@@ -1985,9 +2007,35 @@ probe-access-ship-guard:
 
 probe-access-ship-guard-selfcheck:
     test -f crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    test -f crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    test -f crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard.rs | tr -d ' ')" -le 260
+    test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs | tr -d ' ')" -le 340
+    test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs | tr -d ' ')" -le 420
     rg -q '^#!\[forbid\(unsafe_code\)\]$' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q '#\[path = "probe_access_ship_guard/contract.rs"\]' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'invalid runtime_probe_access_mode' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'ci_snapshot probe access requires snapshot-safe targets' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'validate_probe_contract' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'probe failed_total mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q '#\[path = "contract_tests.rs"\]' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'target_error requires failed policy' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'rejects_probe_contract_total_mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'target direct_ok total mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'mixed ci_snapshot and live probe targets' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'threshold_exceeded cannot ship' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'rejects_probe_contract_target_row_mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_probe_contract_non_object_target' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_probe_contract_non_http_target_url' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_probe_contract_empty_authority_url' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_applied_policy_without_verify_ok' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_failed_policy_without_error' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_target_error_without_failed_policy' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'accepts_applied_policy_with_verified_route' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'authority_has_non_empty_host' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'applied policy must verify ok' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'rejects_mixed_ci_snapshot_and_live_targets' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'checked_total' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     rg -q 'probe access ship guard: PASS' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'rejects_ci_snapshot_with_external_targets' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     cargo test -q -p chimera-lab --bin probe_access_ship_guard
@@ -2004,6 +2052,7 @@ ship-readiness-freshness-guard-selfcheck:
     rg -q 'missing required artifact' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     rg -q 'stale/out-of-window artifact' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
     rg -Fq 'delta.abs() > max_age_sec' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
+    awk 'BEGIN{in_fresh=0;in_required=0;fresh=0;required=0} /let fresh_artifacts = \[/{in_fresh=1} /let required_artifacts = \[/{in_fresh=0;in_required=1} in_fresh && /docs\/benchmark_baseline\.json/{fresh=1} in_required && /docs\/benchmark_baseline\.json/{required=1} in_required && /\];/{in_required=0} END{exit (!fresh && required) ? 0 : 1}' crates/chimera-lab/src/bin/ship_readiness_freshness_guard.rs
 
 ship-nonregression-guard:
     bash scripts/ship_nonregression_guard.sh \

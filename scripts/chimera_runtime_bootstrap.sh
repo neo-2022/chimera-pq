@@ -27,14 +27,14 @@ download_url_to_file() {
   fi
   if command -v curl >/dev/null 2>&1; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      curl -fL --connect-timeout 10 --max-time 60 "$url" -o "$dest"
+      curl --disable -fL --connect-timeout 10 --max-time 60 "$url" -o "$dest"
     then
       return 0
     fi
   fi
   if command -v wget >/dev/null 2>&1; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      wget -qO "$dest" "$url"
+      wget --no-config -qO "$dest" "$url"
     then
       return 0
     fi

@@ -303,7 +303,8 @@ fn command_exists(name: &str) -> bool {
 
 fn run_curl_plain(url: &str, timeout_sec: u64) -> bool {
     let mut cmd = Command::new("curl");
-    cmd.arg("--silent")
+    cmd.arg("--disable")
+        .arg("--silent")
         .arg("--show-error")
         .arg("--location")
         .arg("--noproxy")

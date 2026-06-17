@@ -48,20 +48,23 @@ pub(super) fn collect_candidates(
         accepted_count: 0,
     };
 
-    for peer in peers.values() {
+    for (index, peer) in peers.values().enumerate() {
         match evaluate_candidate_peer(peer, filter) {
             CandidateEval::Accepted(score) => {
                 let mut accepted = peer.clone();
                 accepted.selection_score = score;
                 stats.accepted_count = stats.accepted_count.saturating_add(1);
-                explain.push(format!("peer={} accepted score={score}", accepted.node_id));
+                explain.push(format!(
+                    "candidate#{} accepted score={score}",
+                    index.saturating_add(1)
+                ));
                 candidates.push(accepted);
             }
             CandidateEval::Rejected(reason) => {
                 register_candidate_rejection(&mut stats, reason);
                 explain.push(format!(
-                    "peer={} rejected={}",
-                    peer.node_id,
+                    "candidate#{} rejected={}",
+                    index.saturating_add(1),
                     reason.as_str()
                 ));
             }

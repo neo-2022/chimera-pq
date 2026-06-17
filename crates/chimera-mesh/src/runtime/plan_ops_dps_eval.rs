@@ -20,7 +20,7 @@ pub(super) fn plan_path_from_dps_payload(
     let policy = policy_from_dps_payload_with_traffic_hints(payload)?;
     let mut plan = runtime.plan_path(request, &policy)?;
     annotate_dps_payload_explain(&mut plan.explain, payload, "plan");
-    adapt_standby_shadow_from_dps(&mut plan.explain);
+    adapt_standby_shadow_from_dps(&plan.selected_peers, &mut plan.explain);
     apply_dps_multipath_schedule(payload, &mut plan)?;
     Ok(plan)
 }

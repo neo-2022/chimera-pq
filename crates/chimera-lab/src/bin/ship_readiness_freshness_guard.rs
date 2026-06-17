@@ -35,7 +35,6 @@ fn main() {
         "docs/CEF_PHASE1_SMOKE.json",
         "docs/BENCHMARK_REGRESSION_GATE.json",
         "docs/benchmark_latest.json",
-        "docs/benchmark_baseline.json",
         "docs/RUNTIME_APPLY_DNS_SMOKE.json",
         "docs/RUNTIME_APPLY_ROUTE_SMOKE.json",
         "docs/RUNTIME_APPLY_ROUTE_EXISTING_TUN_SMOKE.json",
@@ -55,6 +54,7 @@ fn main() {
         "docs/release_readiness_audit.json",
         "docs/MVP_HANDOFF_CHECKLIST.md",
         "docs/SECOND_MACHINE_REPORT.md",
+        "docs/benchmark_baseline.json",
     ];
 
     for artifact in required_artifacts {

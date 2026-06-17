@@ -39,7 +39,12 @@ fn runtime_failover_plan_from_dps_payload_builds_replacement() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("failover_triggered node=node-eu reason=probe_timeout"))
+            .any(|line| line.contains("failover_triggered node=peer#1 reason=probe_timeout"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .all(|line| !line.contains("failover_triggered node=node-"))
     );
     assert!(
         plan.explain

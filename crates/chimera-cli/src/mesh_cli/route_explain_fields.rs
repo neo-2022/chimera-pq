@@ -16,12 +16,14 @@ use super::route_explain_types::{MeshRouteExplainFields, MeshRouteExplainRender}
 pub(crate) fn collect_mesh_route_explain_fields(
     render: MeshRouteExplainRender<'_>,
 ) -> MeshRouteExplainFields {
-    let initial_selected = render
-        .initial
-        .selected_peers
-        .first()
-        .map(|peer| peer.node_id.as_str())
-        .unwrap_or_default();
+    let initial_selected =
+        first_public_selected_peer(&render.initial.explain).unwrap_or_else(|| {
+            if render.initial.selected_peers.is_empty() {
+                "none".to_string()
+            } else {
+                "peer#1".to_string()
+            }
+        });
     let preemptive_degraded_path =
         explain_value(&render.initial.explain, "preemptive_shadow_degraded_path=")
             .unwrap_or("false");
@@ -202,7 +204,7 @@ pub(crate) fn collect_mesh_route_explain_fields(
     );
     let route_explain_operator_summary = build_route_explain_operator_summary(
         route_explain_health.gate,
-        initial_selected,
+        &initial_selected,
         pressure.selection_level,
         pressure.selection_action_hint,
         preemptive_degraded_reason,
@@ -232,7 +234,7 @@ pub(crate) fn collect_mesh_route_explain_fields(
         namespace: render.options.namespace.clone(),
         node_name: render.options.node_name.clone(),
         join_mode: render.initial.join_mode.clone(),
-        initial_selected: initial_selected.to_string(),
+        initial_selected,
         failover_selected: render.failover_selected.to_string(),
         cooldown_selected: render.cooldown_selected.to_string(),
         table_runtime_consistency_gate: table_runtime_consistency_gate.to_string(),
@@ -329,4 +331,12 @@ pub(crate) fn collect_mesh_route_explain_fields(
         selected_peer_connect_backoff_profile: selected_peer_connect_backoff_profile.to_string(),
         explain: render.initial.explain.join(" | "),
     }
+}
+
+fn first_public_selected_peer(explain: &[String]) -> Option<String> {
+    explain_value(explain, "selected_peer_ids=")?
+        .split(',')
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .map(ToString::to_string)
 }

@@ -58,7 +58,7 @@ fn runtime_bootstrap_discovery_and_plan_select_best_peer() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_ids=node-a"))
+            .any(|line| line.contains("selected_peer_ids=peer#1"))
     );
     assert!(
         plan.explain
@@ -68,14 +68,16 @@ fn runtime_bootstrap_discovery_and_plan_select_best_peer() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_endpoints=198.51.100.10:443"))
+            .any(|line| line.contains("selected_peer_endpoints=endpoint#1:<redacted>"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| { line.contains("selected_peer_connect_priority=1:peer#1@<redacted>") })
     );
     assert!(plan.explain.iter().any(|line| {
-        line.contains("selected_peer_connect_priority=1:node-a@198.51.100.10:443")
-    }));
-    assert!(plan.explain.iter().any(|line| {
         line.contains(
-            "selected_peer_connect_retry_plan=node-a@198.51.100.10:443:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=443|8443",
+            "selected_peer_connect_retry_plan=peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured",
         )
     }));
     assert!(plan.explain.iter().any(|line| {
@@ -86,7 +88,7 @@ fn runtime_bootstrap_discovery_and_plan_select_best_peer() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_scores=node-a:160"))
+            .any(|line| line.contains("selected_peer_scores=peer#1:160"))
     );
     assert!(
         plan.explain
@@ -208,6 +210,11 @@ fn runtime_bootstrap_discovery_and_plan_select_best_peer() {
             .iter()
             .any(|line| line.contains("preemptive_shadow_action_priority="))
     );
+    let explain = plan.explain.join("\n");
+    assert!(!explain.contains("node-a"));
+    assert!(!explain.contains("node-b"));
+    assert!(!explain.contains("198.51.100.10"));
+    assert!(!explain.contains("198.51.100.11"));
     assert!(
         plan.explain
             .iter()

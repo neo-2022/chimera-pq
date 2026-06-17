@@ -169,7 +169,7 @@ fn mesh_route_explain_json_contains_preemptive_degraded_fields() {
     assert!(json.contains("\"connect_recovery_strategy\":\"none\""));
     assert!(json.contains("\"connect_recovery_projection_consistency\":\"true\""));
     assert!(json.contains("\"connect_recovery_projection_key\":\"needed:false;strategy:none;action:use_selected_path\""));
-    assert!(json.contains("\"selected_peer_connect_retry_plan\":\"n1@198.51.100.1:443:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=443|8443\""));
+    assert!(json.contains("\"selected_peer_connect_retry_plan\":\"peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured\""));
     assert!(json.contains("\"selected_peer_connect_backoff_profile\":\"initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=1\""));
     assert!(json.contains(&format!(
         "\"route_explain_recovery_schema_version\":\"{}\"",

@@ -22,12 +22,12 @@ pub(super) fn build_peer_selection_summary(
     connect_fallback_ports: &[u16],
 ) -> PeerSelectionSummary {
     PeerSelectionSummary {
-        selected_peer_ids: join_selected(selected_peers, |peer| peer.node_id.as_str().to_string()),
-        selected_peer_regions: join_selected(selected_peers, |peer| {
+        selected_peer_ids: join_selected(selected_peers, |idx, _| redacted_peer_label(idx)),
+        selected_peer_regions: join_selected(selected_peers, |_, peer| {
             peer.region.as_str().to_string()
         }),
-        selected_peer_endpoints: join_selected(selected_peers, |peer| {
-            peer.endpoint.as_str().to_string()
+        selected_peer_endpoints: join_selected(selected_peers, |idx, _| {
+            format!("endpoint#{}:<redacted>", idx + 1)
         }),
         selected_peer_connect_priority: build_connect_priority(selected_peers),
         selected_peer_connect_retry_plan: build_connect_retry_plan(
@@ -35,8 +35,8 @@ pub(super) fn build_peer_selection_summary(
             connect_fallback_ports,
         ),
         selected_peer_connect_backoff_profile: build_connect_backoff_profile(selected_peers.len()),
-        selected_peer_scores: join_selected(selected_peers, |peer| {
-            format!("{}:{}", peer.node_id, peer.selection_score)
+        selected_peer_scores: join_selected(selected_peers, |idx, peer| {
+            format!("{}:{}", redacted_peer_label(idx), peer.selection_score)
         }),
         selected_score_sum: selected_peers.iter().map(|peer| peer.selection_score).sum(),
         selected_reliability_avg: average_selected_metric(selected_peers, |peer| {
@@ -49,13 +49,18 @@ pub(super) fn build_peer_selection_summary(
 
 fn join_selected(
     selected_peers: &[MeshPeerState],
-    map_value: impl Fn(&MeshPeerState) -> String,
+    map_value: impl Fn(usize, &MeshPeerState) -> String,
 ) -> String {
     selected_peers
         .iter()
-        .map(map_value)
+        .enumerate()
+        .map(|(idx, peer)| map_value(idx, peer))
         .collect::<Vec<_>>()
         .join(",")
+}
+
+fn redacted_peer_label(index: usize) -> String {
+    format!("peer#{}", index + 1)
 }
 
 fn average_selected_metric(

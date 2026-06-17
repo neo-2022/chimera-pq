@@ -312,7 +312,7 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
 
 fn selected_peer_node_id(plan: Option<&MeshPathPlan>) -> Option<String> {
     plan.and_then(|plan| plan.selected_peers.first())
-        .map(|peer| peer.node_id.clone())
+        .map(|_| "peer#1".to_string())
 }
 
 fn validate_simulation_nodes(

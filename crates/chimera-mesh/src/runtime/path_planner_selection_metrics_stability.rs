@@ -35,7 +35,7 @@ pub(super) fn build_stability_metrics(
     let mut effective_threshold_max: Option<i32> = None;
     let mut replacement_budget_remaining_total = 0u64;
 
-    for peer in selected_peers {
+    for (idx, peer) in selected_peers.iter().enumerate() {
         if let Some(meta) = runtime.peer_meta.get(&peer.node_id) {
             stability_updates_total = stability_updates_total.saturating_add(meta.update_events);
             stability_replacements_total =
@@ -49,11 +49,12 @@ pub(super) fn build_stability_metrics(
                 stability_threshold_blocks_total.saturating_add(meta.threshold_block_events);
             selected_effective_thresholds.push(format!(
                 "{}:{}",
-                peer.node_id, meta.last_effective_replacement_threshold
+                redacted_peer_label(idx),
+                meta.last_effective_replacement_threshold
             ));
             selected_replacement_decisions.push(format!(
                 "{}:replace{}:hold{}:churn_block{}:threshold_block{}",
-                peer.node_id,
+                redacted_peer_label(idx),
                 meta.replacement_events,
                 meta.hold_events,
                 meta.churn_block_events,
@@ -65,7 +66,7 @@ pub(super) fn build_stability_metrics(
                 .saturating_sub(meta.replacement_events);
             replacement_budget_remaining_total =
                 replacement_budget_remaining_total.saturating_add(remaining);
-            selected_replacement_budget.push(format!("{}:{}", peer.node_id, remaining));
+            selected_replacement_budget.push(format!("{}:{}", redacted_peer_label(idx), remaining));
             effective_threshold_min = Some(match effective_threshold_min {
                 Some(current) => current.min(meta.last_effective_replacement_threshold),
                 None => meta.last_effective_replacement_threshold,
@@ -76,7 +77,7 @@ pub(super) fn build_stability_metrics(
             });
             selected_stability.push(format!(
                 "{}:u{}:r{}:h{}:d{}",
-                peer.node_id,
+                redacted_peer_label(idx),
                 meta.update_events,
                 meta.replacement_events,
                 meta.hold_events,
@@ -106,4 +107,8 @@ pub(super) fn build_stability_metrics(
         replacement_hold_ratio_pct,
         replacement_budget_remaining_total,
     }
+}
+
+fn redacted_peer_label(index: usize) -> String {
+    format!("peer#{}", index + 1)
 }

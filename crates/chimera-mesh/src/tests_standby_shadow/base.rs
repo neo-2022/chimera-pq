@@ -32,7 +32,7 @@ fn standby_shadow_uses_switch_target_when_preemptive_recommends_candidate() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("standby_shadow_target=node-b"))
+            .any(|line| line.contains("standby_shadow_target=peer#"))
     );
     assert!(
         plan.explain
@@ -64,6 +64,11 @@ fn standby_shadow_uses_switch_target_when_preemptive_recommends_candidate() {
             .iter()
             .any(|line| line.starts_with("standby_shadow_stage_source=stage:"))
     );
+    let explain = plan.explain.join("\n");
+    assert!(!explain.contains("node-a"));
+    assert!(!explain.contains("node-b"));
+    assert!(!explain.contains("198.51.100.41"));
+    assert!(!explain.contains("198.51.100.42"));
 }
 
 #[test]
@@ -87,10 +92,11 @@ fn standby_shadow_uses_single_peer_target_when_only_one_peer_selected() {
     let plan = runtime
         .plan_path_from_dps_payload(&req, payload)
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
-    assert!(plan.explain.iter().any(|line| {
-        line.contains("standby_shadow_target=node-a")
-            || line.contains("standby_shadow_target=node-b")
-    }));
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("standby_shadow_target=peer#1"))
+    );
     assert!(
         plan.explain
             .iter()
@@ -120,4 +126,7 @@ fn standby_shadow_uses_single_peer_target_when_only_one_peer_selected() {
             .iter()
             .any(|line| line.starts_with("standby_shadow_stage_source=stage:"))
     );
+    let explain = plan.explain.join("\n");
+    assert!(!explain.contains("node-a"));
+    assert!(!explain.contains("198.51.100.51"));
 }

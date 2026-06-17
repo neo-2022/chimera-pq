@@ -17,6 +17,7 @@ use crate::preemptive::{
 mod candidate_filter;
 mod connect_probe;
 mod connect_retry_profile;
+mod diagnostic_redaction;
 mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;

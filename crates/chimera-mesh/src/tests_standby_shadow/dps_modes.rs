@@ -30,15 +30,21 @@ fn standby_shadow_respects_dps_standby_only_mode_with_primary_target() {
     let plan = runtime
         .plan_path_from_dps_payload(&req, payload)
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
-    assert!(plan.explain.iter().any(|line| {
-        line.contains("standby_shadow_target=node-a")
-            || line.contains("standby_shadow_target=node-b")
-    }));
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("standby_shadow_target=peer#1"))
+    );
     assert!(
         plan.explain
             .iter()
             .any(|line| line.contains("standby_shadow_source=dps_multipath_policy"))
     );
+    let explain = plan.explain.join("\n");
+    assert!(!explain.contains("node-a"));
+    assert!(!explain.contains("node-b"));
+    assert!(!explain.contains("198.51.100.61"));
+    assert!(!explain.contains("198.51.100.62"));
 }
 
 #[test]
@@ -74,11 +80,16 @@ fn standby_shadow_respects_dps_flow_shard_mode_with_secondary_target() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("standby_shadow_target=node-b"))
+            .any(|line| line.contains("standby_shadow_target=peer#2"))
     );
     assert!(
         plan.explain
             .iter()
             .any(|line| line.contains("standby_shadow_source=dps_multipath_policy"))
     );
+    let explain = plan.explain.join("\n");
+    assert!(!explain.contains("node-a"));
+    assert!(!explain.contains("node-b"));
+    assert!(!explain.contains("198.51.100.71"));
+    assert!(!explain.contains("198.51.100.72"));
 }

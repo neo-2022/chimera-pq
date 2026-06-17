@@ -21,9 +21,14 @@ pub(crate) fn build_selected_stability_metrics(
         replacement_budget_remaining_total: 0,
     };
 
-    for peer in selected_peers {
+    for (idx, peer) in selected_peers.iter().enumerate() {
         if let Some(meta) = peer_meta.get(&peer.node_id) {
-            accumulate_selected_peer_stability(&mut aggregate, peer, meta, max_replacements_per_window);
+            accumulate_selected_peer_stability(
+                &mut aggregate,
+                idx,
+                meta,
+                max_replacements_per_window,
+            );
         }
     }
 
@@ -55,7 +60,7 @@ pub(crate) fn build_selected_stability_metrics(
 
 pub(crate) fn accumulate_selected_peer_stability(
     aggregate: &mut StabilityAggregate,
-    peer: &MeshPeerState,
+    peer_index: usize,
     meta: &MeshPeerMeta,
     max_replacements_per_window: u64,
 ) {
@@ -79,17 +84,17 @@ pub(crate) fn accumulate_selected_peer_stability(
         .saturating_add(meta.threshold_block_events);
     aggregate
         .selected_effective_thresholds
-        .push(format_selected_effective_threshold(peer, meta));
+        .push(format_selected_effective_threshold(peer_index, meta));
     aggregate
         .selected_replacement_decisions
-        .push(format_selected_replacement_decision(peer, meta));
+        .push(format_selected_replacement_decision(peer_index, meta));
     let remaining = max_replacements_per_window.saturating_sub(meta.replacement_events);
     aggregate.replacement_budget_remaining_total = aggregate
         .replacement_budget_remaining_total
         .saturating_add(remaining);
     aggregate
         .selected_replacement_budget
-        .push(format_selected_replacement_budget(peer, remaining));
+        .push(format_selected_replacement_budget(peer_index, remaining));
     aggregate.effective_threshold_min = Some(match aggregate.effective_threshold_min {
         Some(current) => current.min(meta.last_effective_replacement_threshold),
         None => meta.last_effective_replacement_threshold,
@@ -100,26 +105,27 @@ pub(crate) fn accumulate_selected_peer_stability(
     });
     aggregate
         .selected_stability
-        .push(format_selected_stability(peer, meta));
+        .push(format_selected_stability(peer_index, meta));
 }
 
 pub(crate) fn format_selected_effective_threshold(
-    peer: &MeshPeerState,
+    peer_index: usize,
     meta: &MeshPeerMeta,
 ) -> String {
     format!(
         "{}:{}",
-        peer.node_id, meta.last_effective_replacement_threshold
+        redacted_peer_label(peer_index),
+        meta.last_effective_replacement_threshold
     )
 }
 
 pub(crate) fn format_selected_replacement_decision(
-    peer: &MeshPeerState,
+    peer_index: usize,
     meta: &MeshPeerMeta,
 ) -> String {
     format!(
         "{}:replace{}:hold{}:churn_block{}:threshold_block{}",
-        peer.node_id,
+        redacted_peer_label(peer_index),
         meta.replacement_events,
         meta.hold_events,
         meta.churn_block_events,
@@ -127,17 +133,21 @@ pub(crate) fn format_selected_replacement_decision(
     )
 }
 
-pub(crate) fn format_selected_replacement_budget(peer: &MeshPeerState, remaining: u64) -> String {
-    format!("{}:{}", peer.node_id, remaining)
+pub(crate) fn format_selected_replacement_budget(peer_index: usize, remaining: u64) -> String {
+    format!("{}:{}", redacted_peer_label(peer_index), remaining)
 }
 
-pub(crate) fn format_selected_stability(peer: &MeshPeerState, meta: &MeshPeerMeta) -> String {
+pub(crate) fn format_selected_stability(peer_index: usize, meta: &MeshPeerMeta) -> String {
     format!(
         "{}:u{}:r{}:h{}:d{}",
-        peer.node_id,
+        redacted_peer_label(peer_index),
         meta.update_events,
         meta.replacement_events,
         meta.hold_events,
         meta.degraded_events
     )
+}
+
+fn redacted_peer_label(index: usize) -> String {
+    format!("peer#{}", index + 1)
 }

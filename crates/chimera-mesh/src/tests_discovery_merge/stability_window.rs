@@ -66,11 +66,11 @@ fn stability_counters_reset_after_window_gap() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_stability=node-a:u1:r0:h1:d0"))
+            .any(|line| line.contains("selected_peer_stability=peer#1:u1:r0:h1:d0"))
     );
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_effective_replacement_thresholds=node-a:5"))
+            .any(|line| line.contains("selected_effective_replacement_thresholds=peer#1:5"))
     );
 }

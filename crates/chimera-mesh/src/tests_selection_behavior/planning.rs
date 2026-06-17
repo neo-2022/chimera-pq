@@ -73,8 +73,11 @@ fn plan_explain_contains_candidate_summary_counters() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("selected_peer_ids=node-ok"))
+            .any(|line| line.contains("selected_peer_ids=peer#1"))
     );
+    let explain = plan.explain.join("\n");
+    assert!(!explain.contains("node-ok"));
+    assert!(!explain.contains("198.51.100.14"));
     assert!(
         plan.explain
             .iter()

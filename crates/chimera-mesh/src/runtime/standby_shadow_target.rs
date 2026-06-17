@@ -16,10 +16,10 @@ pub(crate) fn standby_target_for_multipath_mode(
             }
         }
         Some("flow_shard") | Some("aggregate_buffered") => {
-            if switch_target != "none" {
-                (switch_target.to_string(), "switch_target")
-            } else if !secondary.is_empty() {
+            if !secondary.is_empty() {
                 (secondary, "selected_secondary")
+            } else if switch_target != "none" {
+                (switch_target.to_string(), "switch_target")
             } else if !primary.is_empty() {
                 (primary, "selected_primary")
             } else {

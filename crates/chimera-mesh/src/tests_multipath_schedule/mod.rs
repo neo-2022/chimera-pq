@@ -210,41 +210,45 @@ fn multipath_schedule_flow_shard_uses_multiple_active_lanes() {
 }
 
 #[test]
-fn multipath_schedule_aggregate_buffered_uses_three_active_lanes() {
+fn multipath_schedule_aggregate_buffered_uses_all_policy_selected_peers() {
     let runtime = runtime_with_peers(vec![
         record("node-a", "198.51.100.31:443", "eu", 20, 90),
         record("node-b", "198.51.100.32:443", "eu", 22, 91),
         record("node-c", "198.51.100.33:443", "eu", 24, 92),
+        record("node-d", "198.51.100.34:443", "eu", 26, 93),
+        record("node-e", "198.51.100.35:443", "eu", 28, 94),
     ]);
 
     let plan = runtime
         .plan_path_from_dps_payload(
             &request(),
-            "mesh_allowed_regions=eu;mesh_multipath_mode=aggregate_buffered;mesh_route_binding_id=7004",
+            "mesh_allowed_regions=eu;mesh_max_peers=5;mesh_max_selected_per_region=5;mesh_multipath_mode=aggregate_buffered;mesh_route_binding_id=7004",
         )
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
-    assert_eq!(plan.selected_peers.len(), 3);
+    assert_eq!(plan.selected_peers.len(), 5);
     assert_eq!(
         plan.multipath_schedule.mode,
         MeshMultipathMode::AggregateBuffered
     );
-    assert_eq!(plan.multipath_schedule.active_lane_count, 3);
+    assert_eq!(plan.multipath_schedule.active_lane_count, 5);
     assert_eq!(plan.multipath_schedule.standby_lane_count, 0);
-    assert_eq!(plan.multipath_schedule.lanes.len(), 3);
-    assert!(explain_has(&plan.explain, "effective_max_peers=3"));
+    assert_eq!(plan.multipath_schedule.lanes.len(), 5);
+    assert!(explain_has(&plan.explain, "effective_max_peers=5"));
     assert!(explain_has(
         &plan.explain,
         "multipath_schedule_mode=aggregate_buffered"
     ));
     assert!(explain_has(
         &plan.explain,
-        "multipath_schedule_active_lanes=3"
+        "multipath_schedule_active_lanes=5"
     ));
-    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 3);
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 5);
     assert_binding_matches_lane(&plan, 0, "node-a", "198.51.100.31:443");
     assert_binding_matches_lane(&plan, 1, "node-b", "198.51.100.32:443");
     assert_binding_matches_lane(&plan, 2, "node-c", "198.51.100.33:443");
+    assert_binding_matches_lane(&plan, 3, "node-d", "198.51.100.34:443");
+    assert_binding_matches_lane(&plan, 4, "node-e", "198.51.100.35:443");
     assert_active_weight_contract(&plan);
     assert_carrier_binding_contract(&plan);
 }
@@ -311,6 +315,38 @@ fn multipath_schedule_explain_does_not_leak_payload_destination_or_endpoint() {
         plan.multipath_schedule.transit_payload_policy,
         "sealed_opaque_only"
     );
+}
+
+#[test]
+fn multipath_plan_public_explain_redacts_peer_identity_endpoint_and_connect_plan() {
+    let runtime = runtime_with_peers(vec![
+        record("node-sensitive-a", "198.51.100.31:443", "eu", 20, 90),
+        record("node-sensitive-b", "198.51.100.32:9443", "eu", 22, 91),
+    ]);
+
+    let plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7009",
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+    let explain = plan.explain.join("\n");
+
+    assert!(explain.contains("selected_peer_ids=peer#1,peer#2"));
+    assert!(
+        explain.contains("selected_peer_endpoints=endpoint#1:<redacted>,endpoint#2:<redacted>")
+    );
+    assert!(
+        explain.contains("selected_peer_connect_priority=1:peer#1@<redacted>,2:peer#2@<redacted>")
+    );
+    assert!(explain.contains("selected_peer_scores=peer#1:"));
+    assert!(explain.contains("standby_shadow_target=peer#"));
+    assert!(explain.contains("multipath_schedule_transit_payload_policy=sealed_opaque_only"));
+    assert!(!explain.contains("node-sensitive-a"));
+    assert!(!explain.contains("node-sensitive-b"));
+    assert!(!explain.contains("198.51.100.31"));
+    assert!(!explain.contains("198.51.100.32"));
+    assert!(!explain.contains("7009"));
 }
 
 #[test]

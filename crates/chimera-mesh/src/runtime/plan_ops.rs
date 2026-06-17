@@ -63,7 +63,7 @@ impl MeshRuntime {
         let policy = dps_eval::policy_from_dps_payload_with_traffic_hints(payload)?;
         let mut plan = self.failover_plan(request, &policy, event)?;
         annotate_dps_payload_explain(&mut plan.explain, payload, "failover");
-        adapt_standby_shadow_from_dps(&mut plan.explain);
+        adapt_standby_shadow_from_dps(&plan.selected_peers, &mut plan.explain);
         dps_eval::apply_dps_multipath_schedule(payload, &mut plan)?;
         Ok(plan)
     }
@@ -87,7 +87,7 @@ impl MeshRuntime {
         let policy = dps_eval::policy_from_dps_payload_with_traffic_hints(payload)?;
         let mut plan = self.reselection_plan_with_health(request, &policy, health)?;
         annotate_dps_payload_explain(&mut plan.explain, payload, "reselection");
-        adapt_standby_shadow_from_dps(&mut plan.explain);
+        adapt_standby_shadow_from_dps(&plan.selected_peers, &mut plan.explain);
         dps_eval::apply_dps_multipath_schedule(payload, &mut plan)?;
         Ok(plan)
     }

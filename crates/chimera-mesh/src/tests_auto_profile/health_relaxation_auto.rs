@@ -62,6 +62,12 @@ fn plan_auto_excludes_degraded_peers_from_candidates() {
     assert!(
         plan.explain
             .iter()
+            .any(|line| line.contains("effective_health_blocked_node_ids=peer#1"))
+    );
+    assert!(
+        !plan
+            .explain
+            .iter()
             .any(|line| line.contains("effective_health_blocked_node_ids=node-degraded"))
     );
     assert!(
@@ -104,7 +110,7 @@ fn plan_auto_excludes_degraded_peers_from_candidates() {
     assert!(
         plan.explain
             .iter()
-            .any(|line| line.contains("peer=node-degraded rejected=health"))
+            .any(|line| line.contains("candidate#1 rejected=health"))
     );
 }
 

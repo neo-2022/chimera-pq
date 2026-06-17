@@ -4,6 +4,11 @@ use serde_json::Value;
 use std::env;
 use std::fs;
 
+#[path = "probe_access_ship_guard/contract.rs"]
+mod probe_access_contract;
+
+use probe_access_contract::{url_has_host, validate_probe_contract};
+
 const CI_SNAPSHOT_HOST: &str = "chimera-ci-snapshot.local";
 
 fn main() {
@@ -20,6 +25,7 @@ fn main() {
     let probe = read_obj(probe_json, "probe access");
 
     require_bool(&ship, "runtime_probe_access_smoke_ok", true);
+    validate_probe_contract(&probe, CI_SNAPSHOT_HOST).unwrap_or_else(|msg| fail(&msg));
     let mode = get_str(&ship, "runtime_probe_access_mode");
     if !["live", "ci_snapshot"].contains(&mode) {
         fail("probe access ship guard: invalid runtime_probe_access_mode");
@@ -105,29 +111,6 @@ fn targets_all_match_host_obj(probe: &serde_json::Map<String, Value>, host: &str
 
 fn targets_all_match_host(probe: &serde_json::Map<String, Value>, host: &str) -> bool {
     targets_all_match_host_obj(probe, host)
-}
-
-fn url_has_host(url: &str, expected_host: &str) -> bool {
-    let Some((scheme, rest)) = url.split_once("://") else {
-        return false;
-    };
-    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
-        return false;
-    }
-    let authority = rest
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or_default()
-        .rsplit('@')
-        .next()
-        .unwrap_or_default();
-    let host = authority
-        .split(':')
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
-    host == expected_host
 }
 
 fn get_str<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {

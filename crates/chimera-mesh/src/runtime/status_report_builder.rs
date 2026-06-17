@@ -37,6 +37,22 @@ pub(super) fn build_status_report_from_snapshot(
     let switch_guard_summary = shadow::preemptive_shadow_switch_guard_summary(&snapshot);
     let confirm_state = shadow::preemptive_shadow_confirm_state(&snapshot);
     let confirm_summary = shadow::preemptive_shadow_confirm_summary(&snapshot);
+    let public_switch_target =
+        diagnostic_redaction::peer_label_from_table(&snapshot.switch_target, &runtime.peers);
+    let public_standby_target =
+        diagnostic_redaction::peer_label_from_table(&snapshot.standby.target, &runtime.peers);
+    let public_standby_summary =
+        standby_shadow::derive_standby_shadow_fields(standby_shadow::StandbyShadowDeriveInput {
+            mode: &snapshot.standby.mode,
+            target: &public_standby_target,
+            target_source: &snapshot.standby.target_source,
+            reason: &snapshot.standby.reason,
+            source: &snapshot.standby.source,
+            warm_ready: snapshot.standby.warm_ready,
+            hot_ready: snapshot.standby.hot_ready,
+            stage_source: &snapshot.standby.stage_source,
+        })
+        .summary;
     MeshRuntimeStatusReport {
         namespace: runtime.namespace.clone(),
         source_count: runtime.source_count(),
@@ -65,7 +81,7 @@ pub(super) fn build_status_report_from_snapshot(
             .switch_candidate_sample_age_ticks
             .map(|value| value.to_string())
             .unwrap_or_else(|| "unknown".to_string()),
-        preemptive_shadow_switch_target: snapshot.switch_target,
+        preemptive_shadow_switch_target: public_switch_target,
         preemptive_shadow_switch_mode: snapshot.switch_mode,
         preemptive_shadow_hints_status: snapshot.hints_status,
         preemptive_shadow_hints_source: hints_summary.source,
@@ -121,13 +137,13 @@ pub(super) fn build_status_report_from_snapshot(
         preemptive_shadow_degraded_reason: table_consistency.preemptive_degraded_reason,
         preemptive_shadow_degraded_summary,
         standby_shadow_mode: snapshot.standby.mode,
-        standby_shadow_target: snapshot.standby.target,
+        standby_shadow_target: public_standby_target,
         standby_shadow_target_source: snapshot.standby.target_source,
         standby_shadow_reason: snapshot.standby.reason,
         standby_shadow_source: snapshot.standby.source,
         standby_shadow_warm_ready: snapshot.standby.warm_ready,
         standby_shadow_hot_ready: snapshot.standby.hot_ready,
         standby_shadow_stage_source: snapshot.standby.stage_source,
-        standby_shadow_summary: snapshot.standby.summary,
+        standby_shadow_summary: public_standby_summary,
     }
 }

@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
 Status: **PASS (LAB/SOURCE GATE ONLY)**
-Generated at (UTC): `2026-06-16T18:19:14Z`
+Generated at (UTC): `2026-06-16T20:05:52Z`
 
 Checks:
 - Baseline freeze: `true`
@@ -55,7 +55,8 @@ Checks:
 - Runtime real-world datapath targets ok: `0`
 - Runtime real-world datapath targets failed: `0`
 - Runtime real-world skipped no curl: `false`
-- Artifacts refreshed in this run: `true`
+- Fresh checked artifacts in this run: `true`
+- Benchmark baseline control present: `true`
 
 Truth boundary:
 - Lab/proof/report contour only: `true`

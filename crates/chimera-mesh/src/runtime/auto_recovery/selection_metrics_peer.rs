@@ -50,7 +50,8 @@ pub(crate) fn build_selected_peer_metrics(
 pub(crate) fn build_selected_peer_strings(selected_peers: &[MeshPeerState]) -> SelectedPeerStrings {
     let ids = selected_peers
         .iter()
-        .map(|peer| peer.node_id.as_str())
+        .enumerate()
+        .map(|(idx, _)| redacted_peer_label(idx))
         .collect::<Vec<_>>()
         .join(",");
     let regions = selected_peers
@@ -60,12 +61,14 @@ pub(crate) fn build_selected_peer_strings(selected_peers: &[MeshPeerState]) -> S
         .join(",");
     let endpoints = selected_peers
         .iter()
-        .map(|peer| peer.endpoint.as_str())
+        .enumerate()
+        .map(|(idx, _)| format!("endpoint#{}:<redacted>", idx + 1))
         .collect::<Vec<_>>()
         .join(",");
     let scores = selected_peers
         .iter()
-        .map(|peer| format!("{}:{}", peer.node_id, peer.selection_score))
+        .enumerate()
+        .map(|(idx, peer)| format!("{}:{}", redacted_peer_label(idx), peer.selection_score))
         .collect::<Vec<_>>()
         .join(",");
     SelectedPeerStrings {
@@ -74,6 +77,10 @@ pub(crate) fn build_selected_peer_strings(selected_peers: &[MeshPeerState]) -> S
         endpoints,
         scores,
     }
+}
+
+fn redacted_peer_label(index: usize) -> String {
+    format!("peer#{}", index + 1)
 }
 
 pub(crate) fn average_selected_metric(

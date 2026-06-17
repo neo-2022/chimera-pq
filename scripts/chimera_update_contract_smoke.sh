@@ -114,6 +114,7 @@ EOF
       || fail "bounded curl download should succeed through fake curl"
 
   [[ "$(cat "$record")" == *"--retry 1"* ]] || fail "curl retry bound missing"
+  [[ "$(cat "$record")" == *"--disable"* ]] || fail "curl disable rcfile flag missing"
   [[ "$(cat "$record")" == *"--connect-timeout 2"* ]] || fail "curl connect timeout bound missing"
   [[ "$(cat "$record")" == *"--max-time 4"* ]] || fail "curl max time bound missing"
   [[ "$(cat "$record")" == *"http_proxy=unset"* ]] || fail "curl HTTP proxy was not cleared"
@@ -647,6 +648,64 @@ EOF
   rm -rf "$tmp_dir"
 )
 
+case_upstream_env_shell_quotes_peer_token() (
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum upstream_env injected_token marker output rc
+  tmp_dir="$(mktemp -d)"
+  old_home="$tmp_dir/home/chimera"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  fake_bin="$tmp_dir/fake-bin"
+  upstream_env="$xdg_config/chimera/upstream_proxy.env"
+  marker="$tmp_dir/upstream-token-injection-ran"
+  injected_token="test-token;touch $marker"
+  mkdir -p "$old_home/scripts" "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.99"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+
+  set +e
+  output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_HOME="$old_home" \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_PEER_EGRESS_TOKEN="$injected_token" \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "upstream env shell quoting install failed: $output"
+  [[ ! -f "$marker" ]] || fail "peer token injection executed during install"
+  grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$upstream_env" \
+    || fail "upstream env did not receive peer token"
+  set -a
+  # shellcheck disable=SC1090
+  source "$upstream_env"
+  set +a
+  [[ "${CHIMERA_PEER_EGRESS_TOKEN:-}" == "$injected_token" ]] \
+    || fail "shell quoted upstream peer token did not round-trip"
+  [[ ! -f "$marker" ]] || fail "peer token injection executed during explicit source"
+  rm -rf "$tmp_dir"
+)
+
 case_failed_install_restores_previous_release() (
   local tmp_dir old_home archive checksum rc
   tmp_dir="$(mktemp -d)"
@@ -1051,6 +1110,7 @@ case_semver_update_order
 case_auto_update_preserves_bound_transit_env
 case_peer_egress_env_shell_quotes_lane_bindings_path
 case_auto_update_preserves_quoted_lane_bindings_env
+case_upstream_env_shell_quotes_peer_token
 case_failed_install_restores_previous_release
 case_failed_launcher_link_restores_previous_release
 case_peer_update_metadata_does_not_execute_peer_bootstrap

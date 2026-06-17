@@ -32,7 +32,6 @@ pub(crate) struct StandbyShadowStatus {
     pub(crate) warm_ready: bool,
     pub(crate) hot_ready: bool,
     pub(crate) stage_source: String,
-    pub(crate) summary: String,
 }
 
 pub(crate) fn derive_standby_shadow_fields(
@@ -117,6 +116,5 @@ pub(crate) fn build_standby_shadow_status(
         warm_ready: derived.warm_ready,
         hot_ready: derived.hot_ready,
         stage_source: derived.stage_source,
-        summary: derived.summary,
     }
 }

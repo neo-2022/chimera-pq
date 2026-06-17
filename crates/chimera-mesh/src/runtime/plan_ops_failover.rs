@@ -23,9 +23,11 @@ pub(super) fn failover_plan(
     }
 
     let mut plan = runtime.plan_path(request, &failover_policy)?;
+    let public_failed_node =
+        diagnostic_redaction::peer_label_from_table(&event.failed_node_id, &runtime.peers);
     plan.explain.push(format!(
         "failover_triggered node={} reason={}",
-        event.failed_node_id, event.reason
+        public_failed_node, event.reason
     ));
     Ok(plan)
 }

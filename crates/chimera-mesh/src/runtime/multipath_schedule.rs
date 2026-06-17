@@ -106,7 +106,9 @@ fn build_lanes(
         MeshMultipathMode::Off => build_active_lanes(selected_peers, 1),
         MeshMultipathMode::StandbyOnly => build_standby_lanes(selected_peers),
         MeshMultipathMode::FlowShard => build_active_lanes(selected_peers, 2),
-        MeshMultipathMode::AggregateBuffered => build_active_lanes(selected_peers, 3),
+        MeshMultipathMode::AggregateBuffered => {
+            build_active_lanes(selected_peers, selected_peers.len())
+        }
     }
 }
 

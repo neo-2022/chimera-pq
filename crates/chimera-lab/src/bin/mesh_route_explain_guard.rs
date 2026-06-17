@@ -24,9 +24,9 @@ fn main() {
     require_str(obj, "namespace", "cef-public");
     require_str(obj, "node", "node-client");
     require_str(obj, "join_mode", "InvitationOnly");
-    require_str(obj, "initial_selected_peer", "node-eu-1");
-    require_str(obj, "failover_selected_peer", "node-eu-2");
-    require_str(obj, "cooldown_selected_peer", "node-eu-1");
+    require_str(obj, "initial_selected_peer", "peer#1");
+    require_str(obj, "failover_selected_peer", "peer#1");
+    require_str(obj, "cooldown_selected_peer", "peer#1");
     require_str(obj, "network_state", "not_modified");
 
     let explain = obj
@@ -36,6 +36,17 @@ fn main() {
     for needle in ["join_mode=InvitationOnly", "selected_peers=1"] {
         if !explain.contains(needle) {
             fail("mesh route explain guard: explain content mismatch");
+        }
+    }
+    for forbidden in [
+        "selected_peer_ids=node-",
+        "selected_peer_endpoints=198.51.",
+        "selected_peer_connect_priority=1:node-",
+        "selected_peer_connect_retry_plan=node-",
+        "effective_health_blocked_node_ids=node-",
+    ] {
+        if explain.contains(forbidden) {
+            fail("mesh route explain guard: raw peer identity leaked");
         }
     }
 

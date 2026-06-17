@@ -699,7 +699,8 @@ fn run_curl_probe(url: &str, timeout_seconds: u64) -> Result<bool, String> {
     fn run_once(url: &str, timeout_seconds: u64) -> Result<bool, String> {
         let timeout_arg = timeout_seconds.to_string();
         let mut cmd = Command::new("curl");
-        cmd.arg("-sS")
+        cmd.arg("--disable")
+            .arg("-sS")
             .arg("-L")
             .arg("--noproxy")
             .arg("*")

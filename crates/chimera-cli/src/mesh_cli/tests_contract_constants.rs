@@ -1,4 +1,4 @@
-pub(crate) const SUCCESS_SELECTED_NODE: &str = "n1";
+pub(crate) const SUCCESS_SELECTED_NODE: &str = "peer#1";
 pub(crate) const SUCCESS_PRESSURE: &str = "saturated";
 pub(crate) const SUCCESS_OPERATOR_ACTION: &str = "use_selected_path";
 pub(crate) const SUCCESS_OPERATOR_REASON: &str = "none";

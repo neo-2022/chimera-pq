@@ -1,4 +1,7 @@
-use super::common::{StandbyShadowDeriveInput, derive_standby_shadow_fields, explain_value};
+use super::common::{
+    StandbyShadowDeriveInput, derive_standby_shadow_fields, explain_value,
+    redact_preemptive_switch_target, redacted_standby_target, selected_peer_ids,
+};
 use super::standby_shadow::{
     resolve_mode_from_action, standby_ready_flags, standby_stage_source,
     standby_target_for_multipath_mode,
@@ -17,14 +20,10 @@ pub(super) fn append_standby_shadow_explain(
     let should_switch =
         explain_value(explain, "preemptive_shadow_switch_recommend=") == Some("true");
 
-    let (standby_target, standby_target_source) = standby_target_for_multipath_mode(
-        None,
-        switch_target,
-        &selected_peers
-            .iter()
-            .map(|peer| peer.node_id.clone())
-            .collect::<Vec<_>>(),
-    );
+    let selected_peer_ids = selected_peer_ids(selected_peers);
+    let (standby_target, standby_target_source) =
+        standby_target_for_multipath_mode(None, switch_target, &selected_peer_ids);
+    let public_standby_target = redacted_standby_target(&standby_target, &selected_peer_ids);
     let standby_mode = resolve_mode_from_action(action);
     let stage = explain_value(explain, "preemptive_shadow_stage=")
         .unwrap_or("clear")
@@ -48,7 +47,7 @@ pub(super) fn append_standby_shadow_explain(
 
     let derived = derive_standby_shadow_fields(StandbyShadowDeriveInput {
         mode: standby_mode,
-        target: &standby_target,
+        target: &public_standby_target,
         target_source: standby_target_source,
         reason: standby_reason,
         source: "preemptive_shadow",
@@ -56,6 +55,7 @@ pub(super) fn append_standby_shadow_explain(
         hot_ready,
         stage_source: &stage_source,
     });
+    redact_preemptive_switch_target(explain, &selected_peer_ids);
     explain.push(format!("standby_shadow_mode={}", derived.mode));
     explain.push(format!("standby_shadow_target={}", derived.target));
     explain.push(format!(

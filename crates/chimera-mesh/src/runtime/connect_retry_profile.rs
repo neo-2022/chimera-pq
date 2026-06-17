@@ -9,7 +9,7 @@ pub(crate) fn build_connect_priority(selected_peers: &[MeshPeerState]) -> String
     selected_peers
         .iter()
         .enumerate()
-        .map(|(idx, peer)| format!("{}:{}@{}", idx + 1, peer.node_id, peer.endpoint))
+        .map(|(idx, _)| format!("{}:peer#{}@<redacted>", idx + 1, idx + 1))
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -21,15 +21,21 @@ pub(crate) fn build_connect_retry_plan(
     selected_peers
         .iter()
         .enumerate()
-        .map(|(idx, peer)| {
-            let fallback_ports = endpoint_fallback_ports(&peer.endpoint, fallback_ports);
+        .map(|(idx, _)| {
+            let fallback_port_state = if fallback_ports.is_empty() {
+                "none"
+            } else {
+                "configured"
+            };
             let fallback = selected_peers
                 .get(idx.saturating_add(1))
-                .map(|next| format!(";fallback:{}@{}", next.node_id, next.endpoint))
+                .map(|_| format!(";fallback:peer#{}@<redacted>", idx + 2))
                 .unwrap_or_default();
             format!(
-                "{}@{}:try0(connect)|try1(retry_fast)|try2(retry_slow);ports={}{}",
-                peer.node_id, peer.endpoint, fallback_ports, fallback
+                "peer#{}@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports={}{}",
+                idx + 1,
+                fallback_port_state,
+                fallback
             )
         })
         .collect::<Vec<_>>()
@@ -47,39 +53,9 @@ pub(crate) fn build_connect_backoff_profile(selected_peer_count: usize) -> Strin
     )
 }
 
-fn endpoint_fallback_ports(endpoint: &str, fallback_ports: &[u16]) -> String {
-    let current_port = endpoint_port(endpoint);
-    let mut ports = Vec::new();
-    if let Some(port) = current_port {
-        ports.push(port);
-    }
-    for port in fallback_ports {
-        let port = *port;
-        if !ports.contains(&port) {
-            ports.push(port);
-        }
-    }
-    ports
-        .into_iter()
-        .map(|port| port.to_string())
-        .collect::<Vec<_>>()
-        .join("|")
-}
-
-fn endpoint_port(endpoint: &str) -> Option<u16> {
-    let port_raw = if endpoint.starts_with('[') {
-        let close = endpoint.find(']')?;
-        let tail = endpoint.get((close + 1)..)?;
-        tail.strip_prefix(':')?
-    } else {
-        endpoint.rsplit_once(':')?.1
-    };
-    port_raw.parse::<u16>().ok().filter(|port| *port > 0)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{build_connect_retry_plan, endpoint_fallback_ports};
+    use super::build_connect_retry_plan;
     use crate::model::MeshPeerState;
 
     fn peer(node: &str, endpoint: &str) -> MeshPeerState {
@@ -94,34 +70,24 @@ mod tests {
     }
 
     #[test]
-    fn fallback_ports_preserve_current_port_and_add_known_fallbacks() {
-        let ports = [443, 8443];
-        assert_eq!(
-            endpoint_fallback_ports("198.51.100.10:9443", &ports),
-            "9443|443|8443"
-        );
-        assert_eq!(
-            endpoint_fallback_ports("198.51.100.10:443", &ports),
-            "443|8443"
-        );
-        assert_eq!(
-            endpoint_fallback_ports("[2001:db8::10]:8443", &ports),
-            "8443|443"
-        );
-    }
-
-    #[test]
-    fn retry_plan_includes_port_fallbacks_and_next_peer_chain() {
+    fn retry_plan_redacts_ports_and_keeps_next_peer_chain() {
         let peers = vec![
             peer("node-a", "198.51.100.10:9443"),
             peer("node-b", "198.51.100.11:443"),
         ];
         let plan = build_connect_retry_plan(&peers, &[443, 8443]);
         assert!(plan.contains(
-            "node-a@198.51.100.10:9443:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=9443|443|8443;fallback:node-b@198.51.100.11:443"
+            "peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured;fallback:peer#2@<redacted>"
         ));
         assert!(plan.contains(
-            "node-b@198.51.100.11:443:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=443|8443"
+            "peer#2@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured"
         ));
+        assert!(!plan.contains("9443"));
+        assert!(!plan.contains("443"));
+        assert!(!plan.contains("8443"));
+        assert!(!plan.contains("node-a"));
+        assert!(!plan.contains("node-b"));
+        assert!(!plan.contains("198.51.100.10"));
+        assert!(!plan.contains("198.51.100.11"));
     }
 }

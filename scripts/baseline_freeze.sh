@@ -12,7 +12,9 @@ artifacts=(
   "docs/ARTIFACT_AUDIT.json"
 )
 
-cp docs/benchmark_latest.json docs/benchmark_baseline.json
+if [[ "${CHIMERA_ACCEPT_BENCHMARK_BASELINE_REFRESH:-0}" == "1" ]]; then
+  cp docs/benchmark_latest.json docs/benchmark_baseline.json
+fi
 
 sha256sum "${artifacts[@]}" > docs/V1_MVP_BASELINE.sha256
 

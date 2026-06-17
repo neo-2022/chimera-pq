@@ -118,5 +118,17 @@ fn runtime_confirmation_gate_allows_switch_when_signals_confirmed() {
         "pri_switch_threshold"
     );
     assert_ne!(report.preemptive_shadow_switch_target, "none");
+    assert!(report.preemptive_shadow_switch_target.starts_with("peer#"));
+    assert!(report.standby_shadow_target.starts_with("peer#"));
+    let public_status = format!(
+        "{}\n{}\n{}",
+        report.preemptive_shadow_switch_target,
+        report.standby_shadow_target,
+        report.standby_shadow_summary
+    );
+    assert!(!public_status.contains("node-fast-a"));
+    assert!(!public_status.contains("node-stable-b"));
+    assert!(!public_status.contains("198.51.100.220"));
+    assert!(!public_status.contains("198.51.100.221"));
     assert!(report.preemptive_shadow_eligible_candidates >= 1);
 }

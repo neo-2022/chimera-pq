@@ -64,8 +64,10 @@ pub(super) fn build_plan_setup(
         "effective_health_blocked_candidates={}",
         health_blocked_all.len()
     ));
-    let health_blocked_node_ids =
-        crate::runtime::health_state_utils::format_node_set(&health_blocked_all);
+    let health_blocked_node_ids = crate::runtime::diagnostic_redaction::peer_labels_from_table(
+        &health_blocked_all,
+        &runtime.peers,
+    );
     explain.push(format!(
         "effective_health_blocked_node_ids={health_blocked_node_ids}"
     ));

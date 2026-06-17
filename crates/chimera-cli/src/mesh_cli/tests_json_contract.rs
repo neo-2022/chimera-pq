@@ -36,6 +36,43 @@ fn mesh_route_explain_json_escapes_user_controlled_fields() {
 }
 
 #[test]
+fn mesh_route_explain_json_redacts_selected_peer_identity_endpoint_and_retry_ports() {
+    let parsed = run_route_explain_json(
+        vec![
+            "--namespace".to_string(),
+            "cef-public".to_string(),
+            "--node".to_string(),
+            "node-client".to_string(),
+            "--policy-payload".to_string(),
+            "allow=mesh;mesh_max_peers=1;mesh_connect_fallback_ports=7443,443".to_string(),
+            "--peer".to_string(),
+            "n1@198.51.100.1:9443@eu@20@90".to_string(),
+        ],
+        0,
+        "json_public_redaction",
+    );
+    let json = parsed.to_string();
+    let explain = parsed["explain"].as_str().unwrap_or_default();
+    let retry_plan = parsed["selected_peer_connect_retry_plan"]
+        .as_str()
+        .unwrap_or_default();
+
+    assert_eq!(parsed["initial_selected_peer"], SUCCESS_SELECTED_NODE);
+    assert_eq!(
+        parsed["route_explain_operator_selected"],
+        SUCCESS_SELECTED_NODE
+    );
+    assert!(!json.contains("\"initial_selected_peer\":\"n1\""));
+    assert!(!json.contains("\"route_explain_operator_selected\":\"n1\""));
+    assert!(!explain.contains("n1@"));
+    assert!(!explain.contains("198.51.100.1"));
+    assert!(!retry_plan.contains("9443"));
+    assert!(!retry_plan.contains("7443"));
+    assert!(!retry_plan.contains("443"));
+    assert!(retry_plan.contains("ports=<redacted>"));
+}
+
+#[test]
 fn mesh_route_explain_json_degraded_fields_are_coherent() {
     let parsed = run_route_explain_json(
         base_route_explain_args("allow=mesh;mesh_max_peers=1"),
@@ -258,13 +295,13 @@ fn mesh_route_explain_json_connect_retry_plan_respects_policy_fallback_ports() {
         .unwrap_or_default();
     assert!(
         explain.contains(
-            "selected_peer_connect_retry_plan=n1@198.51.100.1:9443:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=9443|7443|443"
+            "selected_peer_connect_retry_plan=peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured"
         ),
-        "explain missing policy-driven retry port chain: {explain}"
+        "explain missing redacted retry plan: {explain}"
     );
     assert_eq!(
         retry_plan,
-        "n1@198.51.100.1:9443:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=9443|7443|443"
+        "peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured"
     );
     assert_eq!(
         backoff_profile,

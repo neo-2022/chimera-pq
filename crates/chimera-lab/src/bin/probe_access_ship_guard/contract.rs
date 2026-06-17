@@ -1,0 +1,309 @@
+use serde_json::Value;
+
+pub(crate) fn validate_probe_contract(
+    probe: &serde_json::Map<String, Value>,
+    ci_snapshot_host: &str,
+) -> Result<(), String> {
+    if get_str(probe, "status") != "ok" {
+        return Err("probe access ship guard: probe status mismatch".to_string());
+    }
+    if get_str(probe, "kind") != "probe_access" {
+        return Err("probe access ship guard: probe kind mismatch".to_string());
+    }
+    if get_str(probe, "network_state") != "not_modified" {
+        return Err("probe access ship guard: probe network_state mismatch".to_string());
+    }
+    let targets = probe
+        .get("targets")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "probe access ship guard: probe targets missing".to_string())?;
+    if targets.is_empty() {
+        return Err("probe access ship guard: probe targets empty".to_string());
+    }
+    let snapshot_targets = count_targets_with_host(targets, ci_snapshot_host)?;
+    if snapshot_targets > 0 && snapshot_targets < targets.len() {
+        return Err(
+            "probe access ship guard: mixed ci_snapshot and live probe targets".to_string(),
+        );
+    }
+    let totals = probe
+        .get("totals")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "probe access ship guard: probe totals missing".to_string())?;
+    let all = get_i64(totals, "all")?;
+    let direct_ok = get_i64(totals, "direct_ok")?;
+    let unreachable = get_i64(totals, "unreachable")?;
+    let policy_apply_failed = get_i64(totals, "policy_apply_failed")?;
+    let failed_total = get_i64(totals, "failed_total")?;
+    let fail_threshold = get_i64(totals, "fail_threshold")?;
+    let threshold_exceeded = totals
+        .get("threshold_exceeded")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| "probe access ship guard: invalid threshold_exceeded".to_string())?;
+    if all <= 0 || all != targets.len() as i64 {
+        return Err("probe access ship guard: probe all total mismatch".to_string());
+    }
+    if direct_ok < 0 || unreachable < 0 || policy_apply_failed < 0 || failed_total < 0 {
+        return Err("probe access ship guard: negative probe totals".to_string());
+    }
+    let reachability_total = checked_total(direct_ok, unreachable, "probe reachability totals")?;
+    if reachability_total != all {
+        return Err("probe access ship guard: probe reachability totals mismatch".to_string());
+    }
+    let computed_failed_total =
+        checked_total(unreachable, policy_apply_failed, "probe failed totals")?;
+    if computed_failed_total != failed_total {
+        return Err("probe access ship guard: probe failed_total mismatch".to_string());
+    }
+    if fail_threshold < 0 {
+        return Err("probe access ship guard: negative fail_threshold".to_string());
+    }
+    if threshold_exceeded != (failed_total > fail_threshold) {
+        return Err("probe access ship guard: threshold_exceeded mismatch".to_string());
+    }
+    if threshold_exceeded {
+        return Err("probe access ship guard: threshold_exceeded cannot ship".to_string());
+    }
+    let row_counts = count_target_rows(targets)?;
+    if direct_ok != row_counts.direct_ok {
+        return Err("probe access ship guard: target direct_ok total mismatch".to_string());
+    }
+    if unreachable != row_counts.unreachable {
+        return Err("probe access ship guard: target unreachable total mismatch".to_string());
+    }
+    if policy_apply_failed != row_counts.policy_apply_failed {
+        return Err(
+            "probe access ship guard: target policy_apply_failed total mismatch".to_string(),
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn url_has_host(url: &str, expected_host: &str) -> bool {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return false;
+    };
+    let authority = extract_authority(rest);
+    if !is_supported_probe_scheme(scheme) || !authority_has_non_empty_host(authority) {
+        return false;
+    }
+    let host_port = authority.rsplit('@').next().unwrap_or(authority).trim();
+    let host = host_port
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    host == expected_host
+}
+
+struct TargetRowCounts {
+    direct_ok: i64,
+    unreachable: i64,
+    policy_apply_failed: i64,
+}
+
+fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
+    let mut direct_ok = 0i64;
+    let mut unreachable = 0i64;
+    let mut policy_apply_failed = 0i64;
+    for target in targets {
+        let obj = target
+            .as_object()
+            .ok_or_else(|| "probe access ship guard: target row is not object".to_string())?;
+        let row_url = obj
+            .get("url")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "probe access ship guard: target url missing".to_string())?;
+        if !is_supported_probe_url(row_url) {
+            return Err("probe access ship guard: target url scheme mismatch".to_string());
+        }
+        let row_direct_ok = obj
+            .get("direct_ok")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| "probe access ship guard: target direct_ok missing".to_string())?;
+        let recommended_route = obj
+            .get("recommended_route")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                "probe access ship guard: target recommended_route missing".to_string()
+            })?;
+        let expected_route = if row_direct_ok { "direct" } else { "transit" };
+        if recommended_route != expected_route {
+            return Err("probe access ship guard: target recommended_route mismatch".to_string());
+        }
+        let policy_apply_result = obj
+            .get("policy_apply_result")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                "probe access ship guard: target policy_apply_result missing".to_string()
+            })?;
+        if !matches!(
+            policy_apply_result,
+            "not_requested" | "applied" | "failed" | "skipped_unknown_recommendation"
+        ) {
+            return Err("probe access ship guard: target policy_apply_result mismatch".to_string());
+        }
+        let policy_verify_ok = obj
+            .get("policy_verify_ok")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| {
+                "probe access ship guard: target policy_verify_ok missing".to_string()
+            })?;
+        let policy_rule_id = get_target_str(obj, "policy_rule_id")?;
+        let policy_verify_outbound = get_target_str(obj, "policy_verify_outbound")?;
+        let target_error = get_target_str(obj, "target_error")?;
+        get_target_str(obj, "policy_hint")?;
+        if policy_apply_result != "failed" && !target_error.is_empty() {
+            return Err("probe access ship guard: target_error requires failed policy".to_string());
+        }
+        match policy_apply_result {
+            "applied" => {
+                if !policy_verify_ok {
+                    return Err(
+                        "probe access ship guard: applied policy must verify ok".to_string()
+                    );
+                }
+                if policy_rule_id.is_empty() || policy_verify_outbound != recommended_route {
+                    return Err(
+                        "probe access ship guard: applied policy verification mismatch".to_string(),
+                    );
+                }
+            }
+            "failed" => {
+                if policy_verify_ok || target_error.is_empty() {
+                    return Err(
+                        "probe access ship guard: failed policy must carry error".to_string()
+                    );
+                }
+            }
+            "not_requested" | "skipped_unknown_recommendation" => {
+                if policy_verify_ok
+                    || !policy_rule_id.is_empty()
+                    || !policy_verify_outbound.is_empty()
+                {
+                    return Err(
+                        "probe access ship guard: unapplied policy must not claim verification"
+                            .to_string(),
+                    );
+                }
+            }
+            _ => return Err("probe access ship guard: target policy_apply_result mismatch".into()),
+        }
+        if row_direct_ok {
+            direct_ok += 1;
+        } else {
+            unreachable += 1;
+        }
+        if policy_apply_result == "failed" {
+            policy_apply_failed += 1;
+        }
+    }
+    Ok(TargetRowCounts {
+        direct_ok,
+        unreachable,
+        policy_apply_failed,
+    })
+}
+
+fn count_targets_with_host(targets: &[Value], host: &str) -> Result<usize, String> {
+    let mut count = 0usize;
+    for target in targets {
+        let obj = target
+            .as_object()
+            .ok_or_else(|| "probe access ship guard: target row is not object".to_string())?;
+        let url = obj
+            .get("url")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "probe access ship guard: target url missing".to_string())?;
+        if url_has_host(url, host) {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+fn is_supported_probe_url(value: &str) -> bool {
+    let Some((scheme, rest)) = value.split_once("://") else {
+        return false;
+    };
+    let authority = extract_authority(rest);
+    is_supported_probe_scheme(scheme)
+        && !value.chars().any(char::is_control)
+        && !authority.trim().is_empty()
+        && !authority.chars().any(char::is_whitespace)
+        && authority_has_non_empty_host(authority)
+}
+
+fn is_supported_probe_scheme(value: &str) -> bool {
+    let scheme_lc = value.to_ascii_lowercase();
+    matches!(scheme_lc.as_str(), "http" | "https") && is_valid_scheme_token(value)
+}
+
+fn extract_authority(rest: &str) -> &str {
+    rest.split(['/', '?', '#']).next().unwrap_or(rest)
+}
+
+fn is_valid_scheme_token(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphabetic() {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
+fn authority_has_non_empty_host(authority: &str) -> bool {
+    let host_port = authority.rsplit('@').next().unwrap_or(authority).trim();
+    if host_port.is_empty() {
+        return false;
+    }
+    if let Some(inner) = host_port.strip_prefix('[') {
+        let Some((host, _rem)) = inner.split_once(']') else {
+            return false;
+        };
+        return !host.trim().is_empty();
+    }
+    if let Some((h, p)) = host_port.rsplit_once(':')
+        && h.is_empty()
+        && !p.is_empty()
+    {
+        return false;
+    }
+    let host = match host_port.rsplit_once(':') {
+        Some((h, p)) if !h.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => h,
+        Some((_h, _p)) => return false,
+        _ => host_port,
+    };
+    !host.trim().is_empty()
+}
+
+fn checked_total(left: i64, right: i64, label: &str) -> Result<i64, String> {
+    left.checked_add(right)
+        .ok_or_else(|| format!("probe access ship guard: {label} overflow"))
+}
+
+fn get_str<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {
+    obj.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+fn get_i64(obj: &serde_json::Map<String, Value>, key: &str) -> Result<i64, String> {
+    obj.get(key)
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("probe access ship guard: invalid integer field: {key}"))
+}
+
+fn get_target_str<'a>(
+    obj: &'a serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<&'a str, String> {
+    obj.get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("probe access ship guard: target {key} missing"))
+}
+
+#[cfg(test)]
+#[path = "contract_tests.rs"]
+mod tests;

@@ -39,6 +39,7 @@ fn main() {
         .as_object()
         .unwrap_or_else(|| fail("ship readiness json guard: reality root is not object"));
     require_str_eq(report_obj, "status", "ok");
+    require_str_eq(report_obj, "status_scope", "lab_source_gate_only");
     require_str_eq(report_obj, "kind", "ship_readiness_report");
     require_bool_eq(report_obj, "release_ok", true);
     require_bool_eq(report_obj, "release_ok_lab_only", true);
@@ -104,6 +105,12 @@ fn main() {
     ] {
         require_step_true(report_obj, key);
     }
+    let fresh_checked_artifacts_ok = report_obj
+        .get("fresh_checked_artifacts_ok")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| fail("ship readiness json guard: invalid fresh_checked_artifacts_ok"));
+    require_bool_eq(report_obj, "artifacts_fresh", fresh_checked_artifacts_ok);
+    require_step_eq(report_obj, "freshness_check", fresh_checked_artifacts_ok);
 
     for key in [
         "runtime_real_world_datapath_targets_total",
@@ -164,8 +171,13 @@ fn main() {
     require_md_contains(&report_md_raw, "CEF track sync guard:");
     require_md_contains(&report_md_raw, "Truth boundary:");
     require_md_contains(&report_md_raw, "Status: **PASS (LAB/SOURCE GATE ONLY)**");
+    require_md_contains(&report_md_raw, "Fresh checked artifacts in this run:");
+    require_md_contains(&report_md_raw, "Benchmark baseline control present: `true`");
     if report_md_raw.lines().any(|line| line == "Status: **PASS**") {
         fail("ship readiness json guard: markdown status must be lab/source scoped");
+    }
+    if report_md_raw.contains("Artifacts refreshed in this run:") {
+        fail("ship readiness json guard: markdown must not claim every artifact refreshed");
     }
     require_md_contains(
         &report_md_raw,
@@ -245,12 +257,16 @@ fn require_bool_eq(obj: &serde_json::Map<String, Value>, key: &str, expected: bo
 }
 
 fn require_step_true(root: &serde_json::Map<String, Value>, step: &str) {
+    require_step_eq(root, step, true);
+}
+
+fn require_step_eq(root: &serde_json::Map<String, Value>, step: &str, expected: bool) {
     let steps = root
         .get("steps")
         .and_then(Value::as_object)
         .unwrap_or_else(|| fail("ship readiness json guard: missing steps object"));
-    if steps.get(step).and_then(Value::as_bool) != Some(true) {
-        fail(&format!("ship readiness json guard: step not true: {step}"));
+    if steps.get(step).and_then(Value::as_bool) != Some(expected) {
+        fail(&format!("ship readiness json guard: step mismatch: {step}"));
     }
 }
 

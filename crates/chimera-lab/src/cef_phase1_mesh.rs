@@ -339,24 +339,38 @@ pub(crate) fn render_mesh_runtime_trace_json() -> String {
         "join_mode": format!("{:?}", initial.join_mode),
         "phases": {
             "initial": {
-                "selected_peer": initial.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&initial.explain),
                 "explain": initial.explain,
             },
             "failover": {
-                "selected_peer": failover.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&failover.explain),
                 "explain": failover.explain,
             },
             "reselection": {
-                "selected_peer": reselection.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&reselection.explain),
                 "explain": reselection.explain,
             },
             "persisted_state_reselection": {
-                "selected_peer": persisted.selected_peers.first().map(|p| p.node_id.clone()).unwrap_or_default(),
+                "selected_peer": public_selected_peer(&persisted.explain),
                 "explain": persisted.explain,
             }
         }
     })
     .to_string()
+}
+
+fn public_selected_peer(explain: &[String]) -> String {
+    explain
+        .iter()
+        .find_map(|line| line.strip_prefix("selected_peer_ids="))
+        .and_then(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .find(|value| !value.is_empty())
+        })
+        .unwrap_or("none")
+        .to_string()
 }
 
 pub(crate) fn render_mesh_auto_adaptive_trace_json() -> String {
