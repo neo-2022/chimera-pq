@@ -20,8 +20,8 @@ Observed on the laptop stand:
 ## PLAN
 
 1. Keep GitHub Release/Latest as the canonical stand source.
-2. Keep one shell command, but add timeout/retry bounds to the outer bootstrap
-   download:
+2. Keep one shell command, but wrap it with `bash -o pipefail -c` and add
+   timeout/retry bounds to the outer bootstrap download:
    `curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60`.
 3. Update remote-cycle smoke so proof automation cannot hang on the outer curl.
 4. Add installer guard checks for the bounded command.
@@ -61,6 +61,8 @@ Implementation result:
 - the canonical stand command remains a single GitHub pipe command;
 - the outer bootstrap download is bounded with `--disable`, retries,
   connect-timeout and max-time;
+- the outer shell uses `pipefail`, so a failed download cannot be hidden by an
+  empty `bash` process on the right side of the pipe;
 - `chimera_remote_cycle_smoke.sh` uses the bounded command;
 - `chimera_installer_gate.sh` fails if the bounded outer command is removed.
 
@@ -72,8 +74,10 @@ The sub-agent team reviewed the patch after local gates.
 
 Accepted:
 
-- commit/release pipeline for `v0.1.105`;
+- commit/release pipeline for `v0.1.106`;
 - bounded outer GitHub bootstrap as the correct fix for the observed hang;
+- `pipefail` as the required follow-up fix for the observed false success on
+  the laptop when the outer download failed;
 - no security/privacy blocker in this install/update reliability change.
 
 Still blocked for strong claims:

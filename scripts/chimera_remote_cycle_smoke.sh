@@ -52,7 +52,7 @@ bootstrap_url="https://github.com/neo-2022/chimera-pq/releases/latest/download/c
 for i in $(seq 1 "__CYCLES__"); do
   echo "cycle=$i step=install"
   env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-    bash -lc 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 "'"$bootstrap_url"'" | bash -s -- -install' >/tmp/chimera_cycle_install.log 2>&1
+    bash -o pipefail -lc 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 "'"$bootstrap_url"'" | bash -s -- -install' >/tmp/chimera_cycle_install.log 2>&1
 
   echo "cycle=$i step=start"
   "$HOME/.local/bin/chimera.sh" -start >/tmp/chimera_cycle_start.log 2>&1

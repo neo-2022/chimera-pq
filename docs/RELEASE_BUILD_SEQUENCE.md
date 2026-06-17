@@ -53,6 +53,7 @@ Use this sequence for every bundle or bootstrap update.
    - false `start_status=ok` is a release-blocking regression.
 11. Smoke-test the install flow on the notebook/VPS only through the GitHub
    one-command bootstrap.
+   - the command must be wrapped with `bash -o pipefail -c`
    - the outer bootstrap download must use `curl --disable -fsSL --retry 3
      --connect-timeout 10 --max-time 60`
    - first install must not loop on self-update
