@@ -256,86 +256,126 @@ fn main() {
         .unwrap_or("help");
 
     let exit_code = match command {
-        "status" => status_command(lang, lang_source, &args[(command_index + 1)..]),
-        "health" => health_command(lang, &args[(command_index + 1)..]),
-        "doctor" => doctor_command(lang, &args[(command_index + 1)..]),
-        "mvp-verify" => lab_command(lang, Some("mvp-verify"), &args[(command_index + 1)..]),
-        "mvp-snapshot" => lab_command(lang, Some("mvp-snapshot"), &args[(command_index + 1)..]),
-        "mvp-spec-check" => lab_command(lang, Some("mvp-spec-check"), &args[(command_index + 1)..]),
-        "mvp-spec-report" => {
-            lab_command(lang, Some("mvp-spec-report"), &args[(command_index + 1)..])
-        }
+        "status" => status_command(lang, lang_source, args_tail(&args, command_index + 1)),
+        "health" => health_command(lang, args_tail(&args, command_index + 1)),
+        "doctor" => doctor_command(lang, args_tail(&args, command_index + 1)),
+        "mvp-verify" => lab_command(
+            lang,
+            Some("mvp-verify"),
+            args_tail(&args, command_index + 1),
+        ),
+        "mvp-snapshot" => lab_command(
+            lang,
+            Some("mvp-snapshot"),
+            args_tail(&args, command_index + 1),
+        ),
+        "mvp-spec-check" => lab_command(
+            lang,
+            Some("mvp-spec-check"),
+            args_tail(&args, command_index + 1),
+        ),
+        "mvp-spec-report" => lab_command(
+            lang,
+            Some("mvp-spec-report"),
+            args_tail(&args, command_index + 1),
+        ),
         "m5-artifacts-report" => lab_command(
             lang,
             Some("m5-artifacts-report"),
-            &args[(command_index + 1)..],
+            args_tail(&args, command_index + 1),
         ),
         "m6-artifacts-report" => lab_command(
             lang,
             Some("m6-artifacts-report"),
-            &args[(command_index + 1)..],
+            args_tail(&args, command_index + 1),
         ),
-        "lab-smoke" => lab_command(lang, Some("smoke"), &args[(command_index + 1)..]),
-        "lab-doctor" => lab_command(lang, Some("doctor"), &args[(command_index + 1)..]),
-        "lab-hardening-smoke" => {
-            lab_command(lang, Some("hardening-smoke"), &args[(command_index + 1)..])
-        }
-        "benchmark-report" => {
-            lab_command(lang, Some("benchmark-report"), &args[(command_index + 1)..])
-        }
-        "hardening-smoke" => {
-            lab_command(lang, Some("hardening-smoke"), &args[(command_index + 1)..])
-        }
+        "lab-smoke" => lab_command(lang, Some("smoke"), args_tail(&args, command_index + 1)),
+        "lab-doctor" => lab_command(lang, Some("doctor"), args_tail(&args, command_index + 1)),
+        "lab-hardening-smoke" => lab_command(
+            lang,
+            Some("hardening-smoke"),
+            args_tail(&args, command_index + 1),
+        ),
+        "benchmark-report" => lab_command(
+            lang,
+            Some("benchmark-report"),
+            args_tail(&args, command_index + 1),
+        ),
+        "hardening-smoke" => lab_command(
+            lang,
+            Some("hardening-smoke"),
+            args_tail(&args, command_index + 1),
+        ),
         "benchmark-regression-check" => lab_command(
             lang,
             Some("benchmark-regression-check"),
-            &args[(command_index + 1)..],
+            args_tail(&args, command_index + 1),
         ),
-        "net-sim" => lab_command(lang, Some("net-sim"), &args[(command_index + 1)..]),
-        "perf-smoke" => lab_command(lang, Some("perf-smoke"), &args[(command_index + 1)..]),
-        "fuzz-smoke" => lab_command(lang, Some("fuzz-smoke"), &args[(command_index + 1)..]),
-        "config-smoke" => lab_command(lang, Some("config-smoke"), &args[(command_index + 1)..]),
+        "net-sim" => lab_command(lang, Some("net-sim"), args_tail(&args, command_index + 1)),
+        "perf-smoke" => lab_command(
+            lang,
+            Some("perf-smoke"),
+            args_tail(&args, command_index + 1),
+        ),
+        "fuzz-smoke" => lab_command(
+            lang,
+            Some("fuzz-smoke"),
+            args_tail(&args, command_index + 1),
+        ),
+        "config-smoke" => lab_command(
+            lang,
+            Some("config-smoke"),
+            args_tail(&args, command_index + 1),
+        ),
         "release-readiness-report" => lab_command(
             lang,
             Some("release-readiness-report"),
-            &args[(command_index + 1)..],
+            args_tail(&args, command_index + 1),
         ),
-        "artifact-audit" => lab_command(lang, Some("artifact-audit"), &args[(command_index + 1)..]),
-        "report-pack" => lab_command(lang, Some("report-pack"), &args[(command_index + 1)..]),
-        "up" => up_command(lang, &args[(command_index + 1)..]),
-        "down" => down_command(lang, &args[(command_index + 1)..]),
-        "rollback" => rollback_command(lang, &args[(command_index + 1)..]),
+        "artifact-audit" => lab_command(
+            lang,
+            Some("artifact-audit"),
+            args_tail(&args, command_index + 1),
+        ),
+        "report-pack" => lab_command(
+            lang,
+            Some("report-pack"),
+            args_tail(&args, command_index + 1),
+        ),
+        "up" => up_command(lang, args_tail(&args, command_index + 1)),
+        "down" => down_command(lang, args_tail(&args, command_index + 1)),
+        "rollback" => rollback_command(lang, args_tail(&args, command_index + 1)),
         "probe" => probe_command(
             lang,
             args.get(command_index + 1).map(String::as_str),
-            &args[(command_index + 2)..],
+            args_tail(&args, command_index + 2),
         ),
         "lab" => lab_command(
             lang,
             args.get(command_index + 1).map(String::as_str),
-            &args[(command_index + 2)..],
+            args_tail(&args, command_index + 2),
         ),
-        "mvp-check" => lab_command(lang, Some("mvp-check"), &args[(command_index + 1)..]),
+        "mvp-check" => lab_command(lang, Some("mvp-check"), args_tail(&args, command_index + 1)),
         "route" => route_command(
             lang,
             args.get(command_index + 1).map(String::as_str),
             args.get(command_index + 2).map(String::as_str),
-            &args[(command_index + 3)..],
+            args_tail(&args, command_index + 3),
         ),
         "mesh" => mesh_command(
             lang,
             args.get(command_index + 1).map(String::as_str),
-            &args[(command_index + 2)..],
+            args_tail(&args, command_index + 2),
         ),
-        "nodes" => nodes_short_command(lang, &args[(command_index + 1)..]),
-        "connect" => connect_short_command(lang, &args[(command_index + 1)..]),
-        "pin" => pin_short_command(lang, &args[(command_index + 1)..]),
+        "nodes" => nodes_short_command(lang, args_tail(&args, command_index + 1)),
+        "connect" => connect_short_command(lang, args_tail(&args, command_index + 1)),
+        "pin" => pin_short_command(lang, args_tail(&args, command_index + 1)),
         "policy" => policy_command(
             lang,
             args.get(command_index + 1).map(String::as_str),
             args.get(command_index + 2).map(String::as_str),
         ),
-        "diag" => diag_command(lang, &args[(command_index + 1)..]),
+        "diag" => diag_command(lang, args_tail(&args, command_index + 1)),
         "help" | "--help" | "-h" => {
             print_help(lang);
             0
@@ -348,6 +388,10 @@ fn main() {
     };
 
     std::process::exit(exit_code);
+}
+
+fn args_tail(args: &[String], start: usize) -> &[String] {
+    args.get(start..).unwrap_or(&[])
 }
 
 fn parse_language_flag(args: &[String]) -> Option<(Language, LanguageSource, usize)> {
@@ -4263,13 +4307,14 @@ fn render_rollback_json(
 mod tests {
     use super::{
         CapturePreference, CarrierProfile, Language, LanguageSource, RekeyReason,
-        RouteExplainRenderContext, StatusOptions, detect_language_from_lang_value, down_command,
-        lab_command, parse_diag_export_options, parse_doctor_options, parse_language_flag,
-        parse_mesh_route_explain_options, parse_rollback_options, parse_route_explain_options,
-        parse_status_options, parse_up_down_options, render_diag_export_json,
-        render_diag_rekey_block, render_doctor_json, render_health_block, render_help_text,
-        render_policy_validate_block, render_route_explain_block, render_route_explain_json,
-        render_status_rekey_block, rollback_command, up_command,
+        RouteExplainRenderContext, StatusOptions, args_tail, detect_language_from_lang_value,
+        down_command, lab_command, mesh_command, parse_diag_export_options, parse_doctor_options,
+        parse_language_flag, parse_mesh_route_explain_options, parse_rollback_options,
+        parse_route_explain_options, parse_status_options, parse_up_down_options, probe_command,
+        render_diag_export_json, render_diag_rekey_block, render_doctor_json, render_health_block,
+        render_help_text, render_policy_validate_block, render_route_explain_block,
+        render_route_explain_json, render_status_rekey_block, rollback_command, route_command,
+        up_command,
     };
     use chimera_policy::{
         FlowContext, OutboundMode, Policy, PolicySummary, Protocol, RouteDecision,
@@ -4761,6 +4806,21 @@ mod tests {
     fn lab_command_rejects_unknown_subcommand() {
         let exit = lab_command(Language::En, Some("unknown"), &[]);
         assert_eq!(exit, 2);
+    }
+
+    #[test]
+    fn args_tail_returns_empty_for_missing_tail() {
+        let args = vec!["chimera".to_string(), "mesh".to_string()];
+        assert_eq!(args_tail(&args, 2), &[] as &[String]);
+        assert_eq!(args_tail(&args, 3), &[] as &[String]);
+    }
+
+    #[test]
+    fn nested_commands_without_subcommands_return_usage_errors() {
+        assert_eq!(mesh_command(Language::En, None, &[]), 2);
+        assert_eq!(probe_command(Language::En, None, &[]), 2);
+        assert_eq!(lab_command(Language::En, None, &[]), 2);
+        assert_eq!(route_command(Language::En, None, None, &[]), 2);
     }
 
     #[test]
