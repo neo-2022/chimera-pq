@@ -59,6 +59,7 @@ fn plan_explain_contains_candidate_summary_counters() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
 
@@ -152,6 +153,7 @@ fn planning_rejects_when_no_peer_matches_policy() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     assert!(runtime.plan_path(&req, &policy).is_err());
@@ -201,6 +203,7 @@ fn score_only_strategy_still_respects_region_cap() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

@@ -39,6 +39,14 @@ pub enum MultipathMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MultipathDemand {
+    Low,
+    Normal,
+    High,
+    Bulk,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContinuityPolicy {
     SameEgressOnly,
     AllowFlowDrain,
@@ -57,6 +65,7 @@ pub enum ShadowSwitchMode {
 pub struct MeshTrafficHints {
     pub traffic_class: Option<TrafficClass>,
     pub multipath_mode: Option<MultipathMode>,
+    pub multipath_demand: Option<MultipathDemand>,
     pub continuity_policy: Option<ContinuityPolicy>,
     pub shadow_switch_mode: ShadowSwitchMode,
 }
@@ -65,6 +74,7 @@ impl MeshTrafficHints {
     pub fn has_any_hint(&self) -> bool {
         self.traffic_class.is_some()
             || self.multipath_mode.is_some()
+            || self.multipath_demand.is_some()
             || self.continuity_policy.is_some()
     }
 }
@@ -246,6 +256,27 @@ impl MultipathMode {
     }
 }
 
+impl MultipathDemand {
+    pub fn from_dps_value(value: &str) -> Result<Self, String> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "low" => Ok(Self::Low),
+            "normal" => Ok(Self::Normal),
+            "high" => Ok(Self::High),
+            "bulk" => Ok(Self::Bulk),
+            _ => Err("mesh multipath_demand must be one of: low, normal, high, bulk".to_string()),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Normal => "normal",
+            Self::High => "high",
+            Self::Bulk => "bulk",
+        }
+    }
+}
+
 impl ContinuityPolicy {
     pub fn from_dps_value(value: &str) -> Result<Self, String> {
         match value.trim().to_ascii_lowercase().as_str() {
@@ -302,6 +333,7 @@ pub struct MeshPathPolicy {
     pub min_distinct_regions: usize,
     pub path_profile_override: Option<MeshPathProfile>,
     pub multipath_mode: Option<MultipathMode>,
+    pub multipath_demand: Option<MultipathDemand>,
     pub connect_fallback_ports: Vec<u16>,
 }
 
@@ -318,6 +350,7 @@ impl MeshPathPolicy {
             min_distinct_regions: 1,
             path_profile_override: None,
             multipath_mode: None,
+            multipath_demand: None,
             connect_fallback_ports: vec![443, 8443],
         }
     }
@@ -401,6 +434,7 @@ impl MeshPathPolicy {
         let mut min_distinct_regions: Option<usize> = None;
         let mut path_profile_override: Option<MeshPathProfile> = None;
         let mut multipath_mode: Option<MultipathMode> = None;
+        let mut multipath_demand: Option<MultipathDemand> = None;
         let mut connect_fallback_ports: Option<Vec<u16>> = None;
         let mut seen_mesh_keys = BTreeSet::new();
 
@@ -462,6 +496,9 @@ impl MeshPathPolicy {
                 "mesh_multipath_mode" => {
                     multipath_mode = Some(MultipathMode::from_dps_value(value)?);
                 }
+                "mesh_multipath_demand" => {
+                    multipath_demand = Some(MultipathDemand::from_dps_value(value)?);
+                }
                 "mesh_continuity_policy" => {
                     let _ = ContinuityPolicy::from_dps_value(value)?;
                 }
@@ -494,129 +531,12 @@ impl MeshPathPolicy {
         policy.min_distinct_regions = min_distinct_regions.unwrap_or(policy.min_distinct_regions);
         policy.path_profile_override = path_profile_override;
         policy.multipath_mode = multipath_mode;
+        policy.multipath_demand = multipath_demand;
         policy.connect_fallback_ports =
             connect_fallback_ports.unwrap_or(policy.connect_fallback_ports);
         policy.validate()?;
         Ok(policy)
     }
-}
-
-pub fn traffic_class_from_dps_payload(payload: &str) -> Result<Option<TrafficClass>, String> {
-    if payload.trim().is_empty() {
-        return Ok(None);
-    }
-    let mut found: Option<TrafficClass> = None;
-    for segment in payload.split(';') {
-        let part = segment.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let Some((key_raw, value_raw)) = part.split_once('=') else {
-            return Err("mesh policy payload field is malformed".to_string());
-        };
-        let key = key_raw.trim().to_ascii_lowercase();
-        if key != "mesh_traffic_class" {
-            continue;
-        }
-        if found.is_some() {
-            return Err(
-                "mesh policy payload contains duplicate field 'mesh_traffic_class'".to_string(),
-            );
-        }
-        let value = value_raw.trim();
-        if value.is_empty() {
-            return Err("mesh policy payload field 'mesh_traffic_class' is empty".to_string());
-        }
-        found = Some(TrafficClass::from_dps_value(value)?);
-    }
-    Ok(found)
-}
-
-pub fn multipath_mode_from_dps_payload(payload: &str) -> Result<Option<MultipathMode>, String> {
-    if payload.trim().is_empty() {
-        return Ok(None);
-    }
-    let mut found: Option<MultipathMode> = None;
-    for segment in payload.split(';') {
-        let part = segment.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let Some((key_raw, value_raw)) = part.split_once('=') else {
-            return Err("mesh policy payload field is malformed".to_string());
-        };
-        let key = key_raw.trim().to_ascii_lowercase();
-        if key != "mesh_multipath_mode" {
-            continue;
-        }
-        if found.is_some() {
-            return Err(
-                "mesh policy payload contains duplicate field 'mesh_multipath_mode'".to_string(),
-            );
-        }
-        let value = value_raw.trim();
-        if value.is_empty() {
-            return Err("mesh policy payload field 'mesh_multipath_mode' is empty".to_string());
-        }
-        found = Some(MultipathMode::from_dps_value(value)?);
-    }
-    Ok(found)
-}
-
-pub fn continuity_policy_from_dps_payload(
-    payload: &str,
-) -> Result<Option<ContinuityPolicy>, String> {
-    if payload.trim().is_empty() {
-        return Ok(None);
-    }
-    let mut found: Option<ContinuityPolicy> = None;
-    for segment in payload.split(';') {
-        let part = segment.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let Some((key_raw, value_raw)) = part.split_once('=') else {
-            return Err("mesh policy payload field is malformed".to_string());
-        };
-        let key = key_raw.trim().to_ascii_lowercase();
-        if key != "mesh_continuity_policy" {
-            continue;
-        }
-        if found.is_some() {
-            return Err(
-                "mesh policy payload contains duplicate field 'mesh_continuity_policy'".to_string(),
-            );
-        }
-        let value = value_raw.trim();
-        if value.is_empty() {
-            return Err("mesh policy payload field 'mesh_continuity_policy' is empty".to_string());
-        }
-        found = Some(ContinuityPolicy::from_dps_value(value)?);
-    }
-    Ok(found)
-}
-
-pub fn traffic_hints_from_dps_payload(payload: &str) -> Result<MeshTrafficHints, String> {
-    let traffic_class = traffic_class_from_dps_payload(payload)?;
-    let multipath_mode = multipath_mode_from_dps_payload(payload)?;
-    let continuity_policy = continuity_policy_from_dps_payload(payload)?;
-    let shadow_switch_mode = match continuity_policy {
-        Some(ContinuityPolicy::AllowFlowDrain) => ShadowSwitchMode::FlowDrain,
-        Some(ContinuityPolicy::SameEgressOnly) => ShadowSwitchMode::TransportOnly,
-        Some(ContinuityPolicy::AllowHardRebindOnly) => ShadowSwitchMode::HardRebindOnly,
-        None => match multipath_mode {
-            Some(MultipathMode::StandbyOnly) => ShadowSwitchMode::TransportOnly,
-            Some(MultipathMode::FlowShard) => ShadowSwitchMode::FlowDrain,
-            Some(MultipathMode::AggregateBuffered) => ShadowSwitchMode::TransportOnly,
-            Some(MultipathMode::Off) | None => ShadowSwitchMode::Unknown,
-        },
-    };
-    Ok(MeshTrafficHints {
-        traffic_class,
-        multipath_mode,
-        continuity_policy,
-        shadow_switch_mode,
-    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

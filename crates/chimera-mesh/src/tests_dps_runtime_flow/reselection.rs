@@ -182,8 +182,12 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         node_name: "node-client".to_string(),
         invite_token: None,
     };
-    let payload =
-        "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7102";
+    let payload = concat!(
+        "mesh_allowed_regions=eu;",
+        "mesh_multipath_mode=flow_shard;",
+        "mesh_multipath_demand=normal;",
+        "mesh_route_binding_id=7102"
+    );
     let health = [MeshPeerHealth {
         node_id: "node-a".to_string(),
         healthy: true,
@@ -193,16 +197,26 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         .reselection_plan_with_health_from_dps_payload(&req, payload, &health)
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(plan.multipath_schedule.mode.as_str(), "flow_shard");
-    assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert_eq!(plan.multipath_schedule.active_lane_count, 1);
+    assert_eq!(plan.multipath_schedule.demand_policy, "normal");
+    assert_eq!(
+        plan.multipath_schedule.demand_policy_source,
+        "control_policy"
+    );
+    assert_eq!(
+        plan.multipath_schedule.demand_requested_active_lane_count,
+        1
+    );
+    assert_eq!(plan.multipath_schedule.demand_planned_active_lane_count, 1);
     assert_eq!(
         plan.multipath_schedule
             .lane_admission_requested_active_lane_count,
-        2
+        1
     );
     assert_eq!(
         plan.multipath_schedule
             .lane_admission_admitted_active_lane_count,
-        2
+        1
     );
     assert_eq!(
         plan.multipath_schedule
@@ -213,7 +227,7 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         plan.multipath_schedule.lane_admission_capacity_status,
         "within_budget"
     );
-    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 2);
+    assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 1);
     assert_eq!(
         plan.multipath_schedule.carrier_lane_bindings[0].peer_node_id,
         "node-a"
@@ -221,14 +235,6 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
     assert_eq!(
         plan.multipath_schedule.carrier_lane_bindings[0].carrier_endpoint,
         "198.51.100.72:443"
-    );
-    assert_eq!(
-        plan.multipath_schedule.carrier_lane_bindings[1].peer_node_id,
-        "node-b"
-    );
-    assert_eq!(
-        plan.multipath_schedule.carrier_lane_bindings[1].carrier_endpoint,
-        "198.51.100.73:443"
     );
     assert!(
         plan.explain
@@ -243,6 +249,16 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
     assert!(plan.explain.iter().any(|line| {
         line.contains("multipath_schedule_lane_admission_capacity_status=within_budget")
     }));
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| { line.contains("multipath_schedule_demand_policy=normal") })
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| { line.contains("multipath_schedule_demand_planned_active_lanes=1") })
+    );
 }
 
 #[test]

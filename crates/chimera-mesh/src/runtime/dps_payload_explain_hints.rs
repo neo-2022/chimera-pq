@@ -9,6 +9,7 @@ pub(super) const HINT_EXPLAIN_KEYS: &[&str] = &[
     "preemptive_shadow_hints_present=",
     "preemptive_shadow_hints_reason=",
     "preemptive_shadow_hints_multipath_mode=",
+    "preemptive_shadow_hints_multipath_demand=",
     "preemptive_shadow_hints_continuity_policy=",
     "preemptive_shadow_hints_summary=",
     "preemptive_shadow_hints_source=",
@@ -32,6 +33,10 @@ pub(super) fn append_hints_ok(explain: &mut Vec<String>, hints: &MeshTrafficHint
         .continuity_policy
         .map(|v| v.as_str().to_string())
         .unwrap_or_else(|| "none".to_string());
+    let hints_multipath_demand = hints
+        .multipath_demand
+        .map(|v| v.as_str().to_string())
+        .unwrap_or_else(|| "none".to_string());
 
     explain.push(format!(
         "preemptive_shadow_switch_mode={}",
@@ -43,6 +48,9 @@ pub(super) fn append_hints_ok(explain: &mut Vec<String>, hints: &MeshTrafficHint
     explain.push(format!("preemptive_shadow_hints_source={hints_source}"));
     explain.push(format!(
         "preemptive_shadow_hints_multipath_mode={hints_multipath_mode}"
+    ));
+    explain.push(format!(
+        "preemptive_shadow_hints_multipath_demand={hints_multipath_demand}"
     ));
     explain.push(format!(
         "preemptive_shadow_hints_continuity_policy={hints_continuity_policy}"
@@ -78,6 +86,9 @@ pub(super) fn append_hints_ok(explain: &mut Vec<String>, hints: &MeshTrafficHint
     ));
     explain.push(format!("dps_payload_multipath_mode={hints_multipath_mode}"));
     explain.push(format!(
+        "dps_payload_multipath_demand={hints_multipath_demand}"
+    ));
+    explain.push(format!(
         "dps_payload_continuity_policy={hints_continuity_policy}"
     ));
 }
@@ -98,6 +109,7 @@ pub(super) fn append_hints_invalid(explain: &mut Vec<String>) {
     explain.push(format!(
         "preemptive_shadow_hints_multipath_mode={hints_multipath_mode}"
     ));
+    explain.push("preemptive_shadow_hints_multipath_demand=invalid".to_string());
     explain.push(format!(
         "preemptive_shadow_hints_continuity_policy={hints_continuity_policy}"
     ));
@@ -128,5 +140,6 @@ pub(super) fn append_hints_invalid(explain: &mut Vec<String>) {
     ));
     explain.push("dps_payload_shadow_switch_mode=unknown".to_string());
     explain.push("dps_payload_multipath_mode=invalid".to_string());
+    explain.push("dps_payload_multipath_demand=invalid".to_string());
     explain.push("dps_payload_continuity_policy=invalid".to_string());
 }

@@ -30,6 +30,7 @@ fn policy_region_filter_is_case_insensitive() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

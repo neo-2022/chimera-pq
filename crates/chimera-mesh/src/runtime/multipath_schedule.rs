@@ -3,8 +3,10 @@ use crate::multipath_model::{
     MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshRouteBindingId,
 };
 
+use super::multipath_demand::{MultipathDemandPlan, plan_multipath_demand};
 use super::multipath_lane_admission::evaluate_lane_admission;
 use super::multipath_weights::{active_lane_weights, capacity_weights_from_relative_weights};
+use crate::policy::MultipathDemand;
 
 const LOCAL_TRAFFIC_RESERVE_PCT: u8 = 10;
 const TRANSIT_CAPACITY_BUDGET_PCT: u8 = 100 - LOCAL_TRAFFIC_RESERVE_PCT;
@@ -19,11 +21,13 @@ pub(super) fn build_multipath_schedule(
     selected_peers: &[MeshPeerState],
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
+    demand: Option<MultipathDemand>,
 ) -> Result<MeshMultipathSchedule, String> {
     build_multipath_schedule_with_reason(
         selected_peers,
         mode,
         route_binding_id,
+        demand,
         PLANNER_REBUILD_REASON_INITIAL_PLAN,
     )
 }
@@ -32,13 +36,21 @@ fn build_multipath_schedule_with_reason(
     selected_peers: &[MeshPeerState],
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
+    demand: Option<MultipathDemand>,
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
-    let lanes = build_lanes(selected_peers, &mode);
+    let demand_plan = plan_multipath_demand(
+        &mode,
+        demand,
+        selected_peers.len(),
+        TRANSIT_CAPACITY_BUDGET_PCT,
+    );
+    let lanes = build_lanes(selected_peers, &mode, demand_plan.planned_active_lane_count);
     schedule_from_lanes(
         selected_peers,
         mode,
         route_binding_id,
+        demand_plan,
         lanes,
         planner_rebuild_reason,
     )
@@ -48,12 +60,14 @@ pub(super) fn replace_multipath_schedule(
     plan: &mut MeshPathPlan,
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
+    demand: Option<MultipathDemand>,
 ) -> Result<(), String> {
     remove_multipath_schedule_explain(&mut plan.explain);
     plan.multipath_schedule = build_multipath_schedule_with_reason(
         &plan.selected_peers,
         mode,
         route_binding_id,
+        demand,
         PLANNER_REBUILD_REASON_MULTIPATH_HINT_REPLAN,
     )?;
     append_multipath_schedule_explain(&mut plan.explain, &plan.multipath_schedule);
@@ -125,6 +139,38 @@ pub(super) fn append_multipath_schedule_explain(
         schedule.transit_capacity_budget_pct
     ));
     explain.push(format!(
+        "multipath_schedule_demand_policy={}",
+        schedule.demand_policy
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_policy_source={}",
+        schedule.demand_policy_source
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_requested_active_lanes={}",
+        schedule.demand_requested_active_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_planned_active_lanes={}",
+        schedule.demand_planned_active_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_admitted_lane_capacity_pct={}",
+        schedule.demand_admitted_lane_capacity_pct
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_unmet_lanes={}",
+        schedule.demand_unmet_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_status={}",
+        schedule.demand_status
+    ));
+    explain.push(format!(
+        "multipath_schedule_demand_rebuild_recommended={}",
+        schedule.demand_rebuild_recommended
+    ));
+    explain.push(format!(
         "multipath_schedule_fairness_policy={}",
         schedule.fairness_policy
     ));
@@ -154,13 +200,16 @@ pub(super) fn schedule_mode_from_multipath_hint(mode: MultipathMode) -> MeshMult
 fn build_lanes(
     selected_peers: &[MeshPeerState],
     mode: &MeshMultipathMode,
+    planned_active_lane_count: usize,
 ) -> Vec<MeshMultipathLane> {
     match mode {
-        MeshMultipathMode::Off => build_active_lanes(selected_peers, 1),
+        MeshMultipathMode::Off => build_active_lanes(selected_peers, planned_active_lane_count),
         MeshMultipathMode::StandbyOnly => build_standby_lanes(selected_peers),
-        MeshMultipathMode::FlowShard => build_active_lanes(selected_peers, 2),
+        MeshMultipathMode::FlowShard => {
+            build_active_lanes(selected_peers, planned_active_lane_count)
+        }
         MeshMultipathMode::AggregateBuffered => {
-            build_active_lanes(selected_peers, selected_peers.len())
+            build_active_lanes(selected_peers, planned_active_lane_count)
         }
     }
 }
@@ -205,15 +254,18 @@ fn build_standby_lanes(selected_peers: &[MeshPeerState]) -> Vec<MeshMultipathLan
     lanes
 }
 
-fn schedule_from_lanes(
+pub(super) fn schedule_from_lanes(
     selected_peers: &[MeshPeerState],
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
+    demand_plan: MultipathDemandPlan,
     lanes: Vec<MeshMultipathLane>,
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
-    let lane_admission =
-        evaluate_lane_admission(&mode, selected_peers.len(), TRANSIT_CAPACITY_BUDGET_PCT);
+    let lane_admission = evaluate_lane_admission(
+        demand_plan.requested_active_lane_count,
+        TRANSIT_CAPACITY_BUDGET_PCT,
+    );
     let active_lane_count = lanes
         .iter()
         .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
@@ -260,6 +312,14 @@ fn schedule_from_lanes(
         active_capacity_sum_pct,
         local_traffic_reserve_pct: LOCAL_TRAFFIC_RESERVE_PCT,
         transit_capacity_budget_pct: TRANSIT_CAPACITY_BUDGET_PCT,
+        demand_policy: demand_plan.demand_label().to_string(),
+        demand_policy_source: demand_plan.policy_source.to_string(),
+        demand_requested_active_lane_count: demand_plan.requested_active_lane_count,
+        demand_planned_active_lane_count: demand_plan.planned_active_lane_count,
+        demand_admitted_lane_capacity_pct: demand_plan.admitted_lane_capacity_pct,
+        demand_unmet_lane_count: demand_plan.unmet_lane_count,
+        demand_status: demand_plan.status.to_string(),
+        demand_rebuild_recommended: demand_plan.rebuild_recommended,
         fairness_policy: FAIRNESS_POLICY.to_string(),
         execution_status: execution_status.to_string(),
         transit_payload_policy: TRANSIT_PAYLOAD_POLICY.to_string(),
@@ -313,84 +373,4 @@ fn format_schedule_lanes(lanes: &[MeshMultipathLane]) -> String {
 
 fn remove_multipath_schedule_explain(explain: &mut Vec<String>) {
     explain.retain(|line| !line.starts_with("multipath_schedule_"));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::schedule_from_lanes;
-    use crate::model::MeshPeerState;
-    use crate::multipath_model::{
-        MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode, MeshRouteBindingId,
-    };
-
-    fn peer(node_id: &str) -> MeshPeerState {
-        MeshPeerState {
-            node_id: node_id.to_string(),
-            endpoint: "198.51.100.50:443".to_string(),
-            region: "eu".to_string(),
-            reliability_score: 90,
-            load_score: 10,
-            selection_score: 170,
-        }
-    }
-
-    #[test]
-    fn carrier_lane_binding_fails_closed_when_lane_peer_is_not_selected() -> Result<(), String> {
-        let selected_peers = vec![peer("selected-peer")];
-        let lanes = vec![MeshMultipathLane {
-            lane_id: 0,
-            peer_node_id: "missing-peer".to_string(),
-            role: MeshMultipathLaneRole::Active,
-            weight_pct: 100,
-            capacity_weight_pct: 90,
-        }];
-        let route_binding_id = MeshRouteBindingId::new(77)?;
-
-        let error = match schedule_from_lanes(
-            &selected_peers,
-            MeshMultipathMode::FlowShard,
-            Some(route_binding_id),
-            lanes,
-            "initial_plan",
-        ) {
-            Ok(_) => {
-                return Err(
-                    "missing lane peer must fail instead of silently dropping binding".to_string(),
-                );
-            }
-            Err(error) => error,
-        };
-
-        assert!(error.contains("missing selected peer"));
-        Ok(())
-    }
-
-    #[test]
-    fn aggregate_buffered_limits_active_lanes_to_capacity_budget() -> Result<(), String> {
-        let selected_peers = (0..95)
-            .map(|idx| peer(&format!("node-{idx}")))
-            .collect::<Vec<MeshPeerState>>();
-
-        let schedule = super::build_multipath_schedule(
-            &selected_peers,
-            MeshMultipathMode::AggregateBuffered,
-            Some(MeshRouteBindingId::new(78)?),
-        )?;
-
-        assert_eq!(
-            schedule.active_lane_count,
-            schedule.transit_capacity_budget_pct as usize
-        );
-        assert_eq!(
-            schedule.active_capacity_sum_pct,
-            schedule.transit_capacity_budget_pct as u16
-        );
-        assert!(
-            schedule
-                .lanes
-                .iter()
-                .all(|lane| lane.capacity_weight_pct > 0)
-        );
-        Ok(())
-    }
 }

@@ -36,6 +36,7 @@ pub(super) fn apply_dps_multipath_schedule(
             plan,
             schedule_mode_from_multipath_hint(mode),
             mesh_route_binding_id_from_dps_payload(payload),
+            hints.multipath_demand,
         )?;
     }
     Ok(())

@@ -1,6 +1,7 @@
 use super::payload_utils::has_mesh_policy_key;
 use super::*;
-use crate::policy::{MultipathMode, TrafficClass, traffic_hints_from_dps_payload};
+use crate::policy::{MultipathMode, TrafficClass};
+use crate::policy_hints::traffic_hints_from_dps_payload;
 
 pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut MeshPathPolicy) {
     let Ok(hints) = traffic_hints_from_dps_payload(payload) else {

@@ -120,7 +120,12 @@ impl MeshRuntime {
             .multipath_mode
             .map(schedule_mode_from_multipath_hint)
             .unwrap_or(MeshMultipathMode::Off);
-        let multipath_schedule = build_multipath_schedule(&selected_peers, multipath_mode, None)?;
+        let multipath_schedule = build_multipath_schedule(
+            &selected_peers,
+            multipath_mode,
+            None,
+            policy.multipath_demand,
+        )?;
         multipath_schedule::append_multipath_schedule_explain(&mut explain, &multipath_schedule);
 
         Ok(MeshPathPlan {

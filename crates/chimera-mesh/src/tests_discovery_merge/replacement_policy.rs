@@ -73,6 +73,7 @@ fn merge_discovery_respects_replacement_score_delta_policy() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime
@@ -213,6 +214,7 @@ fn merge_discovery_uses_degraded_replacement_threshold() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime
@@ -355,6 +357,7 @@ fn merge_discovery_respects_max_replacements_per_window() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

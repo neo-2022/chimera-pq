@@ -42,6 +42,7 @@ fn runtime_bootstrap_discovery_and_plan_select_best_peer() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = match runtime.plan_path(&req, &policy) {

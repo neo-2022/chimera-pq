@@ -28,6 +28,7 @@ fn plan_reports_auto_mode_when_policy_is_default_like() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime
@@ -108,6 +109,7 @@ fn plan_reports_manual_filter_source_when_policy_is_overridden() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime

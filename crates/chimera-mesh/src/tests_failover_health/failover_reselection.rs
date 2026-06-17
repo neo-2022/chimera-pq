@@ -41,6 +41,7 @@ fn failover_plan_reselects_peer() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let initial = runtime
@@ -96,6 +97,7 @@ fn reselection_respects_health_cooldown() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let health = vec![MeshPeerHealth {
@@ -155,6 +157,7 @@ fn persisted_health_state_affects_future_reselection() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: None,
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let plan = runtime
@@ -207,6 +210,7 @@ fn failover_plan_preserves_policy_multipath_mode_after_reselection() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: Some(MultipathMode::FlowShard),
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let event = MeshFailoverEvent {
@@ -278,6 +282,7 @@ fn reselection_plan_preserves_policy_multipath_mode_after_health_filter() {
         min_distinct_regions: 1,
         path_profile_override: None,
         multipath_mode: Some(MultipathMode::FlowShard),
+        multipath_demand: None,
         connect_fallback_ports: vec![443, 8443],
     };
     let health = [MeshPeerHealth {

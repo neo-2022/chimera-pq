@@ -1,136 +1,214 @@
-# Workflow Attestation: Real-World Release/Update Gate
+# Workflow Attestation: Remote Release/Update Installed Proof
 
-Status: in_progress
+Status: installed_release_update_pass
 Date: 2026-06-17
+Updated UTC: 2026-06-17T20:51:20Z
 
 ## Objective
 
-Publish a new GitHub Release/Latest for CHIMERA-PQ and verify the documented
-one-command install/update path over SSH on the authorized laptop and VPS
-stand hosts.
+Verify that GitHub Release/Latest `v0.1.107` can be installed or updated on the
+authorized CHIMERA stand hosts using only the documented GitHub one-command
+path over SSH.
 
-The stand install/update command must use GitHub Release/Latest:
+Authorized stand hosts:
+
+- laptop: authorized laptop SSH target, redacted in public proof
+- VPS: authorized VPS SSH target, reached through the laptop as SSH jump host;
+  target value redacted in public proof
+
+The stand install/update command used GitHub Release/Latest only:
 
 ```bash
-curl --disable -fsSL https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install
+bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install'
 ```
 
-## Required Cycle
+No `scp`, `rsync`, local tarball, `cargo`, `git clone`, local `target/`, or
+local PC runtime path was used as stand proof.
 
-Required workflow:
+## Required Cycle
 
 ```text
 ANALYSIS -> PLAN -> TEAM_CRITIQUE -> IMPLEMENTATION -> TEAM_CHECK -> FIX
 -> RECHECK -> FINAL_AUDIT -> REPORT
 ```
 
-## Analysis
+- ANALYSIS: completed
+- PLAN: completed
+- TEAM_CRITIQUE: completed with real sub-agent roles
+- IMPLEMENTATION: completed on laptop and VPS through GitHub one-command
+- TEAM_CHECK: completed through installed-binary proof on both hosts
+- FIX: not_needed
+- RECHECK: completed through bad-bootstrap negative path on both hosts
+- FINAL_AUDIT: completed
+- REPORT: this document
 
-- MVP scope is the WEAVE symmetric mesh-node model from `CHIMERA-PQ_MVP_SPEC.md`.
-- Real-World PASS cannot be claimed from source/lab artifacts alone.
-- Current GitHub Latest before this cycle points to `v0.1.98`.
-- Candidate next release tag: `v0.1.99`, only if source gates pass and the tag
-  is still free at publish time.
-- Local PC is source/control only. CHIMERA runtime proof must be remote-only.
+## Council Consensus
 
-## Team Critique Inputs
-
-Real sub-agent roles were assigned for this cycle:
+Real sub-agent roles used for this cycle:
 
 - architect
-- senior developer
+- senior Rust/release engineer
 - tester
 - security engineer
 - DevOps engineer
 - critic-skeptic
 
-Known blocker themes from the council before this attestation:
+Agreed:
 
-- untracked Rust files must be committed before release;
-- public diagnostics must not leak raw peer ids, endpoints, ports, tokens or
-  payload details;
-- GitHub Latest assets must be verified before stand update;
-- SSH stand proof must be collected on both laptop and VPS;
-- source/lab PASS is not Real-World PASS.
+- `v0.1.107` can be verified as a remote installed release/update proof.
+- The update source must remain GitHub Release/Latest.
+- The VPS SSH jump host is only a transport path, not a release source.
+- Installed proof must include version, checksum, route-explain diagnostics,
+  redaction, and negative bad-bootstrap behavior on both hosts.
 
-Updated council finding during this cycle:
+Rejected:
 
-- GitHub CI failure on `de6a680` was traced to `benchmark-regression-check`,
-  not to redaction, TUN, timeout or freshness.
-- The failed GitHub log reported encode regression `41.01%` and `41.93%`
-  against `docs/benchmark_baseline.json`, which is a local-machine baseline.
-- Consensus fix: keep the 20% regression threshold, keep the benchmark gate
-  mandatory, and add an explicit GitHub Actions benchmark profile
-  `docs/benchmark_ci_baseline.json` selected only under `GITHUB_ACTIONS=true`
-  or by explicit `CHIMERA_BENCHMARK_BASELINE_FILE`.
-- Follow-up GitHub CI run `27689795344` on commit `9f0a904` proved the main
-  GitHub Actions benchmark path used `docs/benchmark_ci_baseline.json` and
-  passed, but failed later inside `benchmark-regression-selfcheck` because the
-  contract smoke forced `env -u GITHUB_ACTIONS` on the GitHub runner and
-  compared that runner against the local-machine baseline.
-- Follow-up consensus fix: keep the real benchmark gate unchanged, keep
-  `docs/benchmark_baseline.json` and `docs/benchmark_ci_baseline.json` separate,
-  and make the profile contract smoke test selection (`baseline_file` /
-  `baseline_profile`) without coupling the smoke to local workstation speed.
-- Rejected: tagging on red CI, skipping the benchmark gate, or globally raising
-  the allowed regression threshold.
+- reporting this as full Real-World datapath PASS;
+- reporting node-to-node transit traffic, TUN/OS routing, DNS binding, forced
+  rollback, browser/IDE workflow, or real multipath carrier traffic as verified;
+- stand proof through `scp`, `rsync`, local tarball, `cargo`, `git clone`, local
+  binaries, or local PC runtime;
+- any public log or report containing tokens, passwords, private keys, raw
+  endpoints, route binding ids, or payload markers.
 
-## Implementation Plan
+## GitHub Latest Evidence
 
-1. Run source and release contract gates without local CHIMERA runtime launch.
-2. Commit the coherent source state, including untracked Rust modules.
-3. Push `main`.
-4. Create and push `v0.1.99`.
-5. Verify GitHub Actions release job and `releases/latest` assets.
-6. Run one-command GitHub install/update on laptop and VPS over SSH.
-7. Collect version, checksum, status/start/stop/rollback/log-redaction evidence.
-8. Run final sub-agent audit before any PASS claim.
+GitHub API Latest:
 
-## Current Evidence
+- `tag_name`: `v0.1.107`
+- release URL: `https://github.com/neo-2022/chimera-pq/releases/tag/v0.1.107`
+- published: `2026-06-17T20:34:11Z`
+- assets:
+  - `chimera.sh`
+  - `chimera-pq-release.tar.gz`
+  - `chimera-pq-release.tar.gz.sha256`
 
-- `gh auth status`: local GitHub CLI is not logged in.
-- GitHub API latest before release: `v0.1.98`.
-- `git ls-remote https://github.com/neo-2022/chimera-pq.git refs/tags/v0.1.99`:
-  no output, tag absent at the time of checking.
-- Laptop SSH preflight: `ssh_ok=true`, has `curl`, `tar`, `sha256sum`.
-- VPS SSH preflight: `ssh_ok=true`, has `curl`, `tar`, `sha256sum`.
-- SSH to GitHub on default port 22 timed out in this environment.
-- SSH authentication to GitHub over `ssh.github.com:443` succeeded.
-- Source gate PASS after public diagnostics redaction:
-  - `cargo fmt --all -- --check`
-  - `cargo check -q --workspace`
-  - `cargo test -q --workspace`
-  - `cargo clippy -q --workspace --all-targets -- -D warnings`
-- Release contract/source guards PASS:
-  - `bash scripts/anti_monolith_guard.sh`
-  - `just rust-no-hardcode-guard`
-  - `bash scripts/chimera_installer_gate.sh`
-  - `bash scripts/chimera_update_contract_smoke.sh`
-  - `bash scripts/chimera_start_contract_smoke.sh`
-  - `bash scripts/chimera_stop_contract_smoke.sh`
-  - mesh route/preflight public artifact guards
-  - `CHIMERA_REAL_WORLD_PROBE_MODE=ci_snapshot just ship-readiness`
-- Defects found and fixed during source gate:
-  - old public error tests expected raw `node`; updated expected public node to
-    `<redacted>`;
-  - `probe_redaction.rs` exceeded anti-monolith line limit; test code moved to
-    `probe_redaction_tests.rs`;
-  - guard test fixture used real VPS IP as a negative leak example; replaced
-    with non-stand example host.
-- Current `docs/SHIP_READINESS_REPORT.json` is lab/source scoped:
-  `status_scope=lab_source_gate_only`, `runtime_real_world_probe_mode=ci_snapshot`,
-  `runtime_real_world_datapath_probe_ok=false`.
-- GitHub CI run `27686843976`, job `81887559086`, failed at
-  `benchmark-regression-check` with encode regression over the 20% threshold
-  against the local baseline.
-- GitHub CI run `27689795344`, job `81897521684`, failed at
-  `benchmark-regression-selfcheck`; its real `benchmark-regression-check`
-  already used `docs/benchmark_ci_baseline.json` and passed.
+Release checksum file:
 
-## Not Closed Yet
+```text
+4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af  chimera-pq-release.tar.gz
+```
 
-- New commit is not pushed yet.
-- New tag/release is not published yet.
-- GitHub Latest does not yet point to the new source.
-- Laptop/VPS one-command update proof is not collected yet.
-- Real-World PASS is not claimed by this document.
+Downloaded Latest bootstrap header:
+
+```text
+VERSION="0.1.107"
+ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz"
+CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz.sha256"
+```
+
+## SSH Preflight
+
+Laptop:
+
+```text
+host=laptop ssh_ok=true user=<redacted> home=<redacted>
+curl=present
+tar=present
+sha256sum=present
+Linux 7.0.0-22-generic x86_64
+```
+
+VPS:
+
+```text
+host=vps ssh_ok=true user=<redacted> home=<redacted>
+curl=present
+tar=present
+sha256sum=present
+Linux 6.8.0-124-generic x86_64
+```
+
+## Install/Update Evidence
+
+Laptop:
+
+```text
+host=laptop phase=before version=0.1.106 bundle_sha=621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97
+host=laptop install_rc=0
+host=laptop phase=after version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af network_unchanged=true
+```
+
+Observed note: several `curl` attempts to GitHub timed out on the laptop, but
+the bounded retry path completed and installed `0.1.107`.
+
+VPS:
+
+```text
+host=vps phase=before version=0.1.106 bundle_sha=621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97
+host=vps install_rc=0
+host=vps phase=after version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af network_unchanged=true
+```
+
+## Installed Binary Proof
+
+Laptop:
+
+```text
+host=laptop proof=installed version_marker=0.1.107 launcher_version="chimera-runtime 0.1.107" cli_executable=true version_ok=true marker_checksum_ok=true archive_checksum_ok=true
+host=laptop proof=route_explain lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
+host=laptop proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.107 checksum_after_bad=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af bad_unchanged=true bad_redaction_ok=true network_unchanged=true
+```
+
+VPS:
+
+```text
+host=vps proof=installed version_marker=0.1.107 launcher_version="chimera-runtime 0.1.107" cli_executable=true version_ok=true marker_checksum_ok=true archive_checksum_ok=true
+host=vps proof=route_explain lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
+host=vps proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.107 checksum_after_bad=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af bad_unchanged=true bad_redaction_ok=true network_unchanged=true
+```
+
+Route-explain proof was run with installed `chimera-cli` and reserved TEST-NET
+simulation endpoints. It verified:
+
+- `multipath_schedule_lane_admission_requested_active_lanes`;
+- `multipath_schedule_lane_admission_admitted_active_lanes`;
+- `multipath_schedule_lane_admission_rejected_active_lanes`;
+- `multipath_schedule_lane_admission_capacity_status`;
+- `multipath_schedule_transit_payload_policy=sealed_opaque_only`;
+- `multipath_schedule_execution_status=carrier_lane_binding_contract_ready`;
+- `multipath_schedule_carrier_binding_contract=carrier_lane_binding_contract_ready`;
+- public redaction markers for peer endpoints;
+- no raw test peer ids, TEST-NET endpoints, route binding id, invite token, or
+  payload marker in the output.
+
+Negative bad-bootstrap proof used a missing GitHub release asset URL and
+`bash -o pipefail`. It returned nonzero on both hosts and left installed version
+and checksum unchanged.
+
+## Status Boundary
+
+Status: installed release/update proof PASS for `v0.1.107`.
+
+Closed:
+
+- GitHub Latest points to `v0.1.107`.
+- Required release assets are present.
+- Laptop and VPS were updated by GitHub one-command install/update only.
+- Installed version and release bundle checksum match on both hosts.
+- Installed route-explain exposes lane-admission diagnostics and
+  `sealed_opaque_only` transit payload policy.
+- Public route-explain redaction passed on both hosts.
+- Bad-bootstrap negative path failed closed and did not alter installed version.
+- Local PC CHIMERA runtime was not started.
+
+Not closed by this document:
+
+- full Real-World datapath PASS;
+- node-to-node live carrier traffic between laptop and VPS;
+- actual transit forwarding of third-party traffic;
+- transparent TUN/OS routing behavior;
+- DNS-to-route runtime binding;
+- crash/forced-stop rollback;
+- browser/IDE transparent workflow;
+- real multipath carrier throughput or long-run stability.
+
+## Risks And Limits
+
+- GitHub timeouts were observed on the laptop before retry success; future
+  update proofs should continue to keep bounded retries and fail-closed behavior.
+- The proof uses installed route-explain simulation for diagnostics and
+  redaction. It does not prove live TUN/datapath traffic.
+- There is no separate signature artifact in this release proof; the verified
+  supply-chain property here is checksum match against the published release
+  checksum file.

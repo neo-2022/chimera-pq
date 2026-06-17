@@ -9,6 +9,7 @@ mod nodes_policy;
 mod nodes_runtime;
 mod nodes_scoring;
 mod policy;
+mod policy_hints;
 mod policy_parse;
 mod preemptive;
 mod runtime;
@@ -39,9 +40,12 @@ pub use nodes_runtime::{MeshNodeRuntime, MeshNodeRuntimeState, select_best_mesh_
 pub use nodes_scoring::{compute_mesh_node_score, refresh_mesh_node_scores};
 pub use policy::{
     ContinuityPolicy, MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MeshTrafficHints,
-    MultipathMode, ShadowSwitchMode, TrafficClass, TrafficClassProfile,
-    continuity_policy_from_dps_payload, multipath_mode_from_dps_payload,
-    traffic_class_from_dps_payload, traffic_hints_from_dps_payload,
+    MultipathDemand, MultipathMode, ShadowSwitchMode, TrafficClass, TrafficClassProfile,
+};
+pub use policy_hints::{
+    continuity_policy_from_dps_payload, multipath_demand_from_dps_payload,
+    multipath_mode_from_dps_payload, traffic_class_from_dps_payload,
+    traffic_hints_from_dps_payload,
 };
 pub use runtime::{
     MeshConnectAttempt, MeshConnectProbeReport, MeshPeerTableEnforcementReport, MeshRuntime,

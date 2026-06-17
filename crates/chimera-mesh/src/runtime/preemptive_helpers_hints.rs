@@ -1,4 +1,4 @@
-use crate::policy::traffic_hints_from_dps_payload;
+use crate::policy_hints::traffic_hints_from_dps_payload;
 
 pub(crate) fn hints_reason_from_presence(has_any_hint: bool) -> &'static str {
     if has_any_hint {

@@ -1,4 +1,4 @@
-use crate::{MeshPathPolicy, MeshPathProfile, MultipathMode};
+use crate::{MeshPathPolicy, MeshPathProfile, MultipathDemand, MultipathMode};
 
 #[test]
 fn policy_from_dps_payload_parses_and_validates() {
@@ -78,6 +78,30 @@ fn policy_from_dps_payload_preserves_multipath_mode_for_direct_planning() {
 }
 
 #[test]
+fn policy_from_dps_payload_preserves_coarse_multipath_demand_hint() {
+    let payload = concat!(
+        "allow=mesh;",
+        "mesh_max_peers=4;",
+        "mesh_max_selected_per_region=4;",
+        "mesh_multipath_mode=aggregate_buffered;",
+        "mesh_multipath_demand=high"
+    );
+    let policy = MeshPathPolicy::from_dps_payload(payload).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(
+        policy.multipath_mode,
+        Some(MultipathMode::AggregateBuffered)
+    );
+    assert_eq!(policy.multipath_demand, Some(MultipathDemand::High));
+    assert!(
+        !policy
+            .manual_override_fields()
+            .contains(&"multipath_demand"),
+        "multipath demand is a control-plane hint, not a manual override"
+    );
+}
+
+#[test]
 fn policy_from_dps_payload_accepts_route_binding_control_key() {
     let payload = "allow=mesh;mesh_allowed_regions=eu;mesh_route_binding_id=7001";
     let policy = MeshPathPolicy::from_dps_payload(payload).unwrap_or_else(|e| unreachable!("{e}"));
@@ -94,6 +118,7 @@ fn policy_from_dps_payload_rejects_invalid_values() {
     assert!(MeshPathPolicy::from_dps_payload("mesh_connect_fallback_ports=0").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_connect_fallback_ports=abc").is_err());
     assert!(MeshPathPolicy::from_dps_payload("mesh_route_binding_id=0").is_err());
+    assert!(MeshPathPolicy::from_dps_payload("mesh_multipath_demand=100mbps").is_err());
     assert!(
         MeshPathPolicy::from_dps_payload("mesh_max_peers=1;mesh_max_selected_per_region=2")
             .is_err()

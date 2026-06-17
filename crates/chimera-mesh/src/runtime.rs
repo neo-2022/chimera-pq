@@ -5,10 +5,8 @@ use crate::model::{
     MeshPeerHealth, MeshPeerState, peer_priority,
 };
 use crate::multipath_model::{MeshMultipathMode, MeshMultipathSchedule};
-use crate::policy::{
-    MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode,
-    traffic_class_from_dps_payload, traffic_hints_from_dps_payload,
-};
+use crate::policy::{MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode};
+use crate::policy_hints::{traffic_class_from_dps_payload, traffic_hints_from_dps_payload};
 use crate::preemptive::{
     evaluate_shadow_runtime_decision, format_confirmation_tuning, format_profile_tuning_thresholds,
     format_profile_tuning_weights, format_shadow_action, format_shadow_action_state,
@@ -21,8 +19,11 @@ mod diagnostic_redaction;
 mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;
+mod multipath_demand;
 mod multipath_lane_admission;
 mod multipath_schedule;
+#[cfg(test)]
+mod multipath_schedule_tests;
 mod multipath_weights;
 mod path_planner;
 mod path_planner_finalize;
