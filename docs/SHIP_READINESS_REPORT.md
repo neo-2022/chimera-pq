@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
 Status: **PASS (LAB/SOURCE GATE ONLY)**
-Generated at (UTC): `2026-06-17T12:40:18Z`
+Generated at (UTC): `2026-06-17T12:51:25Z`
 
 Checks:
 - Baseline freeze: `true`

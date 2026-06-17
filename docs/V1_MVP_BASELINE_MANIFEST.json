@@ -17,7 +17,7 @@
     ,{
       "path": "docs/benchmark_latest.json",
       "size_bytes": 548,
-      "sha256": "c7f81bf940a971ec7df251b882c3c7b4d1abb9c80619fd5efca847973df1f8fc"
+      "sha256": "8b1f803f473328f1fa7788a06b4ffe599f26b687ef1cb3558443066a84a86c85"
     }
     ,{
       "path": "docs/benchmark_baseline.json",

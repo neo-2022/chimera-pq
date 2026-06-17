@@ -65,6 +65,15 @@ Updated council finding during this cycle:
   mandatory, and add an explicit GitHub Actions benchmark profile
   `docs/benchmark_ci_baseline.json` selected only under `GITHUB_ACTIONS=true`
   or by explicit `CHIMERA_BENCHMARK_BASELINE_FILE`.
+- Follow-up GitHub CI run `27689795344` on commit `9f0a904` proved the main
+  GitHub Actions benchmark path used `docs/benchmark_ci_baseline.json` and
+  passed, but failed later inside `benchmark-regression-selfcheck` because the
+  contract smoke forced `env -u GITHUB_ACTIONS` on the GitHub runner and
+  compared that runner against the local-machine baseline.
+- Follow-up consensus fix: keep the real benchmark gate unchanged, keep
+  `docs/benchmark_baseline.json` and `docs/benchmark_ci_baseline.json` separate,
+  and make the profile contract smoke test selection (`baseline_file` /
+  `baseline_profile`) without coupling the smoke to local workstation speed.
 - Rejected: tagging on red CI, skipping the benchmark gate, or globally raising
   the allowed regression threshold.
 
@@ -116,6 +125,9 @@ Updated council finding during this cycle:
 - GitHub CI run `27686843976`, job `81887559086`, failed at
   `benchmark-regression-check` with encode regression over the 20% threshold
   against the local baseline.
+- GitHub CI run `27689795344`, job `81897521684`, failed at
+  `benchmark-regression-selfcheck`; its real `benchmark-regression-check`
+  already used `docs/benchmark_ci_baseline.json` and passed.
 
 ## Not Closed Yet
 
