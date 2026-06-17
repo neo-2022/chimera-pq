@@ -588,9 +588,17 @@ reality-ship-sync-guard-selfcheck:
 
 runtime-apply-route-smoke-selfcheck:
     test -x scripts/runtime_apply_route_smoke.sh
+    test -f scripts/runtime_route_netns_lib.sh
+    bash -n scripts/runtime_route_netns_lib.sh
     bash -n scripts/runtime_apply_route_smoke.sh
-    rg -q 'unshare -Urn' scripts/runtime_apply_route_smoke.sh
+    rg -q 'unshare -Urn' scripts/runtime_route_netns_lib.sh
     rg -q 'ip tuntap add dev chimera-probe0 mode tun' scripts/runtime_apply_route_smoke.sh
+    rg -q 'sudo -n env' scripts/runtime_route_netns_lib.sh
+    rg -q 'CHIMERA_RUNTIME_ROUTE_ALLOW_SUDO_NETNS' scripts/runtime_route_netns_lib.sh
+    rg -q 'GITHUB_ACTIONS' scripts/runtime_route_netns_lib.sh
+    rg -Fq 'CHIMERA_CLI_BIN="$ROOT_DIR/target/debug/chimera-cli"' scripts/runtime_route_netns_lib.sh
+    rg -Fq 'PATH="/usr/sbin:/usr/bin:/sbin:/bin"' scripts/runtime_route_netns_lib.sh
+    rg -q 'CHIMERA_CLI_BIN' scripts/runtime_apply_route_smoke.sh
     rg -q 'apply_attempt_ok' scripts/runtime_apply_route_smoke.sh
     rg -q 'policy_rule_ok' scripts/runtime_apply_route_smoke.sh
     rg -q 'rollback_ok' scripts/runtime_apply_route_smoke.sh
@@ -606,10 +614,13 @@ runtime-apply-route-smoke-selfcheck:
 
 runtime-apply-route-existing-tun-smoke-selfcheck:
     test -x scripts/runtime_apply_route_existing_tun_smoke.sh
+    test -f scripts/runtime_route_netns_lib.sh
+    bash -n scripts/runtime_route_netns_lib.sh
     bash -n scripts/runtime_apply_route_existing_tun_smoke.sh
-    rg -q 'unshare -Urn' scripts/runtime_apply_route_existing_tun_smoke.sh
+    rg -q 'unshare -Urn' scripts/runtime_route_netns_lib.sh
     rg -q 'ip tuntap add dev chimera-probe0 mode tun' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'ip tuntap add dev chimera-pre0 mode tun' scripts/runtime_apply_route_existing_tun_smoke.sh
+    rg -q 'CHIMERA_CLI_BIN' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -Fq 'rg -q "\"tun_applied\":false"' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'preexisting_tun_used' scripts/runtime_apply_route_existing_tun_smoke.sh
     rg -q 'counts_for_release' scripts/runtime_apply_route_existing_tun_smoke.sh
@@ -620,9 +631,12 @@ runtime-apply-route-existing-tun-smoke-selfcheck:
 
 runtime-apply-route-multi-cidr-smoke-selfcheck:
     test -x scripts/runtime_apply_route_multi_cidr_smoke.sh
+    test -f scripts/runtime_route_netns_lib.sh
+    bash -n scripts/runtime_route_netns_lib.sh
     bash -n scripts/runtime_apply_route_multi_cidr_smoke.sh
-    rg -q 'unshare -Urn' scripts/runtime_apply_route_multi_cidr_smoke.sh
+    rg -q 'unshare -Urn' scripts/runtime_route_netns_lib.sh
     rg -q 'ip tuntap add dev chimera-probe1 mode tun' scripts/runtime_apply_route_multi_cidr_smoke.sh
+    rg -q 'CHIMERA_CLI_BIN' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'apply_attempt_ok' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'policy_rule_ok' scripts/runtime_apply_route_multi_cidr_smoke.sh
     rg -q 'rollback_ok' scripts/runtime_apply_route_multi_cidr_smoke.sh
