@@ -30,6 +30,25 @@ fn direct_plan_path_uses_policy_multipath_mode_without_carrier_binding() {
     assert_eq!(plan.selected_peers.len(), 2);
     assert_eq!(plan.multipath_schedule.mode, MeshMultipathMode::FlowShard);
     assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count,
+        2
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count,
+        2
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_rejected_active_lane_count,
+        0
+    );
+    assert_eq!(
+        plan.multipath_schedule.lane_admission_capacity_status,
+        "within_budget"
+    );
     assert_eq!(plan.multipath_schedule.standby_lane_count, 0);
     assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 0);
     assert!(plan.multipath_schedule.route_binding_id.is_none());
@@ -40,6 +59,10 @@ fn direct_plan_path_uses_policy_multipath_mode_without_carrier_binding() {
     assert!(explain_has(
         &plan.explain,
         "multipath_schedule_planner_rebuild_reason=initial_plan"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_capacity_status=within_budget"
     ));
     assert_active_weight_contract(&plan);
 }

@@ -25,6 +25,25 @@ fn flow_shard_capacity_budget_is_distributed_across_active_lanes() {
             + plan.multipath_schedule.transit_capacity_budget_pct,
         100
     );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count,
+        2
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count,
+        2
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_rejected_active_lane_count,
+        0
+    );
+    assert_eq!(
+        plan.multipath_schedule.lane_admission_capacity_status,
+        "within_budget"
+    );
     assert_eq!(plan.multipath_schedule.active_weight_sum_pct, 100);
     assert_eq!(plan.multipath_schedule.active_capacity_sum_pct, 90);
     assert_active_weight_contract(&plan);
@@ -32,6 +51,22 @@ fn flow_shard_capacity_budget_is_distributed_across_active_lanes() {
     assert!(explain_has(
         &plan.explain,
         "multipath_schedule_active_capacity_sum_pct=90"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_requested_active_lanes=2"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_admitted_active_lanes=2"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_rejected_active_lanes=0"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_capacity_status=within_budget"
     ));
 }
 
@@ -141,6 +176,25 @@ fn aggregate_buffered_capacity_uses_all_selected_active_lanes() {
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
     assert_eq!(plan.multipath_schedule.active_lane_count, 5);
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count,
+        5
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count,
+        5
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_rejected_active_lane_count,
+        0
+    );
+    assert_eq!(
+        plan.multipath_schedule.lane_admission_capacity_status,
+        "within_budget"
+    );
     assert_eq!(plan.multipath_schedule.active_capacity_sum_pct, 90);
     assert!(
         plan.multipath_schedule
@@ -159,7 +213,8 @@ fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
         .map(|idx| {
             let node = format!("node-{idx}");
             let endpoint = format!("198.51.100.{}:443", idx + 1);
-            record(&node, &endpoint, "eu", 20, 90)
+            let region = format!("test-region-{idx}");
+            record(&node, &endpoint, &region, 20, 90)
         })
         .collect();
     let runtime = runtime_with_peers(records);
@@ -168,7 +223,6 @@ fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
         .plan_path_from_dps_payload(
             &request(),
             concat!(
-                "mesh_allowed_regions=eu;",
                 "mesh_max_peers=95;",
                 "mesh_max_selected_per_region=95;",
                 "mesh_multipath_mode=aggregate_buffered;",
@@ -178,8 +232,28 @@ fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
         .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
 
     assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count,
+        95
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count,
+        plan.multipath_schedule.transit_capacity_budget_pct as usize
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_rejected_active_lane_count,
+        5
+    );
+    assert_eq!(
+        plan.multipath_schedule.lane_admission_capacity_status,
+        "over_budget_truncated"
+    );
+    assert_eq!(
         plan.multipath_schedule.active_lane_count,
-        plan.selected_peers.len()
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count
     );
     assert!(
         plan.multipath_schedule.active_lane_count
@@ -192,6 +266,22 @@ fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
             .iter()
             .all(|lane| lane.capacity_weight_pct > 0)
     );
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_requested_active_lanes=95"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_admitted_active_lanes=90"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_rejected_active_lanes=5"
+    ));
+    assert!(explain_has(
+        &plan.explain,
+        "multipath_schedule_lane_admission_capacity_status=over_budget_truncated"
+    ));
     assert_active_weight_contract(&plan);
 }
 
@@ -219,6 +309,10 @@ fn capacity_budget_explain_and_debug_redact_sensitive_material() {
     assert!(explain.contains("multipath_schedule_active_capacity_sum_pct=90"));
     assert!(explain.contains("multipath_schedule_local_reserve_pct=10"));
     assert!(explain.contains("multipath_schedule_transit_capacity_budget_pct=90"));
+    assert!(explain.contains("multipath_schedule_lane_admission_requested_active_lanes=2"));
+    assert!(explain.contains("multipath_schedule_lane_admission_admitted_active_lanes=2"));
+    assert!(explain.contains("multipath_schedule_lane_admission_rejected_active_lanes=0"));
+    assert!(explain.contains("multipath_schedule_lane_admission_capacity_status=within_budget"));
     assert!(explain.contains("multipath_schedule_transit_payload_policy=sealed_opaque_only"));
     assert!(explain.contains("multipath_schedule_planner_rebuild_reason=multipath_hint_replan"));
     assert!(!combined.contains("node-sensitive-a"));

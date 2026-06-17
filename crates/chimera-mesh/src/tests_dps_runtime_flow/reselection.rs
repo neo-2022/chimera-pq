@@ -194,6 +194,25 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(plan.multipath_schedule.mode.as_str(), "flow_shard");
     assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count,
+        2
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count,
+        2
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_rejected_active_lane_count,
+        0
+    );
+    assert_eq!(
+        plan.multipath_schedule.lane_admission_capacity_status,
+        "within_budget"
+    );
     assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 2);
     assert_eq!(
         plan.multipath_schedule.carrier_lane_bindings[0].peer_node_id,
@@ -220,6 +239,9 @@ fn runtime_reselection_plan_with_health_from_dps_payload_applies_multipath_sched
         line.contains(
             "multipath_schedule_carrier_binding_contract=carrier_lane_binding_contract_ready",
         )
+    }));
+    assert!(plan.explain.iter().any(|line| {
+        line.contains("multipath_schedule_lane_admission_capacity_status=within_budget")
     }));
 }
 

@@ -21,6 +21,7 @@ mod diagnostic_redaction;
 mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;
+mod multipath_lane_admission;
 mod multipath_schedule;
 mod multipath_weights;
 mod path_planner;

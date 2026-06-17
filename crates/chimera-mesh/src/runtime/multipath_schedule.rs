@@ -3,6 +3,7 @@ use crate::multipath_model::{
     MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshRouteBindingId,
 };
 
+use super::multipath_lane_admission::evaluate_lane_admission;
 use super::multipath_weights::{active_lane_weights, capacity_weights_from_relative_weights};
 
 const LOCAL_TRAFFIC_RESERVE_PCT: u8 = 10;
@@ -90,6 +91,22 @@ pub(super) fn append_multipath_schedule_explain(
     explain.push(format!(
         "multipath_schedule_standby_lanes={}",
         schedule.standby_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_lane_admission_requested_active_lanes={}",
+        schedule.lane_admission_requested_active_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_lane_admission_admitted_active_lanes={}",
+        schedule.lane_admission_admitted_active_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_lane_admission_rejected_active_lanes={}",
+        schedule.lane_admission_rejected_active_lane_count
+    ));
+    explain.push(format!(
+        "multipath_schedule_lane_admission_capacity_status={}",
+        schedule.lane_admission_capacity_status
     ));
     explain.push(format!(
         "multipath_schedule_active_weight_sum_pct={}",
@@ -195,6 +212,8 @@ fn schedule_from_lanes(
     lanes: Vec<MeshMultipathLane>,
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
+    let lane_admission =
+        evaluate_lane_admission(&mode, selected_peers.len(), TRANSIT_CAPACITY_BUDGET_PCT);
     let active_lane_count = lanes
         .iter()
         .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
@@ -233,6 +252,10 @@ fn schedule_from_lanes(
         lanes,
         active_lane_count,
         standby_lane_count,
+        lane_admission_requested_active_lane_count: lane_admission.requested_active_lane_count,
+        lane_admission_admitted_active_lane_count: lane_admission.admitted_active_lane_count,
+        lane_admission_rejected_active_lane_count: lane_admission.rejected_active_lane_count,
+        lane_admission_capacity_status: lane_admission.capacity_status.to_string(),
         active_weight_sum_pct,
         active_capacity_sum_pct,
         local_traffic_reserve_pct: LOCAL_TRAFFIC_RESERVE_PCT,

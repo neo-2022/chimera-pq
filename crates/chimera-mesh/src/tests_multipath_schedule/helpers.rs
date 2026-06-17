@@ -40,6 +40,36 @@ pub(super) fn explain_has(plan_explain: &[String], expected: &str) -> bool {
 }
 
 pub(super) fn assert_active_weight_contract(plan: &MeshPathPlan) {
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_admitted_active_lane_count,
+        plan.multipath_schedule.active_lane_count
+    );
+    assert!(
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count
+            >= plan
+                .multipath_schedule
+                .lane_admission_admitted_active_lane_count
+    );
+    assert_eq!(
+        plan.multipath_schedule
+            .lane_admission_rejected_active_lane_count,
+        plan.multipath_schedule
+            .lane_admission_requested_active_lane_count
+            .saturating_sub(
+                plan.multipath_schedule
+                    .lane_admission_admitted_active_lane_count
+            )
+    );
+    assert!(
+        ["within_budget", "at_budget", "over_budget_truncated"].contains(
+            &plan
+                .multipath_schedule
+                .lane_admission_capacity_status
+                .as_str()
+        )
+    );
     let active_weight_sum: u16 = plan
         .multipath_schedule
         .lanes
