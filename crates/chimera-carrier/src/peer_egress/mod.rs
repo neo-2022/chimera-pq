@@ -1,3 +1,4 @@
+pub(crate) mod bound_transit;
 pub mod handshake;
 pub mod lane_binding;
 pub mod live_lane_selection;

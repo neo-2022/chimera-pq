@@ -7,6 +7,7 @@ use chimera_mesh::{
     validate_weave_sealed_transit_frame,
 };
 
+use crate::peer_egress::bound_transit::forward_bound_peer_transit_pair;
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
 use crate::peer_egress::net::tune_tcp;
 use crate::peer_egress::pool::{SharedPeerPool, UniquePeerPop};
@@ -331,7 +332,7 @@ pub fn forward_bound_peer_sealed_transit_to_next_hop(
         return Err("sealed transit next hop denied by policy".to_string());
     }
     let next_peer = pop_bound_transit_dispatch_next_hop(dispatcher, first.binding())?;
-    forward_peer_sealed_transit_pair(source, next_peer, first.into_frame())
+    forward_bound_peer_transit_pair(source, next_peer, first)
 }
 
 fn forward_peer_sealed_transit_pair(

@@ -25,6 +25,51 @@ pub(super) fn binding(
     )
 }
 
+pub(super) fn bound_payload(
+    binding: crate::peer_egress::transit_binding::TransitPathBinding,
+    kind: FrameKind,
+    packet_number: u64,
+    payload: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let sealed = encoded_frame(kind, packet_number, payload);
+    let frame = crate::peer_egress::transit::validate_transit_relay_frame(&sealed)?;
+    let bound = crate::peer_egress::transit_binding::BoundTransitRelayFrame::new(binding, frame);
+    Ok((
+        crate::peer_egress::transit_binding::encode_bound_transit_relay_frame(&bound),
+        sealed,
+    ))
+}
+
+pub(super) fn assert_bound_payload(
+    payload: &[u8],
+    binding: crate::peer_egress::transit_binding::TransitPathBinding,
+    expected_sealed: &[u8],
+) -> Result<(), String> {
+    if !payload.starts_with(&[crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC]) {
+        return Err("forwarded payload must preserve bound transit magic".to_string());
+    }
+    let parsed = crate::peer_egress::transit_binding::validate_bound_transit_relay_frame(payload)?;
+    if parsed.binding() != binding {
+        return Err("forwarded payload binding mismatch".to_string());
+    }
+    if parsed.frame().sealed_bytes() != expected_sealed {
+        return Err("forwarded sealed bytes mismatch".to_string());
+    }
+    Ok(())
+}
+
+pub(super) fn read_first_bound_frame(
+    source_reader: &mut crate::peer_egress::protocol::SecurePeerStream,
+) -> Result<crate::peer_egress::transit_binding::BoundTransitRelayFrame, String> {
+    match crate::peer_egress::wire::read_peer_message(
+        source_reader,
+        crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
+    )? {
+        crate::peer_egress::wire::PeerMessage::BoundSealedTransit(frame) => Ok(frame),
+        other => Err(format!("unexpected first bound message: {other:?}")),
+    }
+}
+
 pub(super) fn tcp_pair() -> Result<(std::net::TcpStream, std::net::TcpStream), String> {
     let listener = std::net::TcpListener::bind("127.0.0.1:0")
         .map_err(|error| format!("bind test listener failed: {error}"))?;
