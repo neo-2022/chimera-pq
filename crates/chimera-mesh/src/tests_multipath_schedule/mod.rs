@@ -1,7 +1,11 @@
 mod capacity_budget;
 mod demand;
 mod direct_planning;
+mod flow_assignment;
+mod flow_fail_closed;
+mod flow_rebuild_reasons;
 mod helpers;
+mod rebuild_control;
 mod redaction;
 
 use crate::{MeshMultipathLaneRole, MeshMultipathMode};

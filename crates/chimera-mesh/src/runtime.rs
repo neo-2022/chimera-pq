@@ -20,7 +20,10 @@ mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;
 mod multipath_demand;
+mod multipath_flow;
 mod multipath_lane_admission;
+mod multipath_rebuild_control;
+mod multipath_rebuild_model;
 mod multipath_schedule;
 #[cfg(test)]
 mod multipath_schedule_tests;
@@ -57,6 +60,14 @@ mod table_consistency;
 use candidate_filter::collect_candidates;
 use dps_payload_explain::annotate_dps_payload_explain;
 pub use join_mode::evaluate_join_mode;
+pub use multipath_flow::{
+    MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathFlowPlan, plan_multipath_flow,
+};
+use multipath_rebuild_control::MeshMultipathRebuildState;
+pub use multipath_rebuild_model::{
+    MeshMultipathRebuildAction, MeshMultipathRebuildDecision, MeshMultipathRebuildPolicy,
+    MeshMultipathRebuildSignal, MeshMultipathRebuildUrgency,
+};
 use multipath_schedule::{
     build_multipath_schedule, replace_multipath_schedule, schedule_mode_from_multipath_hint,
 };
@@ -121,7 +132,7 @@ impl CandidateStats {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MeshRuntime {
     namespace: String,
     peers: BTreeMap<String, MeshPeerState>,
@@ -130,8 +141,28 @@ pub struct MeshRuntime {
     health_state: BTreeMap<String, MeshHealthMeta>,
     table_policy: MeshPeerTablePolicy,
     profile_state: MeshProfileState,
+    multipath_rebuild_state: MeshMultipathRebuildState,
     last_table_enforcement_report: MeshPeerTableEnforcementReport,
     tick: u64,
+}
+
+impl std::fmt::Debug for MeshRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MeshRuntime")
+            .field("namespace", &"<redacted>")
+            .field("source_count", &self.sources.len())
+            .field("peer_count", &self.peers.len())
+            .field("health_state_count", &self.health_state.len())
+            .field("table_policy", &self.table_policy)
+            .field("profile_state", &self.profile_state)
+            .field("multipath_rebuild_state", &self.multipath_rebuild_state)
+            .field(
+                "last_table_enforcement_report",
+                &self.last_table_enforcement_report,
+            )
+            .field("tick", &self.tick)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,6 +303,7 @@ impl MeshRuntime {
                 active_profile: MeshPathProfile::Balanced,
                 degrade_cleared_since_tick: None,
             },
+            multipath_rebuild_state: MeshMultipathRebuildState::default(),
             last_table_enforcement_report: MeshPeerTableEnforcementReport {
                 tick: 0,
                 total_peers_before: 0,
