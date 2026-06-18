@@ -45,7 +45,7 @@ impl AeadSuite {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Options {
     pub mode: Mode,
     pub local_listen: String,

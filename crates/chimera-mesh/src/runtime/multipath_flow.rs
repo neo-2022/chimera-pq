@@ -31,13 +31,29 @@ impl MeshMultipathFlowKey {
         if flow_id.contains('\n') || flow_id.contains('\r') || flow_id.contains('\t') {
             return Err("multipath flow id contains control whitespace".to_string());
         }
+        Self::from_opaque_flow_bytes(flow_id.as_bytes())
+    }
+
+    pub fn from_opaque_flow_bytes(flow_bytes: &[u8]) -> Result<Self, String> {
+        if flow_bytes.is_empty() {
+            return Err("multipath flow bytes are empty".to_string());
+        }
         Ok(Self {
-            stable_hash: stable_hash(flow_id.as_bytes()),
+            stable_hash: stable_hash(flow_bytes),
         })
     }
 
     pub fn from_stable_hash(stable_hash: u64) -> Self {
         Self { stable_hash }
+    }
+
+    pub fn select_slot_index(self, candidate_count: usize) -> Result<usize, String> {
+        if candidate_count == 0 {
+            return Err("multipath flow has no candidates".to_string());
+        }
+        let candidate_count = u64::try_from(candidate_count)
+            .map_err(|_| "multipath candidate count overflow".to_string())?;
+        Ok((self.stable_hash % candidate_count) as usize)
     }
 }
 
@@ -358,3 +374,7 @@ fn stable_hash(bytes: &[u8]) -> u64 {
     }
     hash
 }
+
+#[cfg(test)]
+#[path = "multipath_flow_tests.rs"]
+mod tests;

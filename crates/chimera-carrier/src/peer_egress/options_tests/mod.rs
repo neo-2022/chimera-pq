@@ -48,6 +48,24 @@ fn parse_laptop_options() {
 }
 
 #[test]
+fn options_debug_redacts_token() -> Result<(), String> {
+    let args = vec![
+        "--mode".to_string(),
+        "laptop".to_string(),
+        "--server".to_string(),
+        "mesh-node.example.invalid:443".to_string(),
+        "--token".to_string(),
+        "SECRET_TOKEN_SENTINEL".to_string(),
+    ];
+    let parsed = Options::parse(&args)?;
+    let debug = format!("{parsed:?}");
+    assert!(debug.contains("token"));
+    assert!(debug.contains("<redacted>"));
+    assert!(!debug.contains("SECRET_TOKEN_SENTINEL"));
+    Ok(())
+}
+
+#[test]
 fn parse_node_options_requires_ingress_listeners_and_keeps_peer_optional() -> Result<(), String> {
     let args = vec![
         "--mode".to_string(),

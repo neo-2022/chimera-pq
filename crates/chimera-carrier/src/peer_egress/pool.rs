@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 
+use chimera_mesh::MeshMultipathFlowKey;
+
 use crate::peer_egress::protocol::SecurePeerStream;
 
 #[derive(Debug, Default)]
@@ -59,6 +61,44 @@ impl PeerPool {
             _ => Ok(UniquePeerPop::Ambiguous),
         }
     }
+
+    pub fn try_pop_for_flow_key(
+        &self,
+        flow_key: MeshMultipathFlowKey,
+    ) -> Result<Option<SecurePeerStream>, String> {
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|_| "peer pool lock poisoned".to_string())?;
+        if peers.is_empty() {
+            return Ok(None);
+        }
+        let slot = flow_key.select_slot_index(peers.len())?;
+        Ok(peers.remove(slot))
+    }
+
+    pub fn pop_wait_for_flow_key(
+        &self,
+        flow_key: MeshMultipathFlowKey,
+    ) -> Result<SecurePeerStream, String> {
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|_| "peer pool lock poisoned".to_string())?;
+        loop {
+            if peers.is_empty() {
+                peers = self
+                    .ready
+                    .wait(peers)
+                    .map_err(|_| "peer pool wait poisoned".to_string())?;
+                continue;
+            }
+            let slot = flow_key.select_slot_index(peers.len())?;
+            return peers
+                .remove(slot)
+                .ok_or_else(|| "peer pool unexpectedly empty".to_string());
+        }
+    }
 }
 
 pub type SharedPeerPool = Arc<PeerPool>;
@@ -77,6 +117,7 @@ pub enum UniquePeerPop {
 #[cfg(test)]
 mod tests {
     use super::{PeerPool, SecurePeerStream};
+    use chimera_mesh::MeshMultipathFlowKey;
 
     fn test_peer_stream() -> SecurePeerStream {
         let transcript = chimera_crypto::TranscriptHash::from_messages(&[b"peer-pool-test"]);
@@ -141,6 +182,119 @@ mod tests {
         ));
         assert!(pool.try_pop()?.is_some());
         assert!(pool.try_pop()?.is_some());
+        Ok(())
+    }
+
+    fn push_test_peer(pool: &PeerPool, label: &str) -> Result<u16, String> {
+        let transcript = chimera_crypto::TranscriptHash::from_messages(&[label.as_bytes()]);
+        let secrets = chimera_crypto::derive_traffic_secrets(
+            chimera_crypto::SuiteId(
+                crate::peer_egress::options::AeadSuite::Chacha20Poly1305.suite_id(),
+            ),
+            &transcript,
+            &[11_u8; 32],
+        )
+        .map_err(|error| format!("test secrets derive failed: {error}"))?;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")
+            .map_err(|error| format!("listener bind failed: {error}"))?;
+        let addr = listener
+            .local_addr()
+            .map_err(|error| format!("listener addr failed: {error}"))?;
+        let client = std::net::TcpStream::connect(addr)
+            .map_err(|error| format!("client connect failed: {error}"))?;
+        let (server, _) = listener
+            .accept()
+            .map_err(|error| format!("server accept failed: {error}"))?;
+        drop(server);
+        let port = client
+            .local_addr()
+            .map_err(|error| format!("client local addr failed: {error}"))?
+            .port();
+        pool.push(SecurePeerStream {
+            stream: client,
+            send_secret: secrets.initiator_to_responder().clone(),
+            recv_secret: secrets.responder_to_initiator().clone(),
+            send_packet: 0,
+            recv_packet: 0,
+            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+        })?;
+        Ok(port)
+    }
+
+    #[test]
+    fn try_pop_for_flow_key_returns_none_when_pool_is_empty() -> Result<(), String> {
+        let pool = PeerPool::default();
+        let key = MeshMultipathFlowKey::from_opaque_flow_id("flow-a")?;
+        assert!(pool.try_pop_for_flow_key(key)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn try_pop_for_flow_key_selects_expected_slot() -> Result<(), String> {
+        let pool = PeerPool::default();
+        let ports = [
+            push_test_peer(&pool, "peer-0")?,
+            push_test_peer(&pool, "peer-1")?,
+            push_test_peer(&pool, "peer-2")?,
+        ];
+        let key = MeshMultipathFlowKey::from_opaque_flow_id("flow-slot-test")?;
+        let slot = key.select_slot_index(ports.len())?;
+        let selected = pool
+            .try_pop_for_flow_key(key)?
+            .ok_or_else(|| "flow pop should select a peer".to_string())?;
+        let selected_port = selected
+            .stream
+            .local_addr()
+            .map_err(|error| format!("selected peer local addr failed: {error}"))?
+            .port();
+
+        assert_eq!(selected_port, ports[slot]);
+        Ok(())
+    }
+
+    #[test]
+    fn flow_key_selection_spreads_across_slots() -> Result<(), String> {
+        let mut slots = std::collections::BTreeSet::new();
+        for index in 0..64 {
+            let pool = PeerPool::default();
+            let ports = [
+                push_test_peer(&pool, &format!("spread-{index}-a"))?,
+                push_test_peer(&pool, &format!("spread-{index}-b"))?,
+            ];
+            let key = MeshMultipathFlowKey::from_opaque_flow_id(&format!("opaque-flow-{index}"))?;
+            let slot = key.select_slot_index(ports.len())?;
+            let selected = pool
+                .try_pop_for_flow_key(key)?
+                .ok_or_else(|| "flow pop should select a peer".to_string())?;
+            let selected_port = selected
+                .stream
+                .local_addr()
+                .map_err(|error| format!("selected peer local addr failed: {error}"))?
+                .port();
+            assert_eq!(selected_port, ports[slot]);
+            slots.insert(slot);
+        }
+        assert!(slots.len() >= 2);
+        Ok(())
+    }
+
+    #[test]
+    fn pop_wait_for_flow_key_waits_until_peer_is_available() -> Result<(), String> {
+        let pool = std::sync::Arc::new(PeerPool::default());
+        let key = MeshMultipathFlowKey::from_opaque_flow_id("wait-flow")?;
+        let worker_pool = pool.clone();
+        let handle = std::thread::spawn(move || worker_pool.pop_wait_for_flow_key(key));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let port = push_test_peer(&pool, "waiting-peer")?;
+        let selected = handle
+            .join()
+            .map_err(|_| "flow wait thread panicked".to_string())??;
+        let selected_port = selected
+            .stream
+            .local_addr()
+            .map_err(|error| format!("selected peer local addr failed: {error}"))?
+            .port();
+        assert_eq!(selected_port, port);
         Ok(())
     }
 }

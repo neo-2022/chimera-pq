@@ -3,9 +3,11 @@ use std::net::{Shutdown, TcpStream};
 use std::thread;
 
 use chimera_mesh::{
-    WeaveSealedTransitFrame, forward_weave_transit_frame, validate_weave_sealed_transit_frame,
+    MeshMultipathFlowKey, MeshPathPlan, WeaveSealedTransitFrame, forward_weave_transit_frame,
+    validate_weave_sealed_transit_frame,
 };
 
+use crate::peer_egress::lane_binding::TransitLaneRegistration;
 use crate::peer_egress::net::tune_tcp;
 use crate::peer_egress::pool::{SharedPeerPool, UniquePeerPop};
 use crate::peer_egress::protocol::SecurePeerStream;
@@ -14,6 +16,9 @@ use crate::peer_egress::secure_halves::{
 };
 use crate::peer_egress::transit_binding::BoundTransitRelayFrame;
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
+use crate::peer_egress::transit_lane_selection::{
+    pop_planned_transit_dispatch_next_hop, pop_registered_transit_next_hop,
+};
 use crate::peer_egress::wire::{
     PeerMessage, write_bound_sealed_transit_message, write_sealed_transit_message,
 };
@@ -117,6 +122,85 @@ pub fn relay_local_sealed_transit(
     }
 }
 
+pub fn relay_local_sealed_transit_to_next_hop(
+    mut local: TcpStream,
+    peer_pool: SharedPeerPool,
+    first_byte: u8,
+) -> Result<(), String> {
+    tune_tcp(&local)?;
+    let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
+    let peer =
+        pop_unbound_pool_transit_next_hop(PeerTransitPolicy::AllowPoolNextHop, Some(peer_pool))?;
+    relay_local_sealed_transit_after_first(local, peer, first)
+}
+
+pub fn relay_local_sealed_transit_to_planned_next_hop(
+    mut local: TcpStream,
+    plan: &MeshPathPlan,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first_byte: u8,
+) -> Result<(), String> {
+    tune_tcp(&local)?;
+    let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
+    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
+    let peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
+    relay_local_sealed_transit_after_first(local, peer, first)
+}
+
+pub fn relay_local_sealed_transit_with_registrations(
+    mut local: TcpStream,
+    registrations: &[TransitLaneRegistration],
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first_byte: u8,
+) -> Result<(), String> {
+    tune_tcp(&local)?;
+    let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
+    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
+    let peer = pop_registered_transit_next_hop(registrations, dispatcher, flow_key)?;
+    relay_local_sealed_transit_after_first(local, peer, first)
+}
+
+fn relay_local_sealed_transit_after_first(
+    mut local: TcpStream,
+    mut peer: SecurePeerStream,
+    first: TransitRelayFrame,
+) -> Result<(), String> {
+    tune_tcp(&peer.stream)?;
+    let mut pending = Some(first);
+    loop {
+        let transit = match pending.take() {
+            Some(frame) => frame,
+            None => {
+                let mut first = [0_u8; 1];
+                match local.read(&mut first) {
+                    Ok(0) => {
+                        let _ = peer.stream.shutdown(Shutdown::Write);
+                        return Ok(());
+                    }
+                    Ok(1) => read_weave_sealed_transit_frame(&mut local, first[0])?,
+                    Ok(_) => unreachable!("single-byte read returned more than one byte"),
+                    Err(error) => {
+                        return Err(format!("read transit frame prefix failed: {error}"));
+                    }
+                }
+            }
+        };
+        eprintln!("event=weave_transit_frame_forwarded");
+        write_sealed_transit_message(&mut peer, &transit)
+            .map_err(|error| format!("write transit frame to peer failed: {error}"))?;
+        let mut first = [0_u8; 1];
+        match local.read(&mut first) {
+            Ok(0) => {
+                let _ = peer.stream.shutdown(Shutdown::Write);
+                return Ok(());
+            }
+            Ok(1) => pending = Some(read_weave_sealed_transit_frame(&mut local, first[0])?),
+            Ok(_) => unreachable!("single-byte read returned more than one byte"),
+            Err(error) => return Err(format!("read transit frame prefix failed: {error}")),
+        }
+    }
+}
+
 pub fn relay_local_bound_sealed_transit(
     mut local: TcpStream,
     peer: SecurePeerStream,
@@ -194,18 +278,47 @@ pub fn forward_peer_sealed_transit_to_next_hop(
     next_hops: Option<SharedPeerPool>,
     first: TransitRelayFrame,
 ) -> Result<(), String> {
+    let next_peer = pop_unbound_pool_transit_next_hop(policy, next_hops)?;
+    forward_peer_sealed_transit_pair(source, next_peer, first)
+}
+
+pub fn forward_peer_sealed_transit_to_planned_next_hop(
+    source: SecurePeerStream,
+    plan: &MeshPathPlan,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first: TransitRelayFrame,
+) -> Result<(), String> {
+    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
+    let next_peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
+    forward_peer_sealed_transit_pair(source, next_peer, first)
+}
+
+pub fn forward_peer_sealed_transit_with_registrations(
+    source: SecurePeerStream,
+    registrations: &[TransitLaneRegistration],
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first: TransitRelayFrame,
+) -> Result<(), String> {
+    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
+    let next_peer = pop_registered_transit_next_hop(registrations, dispatcher, flow_key)?;
+    forward_peer_sealed_transit_pair(source, next_peer, first)
+}
+
+fn pop_unbound_pool_transit_next_hop(
+    policy: PeerTransitPolicy,
+    next_hops: Option<SharedPeerPool>,
+) -> Result<SecurePeerStream, String> {
     if policy != PeerTransitPolicy::AllowPoolNextHop {
         return Err("sealed transit next hop denied by policy".to_string());
     }
     let pool = next_hops.ok_or_else(|| "sealed transit next hop unavailable".to_string())?;
-    let next_peer = match pool.try_pop_unique()? {
-        UniquePeerPop::Ready(peer) => peer,
-        UniquePeerPop::Unavailable => return Err("sealed transit next hop unavailable".to_string()),
+    match pool.try_pop_unique()? {
+        UniquePeerPop::Ready(peer) => Ok(peer),
+        UniquePeerPop::Unavailable => Err("sealed transit next hop unavailable".to_string()),
         UniquePeerPop::Ambiguous => {
-            return Err("sealed transit next hop ambiguous without path binding".to_string());
+            Err("sealed transit next hop ambiguous without path binding".to_string())
         }
-    };
-    forward_peer_sealed_transit_pair(source, next_peer, first)
+    }
 }
 
 pub fn forward_bound_peer_sealed_transit_to_next_hop(

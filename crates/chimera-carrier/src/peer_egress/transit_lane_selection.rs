@@ -1,0 +1,46 @@
+use chimera_mesh::{MeshMultipathFlowAction, MeshMultipathFlowKey, MeshPathPlan};
+
+use crate::peer_egress::lane_binding::TransitLaneRegistration;
+use crate::peer_egress::live_lane_selection::{
+    select_carrier_lane_from_mesh_plan, select_carrier_lane_from_registrations,
+};
+use crate::peer_egress::protocol::SecurePeerStream;
+use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
+
+pub(crate) fn pop_planned_transit_dispatch_next_hop(
+    plan: &MeshPathPlan,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    flow_key: MeshMultipathFlowKey,
+) -> Result<SecurePeerStream, String> {
+    let selection = select_carrier_lane_from_mesh_plan(plan, flow_key);
+    if selection.action != MeshMultipathFlowAction::Assigned {
+        return Err(format!(
+            "sealed transit lane selection failed: {}",
+            selection.reason
+        ));
+    }
+    let binding = selection
+        .selected_binding
+        .ok_or_else(|| "sealed transit lane selection missing binding".to_string())?;
+    let dispatcher = dispatcher
+        .ok_or_else(|| "sealed transit path binding dispatcher unavailable".to_string())?;
+    dispatcher.pop_for(binding)
+}
+
+pub(crate) fn pop_registered_transit_next_hop(
+    registrations: &[TransitLaneRegistration],
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    flow_key: MeshMultipathFlowKey,
+) -> Result<SecurePeerStream, String> {
+    if registrations.is_empty() {
+        return Err("sealed transit lane registrations unavailable".to_string());
+    }
+    let selection = select_carrier_lane_from_registrations(registrations, flow_key)
+        .map_err(|error| format!("sealed transit lane selection failed: {error}"))?;
+    let binding = selection
+        .selected_binding
+        .ok_or_else(|| "sealed transit lane selection missing binding".to_string())?;
+    let dispatcher = dispatcher
+        .ok_or_else(|| "sealed transit path binding dispatcher unavailable".to_string())?;
+    dispatcher.pop_for(binding)
+}

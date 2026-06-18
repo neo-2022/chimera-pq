@@ -1,9 +1,11 @@
 pub mod handshake;
 pub mod lane_binding;
+pub mod live_lane_selection;
 pub mod modes;
 pub mod net;
 pub mod node;
 pub mod options;
+pub(crate) mod options_debug;
 pub(crate) mod options_mode;
 pub(crate) mod options_proof;
 pub mod pool;
@@ -14,6 +16,7 @@ pub mod startup_contract;
 pub mod transit;
 pub mod transit_binding;
 pub mod transit_dispatch;
+pub(crate) mod transit_lane_selection;
 pub mod wire;
 
 pub use handshake::{
@@ -24,6 +27,10 @@ pub use lane_binding::{
     render_transit_lane_registrations, render_transit_lane_registrations_from_mesh_plan,
     transit_lane_registration_from_mesh_lane, transit_lane_registrations_from_mesh_plan,
     transit_path_binding_from_mesh_lane, write_transit_lane_registrations_from_mesh_plan,
+};
+pub use live_lane_selection::{
+    CarrierLaneSelection, CarrierLaneSelectionMode, select_carrier_lane_from_mesh_plan,
+    select_carrier_lane_from_registrations,
 };
 pub use modes::{
     handle_local_client, laptop_worker, outbound_peer_worker, run_bench, run_download_echo,
