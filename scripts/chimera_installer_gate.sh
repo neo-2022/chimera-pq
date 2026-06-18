@@ -69,11 +69,11 @@ fi
 if bash -o pipefail -lc 'false | bash -s -- -install'; then
   fail "bootstrap_pipefail_did_not_block_download_failure"
 fi
-rg -n 'wget --no-config -qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_wget_rcfile_not_disabled"
+rg -n 'wget --no-config .*--tries=3 .*--timeout=10 .*--dns-timeout=10 .*--connect-timeout=10 .*--read-timeout=60 .*--waitretry=1 .*-qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_wget_download_not_bounded"
 rg -n 'curl --disable .*--retry 3 .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_curl_rcfile_not_disabled"
-rg -n 'wget --no-config -qO "\$dest" "\$url"' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_wget_rcfile_not_disabled"
+rg -n 'wget --no-config .*--tries=3 .*--timeout=10 .*--dns-timeout=10 .*--connect-timeout=10 .*--read-timeout=60 .*--waitretry=1 .*-qO "\$dest" "\$url"' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_wget_download_not_bounded"
 rg -n 'curl --disable .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" >/dev/null || fail "runtime_bootstrap_curl_rcfile_not_disabled"
-rg -n 'wget --no-config -qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" >/dev/null || fail "runtime_bootstrap_wget_rcfile_not_disabled"
+rg -n 'wget --no-config .*--tries=3 .*--timeout=10 .*--dns-timeout=10 .*--connect-timeout=10 .*--read-timeout=60 .*--waitretry=1 .*-qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" >/dev/null || fail "runtime_bootstrap_wget_download_not_bounded"
 rg -n 'curl disable rcfile flag missing' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_curl_disable_contract"
 rg -n 'try_update_from_bootstrap_source "peer"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_peer_update_fallback"
 rg -n 'parse-peer-metadata' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_peer_metadata_not_rust_parsed"

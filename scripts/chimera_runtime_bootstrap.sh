@@ -34,7 +34,7 @@ download_url_to_file() {
   fi
   if command -v wget >/dev/null 2>&1; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      wget --no-config -qO "$dest" "$url"
+      wget --no-config --tries=3 --timeout=10 --dns-timeout=10 --connect-timeout=10 --read-timeout=60 --waitretry=1 -qO "$dest" "$url"
     then
       return 0
     fi
