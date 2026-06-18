@@ -121,6 +121,7 @@ pub(crate) use options::parse_mesh_route_explain_options;
 #[cfg(test)]
 pub(crate) use route_explain_contract::*;
 use route_explain_error::emit_route_explain_error;
+use route_explain_error::format_route_explain_error_text;
 use route_explain_error_consts::{
     STAGE_DISCOVERY_MERGE, STAGE_FAILOVER_PLAN, STAGE_HEALTH_STATE_UPDATE, STAGE_OPTIONS_PARSE,
     STAGE_PEER_SPEC, STAGE_PEER_TABLE_POLICY, STAGE_PLAN_PATH, STAGE_POLICY_PARSE,
@@ -330,15 +331,17 @@ fn validate_simulation_nodes(
     if let Some(failed) = options.failed_node_id.as_deref()
         && !known.contains(failed)
     {
-        return Err(format!(
-            "failed node '{failed}' is not present in --peer set"
+        return Err(format_route_explain_error_text(
+            "simulation_input",
+            "failed node is not present in --peer set",
         ));
     }
     if let Some(cooldown) = options.cooldown_node_id.as_deref()
         && !known.contains(cooldown)
     {
-        return Err(format!(
-            "cooldown node '{cooldown}' is not present in --peer set"
+        return Err(format_route_explain_error_text(
+            "simulation_input",
+            "cooldown node is not present in --peer set",
         ));
     }
     if let (Some(failed), Some(cooldown)) = (
@@ -346,8 +349,9 @@ fn validate_simulation_nodes(
         options.cooldown_node_id.as_deref(),
     ) && failed == cooldown
     {
-        return Err(format!(
-            "failed node '{failed}' and cooldown node '{cooldown}' must differ"
+        return Err(format_route_explain_error_text(
+            "simulation_input",
+            "failed node and cooldown node must differ",
         ));
     }
     Ok(())

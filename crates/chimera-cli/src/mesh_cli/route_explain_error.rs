@@ -61,9 +61,16 @@ pub(crate) fn emit_route_explain_error(
     if options.json_output {
         println!("{json}");
     } else {
-        eprintln!("mesh route explain: этап '{error_stage}' завершился ошибкой: {error}");
+        eprintln!("{}", format_route_explain_error_text(error_stage, error));
     }
     2
+}
+
+pub(crate) fn format_route_explain_error_text(error_stage: &str, error: &str) -> String {
+    format!(
+        "mesh route explain: этап '{error_stage}' завершился ошибкой: {}",
+        redact_public_diagnostic_text(error)
+    )
 }
 
 pub(crate) fn build_route_explain_error_json(

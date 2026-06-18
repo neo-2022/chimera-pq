@@ -1,6 +1,6 @@
 use super::route_explain_error::{
     build_route_explain_error_json, error_action_hint, error_retriable, error_stage_category,
-    resolution_hint, retry_backoff_hint,
+    format_route_explain_error_text, resolution_hint, retry_backoff_hint,
 };
 use super::route_explain_meta::{
     ROUTE_EXPLAIN_CONTRACT_FAMILY, ROUTE_EXPLAIN_ERROR_OPERATOR_HEALTH, ROUTE_EXPLAIN_KIND_ERROR,
@@ -109,6 +109,18 @@ fn route_explain_error_json_escapes_user_fields() {
         parsed["network_state"],
         ROUTE_EXPLAIN_NETWORK_STATE_NOT_MODIFIED
     );
+}
+
+#[test]
+fn route_explain_error_text_redacts_sensitive_identifiers() {
+    let text = format_route_explain_error_text(
+        ERROR_STAGE_PLAN_PATH,
+        "duplicate peer node_id 'n1' in --peer set",
+    );
+
+    assert!(text.contains("mesh route explain: этап 'plan_path' завершился ошибкой:"));
+    assert!(text.contains("duplicate peer node_id <redacted> in --peer set"));
+    assert!(!text.contains("'n1'"));
 }
 
 #[test]
