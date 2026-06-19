@@ -24,7 +24,9 @@ use crate::peer_egress::transit::{
     forward_peer_sealed_transit_to_next_hop,
 };
 use crate::peer_egress::transit_binding::TransitPathBinding;
-use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
+use crate::peer_egress::transit_dispatch::{
+    SharedTransitNextHopDispatcher, new_shared_transit_dispatcher,
+};
 use crate::peer_egress::wire::{
     PeerMessage, read_peer_message, write_ack_ok, write_connect_message,
 };
@@ -64,10 +66,12 @@ pub fn run_vps(options: Options) -> Result<(), String> {
     let reverse_connect = options.reverse_connect;
     let peer_transit_policy = PeerTransitPolicy::from_bool(options.allow_pool_transit);
     let bound_transit_policy = BoundPeerTransitPolicy::from_bool(options.allow_bound_transit);
+    let transit_dispatcher = new_shared_transit_dispatcher();
     if reverse_connect {
         let peer_pool = new_shared_pool();
         let r_pool = peer_pool.clone();
         let r_token = token.clone();
+        let r_dispatcher = transit_dispatcher.clone();
         thread::spawn(move || {
             for incoming in peer_listener.incoming() {
                 let Ok(mut stream) = incoming else {
@@ -84,10 +88,15 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                         let pool = r_pool.clone();
                         let policy = peer_transit_policy;
                         let bound_policy = bound_transit_policy;
+                        let dispatcher = r_dispatcher.clone();
                         thread::spawn(move || {
-                            if let Err(error) =
-                                handle_reverse_peer(peer, policy, bound_policy, pool, None)
-                            {
+                            if let Err(error) = handle_reverse_peer(
+                                peer,
+                                policy,
+                                bound_policy,
+                                pool,
+                                Some(dispatcher),
+                            ) {
                                 eprintln!(
                                     "event=reverse_peer_error reason_class={}",
                                     redacted_log_reason(&error)
