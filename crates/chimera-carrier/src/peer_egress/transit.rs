@@ -125,13 +125,13 @@ pub fn relay_local_sealed_transit(
 
 pub fn relay_local_sealed_transit_to_next_hop(
     mut local: TcpStream,
+    policy: PeerTransitPolicy,
     peer_pool: SharedPeerPool,
     first_byte: u8,
 ) -> Result<(), String> {
     tune_tcp(&local)?;
     let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
-    let peer =
-        pop_unbound_pool_transit_next_hop(PeerTransitPolicy::AllowPoolNextHop, Some(peer_pool))?;
+    let peer = pop_unbound_pool_transit_next_hop(policy, Some(peer_pool))?;
     relay_local_sealed_transit_after_first(local, peer, first)
 }
 

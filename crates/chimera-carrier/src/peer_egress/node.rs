@@ -14,7 +14,7 @@ use crate::peer_egress::pool::new_shared_pool;
 use crate::peer_egress::protocol::redacted_log_reason;
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
 use crate::peer_egress::transit::{
-    BoundPeerTransitPolicy, relay_local_bound_sealed_transit_to_next_hop,
+    BoundPeerTransitPolicy, PeerTransitPolicy, relay_local_bound_sealed_transit_to_next_hop,
     relay_local_sealed_transit_to_next_hop, relay_local_sealed_transit_with_registrations,
 };
 use crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC;
@@ -159,10 +159,16 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 let peer_pool = peer_pool.clone();
                 let live_transit_lane_registry = live_transit_lane_registry.clone();
                 let transit_dispatcher = transit_dispatcher.clone();
+                let pool_transit_policy = PeerTransitPolicy::from_bool(options.allow_pool_transit);
                 thread::spawn(move || {
                     let result = match live_transit_lane_registry.snapshot() {
                         Ok(transit_lane_registrations) if transit_lane_registrations.is_empty() => {
-                            relay_local_sealed_transit_to_next_hop(local, peer_pool, first[0])
+                            relay_local_sealed_transit_to_next_hop(
+                                local,
+                                pool_transit_policy,
+                                peer_pool,
+                                first[0],
+                            )
                         }
                         Ok(transit_lane_registrations) => {
                             relay_local_sealed_transit_with_registrations(

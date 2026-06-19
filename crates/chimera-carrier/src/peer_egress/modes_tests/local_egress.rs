@@ -2,6 +2,7 @@ use crate::peer_egress::lane_binding::TransitLaneRegistration;
 use crate::peer_egress::modes::handle_local_client_with_registrations_and_first_byte;
 use crate::peer_egress::options::AeadSuite;
 use crate::peer_egress::protocol::read_line_limited;
+use crate::peer_egress::transit::{PeerTransitPolicy, relay_local_sealed_transit_to_next_hop};
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
 use std::io::Write;
@@ -172,5 +173,46 @@ fn local_client_fails_closed_when_reload_selects_new_binding() -> Result<(), Str
     };
     assert!(error.contains("binding unavailable"));
     assert!(old_peer_reader.read_secure_payload().is_err());
+    Ok(())
+}
+
+#[test]
+fn local_sealed_transit_fails_closed_when_pool_transit_denied() -> Result<(), String> {
+    let (mut local_client, local_server) = tcp_pair()?;
+    let (peer_writer, _peer_reader) = test_peer_pair()?;
+    let pool = crate::peer_egress::pool::new_shared_pool();
+    let _ = pool.push(peer_writer);
+
+    let worker = thread::spawn(move || {
+        relay_local_sealed_transit_to_next_hop(
+            local_server,
+            PeerTransitPolicy::DenyPoolNextHop,
+            pool,
+            chimera_session::FRAME_VERSION,
+        )
+    });
+
+    let frame = chimera_session::Frame {
+        kind: chimera_session::FrameKind::Data,
+        packet_number: 7,
+        payload: vec![b'P'; 32],
+    }
+    .encode()
+    .map_err(|error| format!("encode transit frame failed: {error}"))?;
+    local_client
+        .write_all(&frame[1..])
+        .map_err(|error| format!("write transit frame failed: {error}"))?;
+    local_client
+        .shutdown(Shutdown::Write)
+        .map_err(|error| format!("shutdown local writer failed: {error}"))?;
+
+    let error = match worker
+        .join()
+        .map_err(|_| "local sealed transit worker panicked".to_string())?
+    {
+        Ok(()) => return Err("pool-denied sealed transit must fail closed".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("denied by policy"));
     Ok(())
 }
