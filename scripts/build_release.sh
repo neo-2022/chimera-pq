@@ -77,6 +77,7 @@ cp -p "${ROOT_DIR}/scripts/chimera_runtime_bootstrap.sh" "${RELEASE_DIR}/scripts
 cp -p "${ROOT_DIR}/scripts/chimera-runner.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-update.sh" "${RELEASE_DIR}/scripts/"
+cp -p "${ROOT_DIR}/scripts/chimera-update-runtime-state.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera.sh" "${RELEASE_DIR}/scripts/"
 
 sed -i \
@@ -100,6 +101,7 @@ tar -tzf "${ROOT_DIR}/target/${LATEST_ARCHIVE_NAME}" > "${ROOT_DIR}/target/chime
 grep -q '^chimera-release/bin/chimera-bootstrap$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/install_release\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-update\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/chimera-update-runtime-state\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 

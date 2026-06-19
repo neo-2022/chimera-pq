@@ -5,9 +5,7 @@ UPDATE_PEER_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS_FILE:-${XD
 UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC="${CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC:-3}"
 UPDATE_DOWNLOAD_MAX_TIME_SEC="${CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC:-8}"
 UPDATE_DOWNLOAD_RETRIES="${CHIMERA_UPDATE_DOWNLOAD_RETRIES:-0}"
-RUNTIME_VERSION_FILE="$ROOT_DIR/.chimera_release_version"
-RUNTIME_BUNDLE_SHA_FILE="$ROOT_DIR/.chimera_release_bundle.sha256"
-INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
+source "$ROOT_DIR/scripts/chimera-update-runtime-state.sh"
 
 release_version_to_sortable() {
   local v="${1:-0.0.0}"
@@ -30,19 +28,13 @@ is_remote_newer() {
 }
 
 read_local_runtime_version() {
-  if [[ -f "$RUNTIME_VERSION_FILE" ]]; then
-    tr -d '[:space:]' < "$RUNTIME_VERSION_FILE"
+  local version_file
+  version_file="$(runtime_version_file)"
+  if [[ -f "$version_file" ]]; then
+    tr -d '[:space:]' < "$version_file"
     return 0
   fi
   echo "0.0.0"
-}
-
-read_local_runtime_bundle_sha() {
-  if [[ -f "$RUNTIME_BUNDLE_SHA_FILE" ]]; then
-    tr -d '[:space:]' < "$RUNTIME_BUNDLE_SHA_FILE"
-    return 0
-  fi
-  echo ""
 }
 
 runtime_version_needs_repair() {
@@ -53,8 +45,10 @@ runtime_version_needs_repair() {
 }
 
 read_local_install_role() {
-  if [[ -f "$INSTALL_NODE_ROLE_FILE" ]]; then
-    tr -d '[:space:]' < "$INSTALL_NODE_ROLE_FILE"
+  local install_role_file
+  install_role_file="$(install_node_role_file)"
+  if [[ -f "$install_role_file" ]]; then
+    tr -d '[:space:]' < "$install_role_file"
     return 0
   fi
   local env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"

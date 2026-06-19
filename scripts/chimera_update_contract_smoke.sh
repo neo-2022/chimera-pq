@@ -1020,6 +1020,41 @@ EOF
   rm -rf "$tmp_dir"
 )
 
+case_missing_root_checksum_self_heals_from_released_bundle() (
+  local tmp_dir test_root old_root output rc archive checksum expected_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  mkdir -p "$test_root/releases"
+  printf '%s\n' 0.1.99 >"$test_root/.chimera_release_version"
+  archive="$test_root/releases/chimera-pq-release.tar.gz"
+  checksum="$test_root/releases/chimera-pq-release.tar.gz.sha256"
+  printf '%s\n' "bundle" >"$archive"
+  expected_sha="$(sha256sum "$archive" | awk '{print $1}')"
+  printf '%s  chimera-pq-release.tar.gz\n' "$expected_sha" >"$checksum"
+  ROOT_DIR="$test_root"
+  remote_archive_sha256() {
+    printf '%s\n' "$expected_sha"
+  }
+
+  output="$(read_local_runtime_bundle_sha 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "self-heal from released bundle should not fail, got rc=$rc"
+  [[ "$output" == "$expected_sha" ]] || fail "self-heal did not return expected checksum"
+  [[ "$(cat "$test_root/.chimera_release_bundle.sha256")" == "$expected_sha" ]] || fail "self-heal did not persist root checksum"
+  rm -rf "$tmp_dir"
+)
+
+case_chimera_sh_sources_update_runtime_state_helper() (
+  rg -n 'source "\$ROOT_DIR/scripts/chimera-update-runtime-state\.sh"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null \
+    || fail "update script does not source runtime state helper"
+  rg -n 'read_local_runtime_bundle_sha' "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" >/dev/null \
+    || fail "runtime state helper missing bundle sha reader"
+  rg -n 'sha256_file' "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" >/dev/null \
+    || fail "runtime state helper missing sha helper"
+)
+
 case_github_unavailable_peer_newer_updates_and_reruns() (
   local tmp_dir test_root old_root calls installed_marker rerun_args expected_sha output rc
   tmp_dir="$(mktemp -d)"
@@ -1376,6 +1411,8 @@ case_peer_update_metadata_does_not_execute_peer_bootstrap
 case_peer_metadata_sha_mismatch_blocks_install
 case_same_version_checksum_mismatch_blocks
 case_same_version_missing_local_checksum_blocks
+case_missing_root_checksum_self_heals_from_released_bundle
+case_chimera_sh_sources_update_runtime_state_helper
 case_github_unavailable_peer_newer_updates_and_reruns
 case_github_install_source_unavailable_falls_back_to_peer
 case_connect_peer_update_url_does_not_use_general_peer_list
