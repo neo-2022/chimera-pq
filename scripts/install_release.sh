@@ -198,17 +198,26 @@ elif [[ "${BUNDLE_SOURCE}" == https://* || "${BUNDLE_SOURCE}" == http://* ]]; th
   trap 'rm -rf "$TMP_DIR"' EXIT
   TMP_ARCHIVE="${TMP_DIR}/chimera-release.tar.gz"
   TMP_CHECKSUM="${TMP_DIR}/chimera-release.tar.gz.sha256"
-  download_url_to_file "${BUNDLE_SOURCE}" "${TMP_ARCHIVE}"
+  if ! download_url_to_file "${BUNDLE_SOURCE}" "${TMP_ARCHIVE}"; then
+    echo "error: release archive download unavailable" >&2
+    exit 2
+  fi
   if [[ -n "${CHIMERA_RELEASE_CHECKSUM_URL:-}" ]]; then
-    download_url_to_file "${CHIMERA_RELEASE_CHECKSUM_URL}" "${TMP_CHECKSUM}"
+    if ! download_url_to_file "${CHIMERA_RELEASE_CHECKSUM_URL}" "${TMP_CHECKSUM}"; then
+      echo "error: remote release checksum is unavailable" >&2
+      exit 2
+    fi
     CHECKSUM_SOURCE="$TMP_CHECKSUM"
   elif download_url_to_file "${BUNDLE_SOURCE}.sha256" "${TMP_CHECKSUM}" 2>/dev/null; then
     CHECKSUM_SOURCE="$TMP_CHECKSUM"
   else
-    echo "error: remote release checksum is required for URL install" >&2
-    exit 1
+    echo "error: remote release checksum is unavailable" >&2
+    exit 2
   fi
-  install_from_archive "$TMP_ARCHIVE" "$CHECKSUM_SOURCE"
+  if ! install_from_archive "$TMP_ARCHIVE" "$CHECKSUM_SOURCE"; then
+    echo "error: release archive verification failed" >&2
+    exit 3
+  fi
 else
   echo "error: cannot find release at ${BUNDLE_SOURCE}" >&2
   echo "usage: ${0} [<path-to-tarball> | <path-to-release-dir> | <url>]" >&2

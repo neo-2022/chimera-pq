@@ -364,7 +364,7 @@ install_update_from_release_metadata() {
   local local_sha="${7:-}"
   shift 7 || true
   local -a original_args=("$@")
-  local remote_sha remote_sha_rc install_role installer installed_version installed_sha remote_newer=0
+  local remote_sha remote_sha_rc install_role installer installed_version installed_sha install_rc remote_newer=0
 
   if is_remote_newer "$local_version" "$remote_version"; then
     remote_newer=1
@@ -412,6 +412,7 @@ install_update_from_release_metadata() {
 
   echo "chimera_update=available source=$source_name current_version=$local_version latest_version=$remote_version current_sha=${local_sha:-none} latest_sha=$remote_sha action=install"
   install_role="$(read_local_install_role)"
+  install_rc=0
   if CHIMERA_INSTALL_NODE_ROLE="$install_role" CHIMERA_RELEASE_CHECKSUM_URL="$remote_checksum_url" bash "$installer" "$remote_archive_url"; then
     installed_version="$(read_local_runtime_version)"
     installed_sha="$(read_local_runtime_bundle_sha)"
@@ -421,6 +422,12 @@ install_update_from_release_metadata() {
     fi
     if rerun_after_update "${original_args[@]}"; then
       return 0
+    fi
+  else
+    install_rc=$?
+    if [[ "$install_rc" -eq 2 ]]; then
+      echo "chimera_update=unavailable source=$source_name latest_version=$remote_version action=continue reason=install_source_unavailable" >&2
+      return 2
     fi
   fi
 

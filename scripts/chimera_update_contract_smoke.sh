@@ -1096,6 +1096,172 @@ EOF
   rm -rf "$tmp_dir"
 )
 
+case_github_install_source_unavailable_falls_back_to_peer() (
+  local tmp_dir test_root old_root rerun_args output rc github_sha peer_archive peer_checksum peer_sha fake_bin
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  rerun_args="$tmp_dir/rerun_args"
+  fake_bin="$tmp_dir/fake-bin"
+  mkdir -p "$test_root/scripts" "$fake_bin" "$tmp_dir/home/chimera" "$tmp_dir/bin"
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.100"
+  peer_archive="$tmp_dir/chimera-pq-release.tar.gz"
+  peer_checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+  peer_sha="$(awk '{print $1}' "$peer_checksum")"
+  github_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  mkdir -p "$test_root/scripts"
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+archive="\${1:-}"
+case "\$archive" in
+  *github.invalid*)
+    echo "error: release archive download unavailable" >&2
+    exit 2
+    ;;
+  *peer.invalid*)
+    mkdir -p "\${CHIMERA_HOME:-$tmp_dir/home/chimera}"
+    printf '%s\n' 0.1.100 >"\${CHIMERA_HOME:-$tmp_dir/home/chimera}/.chimera_release_version"
+    printf '%s\n' "$peer_sha" >"\${CHIMERA_HOME:-$tmp_dir/home/chimera}/.chimera_release_bundle.sha256"
+    exit 0
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+  cat >"$fake_bin/curl" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+dest=""
+url=""
+while [[ "\$#" -gt 0 ]]; do
+  case "\$1" in
+    -o)
+      dest="\${2:-}"
+      shift 2
+      ;;
+    --disable|-fsSL)
+      shift
+      ;;
+    --retry|--connect-timeout|--max-time)
+      shift 2
+      ;;
+    *)
+      url="\$1"
+      shift
+      ;;
+  esac
+done
+case "\$url" in
+  *github.invalid*)
+    case "\$url" in
+      *.sha256)
+        printf '%s  chimera-pq-release.tar.gz\n' "$github_sha" >"\$dest"
+        exit 0
+        ;;
+      *)
+        exit 1
+        ;;
+    esac
+    ;;
+  *peer.invalid*)
+    case "\$url" in
+      *.sha256)
+        cp "$peer_checksum" "\$dest"
+        ;;
+      *)
+        cp "$peer_archive" "\$dest"
+        ;;
+    esac
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$fake_bin/curl"
+
+  ROOT_DIR="$test_root"
+  CHIMERA_HOME="$tmp_dir/home/chimera"
+  CHIMERA_LOCAL_BIN="$tmp_dir/bin"
+  HOME="$tmp_dir/home/user"
+  PATH="$fake_bin:$PATH"
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+  read_local_runtime_version() {
+    if [[ -f "$CHIMERA_HOME/.chimera_release_version" ]]; then
+      cat "$CHIMERA_HOME/.chimera_release_version"
+    else
+      printf '%s\n' 0.1.0
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$CHIMERA_HOME/.chimera_release_bundle.sha256" ]]; then
+      cat "$CHIMERA_HOME/.chimera_release_bundle.sha256"
+    else
+      printf '%s\n' deadbeef
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n%s\n%s\n' \
+          0.1.99 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n%s\n%s\n' \
+          0.1.100 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$github_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "$*" >"$rerun_args"
+    return 0
+  }
+
+  output="$(CHIMERA_HOME="$CHIMERA_HOME" CHIMERA_LOCAL_BIN="$CHIMERA_LOCAL_BIN" HOME="$HOME" auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  [[ "$rc" -eq 0 ]] || fail "github install source unavailable should fall back to peer, got rc=$rc"
+  [[ "$output" == *"reason=install_source_unavailable"* ]] || fail "missing github install source unavailable diagnostic"
+  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "peer fallback was not reached after github install source unavailable"
+  [[ "$(cat "$rerun_args")" == "-start" ]] || fail "original command was not rerun after peer fallback"
+  [[ "$(cat "$CHIMERA_HOME/.chimera_release_version")" == "0.1.100" ]] || fail "peer fallback did not install expected version"
+  [[ "$(cat "$CHIMERA_HOME/.chimera_release_bundle.sha256")" == "$(awk '{print $1}' "$peer_checksum")" ]] || fail "peer fallback did not install expected checksum"
+  rm -rf "$tmp_dir"
+)
+
 case_connect_peer_update_url_does_not_use_general_peer_list() (
   selected_connect_peer_update_bootstrap_url() { return 1; }
   load_update_peer_bootstrap_urls() {
@@ -1211,6 +1377,7 @@ case_peer_metadata_sha_mismatch_blocks_install
 case_same_version_checksum_mismatch_blocks
 case_same_version_missing_local_checksum_blocks
 case_github_unavailable_peer_newer_updates_and_reruns
+case_github_install_source_unavailable_falls_back_to_peer
 case_connect_peer_update_url_does_not_use_general_peer_list
 case_connect_peer_update_url_precedes_general_peer_list
 case_update_bootstrap_url_rejects_userinfo
