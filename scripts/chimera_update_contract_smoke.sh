@@ -166,7 +166,17 @@ EOF
   rm -rf "$tmp_dir"
 )
 
-case_newer_release_with_unreachable_checksum_blocks() (
+case_newer_release_with_unreachable_checksum_continues() (
+  local tmp_dir test_root output rc
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  mkdir -p "$test_root/scripts"
+  cat >"$test_root/scripts/install_release.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+  ROOT_DIR="$test_root"
   read_local_runtime_version() { printf '%s\n' 0.1.0; }
   read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
   load_update_peer_bootstrap_urls_for_args() { return 0; }
@@ -178,12 +188,94 @@ case_newer_release_with_unreachable_checksum_blocks() (
   }
   remote_archive_sha256() { return 2; }
 
-  local output rc
   output="$(auto_update_if_needed -start 2>&1)" || rc=$?
   rc="${rc:-0}"
-  [[ "$rc" -ne 0 ]] || fail "confirmed newer release with unreachable checksum must block start"
+  [[ "$rc" -eq 0 ]] || fail "unreachable checksum should fall through as source unavailable, got rc=$rc"
   [[ "$output" == *"reason=checksum_unreachable"* ]] || fail "missing checksum unreachable diagnostic"
-  [[ "$output" != *"chimera_update=unavailable"* ]] || fail "confirmed newer release was downgraded to soft outage"
+  [[ "$output" == *"chimera_update=unavailable"* ]] || fail "unreachable checksum was not downgraded to soft outage"
+  rm -rf "$tmp_dir"
+)
+
+case_newer_release_with_unreachable_checksum_falls_back_to_peer() (
+  local tmp_dir test_root output rc calls installed_marker rerun_args
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  calls="$tmp_dir/calls"
+  installed_marker="$tmp_dir/installed"
+  rerun_args="$tmp_dir/rerun_args"
+  expected_version="0.1.100"
+  expected_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  mkdir -p "$test_root/scripts"
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install >>"$calls"
+touch "$installed_marker"
+exit 0
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() {
+    if [[ -f "$installed_marker" ]]; then
+      printf '%s\n' "$expected_version"
+    else
+      printf '%s\n' 0.1.0
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$installed_marker" ]]; then
+      printf '%s\n' "$expected_sha"
+    else
+      printf '%s\n' deadbeef
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n%s\n%s\n' \
+          0.1.99 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n%s\n%s\n' \
+          0.1.100 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$expected_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "rerun:$*" >>"$calls"
+    printf '%s\n' "$*" >"$rerun_args"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  [[ "$rc" -eq 0 ]] || fail "peer fallback after github checksum outage should continue"
+  [[ "$output" == *"reason=checksum_unreachable"* ]] || fail "missing github checksum unreachable diagnostic"
+  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "peer fallback was not reached"
+  [[ -f "$installed_marker" ]] || fail "peer fallback installer was not invoked"
+  [[ "$(cat "$rerun_args")" == "-start" ]] || fail "original command was not rerun after peer update"
+  [[ "$(cat "$calls")" == $'install\nrerun:-start' ]] || fail "unexpected peer fallback call order"
+  rm -rf "$tmp_dir"
 )
 
 case_update_required_install_failure_blocks() (
@@ -1097,7 +1189,8 @@ case_update_sources_unreachable_continues
 case_update_download_uses_bounded_bootstrap_timeouts
 case_update_download_uses_bounded_curl_args
 case_update_download_timeout_bounds_slow_helper
-case_newer_release_with_unreachable_checksum_blocks
+case_newer_release_with_unreachable_checksum_continues
+case_newer_release_with_unreachable_checksum_falls_back_to_peer
 case_update_required_install_failure_blocks
 case_confirmed_update_missing_local_installer_blocks
 case_peer_confirmed_update_failure_blocks_start

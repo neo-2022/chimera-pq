@@ -378,10 +378,7 @@ install_update_from_release_metadata() {
     remote_sha_rc=$?
     case "$remote_sha_rc" in
       2)
-        if [[ "$remote_newer" -ne 0 ]]; then
-          echo "chimera_update=verify_failed source=$source_name latest_version=$remote_version action=block reason=checksum_unreachable" >&2
-          return 3
-        fi
+        echo "chimera_update=unavailable source=$source_name latest_version=$remote_version action=continue reason=checksum_unreachable" >&2
         return 2
         ;;
       *)
