@@ -414,7 +414,9 @@ install_update_from_release_metadata() {
       echo "chimera_update=verify_failed source=$source_name expected_version=$remote_version installed_version=${installed_version:-unknown} expected_sha=$remote_sha installed_sha=${installed_sha:-none} action=block" >&2
       return 3
     fi
-    if rerun_after_update "${original_args[@]}"; then
+    local -a update_rerun_args
+    mapfile -t update_rerun_args < <(prepare_update_rerun_args "${original_args[@]}")
+    if rerun_after_update "${update_rerun_args[@]}"; then
       return 0
     fi
   else
@@ -426,6 +428,16 @@ install_update_from_release_metadata() {
   fi
 
   return 3
+}
+
+prepare_update_rerun_args() {
+  local -a rerun_args=("$@")
+  case "${rerun_args[0]:-}" in
+    -start|start)
+      rerun_args[0]="-restart"
+      ;;
+  esac
+  printf '%s\n' "${rerun_args[@]}"
 }
 
 rerun_after_update() {

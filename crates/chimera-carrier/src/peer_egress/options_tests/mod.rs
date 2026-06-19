@@ -66,6 +66,32 @@ fn options_debug_redacts_token() -> Result<(), String> {
 }
 
 #[test]
+fn options_debug_redacts_transit_lane_bindings_file() -> Result<(), String> {
+    let args = vec![
+        "--mode".to_string(),
+        "node".to_string(),
+        "--local-listen".to_string(),
+        "127.0.0.1:18135".to_string(),
+        "--peer-listen".to_string(),
+        "0.0.0.0:8443".to_string(),
+        "--server".to_string(),
+        "peer.example.invalid:8443".to_string(),
+        "--token".to_string(),
+        "abc".to_string(),
+        "--allow-bound-transit".to_string(),
+        "true".to_string(),
+        "--transit-lane-bindings-file".to_string(),
+        "/tmp/SECRET_BINDINGS_SENTINEL.csv".to_string(),
+    ];
+    let parsed = Options::parse(&args)?;
+    let debug = format!("{parsed:?}");
+    assert!(debug.contains("transit_lane_bindings_file"));
+    assert!(debug.contains("<redacted>"));
+    assert!(!debug.contains("SECRET_BINDINGS_SENTINEL"));
+    Ok(())
+}
+
+#[test]
 fn parse_node_options_requires_ingress_listeners_and_keeps_peer_optional() -> Result<(), String> {
     let args = vec![
         "--mode".to_string(),

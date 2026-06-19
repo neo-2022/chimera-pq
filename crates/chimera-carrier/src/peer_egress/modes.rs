@@ -23,7 +23,6 @@ use crate::peer_egress::transit::{
     BoundPeerTransitPolicy, PeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop,
     forward_peer_sealed_transit_to_next_hop,
 };
-use crate::peer_egress::transit_binding::TransitPathBinding;
 use crate::peer_egress::transit_dispatch::{
     SharedTransitNextHopDispatcher, new_shared_transit_dispatcher,
 };
@@ -59,7 +58,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
             &resolved_peer_listen,
         )
     {
-        eprintln!("event=peer_state_write_failed reason={error}");
+        eprintln!(
+            "event=peer_state_write_failed reason_class={}",
+            redacted_log_reason(&error)
+        );
     }
     let token = options.token.clone();
     let aead = options.aead;
@@ -78,7 +80,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                     continue;
                 };
                 if let Err(error) = tune_tcp(&stream) {
-                    eprintln!("event=peer_socket_tune_failed reason={error}");
+                    eprintln!(
+                        "event=peer_socket_tune_failed reason_class={}",
+                        redacted_log_reason(&error)
+                    );
                 }
                 match authenticate_peer(&mut stream, &r_token)
                     .and_then(|_| establish_secure_peer_server(stream, &r_token, aead))
@@ -105,7 +110,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                         });
                     }
                     Err(error) => {
-                        eprintln!("event=reverse_peer_auth_failed reason={error}");
+                        eprintln!(
+                            "event=reverse_peer_auth_failed reason_class={}",
+                            redacted_log_reason(&error)
+                        );
                     }
                 }
             }
@@ -137,7 +145,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                     continue;
                 };
                 if let Err(error) = tune_tcp(&stream) {
-                    eprintln!("event=peer_socket_tune_failed reason={error}");
+                    eprintln!(
+                        "event=peer_socket_tune_failed reason_class={}",
+                        redacted_log_reason(&error)
+                    );
                 }
                 match authenticate_peer(&mut stream, &token)
                     .and_then(|_| establish_secure_peer_server(stream, &token, aead))
@@ -147,7 +158,10 @@ pub fn run_vps(options: Options) -> Result<(), String> {
                         let _ = peer_pool.push(peer);
                     }
                     Err(error) => {
-                        eprintln!("event=peer_auth_failed reason={error}");
+                        eprintln!(
+                            "event=peer_auth_failed reason_class={}",
+                            redacted_log_reason(&error)
+                        );
                     }
                 }
             }
@@ -294,38 +308,6 @@ pub fn laptop_worker(options: &Options) -> Result<(), String> {
 
 pub fn outbound_peer_worker(options: &Options) -> Result<(), String> {
     outbound_peer_worker_with_next_hop(options, None, None)
-}
-
-pub fn outbound_transit_lane_registration_worker(
-    options: &Options,
-    registration: &TransitLaneRegistration,
-    dispatcher: SharedTransitNextHopDispatcher,
-) -> Result<(), String> {
-    let mut peer = connect_tcp(registration.endpoint(), options.connect_timeout_ms)
-        .map_err(|error| format!("connect sealed transit lane failed: {error}"))?;
-    tune_tcp(&peer)?;
-    eprintln!("event=outbound_transit_lane_connected endpoint=<redacted>");
-    peer.write_all(b"CHIMERA-PEER-EGRESS/1\n")
-        .map_err(|error| format!("write handshake failed: {error}"))?;
-    peer.write_all(options.token.as_bytes())
-        .and_then(|_| peer.write_all(b"\n"))
-        .map_err(|error| format!("write token failed: {error}"))?;
-    let peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
-    dispatcher.register(registration.binding(), peer)?;
-    eprintln!("event=outbound_transit_lane_registered binding=<opaque>");
-    wait_until_transit_lane_claimed(&dispatcher, registration.binding())?;
-    eprintln!("event=outbound_transit_lane_claimed binding=<opaque>");
-    Ok(())
-}
-
-fn wait_until_transit_lane_claimed(
-    dispatcher: &SharedTransitNextHopDispatcher,
-    binding: TransitPathBinding,
-) -> Result<(), String> {
-    while dispatcher.contains_binding(binding)? {
-        thread::sleep(Duration::from_millis(100));
-    }
-    Ok(())
 }
 
 pub fn outbound_peer_worker_with_next_hop(

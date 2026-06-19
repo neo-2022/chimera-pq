@@ -126,3 +126,51 @@ fn local_client_uses_binding_backed_dispatcher_when_registrations_exist() -> Res
         .map_err(|_| "local ingress worker panicked".to_string())??;
     Ok(())
 }
+
+#[test]
+fn local_client_fails_closed_when_reload_selects_new_binding() -> Result<(), String> {
+    let (mut local_client, local_server) = tcp_pair()?;
+    let (old_peer_writer, mut old_peer_reader) = test_peer_pair()?;
+    let registrations = vec![TransitLaneRegistration::new(
+        binding(302, 5),
+        "198.51.100.45:443".to_string(),
+    )?];
+    let dispatcher = new_shared_transit_dispatcher();
+    dispatcher.register(binding(301, 4), old_peer_writer)?;
+
+    local_client
+        .set_read_timeout(Some(std::time::Duration::from_millis(250)))
+        .map_err(|error| format!("set local timeout failed: {error}"))?;
+    old_peer_reader
+        .stream
+        .set_read_timeout(Some(std::time::Duration::from_millis(250)))
+        .map_err(|error| format!("set old peer timeout failed: {error}"))?;
+
+    let worker = thread::spawn(move || {
+        handle_local_client_with_registrations_and_first_byte(
+            local_server,
+            &registrations,
+            dispatcher,
+            crate::peer_egress::options::LOCAL_MAGIC[0],
+        )
+    });
+
+    local_client
+        .write_all(&crate::peer_egress::options::LOCAL_MAGIC[1..])
+        .and_then(|_| local_client.write_all(b"CONNECT example.org 443\n"))
+        .map_err(|error| format!("write local connect failed: {error}"))?;
+    local_client
+        .shutdown(Shutdown::Write)
+        .map_err(|error| format!("shutdown local writer failed: {error}"))?;
+
+    let error = match worker
+        .join()
+        .map_err(|_| "local ingress worker panicked".to_string())?
+    {
+        Ok(()) => return Err("reload mismatch must fail closed".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("binding unavailable"));
+    assert!(old_peer_reader.read_secure_payload().is_err());
+    Ok(())
+}

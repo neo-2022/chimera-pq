@@ -19,10 +19,7 @@ impl std::fmt::Debug for Options {
             .field("reverse_connect", &self.reverse_connect)
             .field("allow_pool_transit", &self.allow_pool_transit)
             .field("allow_bound_transit", &self.allow_bound_transit)
-            .field(
-                "transit_lane_bindings_file",
-                &self.transit_lane_bindings_file,
-            )
+            .field("transit_lane_bindings_file", &"<redacted>")
             .field("transit_payload_bytes", &self.transit_payload_bytes)
             .field("transit_packet_number", &self.transit_packet_number)
             .field("transit_route_id", &self.transit_route_id)

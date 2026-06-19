@@ -326,6 +326,20 @@ mod tests {
     }
 
     #[test]
+    fn redacted_log_reason_maps_known_error_classes() {
+        assert_eq!(
+            redacted_log_reason("request missing host"),
+            "request_invalid_or_unsupported"
+        );
+        assert_eq!(
+            redacted_log_reason("target connect failed"),
+            "target_connect_failed"
+        );
+        assert_eq!(redacted_log_reason("connect timeout"), "connect_failed");
+        assert_eq!(redacted_log_reason("something else"), "runtime_error");
+    }
+
+    #[test]
     fn parse_peer_connect_destination_preserves_parts_without_logging_shape() {
         let destination = parse_peer_connect_destination("CONNECT example.org 443")
             .unwrap_or_else(|error| unreachable!("request must parse: {error}"));

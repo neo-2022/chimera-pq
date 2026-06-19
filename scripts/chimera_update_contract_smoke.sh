@@ -273,8 +273,8 @@ EOF
   [[ "$output" == *"reason=checksum_unreachable"* ]] || fail "missing github checksum unreachable diagnostic"
   [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "peer fallback was not reached"
   [[ -f "$installed_marker" ]] || fail "peer fallback installer was not invoked"
-  [[ "$(cat "$rerun_args")" == "-start" ]] || fail "original command was not rerun after peer update"
-  [[ "$(cat "$calls")" == $'install\nrerun:-start' ]] || fail "unexpected peer fallback call order"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after peer update"
+  [[ "$(cat "$calls")" == $'install\nrerun:-restart' ]] || fail "unexpected peer fallback call order"
   rm -rf "$tmp_dir"
 )
 
@@ -1126,8 +1126,8 @@ EOF
   [[ "$rc" -eq 0 ]] || fail "expected peer update after github outage to continue"
   [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "missing peer update diagnostic"
   [[ -f "$installed_marker" ]] || fail "fake installer was not invoked"
-  [[ "$(cat "$rerun_args")" == "-start" ]] || fail "original command was not rerun after update"
-  [[ "$(cat "$calls")" == $'meta:github\nmeta:peer\ninstall\nrerun:-start' ]] || fail "unexpected peer update call order"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after update"
+  [[ "$(cat "$calls")" == $'meta:github\nmeta:peer\ninstall\nrerun:-restart' ]] || fail "unexpected peer update call order"
   rm -rf "$tmp_dir"
 )
 
@@ -1291,7 +1291,7 @@ EOF
   [[ "$rc" -eq 0 ]] || fail "github install source unavailable should fall back to peer, got rc=$rc"
   [[ "$output" == *"reason=install_source_unavailable"* ]] || fail "missing github install source unavailable diagnostic"
   [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "peer fallback was not reached after github install source unavailable"
-  [[ "$(cat "$rerun_args")" == "-start" ]] || fail "original command was not rerun after peer fallback"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after peer fallback"
   [[ "$(cat "$CHIMERA_HOME/.chimera_release_version")" == "0.1.100" ]] || fail "peer fallback did not install expected version"
   [[ "$(cat "$CHIMERA_HOME/.chimera_release_bundle.sha256")" == "$(awk '{print $1}' "$peer_checksum")" ]] || fail "peer fallback did not install expected checksum"
   rm -rf "$tmp_dir"

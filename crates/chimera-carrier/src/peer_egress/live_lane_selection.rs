@@ -2,10 +2,8 @@ use chimera_mesh::{
     MeshMultipathFlowAction, MeshMultipathFlowKey, MeshPathPlan, plan_multipath_flow,
 };
 
-use crate::peer_egress::lane_binding::{
-    TransitLaneRegistration, transit_lane_registrations_from_mesh_plan,
-};
-use crate::peer_egress::transit_binding::TransitPathBinding;
+use crate::peer_egress::lane_binding::TransitLaneRegistration;
+use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CarrierLaneSelectionMode {
@@ -91,30 +89,16 @@ pub fn select_carrier_lane_from_mesh_plan(
         );
     };
 
-    let registrations = match transit_lane_registrations_from_mesh_plan(plan) {
-        Ok(registrations) => registrations,
-        Err(error) => {
-            return selection(
-                SelectionInput::new(
-                    MeshMultipathFlowAction::FailClosed,
-                    CarrierLaneSelectionMode::Multipath,
-                    &error,
-                    None,
-                    flow_plan.active_binding_count,
-                    &flow_plan.rebuild_reason,
-                    flow_plan.explain,
-                )
-                .with_rebuild_recommended(flow_plan.rebuild_recommended),
-            );
-        }
-    };
-
-    let binding = registrations
+    let binding = plan
+        .multipath_schedule
+        .carrier_lane_bindings
         .iter()
-        .find(|registration| {
-            registration.binding().lane_id().get() as usize == selected_lane_id + 1
-        })
-        .map(TransitLaneRegistration::binding);
+        .find(|binding| binding.lane_id == selected_lane_id)
+        .and_then(|binding| {
+            let route_id = TransitRouteId::new(binding.route_binding_id.get()).ok()?;
+            let lane_id = TransitLaneId::from_zero_based_lane_index(binding.lane_id).ok()?;
+            Some(TransitPathBinding::new(route_id, lane_id))
+        });
     let Some(binding) = binding else {
         return selection(
             SelectionInput::new(

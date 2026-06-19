@@ -434,7 +434,10 @@ pub fn start_vps_runtime(
                     let _ = peer_pool.push(peer);
                 }
                 Err(error) => {
-                    eprintln!("event=bench_peer_auth_failed reason={error}");
+                    eprintln!(
+                        "event=bench_peer_auth_failed reason_class={}",
+                        crate::peer_egress::protocol::redacted_log_reason(&error)
+                    );
                 }
             }
         }

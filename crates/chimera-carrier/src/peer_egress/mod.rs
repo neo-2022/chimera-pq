@@ -1,6 +1,7 @@
 pub(crate) mod bound_transit;
 pub mod handshake;
 pub mod lane_binding;
+pub mod live_bindings;
 pub mod live_lane_selection;
 pub mod modes;
 pub mod net;
@@ -29,6 +30,7 @@ pub use lane_binding::{
     transit_lane_registration_from_mesh_lane, transit_lane_registrations_from_mesh_plan,
     transit_path_binding_from_mesh_lane, write_transit_lane_registrations_from_mesh_plan,
 };
+pub use live_bindings::{LiveTransitLaneRegistry, load_live_transit_lane_registrations};
 pub use live_lane_selection::{
     CarrierLaneSelection, CarrierLaneSelectionMode, select_carrier_lane_from_mesh_plan,
     select_carrier_lane_from_registrations,
