@@ -26,10 +26,24 @@ fn lane_weight_score(peer: &MeshPeerState) -> u16 {
     let reliability = peer.reliability_score.max(1) as u16;
     let load_headroom = 100_u16.saturating_sub(peer.load_score as u16).max(1);
     let selected_score = peer.selection_score.max(0) as u16;
+    let performance_score = lane_performance_score(peer);
     reliability
         .saturating_add(load_headroom)
         .saturating_add(selected_score / 4)
+        .saturating_add(performance_score)
         .max(1)
+}
+
+fn lane_performance_score(peer: &MeshPeerState) -> u16 {
+    let throughput_score = peer
+        .throughput_mbps
+        .map(|mbps| (mbps.min(1_000) / 5) as u16)
+        .unwrap_or(0);
+    let latency_score = peer
+        .latency_ms
+        .map(|ms| 200_u16.saturating_sub((ms.min(1_000) / 5) as u16))
+        .unwrap_or(0);
+    throughput_score.saturating_add(latency_score)
 }
 
 fn weights_from_scores(scores: &[u16], target_pct: u8) -> Vec<u8> {
@@ -94,5 +108,46 @@ fn normalize_weights_to_target(weights: &mut [u8], target_pct: u8, min_one: bool
         let removable = weight.saturating_sub(min_value).min(remaining);
         *weight = weight.saturating_sub(removable);
         remaining = remaining.saturating_sub(removable);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::active_lane_weights;
+    use crate::model::MeshPeerState;
+
+    fn peer(latency_ms: Option<u32>, throughput_mbps: Option<u32>) -> MeshPeerState {
+        MeshPeerState {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "eu".to_string(),
+            reliability_score: 90,
+            load_score: 20,
+            latency_ms,
+            throughput_mbps,
+            selection_score: 180,
+        }
+    }
+
+    #[test]
+    fn active_lane_weights_shift_capacity_toward_faster_peer() {
+        let slow = peer(Some(250), Some(40));
+        let fast = peer(Some(30), Some(400));
+        let weights = active_lane_weights(&[&slow, &fast]);
+
+        assert_eq!(
+            weights.iter().map(|weight| u16::from(*weight)).sum::<u16>(),
+            100
+        );
+        assert!(weights[1] > weights[0]);
+    }
+
+    #[test]
+    fn active_lane_weights_preserve_evenish_legacy_without_performance() {
+        let first = peer(None, None);
+        let second = peer(None, None);
+        let weights = active_lane_weights(&[&first, &second]);
+
+        assert_eq!(weights, vec![50, 50]);
     }
 }

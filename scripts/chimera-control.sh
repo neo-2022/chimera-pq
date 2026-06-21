@@ -218,6 +218,118 @@ publish_mesh_discovery_snapshot() {
   fi
 }
 
+publish_peer_egress_transit_lane_bindings_from_control_plane() {
+  local control_plane_env_file existing_bindings_file existing_allow_bound_transit
+  local namespace local_node policy_payload traffic_profile out_file
+  local -a peer_args route_args
+  local peer_spec rc
+
+  control_plane_env_file="${CHIMERA_MESH_CONTROL_PLANE_ENV_FILE:-${CHIMERA_MESH_PRELAUNCH_ENV_FILE:-${CHIMERA_MESH_LAUNCH_ENV_FILE:-}}}"
+  if [[ -n "$control_plane_env_file" && -f "$control_plane_env_file" ]]; then
+    # shellcheck disable=SC1090
+    source "$control_plane_env_file"
+  fi
+
+  existing_bindings_file=""
+  existing_allow_bound_transit=""
+  if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
+    existing_bindings_file="$(awk -F= '
+      index($0, "CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=") == 1 {
+        print substr($0, length("CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=") + 1)
+        exit
+      }
+    ' "$PEER_EGRESS_ENV_FILE" 2>/dev/null || true)"
+    existing_allow_bound_transit="$(awk -F= '
+      index($0, "CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=") == 1 {
+        print substr($0, length("CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=") + 1)
+        exit
+      }
+    ' "$PEER_EGRESS_ENV_FILE" 2>/dev/null || true)"
+  fi
+  existing_bindings_file="$(trim_ascii "$existing_bindings_file")"
+  existing_allow_bound_transit="$(trim_ascii "$existing_allow_bound_transit")"
+  if [[ -n "$existing_bindings_file" ]]; then
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=already_configured" >&2
+    return 0
+  fi
+  if [[ ! -f "$PEER_EGRESS_ENV_FILE" ]]; then
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=peer_env_missing" >&2
+    return 0
+  fi
+
+  namespace="$(trim_ascii "${CHIMERA_MESH_NAMESPACE:-}")"
+  local_node="$(trim_ascii "${CHIMERA_MESH_LOCAL_NODE:-}")"
+  policy_payload="$(trim_ascii "${CHIMERA_MESH_POLICY_PAYLOAD:-}")"
+  traffic_profile="$(trim_ascii "${CHIMERA_MESH_TRAFFIC_PROFILE:-}")"
+  if [[ -z "$namespace" || -z "$local_node" ]]; then
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=missing_authoritative_mesh_context" >&2
+    return 0
+  fi
+  if [[ -z "$policy_payload" && -z "$traffic_profile" ]]; then
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=missing_authoritative_policy" >&2
+    return 0
+  fi
+  if [[ "${existing_allow_bound_transit:-${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT:-false}}" != "true" ]]; then
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=bound_transit_disabled" >&2
+    return 0
+  fi
+
+  peer_args=()
+  if [[ -n "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}" ]]; then
+    peer_spec="$(trim_ascii "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}")"
+    [[ -n "$peer_spec" ]] && peer_args+=("$peer_spec")
+  fi
+  if [[ -n "${CHIMERA_MESH_EXTRA_PEERS:-}" ]]; then
+    while IFS= read -r peer_spec; do
+      peer_spec="$(trim_ascii "$peer_spec")"
+      [[ -z "$peer_spec" ]] && continue
+      peer_args+=("$peer_spec")
+    done < <(printf '%s' "${CHIMERA_MESH_EXTRA_PEERS:-}" | tr ',\n' '\n\n')
+  fi
+  if [[ "${#peer_args[@]}" -eq 0 && -n "${CHIMERA_MESH_REMOTE_NODE:-}" && -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" && -n "${CHIMERA_MESH_REMOTE_REGION:-}" && -n "${CHIMERA_MESH_REMOTE_LOAD_SCORE:-}" && -n "${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE:-}" ]]; then
+    peer_args+=("${CHIMERA_MESH_REMOTE_NODE}@${CHIMERA_MESH_REMOTE_ENDPOINT}@${CHIMERA_MESH_REMOTE_REGION}@${CHIMERA_MESH_REMOTE_LOAD_SCORE}@${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE}")
+  fi
+  if [[ "${#peer_args[@]}" -eq 0 ]]; then
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=missing_authoritative_peer_list" >&2
+    return 0
+  fi
+
+  out_file="${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress-transit-lane-bindings.csv}"
+  ensure_parent_dir "$out_file"
+
+  route_args=(
+    mesh route-explain
+    --namespace "$namespace"
+    --node "$local_node"
+  )
+  if [[ -n "$policy_payload" ]]; then
+    route_args+=(--policy-payload "$policy_payload")
+  else
+    route_args+=(--traffic-profile "$traffic_profile")
+  fi
+  for peer_spec in "${peer_args[@]}"; do
+    route_args+=(--peer "$peer_spec")
+  done
+  route_args+=(--transit-lane-bindings-out "$out_file")
+
+  if run_chimera_cli "${route_args[@]}" >/dev/null 2>&1; then
+    if [[ -s "$out_file" ]]; then
+      upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE" "$out_file"
+      printf '%s\n' "peer_egress_transit_lane_bindings_publish=ok" >&2
+      return 0
+    fi
+    rm -f "$out_file"
+    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=generated_file_missing" >&2
+    return 0
+  else
+    rc=$?
+  fi
+
+  rm -f "$out_file"
+  printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=control_plane_derivation_failed exit=$rc" >&2
+  return 0
+}
+
 ensure_upstream_env_bootstrapped() {
   count_candidates_csv() {
     local raw="${1:-}"
@@ -1513,6 +1625,7 @@ site_remove() {
 site_auto_watch_run_once() {
   site_auto_discover_run >/dev/null 2>&1 || true
   site_auto_bootstrap_run >/dev/null 2>&1 || true
+  publish_peer_egress_transit_lane_bindings_from_control_plane || true
   echo "site_auto_watch_run_once=ok"
 }
 
@@ -1783,6 +1896,7 @@ start_runtime() {
   ensure_base_path
   ensure_runtime_log_paths
   ensure_upstream_env_bootstrapped
+  publish_peer_egress_transit_lane_bindings_from_control_plane || true
   if [[ -x "$RUNTIME_BOOTSTRAP_SCRIPT" ]]; then
     "$RUNTIME_BOOTSTRAP_SCRIPT" ensure-singbox >/dev/null 2>&1 || true
   fi

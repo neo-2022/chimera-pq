@@ -12,6 +12,8 @@ fn peer(node_id: &str) -> MeshPeerState {
         region: "eu".to_string(),
         reliability_score: 90,
         load_score: 10,
+        latency_ms: None,
+        throughput_mbps: None,
         selection_score: 170,
     }
 }

@@ -31,7 +31,7 @@ pub fn redacted_destination_label(host: &str, port: u16) -> String {
     hasher.update(b":");
     hasher.update(port.to_string().as_bytes());
     let digest = hasher.finalize();
-    short_hex(&digest[..8])
+    short_redaction_id(&digest[..8])
 }
 
 pub fn redacted_log_reason(error: &str) -> &'static str {
@@ -65,12 +65,12 @@ fn redaction_seed_part(state: &RandomState, label: &[u8]) -> u64 {
     hasher.finish()
 }
 
-fn short_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
+fn short_redaction_id(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 16] = b"BCDFGHJKLMNPQRST";
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
+        out.push(ALPHABET[(byte >> 4) as usize] as char);
+        out.push(ALPHABET[(byte & 0x0f) as usize] as char);
     }
     out
 }

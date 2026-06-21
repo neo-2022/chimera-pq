@@ -8,7 +8,7 @@ mod helpers;
 mod rebuild_control;
 mod redaction;
 
-use crate::{MeshMultipathLaneRole, MeshMultipathMode};
+use crate::{MeshMultipathLaneRole, MeshMultipathMode, MeshPeerPerformance};
 use helpers::{
     assert_active_weight_contract, assert_binding_matches_lane, assert_carrier_binding_contract,
     explain_has, record, request, runtime_with_peers,
@@ -161,6 +161,60 @@ fn multipath_schedule_without_route_binding_id_keeps_carrier_bindings_closed() {
         "multipath_schedule_carrier_binding_contract=planner_only_not_carrier_bound"
     ));
     assert_active_weight_contract(&plan);
+}
+
+#[test]
+fn aggregate_schedule_weights_capacity_toward_better_performance_peer() {
+    let mut runtime = runtime_with_peers(vec![
+        record("node-a-slow", "198.51.100.31:443", "eu", 20, 90),
+        record("node-z-fast", "198.51.100.32:443", "eu", 20, 90),
+    ]);
+    runtime
+        .update_peer_performance(&[
+            MeshPeerPerformance {
+                node_id: "node-a-slow".to_string(),
+                latency_ms: Some(250),
+                throughput_mbps: Some(40),
+            },
+            MeshPeerPerformance {
+                node_id: "node-z-fast".to_string(),
+                latency_ms: Some(30),
+                throughput_mbps: Some(400),
+            },
+        ])
+        .unwrap_or_else(|e| unreachable!("performance update should succeed: {e}"));
+
+    let plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            concat!(
+                "mesh_allowed_regions=eu;",
+                "mesh_multipath_mode=aggregate_buffered;",
+                "mesh_multipath_demand=normal;",
+                "mesh_max_peers=2;",
+                "mesh_max_selected_per_region=2;",
+                "mesh_route_binding_id=7101"
+            ),
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+
+    let fast_lane = plan
+        .multipath_schedule
+        .lanes
+        .iter()
+        .find(|lane| lane.peer_node_id == "node-z-fast")
+        .unwrap_or_else(|| unreachable!("fast lane should be present"));
+    let slow_lane = plan
+        .multipath_schedule
+        .lanes
+        .iter()
+        .find(|lane| lane.peer_node_id == "node-a-slow")
+        .unwrap_or_else(|| unreachable!("slow lane should be present"));
+
+    assert_eq!(plan.multipath_schedule.active_lane_count, 2);
+    assert!(fast_lane.capacity_weight_pct > slow_lane.capacity_weight_pct);
+    assert_active_weight_contract(&plan);
+    assert_carrier_binding_contract(&plan);
 }
 
 #[test]

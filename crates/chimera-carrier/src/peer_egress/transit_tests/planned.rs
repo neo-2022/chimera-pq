@@ -3,10 +3,16 @@ use chimera_session::FrameKind;
 use std::io::Write;
 
 use super::helpers::{binding, encoded_frame, tcp_pair, test_peer_pair};
-use crate::peer_egress::lane_binding::TransitLaneRegistration;
-use crate::peer_egress::live_lane_selection::select_carrier_lane_from_registrations;
+use crate::peer_egress::lane_binding::{
+    TransitLaneRegistration, transit_lane_document_from_mesh_plan,
+};
+use crate::peer_egress::live_lane_selection::{
+    select_carrier_lane_from_mesh_plan, select_carrier_lane_from_registrations,
+};
 use crate::peer_egress::transit::{
-    forward_peer_sealed_transit_with_registrations, relay_local_sealed_transit_with_registrations,
+    forward_peer_sealed_transit_with_registrations,
+    relay_local_sealed_transit_with_lane_document_and_first_byte,
+    relay_local_sealed_transit_with_registrations,
 };
 use crate::peer_egress::wire::{PeerMessage, read_peer_message};
 
@@ -15,6 +21,44 @@ fn registrations() -> Result<Vec<TransitLaneRegistration>, String> {
         TransitLaneRegistration::new(binding(91, 1), "198.51.100.91:443".to_string())?,
         TransitLaneRegistration::new(binding(91, 2), "198.51.100.92:443".to_string())?,
     ])
+}
+
+fn document() -> Result<crate::peer_egress::lane_binding::TransitLaneDocument, String> {
+    let mut runtime = chimera_mesh::MeshRuntime::bootstrap("cef-public", "seed-a")?;
+    runtime.merge_discovery(
+        "seed-b",
+        &[
+            chimera_mesh::MeshDiscoveryRecord {
+                node_id: "node-a".to_string(),
+                endpoint: "198.51.100.31:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 20,
+                reliability_score: 90,
+            },
+            chimera_mesh::MeshDiscoveryRecord {
+                node_id: "node-b".to_string(),
+                endpoint: "198.51.100.32:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 22,
+                reliability_score: 91,
+            },
+        ],
+    )?;
+    let plan = runtime.plan_path_from_dps_payload(
+        &chimera_mesh::MeshJoinRequest {
+            namespace: "cef-public".to_string(),
+            node_name: "node-client".to_string(),
+            invite_token: None,
+        },
+        concat!(
+            "mesh_allowed_regions=eu;",
+            "mesh_max_peers=2;",
+            "mesh_max_selected_per_region=2;",
+            "mesh_multipath_mode=flow_shard;",
+            "mesh_route_binding_id=7003"
+        ),
+    )?;
+    transit_lane_document_from_mesh_plan(&plan)
 }
 
 #[test]
@@ -152,6 +196,50 @@ fn planned_local_ingress_selection_dispatches_selected_lane() -> Result<(), Stri
     relay_local_sealed_transit_with_registrations(
         local_reader,
         &registrations,
+        Some(dispatcher),
+        first_byte,
+    )?;
+
+    assert_eq!(selected_peer_reader.read_secure_payload()?, first_encoded);
+    assert_eq!(selected_peer_reader.read_secure_payload()?, fin_encoded);
+    Ok(())
+}
+
+#[test]
+fn planned_local_ingress_selection_dispatches_selected_lane_from_document() -> Result<(), String> {
+    let (mut local_writer, local_reader) = tcp_pair()?;
+    let (selected_peer_writer, mut selected_peer_reader) = test_peer_pair()?;
+    let first_encoded = encoded_frame(FrameKind::Data, 813, b"planned local document payload");
+    let fin_encoded = encoded_frame(FrameKind::Fin, 814, b"");
+    let document = document()?;
+    let first_byte = first_encoded[0];
+    local_writer
+        .write_all(&first_encoded[1..])
+        .map_err(|error| format!("write local payload failed: {error}"))?;
+    local_writer
+        .write_all(&fin_encoded)
+        .map_err(|error| format!("write local fin failed: {error}"))?;
+    drop(local_writer);
+
+    let plan = document
+        .mesh_path_plan()?
+        .ok_or_else(|| "plan snapshot missing".to_string())?;
+    let key = MeshMultipathFlowKey::from_opaque_flow_bytes(first_encoded.as_slice())?;
+    let selection = select_carrier_lane_from_mesh_plan(&plan, key);
+    let binding = selection
+        .selected_binding
+        .ok_or_else(|| "selected binding missing".to_string())?;
+
+    let dispatcher = crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher();
+    dispatcher.register(binding, selected_peer_writer)?;
+    selected_peer_reader
+        .stream
+        .set_read_timeout(Some(std::time::Duration::from_millis(50)))
+        .map_err(|error| format!("set selected timeout failed: {error}"))?;
+
+    relay_local_sealed_transit_with_lane_document_and_first_byte(
+        local_reader,
+        &document,
         Some(dispatcher),
         first_byte,
     )?;

@@ -8,9 +8,9 @@ use chimera_mesh::{
 };
 
 use crate::peer_egress::bound_transit::forward_bound_peer_transit_pair;
-use crate::peer_egress::lane_binding::TransitLaneRegistration;
+use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
 use crate::peer_egress::net::tune_tcp;
-use crate::peer_egress::pool::{SharedPeerPool, UniquePeerPop};
+use crate::peer_egress::pool::SharedPeerPool;
 use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::secure_halves::{
     SecurePeerReader, SecurePeerWriter, split_secure_peer_stream,
@@ -131,7 +131,8 @@ pub fn relay_local_sealed_transit_to_next_hop(
 ) -> Result<(), String> {
     tune_tcp(&local)?;
     let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
-    let peer = pop_unbound_pool_transit_next_hop(policy, Some(peer_pool))?;
+    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
+    let peer = pop_unbound_pool_transit_next_hop(policy, Some(peer_pool), flow_key)?;
     relay_local_sealed_transit_after_first(local, peer, first)
 }
 
@@ -159,6 +160,24 @@ pub fn relay_local_sealed_transit_with_registrations(
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
     let peer = pop_registered_transit_next_hop(registrations, dispatcher, flow_key)?;
     relay_local_sealed_transit_after_first(local, peer, first)
+}
+
+pub fn relay_local_sealed_transit_with_lane_document_and_first_byte(
+    local: TcpStream,
+    document: &TransitLaneDocument,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first_byte: u8,
+) -> Result<(), String> {
+    if let Some(plan) = document.mesh_path_plan()? {
+        relay_local_sealed_transit_to_planned_next_hop(local, &plan, dispatcher, first_byte)
+    } else {
+        relay_local_sealed_transit_with_registrations(
+            local,
+            document.registrations(),
+            dispatcher,
+            first_byte,
+        )
+    }
 }
 
 fn relay_local_sealed_transit_after_first(
@@ -279,7 +298,8 @@ pub fn forward_peer_sealed_transit_to_next_hop(
     next_hops: Option<SharedPeerPool>,
     first: TransitRelayFrame,
 ) -> Result<(), String> {
-    let next_peer = pop_unbound_pool_transit_next_hop(policy, next_hops)?;
+    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
+    let next_peer = pop_unbound_pool_transit_next_hop(policy, next_hops, flow_key)?;
     forward_peer_sealed_transit_pair(source, next_peer, first)
 }
 
@@ -308,17 +328,15 @@ pub fn forward_peer_sealed_transit_with_registrations(
 fn pop_unbound_pool_transit_next_hop(
     policy: PeerTransitPolicy,
     next_hops: Option<SharedPeerPool>,
+    flow_key: MeshMultipathFlowKey,
 ) -> Result<SecurePeerStream, String> {
     if policy != PeerTransitPolicy::AllowPoolNextHop {
         return Err("sealed transit next hop denied by policy".to_string());
     }
     let pool = next_hops.ok_or_else(|| "sealed transit next hop unavailable".to_string())?;
-    match pool.try_pop_unique()? {
-        UniquePeerPop::Ready(peer) => Ok(peer),
-        UniquePeerPop::Unavailable => Err("sealed transit next hop unavailable".to_string()),
-        UniquePeerPop::Ambiguous => {
-            Err("sealed transit next hop ambiguous without path binding".to_string())
-        }
+    match pool.try_pop_for_flow_key(flow_key)? {
+        Some(peer) => Ok(peer),
+        None => Err("sealed transit next hop unavailable".to_string()),
     }
 }
 

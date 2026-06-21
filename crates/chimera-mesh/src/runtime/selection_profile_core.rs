@@ -27,10 +27,15 @@ pub(super) fn resolve_path_profile(
 }
 
 pub(super) fn score_for_profile(peer: &MeshPeerState, profile: MeshPathProfile) -> i32 {
+    let performance_score = peer_performance_score(peer);
     match profile {
-        MeshPathProfile::Fast => (peer.reliability_score as i32) - (peer.load_score as i32 * 2),
-        MeshPathProfile::Balanced => peer_priority(peer),
-        MeshPathProfile::Resilient => (peer.reliability_score as i32 * 3) - peer.load_score as i32,
+        MeshPathProfile::Fast => (peer.reliability_score as i32)
+            .saturating_sub(peer.load_score as i32 * 2)
+            .saturating_add(performance_score.saturating_mul(2)),
+        MeshPathProfile::Balanced => peer_priority(peer).saturating_add(performance_score),
+        MeshPathProfile::Resilient => (peer.reliability_score as i32 * 3)
+            .saturating_sub(peer.load_score as i32)
+            .saturating_add(performance_score / 2),
     }
 }
 
@@ -55,4 +60,55 @@ pub(super) fn runtime_peer_signal_averages(peers: &BTreeMap<String, MeshPeerStat
     let avg_load = (sum_load / count) as u8;
     let avg_reliability = (sum_reliability / count) as u8;
     (avg_load, avg_reliability)
+}
+
+fn peer_performance_score(peer: &MeshPeerState) -> i32 {
+    let throughput_score = peer
+        .throughput_mbps
+        .map(|mbps| mbps.min(1_000) as i32 / 5)
+        .unwrap_or(0);
+    let latency_score = peer
+        .latency_ms
+        .map(|ms| 200_i32.saturating_sub(ms.min(1_000) as i32 / 5))
+        .unwrap_or(0);
+    throughput_score.saturating_add(latency_score)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MeshPathProfile, MeshPeerState, score_for_profile};
+
+    fn peer(latency_ms: Option<u32>, throughput_mbps: Option<u32>) -> MeshPeerState {
+        MeshPeerState {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "eu".to_string(),
+            reliability_score: 90,
+            load_score: 20,
+            latency_ms,
+            throughput_mbps,
+            selection_score: 0,
+        }
+    }
+
+    #[test]
+    fn fast_profile_uses_explicit_performance_signals() {
+        let slow = peer(Some(250), Some(40));
+        let fast = peer(Some(30), Some(400));
+
+        assert!(
+            score_for_profile(&fast, MeshPathProfile::Fast)
+                > score_for_profile(&slow, MeshPathProfile::Fast)
+        );
+    }
+
+    #[test]
+    fn missing_performance_preserves_legacy_balanced_score() {
+        let peer = peer(None, None);
+
+        assert_eq!(
+            score_for_profile(&peer, MeshPathProfile::Balanced),
+            (peer.reliability_score as i32 * 2) - peer.load_score as i32
+        );
+    }
 }

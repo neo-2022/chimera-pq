@@ -56,7 +56,32 @@ pub struct MeshPeerState {
     pub region: String,
     pub reliability_score: u8,
     pub load_score: u8,
+    pub latency_ms: Option<u32>,
+    pub throughput_mbps: Option<u32>,
     pub selection_score: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeshPeerPerformance {
+    pub node_id: String,
+    pub latency_ms: Option<u32>,
+    pub throughput_mbps: Option<u32>,
+}
+
+impl MeshPeerPerformance {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_label_field(&self.node_id, "mesh peer performance node_id")?;
+        if matches!(self.latency_ms, Some(0)) {
+            return Err("mesh peer performance latency_ms must be > 0".to_string());
+        }
+        if matches!(self.throughput_mbps, Some(0)) {
+            return Err("mesh peer performance throughput_mbps must be > 0".to_string());
+        }
+        if self.latency_ms.is_none() && self.throughput_mbps.is_none() {
+            return Err("mesh peer performance has no signal".to_string());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

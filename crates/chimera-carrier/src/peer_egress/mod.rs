@@ -1,6 +1,7 @@
 pub(crate) mod bound_transit;
 pub mod handshake;
 pub mod lane_binding;
+pub(crate) mod lane_document;
 pub mod live_bindings;
 pub mod live_lane_selection;
 pub mod modes;
@@ -28,7 +29,8 @@ pub use lane_binding::{
     TransitLaneRegistration, load_transit_lane_registrations, parse_transit_lane_registrations,
     render_transit_lane_registrations, render_transit_lane_registrations_from_mesh_plan,
     transit_lane_registration_from_mesh_lane, transit_lane_registrations_from_mesh_plan,
-    transit_path_binding_from_mesh_lane, write_transit_lane_registrations_from_mesh_plan,
+    transit_path_binding_from_mesh_lane, write_transit_lane_document_from_mesh_plan,
+    write_transit_lane_registrations_from_mesh_plan,
 };
 pub use live_bindings::{LiveTransitLaneRegistry, load_live_transit_lane_registrations};
 pub use live_lane_selection::{

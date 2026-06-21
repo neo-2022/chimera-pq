@@ -166,11 +166,14 @@ fn peer_sealed_transit_fails_closed_with_empty_pool() -> Result<(), String> {
 }
 
 #[test]
-fn peer_sealed_transit_rejects_ambiguous_pool_next_hop() -> Result<(), String> {
+fn peer_sealed_transit_uses_flow_key_to_select_pool_next_hop() -> Result<(), String> {
     let (mut source_writer, source_reader) = test_peer_pair()?;
     let (first_next_writer, mut first_next_reader) = test_peer_pair()?;
     let (second_next_writer, mut second_next_reader) = test_peer_pair()?;
     let first_encoded = encoded_frame(FrameKind::Data, 451, b"closed transit payload");
+    let fin_encoded = encoded_frame(FrameKind::Fin, 452, b"");
+    let reverse_encoded = encoded_frame(FrameKind::Data, 453, b"closed reverse payload");
+    let reverse_fin_encoded = encoded_frame(FrameKind::Fin, 454, b"");
     source_writer.write_secure_payload(&first_encoded)?;
     let mut source_reader = source_reader;
     let first_frame = match read_peer_message(
@@ -192,18 +195,46 @@ fn peer_sealed_transit_rejects_ambiguous_pool_next_hop() -> Result<(), String> {
         .set_read_timeout(Some(std::time::Duration::from_millis(50)))
         .map_err(|error| format!("set second transit timeout failed: {error}"))?;
 
-    let error = match forward_peer_sealed_transit_to_next_hop(
+    let flow_key =
+        chimera_mesh::MeshMultipathFlowKey::from_opaque_flow_bytes(first_frame.sealed_bytes())?;
+    let expected_slot = flow_key.select_slot_index(2)?;
+    source_writer.write_secure_payload(&fin_encoded)?;
+
+    match expected_slot {
+        0 => {
+            first_next_reader.write_secure_payload(&reverse_encoded)?;
+            first_next_reader.write_secure_payload(&reverse_fin_encoded)?;
+        }
+        1 => {
+            second_next_reader.write_secure_payload(&reverse_encoded)?;
+            second_next_reader.write_secure_payload(&reverse_fin_encoded)?;
+        }
+        _ => return Err("unexpected slot index".to_string()),
+    }
+
+    forward_peer_sealed_transit_to_next_hop(
         source_reader,
         PeerTransitPolicy::AllowPoolNextHop,
         Some(pool),
         first_frame,
-    ) {
-        Ok(()) => return Err("ambiguous pool transit next hop must fail".to_string()),
-        Err(error) => error,
-    };
+    )?;
 
-    assert!(error.contains("ambiguous"));
-    assert!(first_next_reader.read_secure_payload().is_err());
-    assert!(second_next_reader.read_secure_payload().is_err());
+    match expected_slot {
+        0 => {
+            assert_eq!(first_next_reader.read_secure_payload()?, first_encoded);
+            assert_eq!(first_next_reader.read_secure_payload()?, fin_encoded);
+            assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
+            assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+            assert!(second_next_reader.read_secure_payload().is_err());
+        }
+        1 => {
+            assert!(first_next_reader.read_secure_payload().is_err());
+            assert_eq!(second_next_reader.read_secure_payload()?, first_encoded);
+            assert_eq!(second_next_reader.read_secure_payload()?, fin_encoded);
+            assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
+            assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+        }
+        _ => return Err("unexpected slot index".to_string()),
+    }
     Ok(())
 }

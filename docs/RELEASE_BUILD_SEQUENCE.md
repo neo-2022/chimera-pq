@@ -29,10 +29,15 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera.sh`
    - `chimera-pq-release.tar.gz`
    - `chimera-pq-release.tar.gz.sha256`
-9. Verify the peer-update fallback contract remains update-only:
+9. After the GitHub release is live, install that exact release on the
+   notebook/VPS mirror nodes and publish them with
+   `chimera-bootstrap serve-release --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" --listen 0.0.0.0:18179 --base-url http://node.example:18179`
+   or an equivalent trusted base URL for the stand.
+10. Verify the peer-update fallback contract remains update-only:
    - `chimera-sh` checks GitHub Latest first;
-   - peer fallback is tried only after GitHub Latest is unreachable, not after
-     invalid GitHub metadata/checksum/source;
+   - peer fallback is tried after GitHub Latest if it is unreachable, or if it
+     is valid but not newer; it is not tried after invalid GitHub metadata/
+     checksum/source;
    - configured peer URLs are tried only as fallback for already installed
      CHIMERA;
    - `chimera-sh -connect <peer>` uses only that selected peer's
@@ -45,13 +50,13 @@ Use this sequence for every bundle or bootstrap update.
    - if no trusted update source is reachable, CHIMERA keeps the installed
      version and emits `chimera_update=unavailable`;
    - peer update evidence is not used as first-install stand proof.
-10. Verify the start contract before release:
+11. Verify the start contract before release:
    - `chimera-sh -start` prepares user-cache log targets before the systemd
      user start path;
    - `chimera-sh -start` returns non-zero if either node or transparent runtime
      service fails its active check;
    - false `start_status=ok` is a release-blocking regression.
-11. Smoke-test the install flow on the notebook/VPS only through the GitHub
+12. Smoke-test the install flow on the notebook/VPS only through the GitHub
    one-command bootstrap.
    - the command must be wrapped with `bash -o pipefail -c`
    - the outer bootstrap download must use `curl --disable -fsSL --retry 3

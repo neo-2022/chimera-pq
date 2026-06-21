@@ -5,7 +5,10 @@ use std::thread;
 use std::time::Duration;
 
 use crate::peer_egress::handshake::establish_secure_peer_client;
-use crate::peer_egress::lane_binding::{TransitLaneRegistration, load_transit_lane_registrations};
+use crate::peer_egress::lane_binding::{
+    TransitLaneDocument, TransitLaneRegistration, load_transit_lane_document,
+    load_transit_lane_registrations,
+};
 use crate::peer_egress::net::{connect_tcp, tune_tcp};
 use crate::peer_egress::options::Options;
 use crate::peer_egress::protocol::redacted_log_reason;
@@ -15,7 +18,7 @@ use std::io::Write;
 
 const LIVE_TRANSIT_LANE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const LIVE_TRANSIT_LANE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
-type LiveTransitLaneSnapshot = Result<Arc<Vec<TransitLaneRegistration>>, String>;
+type LiveTransitLaneSnapshot = Result<Arc<TransitLaneDocument>, String>;
 
 #[derive(Clone)]
 pub struct LiveTransitLaneRegistry {
@@ -28,7 +31,7 @@ impl LiveTransitLaneRegistry {
         dispatcher: SharedTransitNextHopDispatcher,
     ) -> Result<Self, String> {
         let initial =
-            load_live_transit_lane_registrations(options.transit_lane_bindings_file.as_deref())?;
+            load_live_transit_lane_document(options.transit_lane_bindings_file.as_deref())?;
         let snapshot = Arc::new(Mutex::new(Ok(Arc::new(initial.clone()))));
         let registry = Self {
             snapshot: snapshot.clone(),
@@ -44,13 +47,13 @@ impl LiveTransitLaneRegistry {
                 worker_options,
                 dispatcher,
                 snapshot,
-                initial,
+                initial.registrations().to_vec(),
             );
         });
         Ok(registry)
     }
 
-    pub fn snapshot(&self) -> Result<Arc<Vec<TransitLaneRegistration>>, String> {
+    pub fn snapshot(&self) -> Result<Arc<TransitLaneDocument>, String> {
         self.snapshot
             .lock()
             .map_err(|_| "sealed transit lane runtime snapshot lock poisoned".to_string())?
@@ -70,6 +73,15 @@ pub fn load_live_transit_lane_registrations(
     match transit_lane_bindings_file {
         Some(path) => load_transit_lane_registrations(path),
         None => Ok(Vec::new()),
+    }
+}
+
+pub fn load_live_transit_lane_document(
+    transit_lane_bindings_file: Option<&str>,
+) -> Result<TransitLaneDocument, String> {
+    match transit_lane_bindings_file {
+        Some(path) => load_transit_lane_document(path),
+        None => Ok(TransitLaneDocument::new(Vec::new(), None)),
     }
 }
 
@@ -97,12 +109,12 @@ fn watch_live_transit_lane_registrations(
 
     loop {
         thread::sleep(LIVE_TRANSIT_LANE_POLL_INTERVAL);
-        match load_transit_lane_registrations(&path) {
-            Ok(registrations) => {
-                replace_live_transit_lane_snapshot(&snapshot, Ok(registrations.clone()));
+        match load_transit_lane_document(&path) {
+            Ok(document) => {
+                replace_live_transit_lane_snapshot(&snapshot, Ok(document.clone()));
                 reconcile_live_transit_lane_workers(
                     &mut workers,
-                    &registrations,
+                    document.registrations(),
                     &dispatcher,
                     |registration, cancel| {
                         spawn_live_transit_lane_worker(
@@ -124,13 +136,13 @@ fn watch_live_transit_lane_registrations(
 
 fn replace_live_transit_lane_snapshot(
     snapshot: &Arc<Mutex<LiveTransitLaneSnapshot>>,
-    next: Result<Vec<TransitLaneRegistration>, String>,
+    next: Result<TransitLaneDocument, String>,
 ) {
     let Ok(mut guard) = snapshot.lock() else {
         return;
     };
     *guard = match next {
-        Ok(registrations) => Ok(Arc::new(registrations)),
+        Ok(document) => Ok(Arc::new(document)),
         Err(error) => Err(error),
     };
 }
@@ -256,7 +268,7 @@ fn wait_until_transit_lane_claimed(
 #[cfg(test)]
 mod tests {
     use super::{
-        LiveTransitLaneWorker, clear_live_transit_lane_workers,
+        LiveTransitLaneWorker, TransitLaneDocument, clear_live_transit_lane_workers,
         reconcile_live_transit_lane_workers, replace_live_transit_lane_snapshot,
     };
     use crate::peer_egress::lane_binding::TransitLaneRegistration;
@@ -362,6 +374,53 @@ mod tests {
     }
 
     #[test]
+    fn worker_reconcile_keeps_same_binding_without_spawn_churn() -> Result<(), String> {
+        let dispatcher = Arc::new(TransitNextHopDispatcher::default());
+        let registration = registration(8, 2, "198.51.100.8:443")?;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut workers = BTreeMap::from([(
+            registration.binding(),
+            LiveTransitLaneWorker {
+                registration: registration.clone(),
+                cancel: cancel.clone(),
+            },
+        )]);
+        dispatcher.register(registration.binding(), test_peer_stream()?)?;
+        let spawned = Arc::new(Mutex::new(Vec::new()));
+        let spawned_log = spawned.clone();
+
+        reconcile_live_transit_lane_workers(
+            &mut workers,
+            std::slice::from_ref(&registration),
+            &dispatcher,
+            move |registration, _cancel| {
+                spawned_log
+                    .lock()
+                    .unwrap_or_else(|_| unreachable!("spawn log must lock"))
+                    .push(registration.clone());
+            },
+        );
+
+        assert!(!cancel.load(Ordering::Relaxed));
+        assert!(dispatcher.contains_binding(registration.binding())?);
+        assert_eq!(workers.len(), 1);
+        assert_eq!(
+            workers
+                .get(&registration.binding())
+                .ok_or_else(|| "worker missing".to_string())?
+                .registration,
+            registration
+        );
+        assert!(
+            spawned
+                .lock()
+                .unwrap_or_else(|_| unreachable!("spawn log must lock"))
+                .is_empty()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn clear_workers_evicts_registered_bindings_and_sets_cancel() -> Result<(), String> {
         let dispatcher = Arc::new(TransitNextHopDispatcher::default());
         let registration = registration(11, 2, "198.51.100.11:443")?;
@@ -385,11 +444,10 @@ mod tests {
 
     #[test]
     fn reload_error_replaces_snapshot_with_fail_closed_error() -> Result<(), String> {
-        let snapshot = Arc::new(Mutex::new(Ok(Arc::new(vec![registration(
-            19,
-            3,
-            "198.51.100.19:443",
-        )?]))));
+        let snapshot = Arc::new(Mutex::new(Ok(Arc::new(TransitLaneDocument::new(
+            vec![registration(19, 3, "198.51.100.19:443")?],
+            None,
+        )))));
 
         replace_live_transit_lane_snapshot(
             &snapshot,

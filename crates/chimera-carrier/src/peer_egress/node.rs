@@ -5,8 +5,8 @@ use std::time::Duration;
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
 use crate::peer_egress::modes::{
-    handle_local_client_with_peer_pool_and_first_byte,
-    handle_local_client_with_registrations_and_first_byte, outbound_peer_worker_with_next_hop,
+    handle_local_client_with_lane_document_and_first_byte,
+    handle_local_client_with_peer_pool_and_first_byte, outbound_peer_worker_with_next_hop,
 };
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
@@ -15,7 +15,8 @@ use crate::peer_egress::protocol::redacted_log_reason;
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
 use crate::peer_egress::transit::{
     BoundPeerTransitPolicy, PeerTransitPolicy, relay_local_bound_sealed_transit_to_next_hop,
-    relay_local_sealed_transit_to_next_hop, relay_local_sealed_transit_with_registrations,
+    relay_local_sealed_transit_to_next_hop,
+    relay_local_sealed_transit_with_lane_document_and_first_byte,
 };
 use crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC;
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
@@ -73,7 +74,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
     let transit_dispatcher = new_shared_transit_dispatcher();
     let live_transit_lane_registry =
         LiveTransitLaneRegistry::start(&options, transit_dispatcher.clone())?;
-    let ingress_pool = peer_pool.clone();
+    let peer_ingress_pool = peer_pool.clone();
     thread::spawn(move || {
         for incoming in peer_listener.incoming() {
             let Ok(mut stream) = incoming else {
@@ -90,7 +91,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
             {
                 Ok(peer) => {
                     eprintln!("event=weave_peer_ingress_authenticated");
-                    if let Err(error) = ingress_pool.push(peer) {
+                    if let Err(error) = peer_ingress_pool.push(peer) {
                         eprintln!(
                             "event=weave_peer_pool_push_failed reason_class={}",
                             redacted_log_reason(&error)
@@ -162,7 +163,9 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 let pool_transit_policy = PeerTransitPolicy::from_bool(options.allow_pool_transit);
                 thread::spawn(move || {
                     let result = match live_transit_lane_registry.snapshot() {
-                        Ok(transit_lane_registrations) if transit_lane_registrations.is_empty() => {
+                        Ok(transit_lane_document)
+                            if transit_lane_document.registrations().is_empty() =>
+                        {
                             relay_local_sealed_transit_to_next_hop(
                                 local,
                                 pool_transit_policy,
@@ -170,10 +173,10 @@ pub fn run_node(options: Options) -> Result<(), String> {
                                 first[0],
                             )
                         }
-                        Ok(transit_lane_registrations) => {
-                            relay_local_sealed_transit_with_registrations(
+                        Ok(transit_lane_document) => {
+                            relay_local_sealed_transit_with_lane_document_and_first_byte(
                                 local,
-                                transit_lane_registrations.as_slice(),
+                                &transit_lane_document,
                                 Some(transit_dispatcher),
                                 first[0],
                             )
@@ -220,15 +223,17 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 let transit_dispatcher = transit_dispatcher.clone();
                 thread::spawn(move || {
                     let result = match live_transit_lane_registry.snapshot() {
-                        Ok(transit_lane_registrations) if transit_lane_registrations.is_empty() => {
+                        Ok(transit_lane_document)
+                            if transit_lane_document.registrations().is_empty() =>
+                        {
                             handle_local_client_with_peer_pool_and_first_byte(
                                 local, peer_pool, first[0],
                             )
                         }
-                        Ok(transit_lane_registrations) => {
-                            handle_local_client_with_registrations_and_first_byte(
+                        Ok(transit_lane_document) => {
+                            handle_local_client_with_lane_document_and_first_byte(
                                 local,
-                                transit_lane_registrations.as_slice(),
+                                &transit_lane_document,
                                 transit_dispatcher,
                                 first[0],
                             )

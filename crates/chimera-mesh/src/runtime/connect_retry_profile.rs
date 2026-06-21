@@ -65,6 +65,8 @@ mod tests {
             region: "eu".to_string(),
             load_score: 10,
             reliability_score: 90,
+            latency_ms: None,
+            throughput_mbps: None,
             selection_score: 180,
         }
     }

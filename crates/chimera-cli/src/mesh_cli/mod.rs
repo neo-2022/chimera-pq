@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use chimera_carrier::peer_egress::write_transit_lane_registrations_from_mesh_plan;
+use chimera_carrier::peer_egress::write_transit_lane_document_from_mesh_plan;
 use chimera_mesh::{
     MeshFailoverEvent, MeshJoinRequest, MeshPathPlan, MeshPathPolicy, MeshPeerHealth,
     MeshPeerTablePolicy, MeshRuntime,
@@ -296,7 +296,7 @@ fn mesh_route_explain_command(usage: &str, args: &[String]) -> i32 {
 
     if let Some(path) = options.transit_lane_bindings_out_path.as_deref()
         && let Err(error) =
-            write_transit_lane_registrations_from_mesh_plan(transit_lane_bindings_export_plan, path)
+            write_transit_lane_document_from_mesh_plan(transit_lane_bindings_export_plan, path)
     {
         return emit_route_explain_error(&options, STAGE_TRANSIT_LANE_BINDINGS_EXPORT, &error);
     }

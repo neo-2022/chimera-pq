@@ -36,6 +36,8 @@ impl MeshRuntime {
                     region: record.region.clone(),
                     reliability_score: record.reliability_score,
                     load_score: record.load_score,
+                    latency_ms: None,
+                    throughput_mbps: None,
                     selection_score: 0,
                 },
             );

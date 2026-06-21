@@ -80,7 +80,10 @@ fn route_explain_exports_transit_lane_bindings_from_dps_plan() {
     let body = fs::read_to_string(&out).unwrap_or_else(|error| unreachable!("{error}"));
 
     assert_eq!(rc, 0);
-    assert!(body.starts_with("# route_id,lane_index,endpoint\n"));
+    assert!(body.starts_with("# chimera_transit_lane_document=v1\n"));
+    assert!(body.contains("# chimera_plan_snapshot=v1"));
+    assert!(body.contains("# chimera_plan_namespace=cef-public"));
+    assert!(body.contains("# chimera_plan_mode="));
     assert!(body.contains("7009,0,"));
     assert!(body.contains("7009,1,"));
     assert!(body.contains("198.51.100.1:443"));
@@ -279,4 +282,46 @@ fn route_explain_transit_lane_bindings_export_does_not_persist_on_late_failover_
 
     assert_eq!(rc, 2);
     assert!(!lane_out.exists());
+}
+
+#[test]
+fn route_explain_lane_bindings_document_round_trips_snapshot() {
+    let out = temp_out_file("route_explain_lane_bindings_document_round_trip");
+    let args = vec![
+        "--namespace".to_string(),
+        "cef-public".to_string(),
+        "--node".to_string(),
+        "node-client".to_string(),
+        "--policy-payload".to_string(),
+        concat!(
+            "mesh_allowed_regions=eu;",
+            "mesh_multipath_mode=flow_shard;",
+            "mesh_route_binding_id=7014"
+        )
+        .to_string(),
+        "--peer".to_string(),
+        "n1@198.51.100.41:443@eu@20@90".to_string(),
+        "--peer".to_string(),
+        "n2@198.51.100.42:443@eu@25@91".to_string(),
+        "--transit-lane-bindings-out".to_string(),
+        out.to_string_lossy().to_string(),
+    ];
+
+    let rc = super::mesh_command("usage", Some("route-explain"), &args);
+    let body = fs::read_to_string(&out).unwrap_or_else(|error| unreachable!("{error}"));
+    let document = chimera_carrier::peer_egress::lane_binding::parse_transit_lane_document(&body)
+        .unwrap_or_else(|error| unreachable!("lane document should parse: {error}"));
+    let plan = document
+        .mesh_path_plan()
+        .unwrap_or_else(|error| unreachable!("document should expose plan: {error}"))
+        .unwrap_or_else(|| unreachable!("plan snapshot missing"));
+
+    assert_eq!(rc, 0);
+    assert_eq!(plan.namespace, "cef-public");
+    assert_eq!(
+        plan.multipath_schedule.route_binding_id.map(|id| id.get()),
+        Some(7014)
+    );
+    assert_eq!(document.registrations().len(), 2);
+    let _ = fs::remove_file(out);
 }

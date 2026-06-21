@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::model::{
     MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerState, peer_priority,
+    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, peer_priority,
 };
 use crate::multipath_model::{MeshMultipathMode, MeshMultipathSchedule};
 use crate::policy::{MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode};
@@ -22,6 +22,7 @@ mod join_mode;
 mod multipath_demand;
 mod multipath_flow;
 mod multipath_lane_admission;
+mod multipath_rebuild_bridge;
 mod multipath_rebuild_control;
 mod multipath_rebuild_model;
 mod multipath_schedule;
@@ -39,6 +40,7 @@ mod payload_utils;
 mod peer_discovery;
 mod peer_health_lifecycle;
 mod peer_maintenance;
+mod peer_performance;
 mod plan_dps_adaptation;
 mod plan_ops;
 mod preemptive_antiflap;
@@ -408,5 +410,13 @@ impl MeshRuntime {
 
     fn status_explain_from_report(&self, report: &MeshRuntimeStatusReport) -> Vec<String> {
         build_status_explain(self, report)
+    }
+
+    pub(super) fn rebuild_plan_snapshot_from_runtime_state(
+        &self,
+        join_mode: MeshJoinMode,
+        policy: &MeshPathPolicy,
+    ) -> Result<MeshPathPlan, String> {
+        path_planner::build_plan_from_runtime_state(self, join_mode, policy)
     }
 }

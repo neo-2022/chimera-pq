@@ -1,5 +1,6 @@
 use crate::{
-    MeshDiscoveryRecord, MeshJoinRequest, MeshPathPolicy, MeshPeerTablePolicy, MeshRuntime,
+    MeshDiscoveryRecord, MeshJoinRequest, MeshPathPolicy, MeshPathProfile, MeshPeerPerformance,
+    MeshPeerTablePolicy, MeshRuntime,
 };
 
 #[test]
@@ -129,4 +130,70 @@ fn peer_snapshot_is_deterministic_by_node_id() {
             "node-c".to_string()
         ]
     );
+}
+
+#[test]
+fn fast_profile_prefers_peer_with_better_performance_telemetry() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-a-slow".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-z-fast".to_string(),
+            endpoint: "198.51.100.11:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    assert!(
+        runtime
+            .update_peer_performance(&[
+                MeshPeerPerformance {
+                    node_id: "node-a-slow".to_string(),
+                    latency_ms: Some(250),
+                    throughput_mbps: Some(40),
+                },
+                MeshPeerPerformance {
+                    node_id: "node-z-fast".to_string(),
+                    latency_ms: Some(30),
+                    throughput_mbps: Some(400),
+                },
+            ])
+            .is_ok()
+    );
+
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let policy = MeshPathPolicy {
+        allowed_regions: vec!["eu".to_string()],
+        blocked_node_ids: Vec::new(),
+        require_min_reliability: 70,
+        max_load_score: 60,
+        max_peers: 1,
+        prefer_region_diversity: false,
+        max_selected_per_region: 1,
+        min_distinct_regions: 1,
+        path_profile_override: Some(MeshPathProfile::Fast),
+        multipath_mode: None,
+        multipath_demand: None,
+        connect_fallback_ports: vec![443, 8443],
+    };
+
+    let plan = runtime
+        .plan_path(&req, &policy)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(plan.selected_peers[0].node_id, "node-z-fast");
+    assert_eq!(plan.selected_peers[0].latency_ms, Some(30));
+    assert_eq!(plan.selected_peers[0].throughput_mbps, Some(400));
 }

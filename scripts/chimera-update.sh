@@ -6,6 +6,9 @@ UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC="${CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_S
 UPDATE_DOWNLOAD_MAX_TIME_SEC="${CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC:-8}"
 UPDATE_DOWNLOAD_RETRIES="${CHIMERA_UPDATE_DOWNLOAD_RETRIES:-0}"
 source "$ROOT_DIR/scripts/chimera-update-runtime-state.sh"
+source "$ROOT_DIR/scripts/chimera-update-rerun.sh"
+
+CHIMERA_UPDATE_SOURCE_NOT_NEWER_RC=4
 
 release_version_to_sortable() {
   local v="${1:-0.0.0}"
@@ -362,8 +365,6 @@ install_update_from_release_metadata() {
 
   if is_remote_newer "$local_version" "$remote_version"; then
     remote_newer=1
-  elif [[ "$local_version" != "$remote_version" ]]; then
-    return 0
   fi
 
   if remote_sha="$(remote_archive_sha256 "$remote_archive_url" "$remote_checksum_url")"; then
@@ -387,15 +388,20 @@ install_update_from_release_metadata() {
   fi
 
   if [[ "$remote_newer" -eq 0 ]]; then
-    if [[ -z "$local_sha" ]]; then
-      echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=none latest_sha=$remote_sha action=block reason=local_checksum_missing" >&2
-      return 3
+    if [[ "$local_version" == "$remote_version" ]]; then
+      if [[ -z "$local_sha" ]]; then
+        echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=none latest_sha=$remote_sha action=block reason=local_checksum_missing" >&2
+        return 3
+      fi
+      if [[ "$local_sha" != "$remote_sha" ]]; then
+        echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=$local_sha latest_sha=$remote_sha action=block reason=same_version_checksum_mismatch" >&2
+        return 3
+      fi
+      echo "chimera_update=source_current source=$source_name current_version=$local_version latest_version=$remote_version current_sha=$local_sha latest_sha=$remote_sha action=continue reason=source_not_newer" >&2
+    else
+      echo "chimera_update=source_stale source=$source_name current_version=$local_version latest_version=$remote_version current_sha=${local_sha:-none} latest_sha=$remote_sha action=continue reason=source_not_newer" >&2
     fi
-    if [[ "$local_sha" != "$remote_sha" ]]; then
-      echo "chimera_update=source_inconsistent source=$source_name current_version=$local_version latest_version=$remote_version current_sha=$local_sha latest_sha=$remote_sha action=block reason=same_version_checksum_mismatch" >&2
-      return 3
-    fi
-    return 0
+    return "$CHIMERA_UPDATE_SOURCE_NOT_NEWER_RC"
   fi
 
   installer="$ROOT_DIR/scripts/install_release.sh"
@@ -428,20 +434,6 @@ install_update_from_release_metadata() {
   fi
 
   return 3
-}
-
-prepare_update_rerun_args() {
-  local -a rerun_args=("$@")
-  case "${rerun_args[0]:-}" in
-    -start|start)
-      rerun_args[0]="-restart"
-      ;;
-  esac
-  printf '%s\n' "${rerun_args[@]}"
-}
-
-rerun_after_update() {
-  exec "$0" "$@"
 }
 
 try_update_from_bootstrap_source() {
@@ -501,6 +493,8 @@ auto_update_if_needed() {
     0)
       return 0
       ;;
+    4)
+      ;;
     2)
       update_source_unavailable=1
       ;;
@@ -520,6 +514,8 @@ auto_update_if_needed() {
     case "$update_rc" in
       0)
         return 0
+        ;;
+      4)
         ;;
       2)
         update_source_unavailable=1

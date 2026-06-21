@@ -218,8 +218,13 @@ Peer update fallback:
 
 - GitHub Release/Latest remains the primary source for first install and stand
   proof.
-- If GitHub is unavailable during `start`, `restart`, `mesh`, or `connect`,
-  an already-installed CHIMERA can try trusted peer bootstrap URLs from:
+- After a successful GitHub publish, refresh the notebook/VPS mirror nodes to
+  the same release tree and serve them with `chimera-bootstrap serve-release`
+  so peers can update from an already-installed Chimera when GitHub is
+  unreachable.
+- If GitHub is unavailable or returns a valid but not newer release during
+  `start`, `restart`, `mesh`, or `connect`, an already-installed CHIMERA can
+  try trusted peer bootstrap URLs from:
   - `CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS`
   - `${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_peer_bootstrap_urls.list`
   For `chimera-sh -connect <peer>`, peer fallback is narrowed to the
@@ -235,9 +240,11 @@ Peer update fallback:
   The update still downloads the archive and checksum, verifies that metadata
   sha equals the checksum file before extraction, writes installed
   version/checksum metadata, and re-runs the original command after install.
-- Peer fallback is allowed only when GitHub Latest is unreachable. If GitHub
-  responds with invalid metadata, bad version, invalid checksum, or an
-  inconsistent source, CHIMERA fails closed and does not try a peer substitute.
+- Peer fallback is allowed when GitHub Latest is unreachable or valid but not
+  newer. If GitHub responds with invalid metadata, bad version, invalid
+  checksum, or an inconsistent source, CHIMERA fails closed and does not try a
+  peer substitute. If GitHub responds with a valid but not newer release,
+  CHIMERA continues to trusted peer sources instead of stopping there.
 - If GitHub and all trusted peers are unreachable, CHIMERA keeps the installed
   version and emits `chimera_update=unavailable`; network outage alone is not
   a release block.
