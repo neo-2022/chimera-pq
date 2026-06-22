@@ -41,7 +41,7 @@ Rejected:
 - Any classification, scheduling or logging based on transit payload contents.
 - Any public raw peer ID, endpoint, route binding ID, token, password or payload.
 - Any claim that route-explain proves real TUN/datapath/transit/rollback.
-- Any laptop/VPS proof through `scp`, `rsync`, local tarball, `cargo run`,
+- Any side_b/SIDE_A proof through `scp`, `rsync`, local tarball, `cargo run`,
   `git clone` or local PC runtime.
 
 ## Source Evidence
@@ -80,7 +80,7 @@ Required next evidence:
 
 - commit and tag next release;
 - publish GitHub Release/Latest with required assets;
-- update laptop and VPS using only the bounded GitHub one-command bootstrap;
+- update side_b and SIDE_A using only the bounded GitHub one-command bootstrap;
 - verify installed version/checksum;
 - verify installed `route-explain` includes
   `multipath_schedule_lane_admission_*` fields and redaction markers.

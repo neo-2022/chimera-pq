@@ -12,8 +12,8 @@ path over SSH.
 
 Authorized stand hosts:
 
-- laptop: authorized laptop SSH target, redacted in public proof
-- VPS: authorized VPS SSH target, redacted in public proof
+- side_b: authorized side_b SSH target, redacted in public proof
+- SIDE_A: authorized SIDE_A SSH target, redacted in public proof
 
 The stand install/update command used GitHub Release/Latest only:
 
@@ -34,7 +34,7 @@ ANALYSIS -> PLAN -> TEAM_CRITIQUE -> IMPLEMENTATION -> TEAM_CHECK -> FIX
 - ANALYSIS: completed
 - PLAN: completed
 - TEAM_CRITIQUE: completed with real sub-agent roles
-- IMPLEMENTATION: completed on laptop and VPS through GitHub one-command
+- IMPLEMENTATION: completed on side_b and SIDE_A through GitHub one-command
 - TEAM_CHECK: completed through installed-binary proof on both hosts
 - FIX: proof_parser_corrected
 - RECHECK: completed through corrected route-explain parsing and bad-bootstrap
@@ -56,7 +56,7 @@ Real sub-agent roles used for this cycle:
 Agreed:
 
 - `v0.1.109` can be verified as a remote installed release/update proof after
-  laptop and VPS evidence is collected.
+  side_b and SIDE_A evidence is collected.
 - The update source must remain GitHub Release/Latest.
 - Installed proof must include version, checksum, route-explain diagnostics,
   redaction, negative bad-bootstrap behavior, and unchanged route/DNS state on
@@ -92,10 +92,10 @@ Release checksum file:
 
 ## SSH Preflight
 
-Laptop:
+Side B:
 
 ```text
-host=laptop ssh_ok=true
+host=side_b ssh_ok=true
 curl=present
 tar=present
 sha256sum=present
@@ -103,10 +103,10 @@ jq=present
 Linux 7.0.0-22-generic x86_64
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps ssh_ok=true
+host=side_a ssh_ok=true
 curl=present
 tar=present
 sha256sum=present
@@ -116,23 +116,23 @@ Linux 6.8.0-124-generic x86_64
 
 ## Install/Update Evidence
 
-Laptop:
+Side B:
 
 ```text
-host=laptop proof=idempotent_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true launcher_version=chimera-runtime 0.1.109 network_unchanged=false
-host=laptop proof=idempotent_update_normalized before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true raw_network_same=false normalized_network_same=true only_timer_diff=true diff_lines=24
-host=laptop proof=route_dns_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true route_dns_unchanged=true
+host=side_b proof=idempotent_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true launcher_version=chimera-runtime 0.1.109 network_unchanged=false
+host=side_b proof=idempotent_update_normalized before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true raw_network_same=false normalized_network_same=true only_timer_diff=true diff_lines=24
+host=side_b proof=route_dns_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true route_dns_unchanged=true
 ```
 
-The first laptop network fingerprint included live address lifetime counters,
+The first side_b network fingerprint included live address lifetime counters,
 which changed during the check. A normalized address check showed only timer
 differences. A separate route/rule/DNS fingerprint stayed unchanged.
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps proof=idempotent_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true launcher_version=chimera-runtime 0.1.109 network_unchanged=true
-host=vps proof=route_dns_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true route_dns_unchanged=true
+host=side_a proof=idempotent_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true launcher_version=chimera-runtime 0.1.109 network_unchanged=true
+host=side_a proof=route_dns_update before_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a install_rc=0 install_ok=true after_version=0.1.109 after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a expected_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a checksum_ok=true route_dns_unchanged=true
 ```
 
 ## Installed Binary Proof
@@ -143,16 +143,16 @@ to be a JSON array and used `mesh_multipath_demand=normal`, which correctly
 planned one active lane. The corrected proof parsed the installed string
 `.explain` and used `mesh_multipath_demand=high` to verify two active lanes.
 
-Laptop:
+Side B:
 
 ```text
-host=laptop proof=route_explain rc=0 schema_ok=true status=ok kind=mesh_route_explain network_state=not_modified node_redacted=<redacted> active_lanes=2 carrier_bindings=2 demand_policy=high lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status=carrier_lane_binding_contract_ready execution_status_ok=true binding_status=carrier_lane_binding_contract_ready binding_status_ok=true redaction_ok=true
+host=side_b proof=route_explain rc=0 schema_ok=true status=ok kind=mesh_route_explain network_state=not_modified node_redacted=<redacted> active_lanes=2 carrier_bindings=2 demand_policy=high lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status=carrier_lane_binding_contract_ready execution_status_ok=true binding_status=carrier_lane_binding_contract_ready binding_status_ok=true redaction_ok=true
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps proof=route_explain rc=0 schema_ok=true status=ok kind=mesh_route_explain network_state=not_modified node_redacted=<redacted> active_lanes=2 carrier_bindings=2 demand_policy=high lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status=carrier_lane_binding_contract_ready execution_status_ok=true binding_status=carrier_lane_binding_contract_ready binding_status_ok=true redaction_ok=true
+host=side_a proof=route_explain rc=0 schema_ok=true status=ok kind=mesh_route_explain network_state=not_modified node_redacted=<redacted> active_lanes=2 carrier_bindings=2 demand_policy=high lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status=carrier_lane_binding_contract_ready execution_status_ok=true binding_status=carrier_lane_binding_contract_ready binding_status_ok=true redaction_ok=true
 ```
 
 Route-explain proof verified:
@@ -176,16 +176,16 @@ Negative bad-bootstrap proof used missing GitHub release asset URLs and
 `bash -o pipefail`. It returned nonzero on both hosts and left installed
 version, checksum, routes, and DNS unchanged.
 
-Laptop:
+Side B:
 
 ```text
-host=laptop proof=bad_bootstrap bad_rc=1 bad_nonzero=true before_version=0.1.109 after_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a unchanged=true route_dns_unchanged=true bad_redaction_ok=true
+host=side_b proof=bad_bootstrap bad_rc=1 bad_nonzero=true before_version=0.1.109 after_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a unchanged=true route_dns_unchanged=true bad_redaction_ok=true
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps proof=bad_bootstrap bad_rc=1 bad_nonzero=true before_version=0.1.109 after_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a unchanged=true route_dns_unchanged=true bad_redaction_ok=true
+host=side_a proof=bad_bootstrap bad_rc=1 bad_nonzero=true before_version=0.1.109 after_version=0.1.109 before_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a after_sha=49238ff1ccf2adb47a597d8af7639a93f7fdae5fbf6d5b8a4adbf2c82c58490a unchanged=true route_dns_unchanged=true bad_redaction_ok=true
 ```
 
 ## Status Boundary
@@ -196,7 +196,7 @@ Closed:
 
 - GitHub Latest points to `v0.1.109`.
 - Required release assets are present.
-- Laptop and VPS were updated by GitHub one-command install/update only.
+- Side B and SIDE_A were updated by GitHub one-command install/update only.
 - Installed version and release bundle checksum match on both hosts.
 - Installed route-explain exposes lane-admission diagnostics and
   `sealed_opaque_only` transit payload policy.
@@ -208,7 +208,7 @@ Closed:
 Not closed by this document:
 
 - full Real-World datapath PASS;
-- node-to-node live carrier traffic between laptop and VPS;
+- node-to-node live carrier traffic between side_b and SIDE_A;
 - actual transit forwarding of third-party traffic;
 - transparent TUN/OS routing behavior;
 - DNS-to-route runtime binding;
@@ -223,5 +223,5 @@ Not closed by this document:
 - There is no separate signature artifact in this release proof; the verified
   supply-chain property here is checksum match against the published release
   checksum file.
-- Laptop GitHub downloads can take longer than VPS downloads; bounded retry and
+- Side B GitHub downloads can take longer than SIDE_A downloads; bounded retry and
   fail-closed behavior remain required.

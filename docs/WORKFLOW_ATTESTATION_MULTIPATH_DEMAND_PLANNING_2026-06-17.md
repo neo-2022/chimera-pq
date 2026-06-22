@@ -113,7 +113,7 @@ Status: done
 
 Status: done
 
-Commands run from `/home/art/Archives/VPN/chimera-pq`:
+Commands run from `<repo-root>`:
 
 - `cargo fmt --all -- --check` PASS
 - `cargo check -q --workspace` PASS
@@ -182,7 +182,7 @@ Done:
 Not done / not verified:
 
 - No new GitHub Release/Latest has been published for this source slice yet.
-- Laptop/VPS one-command update proof for this slice is not done yet.
+- Side B/SIDE_A one-command update proof for this slice is not done yet.
 - Live carrier traffic, real transit forwarding, TUN/OS routing, DNS binding,
   rollback, browser/IDE workflow, throughput, and long-run behavior remain not
   verified for this slice.

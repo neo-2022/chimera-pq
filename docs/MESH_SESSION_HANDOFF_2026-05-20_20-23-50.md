@@ -42,7 +42,7 @@
 - Largest focused mesh test leaf observed: `crates/chimera-mesh/src/tests_dps_explain/plan_paths_hints.rs` at `364` lines.
 
 ## Safety / Scope (fact)
-- OS routes, DNS, firewall, Happ, MYWEAVE, router and VPS were not modified.
+- OS routes, DNS, firewall, Happ, MYWEAVE, router and SIDE_A were not modified.
 - CLI smoke stayed in explain mode and reported `network_state=not_modified`.
 
 ## Next Step (planned)

@@ -16,10 +16,10 @@
   - `README.md`
 
 ## Files Touched (fact)
-- `/home/art/Archives/WEAVE/AGENTS.md`
-- `/home/art/Archives/WEAVE/README.md`
-- `/home/art/Archives/WEAVE/chimera-pq/docs/EXECUTION_MODE_NO_TIMELINES.md`
-- `/home/art/Archives/WEAVE/chimera-pq/docs/QA_VALIDATION_ACCEPTANCE_PLAN.md`
+- `<workspace-root>/AGENTS.md`
+- `<workspace-root>/README.md`
+- `<repo-root>/docs/EXECUTION_MODE_NO_TIMELINES.md`
+- `<repo-root>/docs/QA_VALIDATION_ACCEPTANCE_PLAN.md`
 
 ## Validation (fact)
 - Verified files exist and content is readable via `sed`.
@@ -27,7 +27,7 @@
 
 ## Safety / Scope (fact)
 - No OS routes/DNS/firewall/system proxy changes.
-- No changes to Happ/MYWEAVE/router/VPS.
+- No changes to Happ/MYWEAVE/router/SIDE_A.
 - Work limited to project documentation and session continuity controls.
 
 ## Next Step (planned)

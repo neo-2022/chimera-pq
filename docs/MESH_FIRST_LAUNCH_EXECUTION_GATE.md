@@ -6,7 +6,7 @@ Owner: CHIMERA-PQ mesh workline
 ## Objective (strict)
 
 Single active objective until closure:
-- first real CHIMERA mesh launch between two hosts (VPS + laptop) with factual connectivity confirmation.
+- first real CHIMERA mesh launch between two hosts (SIDE_A + side_b) with factual connectivity confirmation.
 
 No parallel objective is allowed if it does not directly unblock this launch.
 
@@ -39,12 +39,12 @@ Status: completed
 DoD evidence matrix:
 
 1. mesh runtime started on both peers with valid config:
-   - `docs/MESH_LAUNCH_PREFLIGHT_VPS.json` -> `status=ready`, `ready_for_real_launch=true`
-   - `docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json` -> `status=ready`, `ready_for_real_launch=true`
+   - `docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json` -> `status=ready`, `ready_for_real_launch=true`
+   - `docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json` -> `status=ready`, `ready_for_real_launch=true`
 
 2. peers discover/select/connect through runtime path:
-   - `docs/MESH_LAUNCH_PREFLIGHT_VPS.json` -> `connect_probe_success=true`, non-empty selected peer
-   - `docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json` -> `connect_probe_success=true`, non-empty selected peer
+   - `docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json` -> `connect_probe_success=true`, non-empty selected peer
+   - `docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json` -> `connect_probe_success=true`, non-empty selected peer
    - `docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json` -> `status=ready`, `all_ready=true`
 
 3. at least one real end-to-end traffic probe through selected path succeeds:
@@ -67,7 +67,7 @@ Goal of this runbook:
 
 Notes:
 - this preflight does not modify OS routes/DNS/firewall (`network_state=not_modified`);
-- run commands from repo root: `/home/art/Archives/WEAVE/chimera-pq`.
+- run commands from repo root: `<repo-root>`.
 
 ### 1) Prepare peer specs
 
@@ -87,7 +87,7 @@ cargo run -p chimera-cli -- mesh launch-preflight \
   --peer "node-b@<SIDE_B_IP>:<PORT>@eu@25@85" \
   --timeout-ms 1200 \
   --json \
-  --out docs/MESH_LAUNCH_PREFLIGHT_VPS.json
+  --out docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json
 ```
 
 ### 3) Run preflight on Side B
@@ -100,7 +100,7 @@ cargo run -p chimera-cli -- mesh launch-preflight \
   --peer "node-a@<SIDE_A_IP>:<PORT>@eu@20@90" \
   --timeout-ms 1200 \
   --json \
-  --out docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json
+  --out docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json
 ```
 
 ### 4) Interpret result
@@ -120,15 +120,15 @@ cargo run -p chimera-cli -- mesh launch-preflight \
 ### 5) Closure condition for this gate
 
 This gate can move to next step only when both artifacts
-(`MESH_LAUNCH_PREFLIGHT_VPS.json` and `MESH_LAUNCH_PREFLIGHT_LAPTOP.json`)
+(`MESH_LAUNCH_PREFLIGHT_SIDE_A.json` and `MESH_LAUNCH_PREFLIGHT_SIDE_B.json`)
 show `status="ready"` with no blockers.
 
 ### 6) Machine verify (recommended)
 
 ```bash
 cargo run -p chimera-cli -- mesh launch-preflight-verify \
-  --vps-report docs/MESH_LAUNCH_PREFLIGHT_VPS.json \
-  --laptop-report docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json \
+  --side-a-report docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json \
+  --side-b-report docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json \
   --json \
   --out docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json
 ```
@@ -138,8 +138,8 @@ Expected:
 - `docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json` has:
   - `status="ready"`
   - `all_ready=true`
-  - `vps_ready=true` (maps to Side A report path)
-  - `laptop_ready=true` (maps to Side B report path)
+  - `side_a_ready=true` (maps to Side A report path)
+  - `side_b_ready=true` (maps to Side B report path)
   - same non-empty `namespace` on both source reports (mismatch blocks readiness)
 
 ### 7) One-command wrapper (optional)
@@ -175,14 +175,14 @@ Important:
 - if both are unset, wrapper defaults to `CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous`.
 
 Templates:
-- `configs/mesh_launch_preflight.vps.env.example`
-- `configs/mesh_launch_preflight.laptop.env.example`
+- `configs/mesh_launch_preflight.side_a.env.example`
+- `configs/mesh_launch_preflight.side_b.env.example`
 
 Convenience commands after copying templates to `.env` files:
 
 ```bash
-cp configs/mesh_launch_preflight.vps.env.example configs/mesh_launch_preflight.vps.env
-cp configs/mesh_launch_preflight.laptop.env.example configs/mesh_launch_preflight.laptop.env
+cp configs/mesh_launch_preflight.side_a.env.example configs/mesh_launch_preflight.side_a.env
+cp configs/mesh_launch_preflight.side_b.env.example configs/mesh_launch_preflight.side_b.env
 
 just mesh-launch-preflight-ready-check
 just mesh-launch-preflight-side-a
@@ -193,8 +193,8 @@ just mesh-launch-preflight-evidence-guard
 Fast endpoint update helper:
 
 ```bash
-just mesh-launch-preflight-set-remote-endpoint side_a <laptop_host:port>
-just mesh-launch-preflight-set-remote-endpoint side_b <vps_host:port>
+just mesh-launch-preflight-set-remote-endpoint side_a <side_b_host:port>
+just mesh-launch-preflight-set-remote-endpoint side_b <side_a_host:port>
 ```
 
 Profile override examples (no env-file edits required):
@@ -281,12 +281,12 @@ just mesh-launch-preflight-autopilot
 Defaults:
 - mode: `staged`
 - profile set: `core` (`high_speed_anonymous`, `privacy_first`)
-- vps endpoint: `91.124.19.180:443`
+- side_a endpoint: `<stand-host-b-ip>:443`
 
 Variants:
 ```bash
-just mesh-launch-preflight-autopilot full core 91.124.19.180:443
-just mesh-launch-preflight-autopilot staged all 91.124.19.180:443
+just mesh-launch-preflight-autopilot full core <stand-host-b-ip>:443
+just mesh-launch-preflight-autopilot staged all <stand-host-b-ip>:443
 ```
 Behavior:
 - auto-binds real endpoints via `mesh-launch-preflight-auto-bind`;
@@ -296,10 +296,10 @@ Behavior:
 - prints final `mesh-launch-preflight-status-summary`.
 
 `mesh-launch-preflight-evidence-guard` validates:
-- freshness of `MESH_LAUNCH_PREFLIGHT_VPS.json`, `MESH_LAUNCH_PREFLIGHT_LAPTOP.json`, `MESH_LAUNCH_PREFLIGHT_VERIFY.json`
+- freshness of `MESH_LAUNCH_PREFLIGHT_SIDE_A.json`, `MESH_LAUNCH_PREFLIGHT_SIDE_B.json`, `MESH_LAUNCH_PREFLIGHT_VERIFY.json`
   with max age (`CHIMERA_MESH_PREFLIGHT_MAX_AGE_SEC`, default 1800 sec);
-- `docs/MESH_LAUNCH_PREFLIGHT_VPS.json` against Side A role contract;
-- `docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json` against Side B role contract;
+- `docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json` against Side A role contract;
+- `docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json` against Side B role contract;
 - `docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json` aggregate contract.
 - cross-artifact consistency: namespace and ready flags in `VERIFY` must match peer reports.
 
@@ -361,12 +361,12 @@ Preflight env gate:
 One-shot unblock + run:
 
 ```bash
-just mesh-launch-preflight-unblock-and-run <laptop_host:port>
+just mesh-launch-preflight-unblock-and-run <side_b_host:port>
 ```
 
 Fast unblock path (step-by-step):
 ```bash
-just mesh-launch-preflight-set-remote-endpoint side_a <laptop_host:port>
+just mesh-launch-preflight-set-remote-endpoint side_a <side_b_host:port>
 just mesh-launch-preflight-ready-check
 just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard
 ```
@@ -378,10 +378,10 @@ just mesh-launch-preflight-status-summary
 
 Optional local endpoint update helper:
 ```bash
-just mesh-launch-preflight-set-local-endpoint side_b <laptop_host:port>
+just mesh-launch-preflight-set-local-endpoint side_b <side_b_host:port>
 ```
 
 Set both real endpoints in one step:
 ```bash
-just mesh-launch-preflight-set-real-endpoints <laptop_host:port> <vps_host:port>
+just mesh-launch-preflight-set-real-endpoints <side_b_host:port> <side_a_host:port>
 ```

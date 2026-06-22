@@ -1,8 +1,8 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
     Node,
-    Vps,
-    Laptop,
+    SideA,
+    SideB,
     Bench,
     Echo,
     Probe,
@@ -15,8 +15,8 @@ pub enum Mode {
 pub fn parse_mode(value: &str) -> Result<Mode, String> {
     match value {
         "node" | "weave-node" => Ok(Mode::Node),
-        "vps" => Ok(Mode::Vps),
-        "laptop" => Ok(Mode::Laptop),
+        "side-a" | "side_a" => Ok(Mode::SideA),
+        "side-b" | "side_b" => Ok(Mode::SideB),
         "bench" => Ok(Mode::Bench),
         "echo" => Ok(Mode::Echo),
         "probe" => Ok(Mode::Probe),
@@ -25,7 +25,7 @@ pub fn parse_mode(value: &str) -> Result<Mode, String> {
         "sealed-transit-inject" => Ok(Mode::SealedTransitInject),
         "bound-transit-inject" => Ok(Mode::BoundTransitInject),
         _ => Err(
-            "mode must be node, vps, laptop, bench, echo, probe, download-echo, download-probe, sealed-transit-inject, or bound-transit-inject"
+            "mode must be node, side-a, side-b, bench, echo, probe, download-echo, download-probe, sealed-transit-inject, or bound-transit-inject"
                 .to_string(),
         ),
     }
@@ -34,8 +34,8 @@ pub fn parse_mode(value: &str) -> Result<Mode, String> {
 pub fn mode_name(mode: &Mode) -> &'static str {
     match mode {
         Mode::Node => "node",
-        Mode::Vps => "vps",
-        Mode::Laptop => "laptop",
+        Mode::SideA => "side-a",
+        Mode::SideB => "side-b",
         Mode::Bench => "bench",
         Mode::Echo => "echo",
         Mode::Probe => "probe",

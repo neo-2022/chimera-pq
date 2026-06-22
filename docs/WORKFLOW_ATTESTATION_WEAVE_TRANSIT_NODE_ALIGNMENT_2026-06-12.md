@@ -9,7 +9,7 @@ Continue aligning CHIMERA-PQ with the documented WEAVE node model:
 - one symmetric node, not a product-level client/server/gateway split;
 - local ingress, peer ingress, local egress and peer transit capability;
 - transit payload remains sealed/opaque and is not inspected or logged;
-- laptop/VPS real-world verification must use GitHub Release/Latest one-command
+- side_b/SIDE_A real-world verification must use GitHub Release/Latest one-command
   install/update only.
 
 ## Decision Council
@@ -23,7 +23,7 @@ Continue aligning CHIMERA-PQ with the documented WEAVE node model:
 - Security engineer: keep sealed transit forwarding as opaque bytes; do not
   change traffic key labels in this slice because that would alter wire
   compatibility.
-- DevOps: no local CHIMERA install/start/stop; laptop/VPS proof requires a new
+- DevOps: no local CHIMERA install/start/stop; side_b/SIDE_A proof requires a new
   GitHub Release and `releases/latest`.
 - Critic: previous attestation was too strong: `docs/route_explain_latest.json`
   still contained `default-gateway` before this correction.
@@ -95,11 +95,11 @@ compatibility for `=> gateway`:
 
 ## Not Done / Limits
 
-- This is not a real-world laptop/VPS PASS.
+- This is not a real-world side_b/SIDE_A PASS.
 - No CHIMERA install/start/stop was run on the local PC.
 - No local DNS/routes/firewall/proxy/VPN/Happ/MYVPN/router settings were
   changed.
-- Laptop/VPS verification is still required after publishing a GitHub Release
+- Side B/SIDE_A verification is still required after publishing a GitHub Release
   and confirming `releases/latest` points to it.
 - Stand verification must be GitHub one-command install/update only; local
   tarballs, `scp`, `rsync`, `git clone`, `cargo build`, and `cargo run` on the

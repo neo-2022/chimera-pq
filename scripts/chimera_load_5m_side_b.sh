@@ -3,38 +3,38 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-: "${CHIMERA_LAPTOP_HOST:?CHIMERA_LAPTOP_HOST is required}"
-: "${CHIMERA_LAPTOP_USER:?CHIMERA_LAPTOP_USER is required}"
-: "${CHIMERA_LAPTOP_PASS:?CHIMERA_LAPTOP_PASS is required}"
-: "${CHIMERA_LAPTOP_REPO:?CHIMERA_LAPTOP_REPO is required}"
+: "${CHIMERA_SIDE_B_HOST:?CHIMERA_SIDE_B_HOST is required}"
+: "${CHIMERA_SIDE_B_USER:?CHIMERA_SIDE_B_USER is required}"
+: "${CHIMERA_SIDE_B_PASS:?CHIMERA_SIDE_B_PASS is required}"
+: "${CHIMERA_SIDE_B_REPO:?CHIMERA_SIDE_B_REPO is required}"
 : "${CHIMERA_LOAD_TARGETS_FILE:?CHIMERA_LOAD_TARGETS_FILE is required}"
 
-REMOTE_HOST="$CHIMERA_LAPTOP_HOST"
-REMOTE_USER="$CHIMERA_LAPTOP_USER"
-REMOTE_PASS="$CHIMERA_LAPTOP_PASS"
-REMOTE_REPO="$CHIMERA_LAPTOP_REPO"
+REMOTE_HOST="$CHIMERA_SIDE_B_HOST"
+REMOTE_USER="$CHIMERA_SIDE_B_USER"
+REMOTE_PASS="$CHIMERA_SIDE_B_PASS"
+REMOTE_REPO="$CHIMERA_SIDE_B_REPO"
 REMOTE_DURATION_SEC="${CHIMERA_LOAD_DURATION_SEC:-300}"
 REMOTE_TIMEOUT_SEC="${CHIMERA_LOAD_TIMEOUT_SEC:-12}"
 REMOTE_CONNECT_TIMEOUT_SEC="${CHIMERA_LOAD_CONNECT_TIMEOUT_SEC:-5}"
 OUT_DIR="${1:-$ROOT_DIR/docs/load}"
 TS="$(date +%Y%m%d_%H%M%S)"
-LOCAL_OUT="$OUT_DIR/CHIMERA_LOAD_${REMOTE_DURATION_SEC}S_LAPTOP_${TS}.json"
+LOCAL_OUT="$OUT_DIR/CHIMERA_LOAD_${REMOTE_DURATION_SEC}S_SIDE_B_${TS}.json"
 
 mkdir -p "$OUT_DIR"
 
 if ! command -v sshpass >/dev/null 2>&1; then
-  echo "chimera-load-5m-laptop: sshpass is required" >&2
+  echo "chimera-load-5m-side-b: sshpass is required" >&2
   exit 1
 fi
 
 if [[ ! -f "$CHIMERA_LOAD_TARGETS_FILE" ]]; then
-  echo "chimera-load-5m-laptop: CHIMERA_LOAD_TARGETS_FILE not found" >&2
+  echo "chimera-load-5m-side-b: CHIMERA_LOAD_TARGETS_FILE not found" >&2
   exit 1
 fi
 
 TARGETS_PAYLOAD="$(sed '/^[[:space:]]*$/d;/^[[:space:]]*#/d' "$CHIMERA_LOAD_TARGETS_FILE")"
 if [[ -z "$TARGETS_PAYLOAD" ]]; then
-  echo "chimera-load-5m-laptop: target list is empty" >&2
+  echo "chimera-load-5m-side-b: target list is empty" >&2
   exit 1
 fi
 
@@ -147,7 +147,7 @@ printf '%s\n' "$REMOTE_OUTPUT"
 
 REMOTE_OUT_PATH="$(printf '%s\n' "$REMOTE_OUTPUT" | awk -F= '/^__REMOTE_OUT__=/{print $2; exit}')"
 if [[ -z "$REMOTE_OUT_PATH" ]]; then
-  echo "chimera-load-5m-laptop: failed to discover remote output path" >&2
+  echo "chimera-load-5m-side-b: failed to discover remote output path" >&2
   exit 1
 fi
 

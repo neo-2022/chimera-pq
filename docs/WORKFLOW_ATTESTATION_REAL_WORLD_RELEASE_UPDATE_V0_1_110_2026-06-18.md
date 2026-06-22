@@ -12,8 +12,8 @@ path over SSH.
 
 Authorized stand hosts:
 
-- laptop: authorized laptop SSH target
-- VPS: authorized VPS SSH target
+- side_b: authorized side_b SSH target
+- SIDE_A: authorized SIDE_A SSH target
 
 The stand install/update command used GitHub Release/Latest only:
 
@@ -65,7 +65,7 @@ sha256:90b7bd93f81db4eb98679e71d084e53293d873791be3b2e52621522216348c60
 
 ## SSH Preflight
 
-Laptop:
+Side B:
 
 ```text
 ssh_ok=true
@@ -75,7 +75,7 @@ sha256sum=present
 installed_version=0.1.110
 ```
 
-VPS:
+SIDE_A:
 
 ```text
 ssh_ok=true
@@ -87,7 +87,7 @@ installed_version=0.1.110
 
 ## Install/Update Evidence
 
-Laptop:
+Side B:
 
 ```text
 before_version=0.1.110
@@ -97,10 +97,10 @@ after_version=0.1.110
 after_sha=90b7bd93f81db4eb98679e71d084e53293d873791be3b2e52621522216348c60
 ```
 
-Observed note: several bounded `curl` attempts timed out on the laptop, but the
+Observed note: several bounded `curl` attempts timed out on the side_b, but the
 install still completed successfully.
 
-VPS:
+SIDE_A:
 
 ```text
 before_version=0.1.110
@@ -112,7 +112,7 @@ after_sha=90b7bd93f81db4eb98679e71d084e53293d873791be3b2e52621522216348c60
 
 ## Installed Binary Proof
 
-Laptop:
+Side B:
 
 ```text
 start_status=ok mode=systemd_user node_runtime=running node=started transparent_runtime=stopped endpoint=unconfigured
@@ -122,7 +122,7 @@ runtime_state_status=up
 route_mode=split
 ```
 
-VPS:
+SIDE_A:
 
 ```text
 start_status=ok mode=systemd_user node_runtime=running node=started transparent_runtime=stopped endpoint=unconfigured
@@ -134,7 +134,7 @@ route_mode=split
 
 ## Negative Bootstrap Proof
 
-Laptop:
+Side B:
 
 ```text
 bad_rc=22
@@ -144,7 +144,7 @@ before_sha=90b7bd93f81db4eb98679e71d084e53293d873791be3b2e52621522216348c60
 after_sha=90b7bd93f81db4eb98679e71d084e53293d873791be3b2e52621522216348c60
 ```
 
-VPS:
+SIDE_A:
 
 ```text
 bad_rc=22
@@ -162,7 +162,7 @@ Closed:
 
 - GitHub Latest points to `v0.1.110`.
 - Required release assets are present.
-- Laptop and VPS were updated by GitHub one-command install/update only.
+- Side B and SIDE_A were updated by GitHub one-command install/update only.
 - Installed version and release bundle checksum match on both hosts.
 - `chimera.sh -start`, `-status`, and `-stop` passed on both hosts.
 - Bad-bootstrap negative path failed closed and did not alter installed version.
@@ -170,7 +170,7 @@ Closed:
 Not closed by this document:
 
 - full Real-World datapath PASS;
-- node-to-node live carrier traffic between laptop and VPS;
+- node-to-node live carrier traffic between side_b and SIDE_A;
 - actual transit forwarding of third-party traffic;
 - transparent TUN/OS routing behavior;
 - DNS-to-route runtime binding;
@@ -180,7 +180,7 @@ Not closed by this document:
 
 ## Risks And Limits
 
-- GitHub timeouts were observed on the laptop before retry success.
+- GitHub timeouts were observed on the side_b before retry success.
 - The proof uses installed route-explain/runtime diagnostics and does not prove
   live TUN/datapath traffic.
 - The negative path was checked against a missing GitHub release asset URL, not

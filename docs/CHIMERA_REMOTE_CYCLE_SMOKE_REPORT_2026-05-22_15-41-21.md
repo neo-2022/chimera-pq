@@ -7,21 +7,21 @@
 - Runtime package generation mode: static `musl` binaries (`x86_64-unknown-linux-musl`)
 
 ## Environment
-- Laptop: `art@192.168.31.31`
-- VPS: `root@91.124.19.180`
+- Side B: `<stand-user>@<stand-host-a>`
+- SIDE_A: `<stand-admin>@<stand-host-b>`
 - Date: 2026-05-22 (Europe/Moscow)
 
 ## Commands Executed
-- Laptop:
-  - `./scripts/chimera_remote_cycle_smoke.sh --host 192.168.31.31 --user art --pass '***' --cycles 5`
-- VPS:
-  - `./scripts/chimera_remote_cycle_smoke.sh --host 91.124.19.180 --user root --pass '***' --cycles 5`
+- Side B:
+  - `./scripts/chimera_remote_cycle_smoke.sh --host <stand-host-a-ip> --user art --pass '***' --cycles 5`
+- SIDE_A:
+  - `./scripts/chimera_remote_cycle_smoke.sh --host <stand-host-b-ip> --user root --pass '***' --cycles 5`
 
 ## Results
-- Laptop:
+- Side B:
   - `smoke_result=pass cycles=5`
   - Per-cycle outcome: `rc_start=0 rc_status=0 rc_stop=0 rc_uninstall=0` for all 5 cycles
-- VPS:
+- SIDE_A:
   - `smoke_result=pass cycles=5`
   - Per-cycle outcome: `rc_start=0 rc_status=0 rc_stop=0 rc_uninstall=0` for all 5 cycles
 

@@ -172,7 +172,7 @@ third-party installation from required flow.
 
 ## Stand Install/Update Contract
 
-Laptop/VPS stand verification must use the published GitHub one-command path.
+Side B/SIDE_A stand verification must use the published GitHub one-command path.
 Source-tree installs are development-only and do not prove that the shipped
 CHIMERA release works.
 
@@ -218,7 +218,7 @@ Peer update fallback:
 
 - GitHub Release/Latest remains the primary source for first install and stand
   proof.
-- After a successful GitHub publish, refresh the notebook/VPS mirror nodes to
+- After a successful GitHub publish, refresh the notebook/SIDE_A mirror nodes to
   the same release tree and serve them with `chimera-bootstrap serve-release`
   so peers can update from an already-installed Chimera when GitHub is
   unreachable.
@@ -279,10 +279,10 @@ The peer server exposes:
 - `/chimera-pq-release.tar.gz`
 - `/chimera-pq-release.tar.gz.sha256`
 
-The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `vps`,
-and `laptop` remain compatibility labels only.
+The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `side_a`,
+and `side_b` remain compatibility labels only.
 
-Forbidden for laptop/VPS stand proof:
+Forbidden for side_b/SIDE_A stand proof:
 
 - `cargo build`, `cargo run`, or requiring `cargo` on the target;
 - `git clone` as the install source on the target;
@@ -346,45 +346,45 @@ Team gate (single command):
 
 1. `just chimera-ops-gate`
 2. `just chimera-ops-gate-quiet` (same checks with reduced console noise)
-3. `just chimera-ops-gate-fresh` (same checks + forced fresh laptop load run + unified fresh report)
-4. `just chimera-laptop-fresh-gate-sync` (run fresh gate on laptop and sync artifacts locally)
+3. `just chimera-ops-gate-fresh` (same checks + forced fresh side_b load run + unified fresh report)
+4. `just chimera-side-b-fresh-gate-sync` (run fresh gate on side_b and sync artifacts locally)
 
 This runs:
 
 - path-proof selfcheck;
 - channel-audit selfcheck;
 - e2e gate selfcheck;
-- laptop load-gate selfcheck;
+- side_b load-gate selfcheck;
 - runtime verify;
 - end-to-end channel gate.
 - e2e gate artifact guard (`status`, contract fields, freshness).
-- laptop load gate (`status`, min success-rate, min request volume).
+- side_b load gate (`status`, min success-rate, min request volume).
 - unified fresh gate report (`docs/CHIMERA_FRESH_GATE_REPORT.json` + `.md`).
 
 Direct guard run:
 
 1. `just chimera-e2e-channel-gate-guard`
 
-Laptop real-world load run (parallel, default 300s):
+Side B real-world load run (parallel, default 300s):
 
-1. `just chimera-load-laptop`
-2. selfcheck only: `just chimera-load-laptop-selfcheck`
-3. strict gate from latest load artifact: `just chimera-load-gate-laptop`
-4. gate selfcheck only: `just chimera-load-gate-laptop-selfcheck`
+1. `just chimera-load-side-b`
+2. selfcheck only: `just chimera-load-side-b-selfcheck`
+3. strict gate from latest load artifact: `just chimera-load-gate-side-b`
+4. gate selfcheck only: `just chimera-load-gate-side-b-selfcheck`
 
 Optional env overrides:
 
-- `CHIMERA_LAPTOP_HOST`
-- `CHIMERA_LAPTOP_USER`
-- `CHIMERA_LAPTOP_PASS`
-- `CHIMERA_LAPTOP_REPO`
+- `CHIMERA_SIDE_B_HOST`
+- `CHIMERA_SIDE_B_USER`
+- `CHIMERA_SIDE_B_PASS`
+- `CHIMERA_SIDE_B_REPO`
 - `CHIMERA_LOAD_DURATION_SEC`
 - `CHIMERA_LOAD_TIMEOUT_SEC`
 - `CHIMERA_LOAD_CONNECT_TIMEOUT_SEC`
 - `CHIMERA_LOAD_GATE_MIN_SUCCESS_RATE` (default `0.95`)
 - `CHIMERA_LOAD_GATE_MIN_TOTAL_REQUESTS` (default `100`)
 - `CHIMERA_LOAD_GATE_MAX_AGE_SEC` (default `3600`)
-- `CHIMERA_LOAD_GATE_FORCE_FRESH` (`1` = always run a new laptop load before gate)
+- `CHIMERA_LOAD_GATE_FORCE_FRESH` (`1` = always run a new side_b load before gate)
 
 Additional selfcheck for app/service routing config:
 

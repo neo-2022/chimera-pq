@@ -36,7 +36,7 @@
 - Test surface remains split by domain, no return to root/flat test monolith.
 
 ## Safety / Scope (fact)
-- OS routes, DNS, firewall, Happ, MYWEAVE, router and VPS were not modified.
+- OS routes, DNS, firewall, Happ, MYWEAVE, router and SIDE_A were not modified.
 - CLI smoke stayed in route-explain JSON mode and reported `network_state=not_modified`.
 - Shell emitted sandbox `Failed to create stream fd` warnings, but all validation commands exited with code 0.
 

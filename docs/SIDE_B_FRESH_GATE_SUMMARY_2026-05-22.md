@@ -1,6 +1,6 @@
-# Laptop Fresh Gate Summary (2026-05-22)
+# Side B Fresh Gate Summary (2026-05-22)
 
-Source sync dir: `/home/art/Archives/WEAVE/chimera-pq/docs/laptop_sync/20260522_104003`
+Source sync dir: `<repo-root>/docs/side_b_sync/20260522_104003`
 
 Overall:
 - fresh_gate_status: pass
@@ -14,7 +14,7 @@ Checks:
 - load_gate_status: pass
 
 Load gate metrics:
-- load_artifact: /home/art/chimera-pq/docs/load/CHIMERA_LOAD_30S_LAPTOP_20260522_103852.json
+- load_artifact: <stand-repo-root>/docs/load/CHIMERA_LOAD_30S_SIDE_B_20260522_103852.json
 - artifact_age_sec: 0
 - min_success_rate: 0.9841269841269841
 - max_success_rate: 1.0
@@ -22,9 +22,9 @@ Load gate metrics:
 - total_fail: 1
 
 Runtime proofs:
-- path_proof: status=pass, reason=distinct_path_ip, direct_ip=193.243.173.95, chimera_ip=91.124.19.180
+- path_proof: status=pass, reason=distinct_path_ip, direct_ip=193.243.173.95, chimera_ip=<stand-host-b-ip>
 - channel_audit: status=pass, reason=channel_separation_observed
 - e2e_gate: status=pass, reason=channel_audit_and_selected_routes_ok
 
 Raw load sample file:
-- /home/art/Archives/WEAVE/chimera-pq/docs/laptop_sync/20260522_104003/CHIMERA_LOAD_30S_LAPTOP_20260522_103852.json
+- <repo-root>/docs/side_b_sync/20260522_104003/CHIMERA_LOAD_30S_SIDE_B_20260522_103852.json

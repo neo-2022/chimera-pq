@@ -9,7 +9,7 @@ fn main() {
     let path = args
         .get(1)
         .map(String::as_str)
-        .unwrap_or("docs/MESH_LAUNCH_PREFLIGHT_VPS.json");
+        .unwrap_or("docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json");
     let expected_role = args.get(2).map(String::as_str).unwrap_or("side_a");
 
     if expected_role != "side_a" && expected_role != "side_b" {
@@ -322,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_accepts_ready_vps_report() {
+    fn validate_accepts_ready_side_a_report() {
         let m = base_ready("<redacted>");
         assert!(validate_obj(&m, "side_a").is_ok());
     }

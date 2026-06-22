@@ -42,7 +42,7 @@ Status: done
 Status: done
 
 - Architect recommended a narrow source-level flow/rebuild contract and warned
-  that Real-World datapath status must remain unverified until laptop/VPS proof.
+  that Real-World datapath status must remain unverified until side_b/SIDE_A proof.
 - Senior Rust recommended a small `multipath_flow` module, stable flow-to-lane
   assignment, fail-closed behavior and no carrier runtime changes in the first
   slice.
@@ -51,7 +51,7 @@ Status: done
 - Security required payload opacity, no route decision by payload contents and
   no peer/endpoint/route-id/payload leakage in public diagnostics.
 - DevOps required local source checks only, then GitHub Release/Latest
-  one-command laptop/VPS proof before installed proof.
+  one-command side_b/SIDE_A proof before installed proof.
 - Critic blocked any claim that this source slice proves real transit,
   TUN/routing, DNS binding, browser workflow or throughput.
 
@@ -135,7 +135,7 @@ Status: done
 
 Status: done
 
-Commands run from `/home/art/Archives/VPN/chimera-pq`:
+Commands run from `<repo-root>`:
 
 - `cargo fmt --all -- --check` PASS
 - `cargo check -q --workspace` PASS
@@ -210,8 +210,8 @@ Closed:
 Not closed:
 
 - GitHub Release/Latest for this slice.
-- Laptop/VPS one-command update proof for this slice.
-- Live carrier traffic between laptop and VPS.
+- Side B/SIDE_A one-command update proof for this slice.
+- Live carrier traffic between side_b and SIDE_A.
 - Real sealed transit forwarding of third-party traffic.
 - Transparent TUN/OS routing.
 - DNS-to-route runtime binding.

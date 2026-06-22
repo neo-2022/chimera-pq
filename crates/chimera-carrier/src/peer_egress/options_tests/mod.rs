@@ -7,7 +7,7 @@ mod proof;
 fn parse_rejects_empty_token() {
     let args = vec![
         "--mode".to_string(),
-        "vps".to_string(),
+        "side-a".to_string(),
         "--local-listen".to_string(),
         "127.0.0.1:0".to_string(),
         "--peer-listen".to_string(),
@@ -19,10 +19,10 @@ fn parse_rejects_empty_token() {
 }
 
 #[test]
-fn parse_vps_requires_explicit_listeners() {
+fn parse_side_a_requires_explicit_listeners() {
     let args = vec![
         "--mode".to_string(),
-        "vps".to_string(),
+        "side-a".to_string(),
         "--token".to_string(),
         "abc".to_string(),
     ];
@@ -30,10 +30,10 @@ fn parse_vps_requires_explicit_listeners() {
 }
 
 #[test]
-fn parse_laptop_options() {
+fn parse_side_b_options() {
     let args = vec![
         "--mode".to_string(),
-        "laptop".to_string(),
+        "side-b".to_string(),
         "--server".to_string(),
         "mesh-node.example.invalid:443".to_string(),
         "--token".to_string(),
@@ -42,7 +42,7 @@ fn parse_laptop_options() {
     let parsed = Options::parse(&args).unwrap_or_else(|error| {
         unreachable!("options should parse: {error}");
     });
-    assert_eq!(parsed.mode, Mode::Laptop);
+    assert_eq!(parsed.mode, Mode::SideB);
     assert_eq!(parsed.pool, 8);
     assert!(!parsed.allow_pool_transit);
     assert!(!parsed.allow_bound_transit);
@@ -52,7 +52,7 @@ fn parse_laptop_options() {
 fn options_debug_redacts_token() -> Result<(), String> {
     let args = vec![
         "--mode".to_string(),
-        "laptop".to_string(),
+        "side-b".to_string(),
         "--server".to_string(),
         "mesh-node.example.invalid:443".to_string(),
         "--token".to_string(),

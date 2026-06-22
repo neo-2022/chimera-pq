@@ -3,10 +3,10 @@
 Status: pass
 
 Evidence:
-- Load artifact:   docs/load/CHIMERA_LOAD_5M_LAPTOP_20260522_023725.json
-- Laptop post-load gate:   /home/art/chimera-pq/docs/CHIMERA_E2E_CHANNEL_GATE_AFTER_SYNC.json
-- Laptop channel audit:   /home/art/chimera-pq/docs/CHIMERA_CHANNEL_AUDIT.json
-- Laptop path proof:   /home/art/chimera-pq/docs/CHIMERA_PATH_PROOF.json
+- Load artifact:   docs/load/CHIMERA_LOAD_5M_SIDE_B_20260522_023725.json
+- Side B post-load gate:   <stand-repo-root>/docs/CHIMERA_E2E_CHANNEL_GATE_AFTER_SYNC.json
+- Side B channel audit:   <stand-repo-root>/docs/CHIMERA_CHANNEL_AUDIT.json
+- Side B path proof:   <stand-repo-root>/docs/CHIMERA_PATH_PROOF.json
 
 Load summary (5 min, parallel):
 - total_ok: 2980

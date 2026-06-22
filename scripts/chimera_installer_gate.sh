@@ -188,7 +188,7 @@ rg -n 'case_auto_update_preserves_bound_transit_env' "$ROOT_DIR/scripts/chimera_
 rg -n 'case_peer_egress_env_shell_quotes_lane_bindings_path' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_peer_env_shell_quote_case"
 rg -n 'case_auto_update_preserves_quoted_lane_bindings_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_quoted_lane_bindings_preservation_case"
 rg -n 'case_upstream_env_shell_quotes_peer_token' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_upstream_token_shell_quote_case"
-if rg -n 'configure_peer_egress_env "(vps|laptop)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
+if rg -n 'configure_peer_egress_env "(side_a|side_b)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
   fail "installer_writes_legacy_peer_egress_role"
 fi
 rg -n '"node" \| "weave-node" => Ok\(Mode::Node\)' "$ROOT_DIR/crates/chimera-carrier/src/peer_egress/options_mode.rs" >/dev/null || fail "peer_egress_missing_node_mode"

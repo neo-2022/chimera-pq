@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn node_startup_contract_rejects_non_node_mode() {
         let mut options = node_options("");
-        options.mode = Mode::Vps;
+        options.mode = Mode::SideA;
         let result = validate_node_startup_contract(&options);
 
         assert!(result.is_err_and(|error| error.contains("node mode")));

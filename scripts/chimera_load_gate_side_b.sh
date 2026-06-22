@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOAD_DIR="$ROOT_DIR/docs/load"
-OUT_JSON="${1:-$ROOT_DIR/docs/CHIMERA_LOAD_GATE_LAPTOP.json}"
+OUT_JSON="${1:-$ROOT_DIR/docs/CHIMERA_LOAD_GATE_SIDE_B.json}"
 OUT_MD="${OUT_JSON%.json}.md"
 MIN_SUCCESS_RATE="${CHIMERA_LOAD_GATE_MIN_SUCCESS_RATE:-0.95}"
 MIN_TOTAL_REQUESTS="${CHIMERA_LOAD_GATE_MIN_TOTAL_REQUESTS:-100}"
@@ -12,30 +12,30 @@ FORCE_FRESH="${CHIMERA_LOAD_GATE_FORCE_FRESH:-0}"
 MAX_AGE_SEC="${CHIMERA_LOAD_GATE_MAX_AGE_SEC:-3600}"
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "chimera-load-gate-laptop: jq is required" >&2
+  echo "chimera-load-gate-side-b: jq is required" >&2
   exit 1
 fi
 
 mkdir -p "$LOAD_DIR"
 mkdir -p "$(dirname "$OUT_JSON")"
 
-latest_load="$(ls -1t "$LOAD_DIR"/CHIMERA_LOAD_*_LAPTOP_*.json 2>/dev/null | head -n 1 || true)"
+latest_load="$(ls -1t "$LOAD_DIR"/CHIMERA_LOAD_*_SIDE_B_*.json 2>/dev/null | head -n 1 || true)"
 
 if [[ "$FORCE_FRESH" == "1" ]]; then
-  bash "$ROOT_DIR/scripts/chimera_load_5m_laptop.sh" "$LOAD_DIR" >/dev/null
-  latest_load="$(ls -1t "$LOAD_DIR"/CHIMERA_LOAD_*_LAPTOP_*.json 2>/dev/null | head -n 1 || true)"
+  bash "$ROOT_DIR/scripts/chimera_load_5m_side_b.sh" "$LOAD_DIR" >/dev/null
+  latest_load="$(ls -1t "$LOAD_DIR"/CHIMERA_LOAD_*_SIDE_B_*.json 2>/dev/null | head -n 1 || true)"
 elif [[ -z "$latest_load" && "$RUN_IF_MISSING" == "1" ]]; then
-  bash "$ROOT_DIR/scripts/chimera_load_5m_laptop.sh" "$LOAD_DIR" >/dev/null
-  latest_load="$(ls -1t "$LOAD_DIR"/CHIMERA_LOAD_*_LAPTOP_*.json 2>/dev/null | head -n 1 || true)"
+  bash "$ROOT_DIR/scripts/chimera_load_5m_side_b.sh" "$LOAD_DIR" >/dev/null
+  latest_load="$(ls -1t "$LOAD_DIR"/CHIMERA_LOAD_*_SIDE_B_*.json 2>/dev/null | head -n 1 || true)"
 fi
 
 if [[ -z "$latest_load" ]]; then
-  echo "chimera-load-gate-laptop: no load artifact found" >&2
+  echo "chimera-load-gate-side-b: no load artifact found" >&2
   exit 1
 fi
 
 if ! [[ "$MAX_AGE_SEC" =~ ^[0-9]+$ ]] || (( MAX_AGE_SEC < 1 )); then
-  echo "chimera-load-gate-laptop: CHIMERA_LOAD_GATE_MAX_AGE_SEC must be positive integer" >&2
+  echo "chimera-load-gate-side-b: CHIMERA_LOAD_GATE_MAX_AGE_SEC must be positive integer" >&2
   exit 1
 fi
 
@@ -43,11 +43,11 @@ now_epoch="$(date +%s)"
 mtime_epoch="$(stat -c %Y "$latest_load")"
 age_sec=$((now_epoch - mtime_epoch))
 if (( age_sec < 0 )); then
-  echo "chimera-load-gate-laptop: artifact mtime is in the future: $latest_load" >&2
+  echo "chimera-load-gate-side-b: artifact mtime is in the future: $latest_load" >&2
   exit 1
 fi
 if (( age_sec > MAX_AGE_SEC )); then
-  echo "chimera-load-gate-laptop: stale artifact (${age_sec}s > ${MAX_AGE_SEC}s): $latest_load" >&2
+  echo "chimera-load-gate-side-b: stale artifact (${age_sec}s > ${MAX_AGE_SEC}s): $latest_load" >&2
   exit 1
 fi
 
@@ -69,7 +69,7 @@ fi
 
 cat >"$OUT_JSON" <<EOF
 {
-  "kind": "chimera_load_gate_laptop",
+  "kind": "chimera_load_gate_side_b",
   "status": "$status",
   "reason": "$reason",
   "thresholds": {
@@ -94,7 +94,7 @@ cat >"$OUT_JSON" <<EOF
 EOF
 
 cat >"$OUT_MD" <<EOF
-# CHIMERA Load Gate (Laptop)
+# CHIMERA Load Gate (Side B)
 
 - status: $status
 - reason: $reason

@@ -236,7 +236,7 @@ configure_client_target() {
     return 0
   fi
   local client_conf="$ROOT_DIR/configs/client.conf"
-  local candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-${CHIMERA_VPS_ENDPOINT:-}}}}}"
+  local candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-${CHIMERA_SIDE_A_ENDPOINT:-}}}}}"
   local -a mesh_nodes_args=()
   if [[ -z "$candidate" ]]; then
     if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
@@ -269,13 +269,13 @@ configure_client_target() {
     return 0
   fi
   if [[ "$candidate" != *:* ]]; then
-    echo "error: invalid CHIMERA VPS endpoint: $candidate" >&2
+    echo "error: invalid CHIMERA SIDE_A endpoint: $candidate" >&2
     exit 2
   fi
   local host_part="${candidate%:*}"
   local port_part="${candidate##*:}"
   if [[ -z "$host_part" || ! "$port_part" =~ ^[0-9]+$ || "$port_part" -lt 1 || "$port_part" -gt 65535 ]]; then
-    echo "error: invalid CHIMERA VPS endpoint: $candidate" >&2
+    echo "error: invalid CHIMERA SIDE_A endpoint: $candidate" >&2
     exit 2
   fi
   if [[ ! -f "$client_conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then

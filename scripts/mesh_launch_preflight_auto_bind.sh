@@ -5,15 +5,15 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "$repo_root"
 
-vps_endpoint="${1:-${CHIMERA_MESH_VPS_ENDPOINT:-}}"
+side_a_endpoint="${1:-${CHIMERA_MESH_SIDE_A_ENDPOINT:-}}"
 
-if [[ -z "$vps_endpoint" ]]; then
-  echo "mesh launch preflight auto bind: vps endpoint is required via arg or CHIMERA_MESH_VPS_ENDPOINT"
+if [[ -z "$side_a_endpoint" ]]; then
+  echo "mesh launch preflight auto bind: side_a endpoint is required via arg or CHIMERA_MESH_SIDE_A_ENDPOINT"
   exit 2
 fi
 
-if [[ ! "$vps_endpoint" =~ ^[^:]+:[0-9]+$ ]]; then
-  echo "mesh launch preflight auto bind: vps endpoint must be host:port"
+if [[ ! "$side_a_endpoint" =~ ^[^:]+:[0-9]+$ ]]; then
+  echo "mesh launch preflight auto bind: side_a endpoint must be host:port"
   exit 2
 fi
 
@@ -67,7 +67,7 @@ for endpoint in "${candidates[@]}"; do
 done
 
 if [[ -z "$selected" ]]; then
-  echo "mesh launch preflight auto bind: no reachable laptop endpoint found"
+  echo "mesh launch preflight auto bind: no reachable side_b endpoint found"
   echo "tried:"
   for endpoint in "${candidates[@]}"; do
     echo "  - $endpoint"
@@ -75,6 +75,6 @@ if [[ -z "$selected" ]]; then
   exit 1
 fi
 
-echo "mesh launch preflight auto bind: selected laptop endpoint $selected"
-just mesh-launch-preflight-set-real-endpoints "$selected" "$vps_endpoint"
+echo "mesh launch preflight auto bind: selected side_b endpoint $selected"
+just mesh-launch-preflight-set-real-endpoints "$selected" "$side_a_endpoint"
 echo "mesh launch preflight auto bind: configured and ready-check passed"

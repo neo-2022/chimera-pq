@@ -194,27 +194,27 @@ upstream-resilience-smoke-selfcheck:
       rg -Fq '"post": {' "$tmp_json" ; \
       rm -f "$tmp_json"
 
-chimera-load-laptop:
-    bash scripts/chimera_load_5m_laptop.sh docs/load
+chimera-load-side-b:
+    bash scripts/chimera_load_5m_side_b.sh docs/load
 
-chimera-load-laptop-selfcheck:
-    test -x scripts/chimera_load_5m_laptop.sh
-    bash -n scripts/chimera_load_5m_laptop.sh
-    rg -q 'CHIMERA_LAPTOP_HOST' scripts/chimera_load_5m_laptop.sh
-    rg -q '__REMOTE_OUT__=' scripts/chimera_load_5m_laptop.sh
-    rg -q 'local_artifact=' scripts/chimera_load_5m_laptop.sh
+chimera-load-side-b-selfcheck:
+    test -x scripts/chimera_load_5m_side_b.sh
+    bash -n scripts/chimera_load_5m_side_b.sh
+    rg -q 'CHIMERA_SIDE_B_HOST' scripts/chimera_load_5m_side_b.sh
+    rg -q '__REMOTE_OUT__=' scripts/chimera_load_5m_side_b.sh
+    rg -q 'local_artifact=' scripts/chimera_load_5m_side_b.sh
 
-chimera-load-gate-laptop:
-    bash scripts/chimera_load_gate_laptop.sh docs/CHIMERA_LOAD_GATE_LAPTOP.json
+chimera-load-gate-side-b:
+    bash scripts/chimera_load_gate_side_b.sh docs/CHIMERA_LOAD_GATE_SIDE_B.json
 
-chimera-load-gate-laptop-selfcheck:
-    test -x scripts/chimera_load_gate_laptop.sh
-    bash -n scripts/chimera_load_gate_laptop.sh
-    rg -q 'CHIMERA_LOAD_GATE_MIN_SUCCESS_RATE' scripts/chimera_load_gate_laptop.sh
-    rg -q 'CHIMERA_LOAD_GATE_MIN_TOTAL_REQUESTS' scripts/chimera_load_gate_laptop.sh
-    rg -q 'CHIMERA_LOAD_GATE_FORCE_FRESH' scripts/chimera_load_gate_laptop.sh
-    rg -q 'CHIMERA_LOAD_GATE_MAX_AGE_SEC' scripts/chimera_load_gate_laptop.sh
-    rg -q '"kind": "chimera_load_gate_laptop"' scripts/chimera_load_gate_laptop.sh
+chimera-load-gate-side-b-selfcheck:
+    test -x scripts/chimera_load_gate_side_b.sh
+    bash -n scripts/chimera_load_gate_side_b.sh
+    rg -q 'CHIMERA_LOAD_GATE_MIN_SUCCESS_RATE' scripts/chimera_load_gate_side_b.sh
+    rg -q 'CHIMERA_LOAD_GATE_MIN_TOTAL_REQUESTS' scripts/chimera_load_gate_side_b.sh
+    rg -q 'CHIMERA_LOAD_GATE_FORCE_FRESH' scripts/chimera_load_gate_side_b.sh
+    rg -q 'CHIMERA_LOAD_GATE_MAX_AGE_SEC' scripts/chimera_load_gate_side_b.sh
+    rg -q '"kind": "chimera_load_gate_side_b"' scripts/chimera_load_gate_side_b.sh
 
 chimera-fresh-gate-report:
     bash scripts/chimera_fresh_gate_report.sh docs/CHIMERA_FRESH_GATE_REPORT.json
@@ -227,16 +227,16 @@ chimera-fresh-gate-report-selfcheck:
     rg -q 'CHIMERA_LOAD_GATE_JSON' scripts/chimera_fresh_gate_report.sh
     rg -q '"chimera_fresh_gate_report"' scripts/chimera_fresh_gate_report.sh
 
-chimera-laptop-fresh-gate-sync:
-    bash scripts/chimera_laptop_fresh_gate_sync.sh
+chimera-side-b-fresh-gate-sync:
+    bash scripts/chimera_side_b_fresh_gate_sync.sh
 
-chimera-laptop-fresh-gate-sync-selfcheck:
-    test -x scripts/chimera_laptop_fresh_gate_sync.sh
-    bash -n scripts/chimera_laptop_fresh_gate_sync.sh
-    rg -q 'CHIMERA_LAPTOP_HOST' scripts/chimera_laptop_fresh_gate_sync.sh
-    rg -q 'CHIMERA_LOAD_DURATION_SEC' scripts/chimera_laptop_fresh_gate_sync.sh
-    rg -q 'CHIMERA_LOAD_GATE_MAX_AGE_SEC' scripts/chimera_laptop_fresh_gate_sync.sh
-    rg -q 'sync_dir=' scripts/chimera_laptop_fresh_gate_sync.sh
+chimera-side-b-fresh-gate-sync-selfcheck:
+    test -x scripts/chimera_side_b_fresh_gate_sync.sh
+    bash -n scripts/chimera_side_b_fresh_gate_sync.sh
+    rg -q 'CHIMERA_SIDE_B_HOST' scripts/chimera_side_b_fresh_gate_sync.sh
+    rg -q 'CHIMERA_LOAD_DURATION_SEC' scripts/chimera_side_b_fresh_gate_sync.sh
+    rg -q 'CHIMERA_LOAD_GATE_MAX_AGE_SEC' scripts/chimera_side_b_fresh_gate_sync.sh
+    rg -q 'sync_dir=' scripts/chimera_side_b_fresh_gate_sync.sh
 
 chimera-desktop-hygiene-guard:
     bash scripts/chimera_desktop_hygiene_guard.sh
@@ -255,12 +255,12 @@ chimera-ops-gate:
     just chimera-e2e-channel-gate-selfcheck
     just chimera-e2e-channel-gate-guard-selfcheck
     just upstream-resilience-smoke-selfcheck
-    just chimera-load-gate-laptop-selfcheck
+    just chimera-load-gate-side-b-selfcheck
     just chimera-runtime-verify
     just upstream-resilience-smoke
     just chimera-e2e-channel-gate
     just chimera-e2e-channel-gate-guard
-    just chimera-load-gate-laptop
+    just chimera-load-gate-side-b
 
 chimera-ops-gate-quiet:
     just chimera-desktop-hygiene-guard-selfcheck
@@ -269,12 +269,12 @@ chimera-ops-gate-quiet:
     just chimera-e2e-channel-gate-selfcheck
     just chimera-e2e-channel-gate-guard-selfcheck
     just upstream-resilience-smoke-selfcheck
-    just chimera-load-gate-laptop-selfcheck
+    just chimera-load-gate-side-b-selfcheck
     CHIMERA_QUIET=1 just chimera-runtime-verify
     CHIMERA_QUIET=1 just upstream-resilience-smoke
     CHIMERA_QUIET=1 just chimera-e2e-channel-gate
     just chimera-e2e-channel-gate-guard
-    just chimera-load-gate-laptop
+    just chimera-load-gate-side-b
 
 chimera-ops-gate-fresh:
     just chimera-desktop-hygiene-guard-selfcheck
@@ -283,13 +283,13 @@ chimera-ops-gate-fresh:
     just chimera-e2e-channel-gate-selfcheck
     just chimera-e2e-channel-gate-guard-selfcheck
     just upstream-resilience-smoke-selfcheck
-    just chimera-load-gate-laptop-selfcheck
+    just chimera-load-gate-side-b-selfcheck
     just chimera-fresh-gate-report-selfcheck
     CHIMERA_QUIET=1 just chimera-runtime-verify
     CHIMERA_QUIET=1 just upstream-resilience-smoke
     CHIMERA_QUIET=1 just chimera-e2e-channel-gate
     just chimera-e2e-channel-gate-guard
-    CHIMERA_LOAD_GATE_FORCE_FRESH=1 just chimera-load-gate-laptop
+    CHIMERA_LOAD_GATE_FORCE_FRESH=1 just chimera-load-gate-side-b
     just chimera-fresh-gate-report
 
 datapath-report-json:
@@ -996,10 +996,10 @@ mesh-launch-preflight-verify-guard:
     cargo run -q -p chimera-lab --bin mesh_launch_preflight_verify_guard -- docs/MESH_LAUNCH_PREFLIGHT_VERIFY_SMOKE.json
 
 mesh-launch-preflight-report-guard-side-a:
-    cargo run -q -p chimera-lab --bin mesh_launch_preflight_report_guard -- "${CHIMERA_MESH_PREFLIGHT_VPS_JSON:-docs/MESH_LAUNCH_PREFLIGHT_VPS.json}" side_a
+    cargo run -q -p chimera-lab --bin mesh_launch_preflight_report_guard -- "${CHIMERA_MESH_PREFLIGHT_SIDE_A_JSON:-docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json}" side_a
 
 mesh-launch-preflight-report-guard-side-b:
-    cargo run -q -p chimera-lab --bin mesh_launch_preflight_report_guard -- "${CHIMERA_MESH_PREFLIGHT_LAPTOP_JSON:-docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json}" side_b
+    cargo run -q -p chimera-lab --bin mesh_launch_preflight_report_guard -- "${CHIMERA_MESH_PREFLIGHT_SIDE_B_JSON:-docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json}" side_b
 
 mesh-launch-preflight-report-guard-selfcheck:
     test -f crates/chimera-lab/src/bin/mesh_launch_preflight_report_guard.rs
@@ -1033,8 +1033,8 @@ mesh-launch-preflight-pair-selfcheck:
     rg -q 'CHIMERA_MESH_TRAFFIC_PROFILE' scripts/mesh_launch_preflight_pair.sh
     rg -q 'mesh launch-preflight' scripts/mesh_launch_preflight_pair.sh
     rg -q 'mesh launch-preflight-verify' scripts/mesh_launch_preflight_pair.sh
-    rg -q 'VERIFY_VPS_REPORT' scripts/mesh_launch_preflight_pair.sh
-    rg -q 'VERIFY_LAPTOP_REPORT' scripts/mesh_launch_preflight_pair.sh
+    rg -q 'VERIFY_SIDE_A_REPORT' scripts/mesh_launch_preflight_pair.sh
+    rg -q 'VERIFY_SIDE_B_REPORT' scripts/mesh_launch_preflight_pair.sh
     rg -q 'trim_ascii\(\)' scripts/mesh_launch_preflight_pair.sh
     rg -q 'validate_peer_spec\(\)' scripts/mesh_launch_preflight_pair.sh
     rg -q 'declare -A seen_peers=' scripts/mesh_launch_preflight_pair.sh
@@ -1057,23 +1057,23 @@ mesh-control-plane-env-smoke-selfcheck:
 
 mesh-launch-preflight-env-guard-side-a:
     test -x scripts/mesh_launch_preflight_env_guard.sh
-    test -f configs/mesh_launch_preflight.vps.env
-    bash scripts/mesh_launch_preflight_env_guard.sh configs/mesh_launch_preflight.vps.env
+    test -f configs/mesh_launch_preflight.side_a.env
+    bash scripts/mesh_launch_preflight_env_guard.sh configs/mesh_launch_preflight.side_a.env
 
 mesh-launch-preflight-env-guard-side-b:
     test -x scripts/mesh_launch_preflight_env_guard.sh
-    test -f configs/mesh_launch_preflight.laptop.env
-    bash scripts/mesh_launch_preflight_env_guard.sh configs/mesh_launch_preflight.laptop.env
+    test -f configs/mesh_launch_preflight.side_b.env
+    bash scripts/mesh_launch_preflight_env_guard.sh configs/mesh_launch_preflight.side_b.env
 
 mesh-launch-preflight-endpoint-probe-side-a:
     test -x scripts/mesh_launch_preflight_endpoint_probe.sh
-    test -f configs/mesh_launch_preflight.vps.env
-    bash scripts/mesh_launch_preflight_endpoint_probe.sh configs/mesh_launch_preflight.vps.env
+    test -f configs/mesh_launch_preflight.side_a.env
+    bash scripts/mesh_launch_preflight_endpoint_probe.sh configs/mesh_launch_preflight.side_a.env
 
 mesh-launch-preflight-endpoint-probe-side-b:
     test -x scripts/mesh_launch_preflight_endpoint_probe.sh
-    test -f configs/mesh_launch_preflight.laptop.env
-    bash scripts/mesh_launch_preflight_endpoint_probe.sh configs/mesh_launch_preflight.laptop.env
+    test -f configs/mesh_launch_preflight.side_b.env
+    bash scripts/mesh_launch_preflight_endpoint_probe.sh configs/mesh_launch_preflight.side_b.env
 
 mesh-launch-preflight-ready-check:
     just mesh-launch-preflight-env-guard-side-a
@@ -1140,34 +1140,34 @@ mesh-launch-preflight-set-local-endpoint-selfcheck:
     rg -q 'endpoint must be host:port' scripts/mesh_launch_preflight_set_local_endpoint.sh
     rg -q 'port out of range' scripts/mesh_launch_preflight_set_local_endpoint.sh
 
-mesh-launch-preflight-set-real-endpoints laptop_endpoint vps_endpoint:
-    just mesh-launch-preflight-set-remote-endpoint side_a "{{laptop_endpoint}}"
-    just mesh-launch-preflight-set-local-endpoint side_b "{{laptop_endpoint}}"
-    just mesh-launch-preflight-set-remote-endpoint side_b "{{vps_endpoint}}"
-    just mesh-launch-preflight-set-local-endpoint side_a "{{vps_endpoint}}"
+mesh-launch-preflight-set-real-endpoints side_b_endpoint side_a_endpoint:
+    just mesh-launch-preflight-set-remote-endpoint side_a "{{side_b_endpoint}}"
+    just mesh-launch-preflight-set-local-endpoint side_b "{{side_b_endpoint}}"
+    just mesh-launch-preflight-set-remote-endpoint side_b "{{side_a_endpoint}}"
+    just mesh-launch-preflight-set-local-endpoint side_a "{{side_a_endpoint}}"
     just mesh-launch-preflight-ready-check
 
 mesh-launch-preflight-set-real-endpoints-selfcheck:
-    rg -q '^mesh-launch-preflight-set-real-endpoints laptop_endpoint vps_endpoint:$' justfile
+    rg -q '^mesh-launch-preflight-set-real-endpoints side_b_endpoint side_a_endpoint:$' justfile
     rg -q '^    just mesh-launch-preflight-set-remote-endpoint side_a ' justfile
     rg -q '^    just mesh-launch-preflight-set-local-endpoint side_b ' justfile
     rg -q '^    just mesh-launch-preflight-set-remote-endpoint side_b ' justfile
     rg -q '^    just mesh-launch-preflight-set-local-endpoint side_a ' justfile
     rg -q '^    just mesh-launch-preflight-ready-check$' justfile
 
-mesh-launch-preflight-auto-bind vps_endpoint:
+mesh-launch-preflight-auto-bind side_a_endpoint:
     test -x scripts/mesh_launch_preflight_auto_bind.sh
-    bash scripts/mesh_launch_preflight_auto_bind.sh "{{vps_endpoint}}"
+    bash scripts/mesh_launch_preflight_auto_bind.sh "{{side_a_endpoint}}"
 
 mesh-launch-preflight-auto-bind-selfcheck:
     test -x scripts/mesh_launch_preflight_auto_bind.sh
     bash -n scripts/mesh_launch_preflight_auto_bind.sh
-    rg -q 'selected laptop endpoint' scripts/mesh_launch_preflight_auto_bind.sh
+    rg -q 'selected side_b endpoint' scripts/mesh_launch_preflight_auto_bind.sh
     rg -q 'mesh-launch-preflight-set-real-endpoints' scripts/mesh_launch_preflight_auto_bind.sh
 
-mesh-launch-preflight-autopilot mode="staged" profile_set="core" vps_endpoint="":
+mesh-launch-preflight-autopilot mode="staged" profile_set="core" side_a_endpoint="":
     test -x scripts/mesh_launch_preflight_autopilot.sh
-    bash scripts/mesh_launch_preflight_autopilot.sh "{{mode}}" "{{profile_set}}" "{{vps_endpoint}}"
+    bash scripts/mesh_launch_preflight_autopilot.sh "{{mode}}" "{{profile_set}}" "{{side_a_endpoint}}"
 
 mesh-launch-preflight-autopilot-selfcheck:
     test -x scripts/mesh_launch_preflight_autopilot.sh
@@ -1183,15 +1183,15 @@ mesh-launch-preflight-autopilot-selfcheck:
     rg -q 'mesh-launch-preflight-evidence-guard' scripts/mesh_launch_preflight_autopilot.sh
     rg -q 'mesh launch preflight autopilot: PASS' scripts/mesh_launch_preflight_autopilot.sh
 
-mesh-launch-preflight-unblock-and-run laptop_endpoint:
-    just mesh-launch-preflight-set-remote-endpoint side_a "{{laptop_endpoint}}"
+mesh-launch-preflight-unblock-and-run side_b_endpoint:
+    just mesh-launch-preflight-set-remote-endpoint side_a "{{side_b_endpoint}}"
     just mesh-launch-preflight-ready-check
     just mesh-launch-preflight-side-a
     just mesh-launch-preflight-side-b
     just mesh-launch-preflight-evidence-guard
 
 mesh-launch-preflight-unblock-and-run-selfcheck:
-    rg -q '^mesh-launch-preflight-unblock-and-run laptop_endpoint:$' justfile
+    rg -q '^mesh-launch-preflight-unblock-and-run side_b_endpoint:$' justfile
     rg -q '^    just mesh-launch-preflight-set-remote-endpoint side_a ' justfile
     rg -q '^    just mesh-launch-preflight-ready-check$' justfile
     rg -q '^    just mesh-launch-preflight-side-a$' justfile
@@ -1200,11 +1200,11 @@ mesh-launch-preflight-unblock-and-run-selfcheck:
 
 mesh-launch-preflight-env-pair-guard:
     test -x scripts/mesh_launch_preflight_env_pair_guard.sh
-    vps_env=configs/mesh_launch_preflight.vps.env; \
-    laptop_env=configs/mesh_launch_preflight.laptop.env; \
-    if [[ ! -f "$vps_env" ]]; then vps_env=configs/mesh_launch_preflight.vps.env.example; fi; \
-    if [[ ! -f "$laptop_env" ]]; then laptop_env=configs/mesh_launch_preflight.laptop.env.example; fi; \
-    bash scripts/mesh_launch_preflight_env_pair_guard.sh "$vps_env" "$laptop_env"
+    side_a_env=configs/mesh_launch_preflight.side_a.env; \
+    side_b_env=configs/mesh_launch_preflight.side_b.env; \
+    if [[ ! -f "$side_a_env" ]]; then side_a_env=configs/mesh_launch_preflight.side_a.env.example; fi; \
+    if [[ ! -f "$side_b_env" ]]; then side_b_env=configs/mesh_launch_preflight.side_b.env.example; fi; \
+    bash scripts/mesh_launch_preflight_env_pair_guard.sh "$side_a_env" "$side_b_env"
 
 mesh-launch-preflight-env-pair-guard-selfcheck:
     test -x scripts/mesh_launch_preflight_env_pair_guard.sh
@@ -1251,35 +1251,35 @@ mesh-launch-preflight-side-a:
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-endpoint-probe-side-a
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.vps.env; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_a.env; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b:
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-endpoint-probe-side-b
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.laptop.env; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_b.env; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-a-profile profile:
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-endpoint-probe-side-a
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.vps.env; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b-profile profile:
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-endpoint-probe-side-b
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.laptop.env; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-a-profile-staged profile:
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.vps.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b-profile-staged profile:
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.laptop.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-profile-staged-selfcheck:
     rg -q '^mesh-launch-preflight-side-a-profile-staged profile:' justfile
@@ -1287,31 +1287,31 @@ mesh-launch-preflight-profile-staged-selfcheck:
     rg -q 'CHIMERA_MESH_ALLOW_REMOTE_MISSING=1' justfile
     rg -q 'CHIMERA_MESH_TRAFFIC_PROFILE=' justfile
     rg -q 'unset CHIMERA_MESH_POLICY_PAYLOAD' justfile
-    rg -q '^    set -a; source configs/mesh_launch_preflight.vps.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="\{\{profile\}\}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set \+a; bash scripts/mesh_launch_preflight_pair.sh$' justfile
-    rg -q '^    set -a; source configs/mesh_launch_preflight.laptop.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="\{\{profile\}\}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set \+a; bash scripts/mesh_launch_preflight_pair.sh$' justfile
+    rg -q '^    set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="\{\{profile\}\}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set \+a; bash scripts/mesh_launch_preflight_pair.sh$' justfile
+    rg -q '^    set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="\{\{profile\}\}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set \+a; bash scripts/mesh_launch_preflight_pair.sh$' justfile
 
 mesh-launch-preflight-side-a-staged:
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-endpoint-probe-side-a
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.vps.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b-staged:
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-endpoint-probe-side-b
     just mesh-launch-preflight-env-pair-guard
-    set -a; source configs/mesh_launch_preflight.laptop.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; set +a; bash scripts/mesh_launch_preflight_pair.sh
+    set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-freshness-guard:
     bash scripts/mesh_launch_preflight_freshness_guard.sh
 
 mesh-launch-preflight-cross-artifact-guard:
-    cargo run -q -p chimera-lab --bin mesh_launch_preflight_cross_artifact_guard -- "${CHIMERA_MESH_PREFLIGHT_VPS_JSON:-docs/MESH_LAUNCH_PREFLIGHT_VPS.json}" "${CHIMERA_MESH_PREFLIGHT_LAPTOP_JSON:-docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json}" "${CHIMERA_MESH_PREFLIGHT_VERIFY_JSON:-docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json}"
+    cargo run -q -p chimera-lab --bin mesh_launch_preflight_cross_artifact_guard -- "${CHIMERA_MESH_PREFLIGHT_SIDE_A_JSON:-docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json}" "${CHIMERA_MESH_PREFLIGHT_SIDE_B_JSON:-docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json}" "${CHIMERA_MESH_PREFLIGHT_VERIFY_JSON:-docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json}"
 
 mesh-launch-preflight-cross-artifact-guard-selfcheck:
     test -f crates/chimera-lab/src/bin/mesh_launch_preflight_cross_artifact_guard.rs
     rg -q 'verify namespace mismatch' crates/chimera-lab/src/bin/mesh_launch_preflight_cross_artifact_guard.rs
-    rg -q 'verify vps_ready mismatch' crates/chimera-lab/src/bin/mesh_launch_preflight_cross_artifact_guard.rs
+    rg -q 'verify side_a_ready mismatch' crates/chimera-lab/src/bin/mesh_launch_preflight_cross_artifact_guard.rs
     rg -q 'mesh launch preflight cross artifact guard: PASS' crates/chimera-lab/src/bin/mesh_launch_preflight_cross_artifact_guard.rs
     cargo test -q -p chimera-lab --bin mesh_launch_preflight_cross_artifact_guard
 
@@ -1319,8 +1319,8 @@ mesh-launch-preflight-freshness-guard-selfcheck:
     test -x scripts/mesh_launch_preflight_freshness_guard.sh
     bash -n scripts/mesh_launch_preflight_freshness_guard.sh
     rg -q 'CHIMERA_MESH_PREFLIGHT_MAX_AGE_SEC' scripts/mesh_launch_preflight_freshness_guard.sh
-    rg -q 'CHIMERA_MESH_PREFLIGHT_VPS_JSON' scripts/mesh_launch_preflight_freshness_guard.sh
-    rg -q 'CHIMERA_MESH_PREFLIGHT_LAPTOP_JSON' scripts/mesh_launch_preflight_freshness_guard.sh
+    rg -q 'CHIMERA_MESH_PREFLIGHT_SIDE_A_JSON' scripts/mesh_launch_preflight_freshness_guard.sh
+    rg -q 'CHIMERA_MESH_PREFLIGHT_SIDE_B_JSON' scripts/mesh_launch_preflight_freshness_guard.sh
     rg -q 'CHIMERA_MESH_PREFLIGHT_VERIFY_JSON' scripts/mesh_launch_preflight_freshness_guard.sh
     rg -q 'stale artifact' scripts/mesh_launch_preflight_freshness_guard.sh
     rg -q 'verify artifact older than peer artifacts' scripts/mesh_launch_preflight_freshness_guard.sh
@@ -1364,9 +1364,9 @@ mesh-launch-preflight-doc-quickcheck-selfcheck:
     rg -q '^just mesh-launch-preflight-ready-check$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-ready-hint$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-status-summary$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
-    rg -q '^just mesh-launch-preflight-unblock-and-run <laptop_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
-    rg -q '^just mesh-launch-preflight-set-real-endpoints <laptop_host:port> <vps_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
-    rg -q '^just mesh-launch-preflight-set-remote-endpoint side_a <laptop_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-unblock-and-run <side_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-set-real-endpoints <side_b_host:port> <side_a_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-set-remote-endpoint side_a <side_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^Full gate note:$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^- `just mesh-launch-gate-selfcheck` now includes this fast fail-fast block before heavier smoke runs\.$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
@@ -1401,15 +1401,15 @@ mesh-launch-preflight-evidence-smoke-selfcheck:
     rg -q 'trap cleanup EXIT' scripts/mesh_launch_preflight_evidence_smoke.sh
     rg -q 'mesh launch preflight evidence smoke: temp artifact cleanup failed' scripts/mesh_launch_preflight_evidence_smoke.sh
     rg -q 'CHIMERA_MESH_PREFLIGHT_MAX_AGE_SEC=300' scripts/mesh_launch_preflight_evidence_smoke.sh
-    rg -q 'CHIMERA_MESH_PREFLIGHT_VPS_JSON=' scripts/mesh_launch_preflight_evidence_smoke.sh
-    rg -q 'CHIMERA_MESH_PREFLIGHT_LAPTOP_JSON=' scripts/mesh_launch_preflight_evidence_smoke.sh
+    rg -q 'CHIMERA_MESH_PREFLIGHT_SIDE_A_JSON=' scripts/mesh_launch_preflight_evidence_smoke.sh
+    rg -q 'CHIMERA_MESH_PREFLIGHT_SIDE_B_JSON=' scripts/mesh_launch_preflight_evidence_smoke.sh
     rg -q 'CHIMERA_MESH_PREFLIGHT_VERIFY_JSON=' scripts/mesh_launch_preflight_evidence_smoke.sh
     rg -q 'just mesh-launch-preflight-evidence-guard' scripts/mesh_launch_preflight_evidence_smoke.sh
     rg -q 'mesh launch preflight evidence smoke: PASS' scripts/mesh_launch_preflight_evidence_smoke.sh
 
 mesh-launch-preflight-evidence-smoke-docs-preserve-selfcheck:
     tmp_before=$(mktemp); tmp_after=$(mktemp); \
-    for p in docs/MESH_LAUNCH_PREFLIGHT_VPS.json docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json; do \
+    for p in docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json; do \
       if [[ -f "$$p" ]]; then \
         printf '%s %s\n' "$$p" "$(sha256sum "$$p" | awk '{print $1}')" >> "$$tmp_before"; \
       else \
@@ -1417,7 +1417,7 @@ mesh-launch-preflight-evidence-smoke-docs-preserve-selfcheck:
       fi; \
     done; \
     just mesh-launch-preflight-evidence-smoke; \
-    for p in docs/MESH_LAUNCH_PREFLIGHT_VPS.json docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json; do \
+    for p in docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json; do \
       if [[ -f "$$p" ]]; then \
         printf '%s %s\n' "$$p" "$(sha256sum "$$p" | awk '{print $1}')" >> "$$tmp_after"; \
       else \

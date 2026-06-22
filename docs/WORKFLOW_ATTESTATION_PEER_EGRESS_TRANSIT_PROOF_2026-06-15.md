@@ -21,7 +21,7 @@ Stages:
     rejected any Real-World PASS claim from injector evidence alone.
   - Senior developer: found a release blocker where proof-only env parsing
     could break ordinary modes; required regression coverage.
-  - Tester: required local source gates plus GitHub one-command laptop/VPS
+  - Tester: required local source gates plus GitHub one-command side_b/SIDE_A
     stand evidence before shipped runtime claims.
   - Security engineer: required no payload, token, raw sealed bytes, route or
     lane values in proof output; recommended removing `packet_number`.
@@ -82,17 +82,17 @@ Stages:
   - Sub-agent consensus accepted commit/tag `v0.1.96` only as a diagnostic
     source release to deliver shipped Rust proof modes to the SSH stand.
   - New source has not yet been published as a GitHub release.
-  - Laptop/VPS one-command install/update and shipped-binary stand proof remain
+  - Side B/SIDE_A one-command install/update and shipped-binary stand proof remain
     unverified for this source until a new GitHub Latest release exists.
 - REPORT: partial
   - Status: source-level diagnostic proof modes are implemented and locally
     verified.
-  - Not closed: GitHub release publication, CI verification, laptop/VPS
+  - Not closed: GitHub release publication, CI verification, side_b/SIDE_A
     one-command update, and remote stand proof from installed binaries.
 
 Runtime/network statement:
 
 - No CHIMERA runtime was started, stopped or restarted on the current PC.
-- No local DNS, routes, firewall, proxy, VPN, Happ, MYVPN, router, laptop or VPS
+- No local DNS, routes, firewall, proxy, VPN, Happ, MYVPN, router, side_b or SIDE_A
   network settings are changed by this source-level work.
 - This is not a Real-World PASS and not a milestone close.

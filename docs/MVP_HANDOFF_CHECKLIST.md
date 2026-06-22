@@ -110,4 +110,4 @@ No command in this checklist should change:
 - OS DNS;
 - firewall (`iptables`/`nftables`);
 - system proxy settings;
-- router/VPS configuration.
+- router/SIDE_A configuration.

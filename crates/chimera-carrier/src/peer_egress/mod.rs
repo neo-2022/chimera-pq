@@ -39,8 +39,8 @@ pub use live_lane_selection::{
     select_carrier_lane_from_registrations,
 };
 pub use modes::{
-    handle_local_client, laptop_worker, outbound_peer_worker, run_bench, run_download_echo,
-    run_download_probe, run_echo, run_laptop, run_probe, run_vps, start_vps_runtime,
+    handle_local_client, outbound_peer_worker, run_bench, run_download_echo, run_download_probe,
+    run_echo, run_probe, run_side_a, run_side_b, side_b_worker, start_side_a_runtime,
 };
 pub use net::{connect_tcp, pipe_plain_with_secure_peer, pipe_secure_peer_with_plain, tune_tcp};
 pub use node::run_node;

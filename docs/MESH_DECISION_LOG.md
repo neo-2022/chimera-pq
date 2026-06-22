@@ -26,14 +26,14 @@ CHIMERA-PQ mesh MVP.
 - Evidence:
   - `scripts/mesh_launch_preflight_pair.sh`
   - `scripts/mesh_launch_preflight_env_guard.sh`
-  - `configs/mesh_launch_preflight.vps.env.example`
-  - `configs/mesh_launch_preflight.laptop.env.example`
+  - `configs/mesh_launch_preflight.side_a.env.example`
+  - `configs/mesh_launch_preflight.side_b.env.example`
   - `docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md`
   - `justfile` profile targets (`mesh-launch-preflight-side-{a,b}-profile`)
 - Follow-up: add profile-specific expected readiness guidance (when to prefer privacy/speed/low-latency preset) after first real multi-node evidence run.
 
 - Decision: isolate `mesh-launch-preflight-evidence-smoke` into `/tmp` artifacts and add docs-preserve selfcheck.
-- Why: smoke runs must not overwrite real launch evidence in `docs/MESH_LAUNCH_PREFLIGHT_{VPS,LAPTOP,VERIFY}.json`.
+- Why: smoke runs must not overwrite real launch evidence in `docs/MESH_LAUNCH_PREFLIGHT_{SIDE_A,SIDE_B,VERIFY}.json`.
 - Evidence:
   - `scripts/mesh_launch_preflight_evidence_smoke.sh` uses `/tmp/chimera_mesh_launch_preflight_*_smoke.json`.
   - `justfile` target `mesh-launch-preflight-evidence-smoke-docs-preserve-selfcheck` proves checksums of real `docs/*` artifacts stay unchanged before/after smoke.
@@ -41,7 +41,7 @@ CHIMERA-PQ mesh MVP.
 - Follow-up: keep smoke scripts isolated from real evidence paths by default; only real staged/preflight commands should write `docs/*` launch artifacts.
 
 - Decision: add preflight artifact freshness guard and include it in evidence-gate chain.
-- Why: prevent false launch evidence from stale `VPS/LAPTOP/VERIFY` artifacts left from earlier runs.
+- Why: prevent false launch evidence from stale `SIDE_A/SIDE_B/VERIFY` artifacts left from earlier runs.
 - Evidence:
   - `scripts/mesh_launch_preflight_freshness_guard.sh`
   - `justfile` targets:
@@ -50,7 +50,7 @@ CHIMERA-PQ mesh MVP.
   - `mesh-launch-preflight-evidence-guard` now starts with freshness check.
 - Follow-up: if lab window changes, tune `CHIMERA_MESH_PREFLIGHT_MAX_AGE_SEC` rather than weakening guard logic.
 
-- Decision: add staged preflight mode with `CHIMERA_MESH_ALLOW_REMOTE_MISSING=1` and `just mesh-launch-preflight-{vps,laptop}-staged`.
+- Decision: add staged preflight mode with `CHIMERA_MESH_ALLOW_REMOTE_MISSING=1` and `just mesh-launch-preflight-{side_a,side_b}-staged`.
 - Why: first peer execution must be able to generate local launch-preflight evidence without hard-failing on missing remote artifact; verify runs only after both artifacts are present.
 - Evidence:
   - `scripts/mesh_launch_preflight_pair.sh`
@@ -59,38 +59,38 @@ CHIMERA-PQ mesh MVP.
 - Follow-up: use staged commands for first pass on each host, then run full evidence gate.
 
 - Decision: add per-peer `launch-preflight` artifact guard (`mesh_launch_preflight_report_guard`) and evidence bundle command `just mesh-launch-preflight-evidence-guard`.
-- Why: first-launch proof must validate raw VPS/laptop preflight reports before aggregate verify to avoid false confidence from only final merged artifact checks.
+- Why: first-launch proof must validate raw SIDE_A/side_b preflight reports before aggregate verify to avoid false confidence from only final merged artifact checks.
 - Evidence:
   - `crates/chimera-lab/src/bin/mesh_launch_preflight_report_guard.rs`
   - `justfile` targets:
-    - `mesh-launch-preflight-report-guard-vps`
-    - `mesh-launch-preflight-report-guard-laptop`
+    - `mesh-launch-preflight-report-guard-side_a`
+    - `mesh-launch-preflight-report-guard-side_b`
     - `mesh-launch-preflight-report-guard-selfcheck`
     - `mesh-launch-preflight-evidence-guard`
-- Follow-up: use `mesh-launch-preflight-evidence-guard` as required artifact gate after real VPS/laptop runs.
+- Follow-up: use `mesh-launch-preflight-evidence-guard` as required artifact gate after real SIDE_A/side_b runs.
 
-- Decision: make pair-preflight verify role-explicit via `CHIMERA_MESH_LOCAL_ROLE` (`vps|laptop`) and map local/remote artifacts to `--vps-report/--laptop-report` deterministically.
-- Why: prevent false `launch-preflight-verify` failures caused by swapped report semantics when wrapper is executed from laptop side.
+- Decision: make pair-preflight verify role-explicit via `CHIMERA_MESH_LOCAL_ROLE` (`side_a|side_b`) and map local/remote artifacts to `--side-a-report/--side-b-report` deterministically.
+- Why: prevent false `launch-preflight-verify` failures caused by swapped report semantics when wrapper is executed from side_b side.
 - Evidence:
   - `scripts/mesh_launch_preflight_pair.sh`
   - `scripts/mesh_launch_preflight_env_guard.sh`
-  - `configs/mesh_launch_preflight.vps.env.example`
-  - `configs/mesh_launch_preflight.laptop.env.example`
-- Follow-up: keep env templates and wrapper contract synchronized for first real VPS↔laptop runbook.
+  - `configs/mesh_launch_preflight.side_a.env.example`
+  - `configs/mesh_launch_preflight.side_b.env.example`
+- Follow-up: keep env templates and wrapper contract synchronized for first real SIDE_A↔side_b runbook.
 
 - Decision: enforce strict env-file validation gate before any `mesh launch-preflight` pair run.
 - Why: first-launch readiness must fail fast on malformed namespace/node/endpoint/output parameters instead of burning cycles in runtime probe attempts.
 - Evidence:
   - `scripts/mesh_launch_preflight_env_guard.sh`
   - `justfile` targets:
-    - `mesh-launch-preflight-env-guard-vps`
-    - `mesh-launch-preflight-env-guard-laptop`
+    - `mesh-launch-preflight-env-guard-side_a`
+    - `mesh-launch-preflight-env-guard-side_b`
     - `mesh-launch-preflight-env-guard-selfcheck`
-    - `mesh-launch-preflight-vps`/`mesh-launch-preflight-laptop` now call env guard first.
+    - `mesh-launch-preflight-side_a`/`mesh-launch-preflight-side_b` now call env guard first.
   - `mesh-launch-gate-selfcheck` now includes `mesh-launch-preflight-env-guard-selfcheck`.
 - Follow-up: keep env guard and pair wrapper in lockstep when preflight env contract evolves.
 
-- Decision: activate strict first-launch execution gate (`docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md`) and freeze workline on real VPS↔laptop mesh startup readiness.
+- Decision: activate strict first-launch execution gate (`docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md`) and freeze workline on real SIDE_A↔side_b mesh startup readiness.
 - Why: prevent drift into non-blocking contract/test work before first factual mesh launch closure.
 - Evidence:
   - `docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md` added with objective, DoD, and hard execution rules.
@@ -312,7 +312,7 @@ CHIMERA-PQ mesh MVP.
 - Follow-up: if we introduce policy-driven retry budgets later, wire that policy into this single helper instead of per-domain string forks.
 
 - Decision: enrich mesh connect retry-plan explain with endpoint port fallback chain (`ports=<current>|443|8443`) and keep logic centralized in `runtime/connect_retry_profile.rs`.
-- Why: route-explain now reflects a realistic auto-connect strategy (retry + port fallback + next-peer fallback) useful for VPS/laptop deployment diagnostics.
+- Why: route-explain now reflects a realistic auto-connect strategy (retry + port fallback + next-peer fallback) useful for SIDE_A/side_b deployment diagnostics.
 - Evidence:
   - `cargo test -q -p chimera-mesh`
 - Follow-up: when transport-level connector is wired, consume this same retry profile as execution input, not only explain output.
@@ -356,7 +356,7 @@ CHIMERA-PQ mesh MVP.
   - `cargo test -q -p chimera-cli`
   - `cargo test -q -p chimera-mesh`
   - `cargo clippy -q -p chimera-cli --all-targets -- -D warnings`
-- Follow-up: add explicit `--timeout-ms` CLI flag and JSON-contract tests for `connect-probe` envelope/output schema before first real VPS↔laptop launch pass.
+- Follow-up: add explicit `--timeout-ms` CLI flag and JSON-contract tests for `connect-probe` envelope/output schema before first real SIDE_A↔side_b launch pass.
 
 - Decision: add deterministic `chimera-mesh` runtime tests for real `connect_probe` execution order and fallback behavior.
 - Why: first-launch gate requires proof that runtime connector follows the same policy-driven fallback strategy as explain diagnostics (`current endpoint -> fallback ports`).
@@ -368,26 +368,26 @@ CHIMERA-PQ mesh MVP.
 - Follow-up: add a launch-preflight CLI report path that packages probe result + selected peer + rollback-safe status into one operator-facing artifact.
 
 - Decision: add `mesh launch-preflight` CLI command as unified operator artifact for first-launch readiness checks.
-- Why: first real VPS↔laptop launch needs one deterministic report combining connect probe result, selected peers, blockers, and rollback-safe network-state marker (`not_modified`) before live rollout.
+- Why: first real SIDE_A↔side_b launch needs one deterministic report combining connect probe result, selected peers, blockers, and rollback-safe network-state marker (`not_modified`) before live rollout.
 - Evidence:
   - `cargo test -q -p chimera-cli tests_launch_preflight_json`
   - `cargo test -q -p chimera-cli`
   - `cargo clippy -q -p chimera-cli --all-targets -- -D warnings`
   - `bash scripts/anti_monolith_guard.sh`
-- Follow-up: add docs snippet with exact launch-preflight command template for VPS/laptop pair and expected `ready`/`blocked` interpretation.
+- Follow-up: add docs snippet with exact launch-preflight command template for SIDE_A/side_b pair and expected `ready`/`blocked` interpretation.
 
-- Decision: add explicit VPS↔laptop `mesh launch-preflight` operator runbook and ready/blocked interpretation to first-launch execution gate doc.
+- Decision: add explicit SIDE_A↔side_b `mesh launch-preflight` operator runbook and ready/blocked interpretation to first-launch execution gate doc.
 - Why: reduce operator ambiguity and make first real preflight execution reproducible with concrete command templates and closure criteria.
 - Evidence:
   - `docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md` now includes:
     - peer spec format,
-    - VPS command template,
-    - laptop command template,
+    - SIDE_A command template,
+    - side_b command template,
     - deterministic `ready` vs `blocked` interpretation,
     - dual-artifact closure rule.
 - Follow-up: run both preflight commands with real environment endpoints and attach produced JSON artifacts as launch evidence.
 
-- Decision: add `mesh launch-preflight-verify` command to enforce dual-artifact readiness (`VPS` + `Laptop`) with one deterministic verdict.
+- Decision: add `mesh launch-preflight-verify` command to enforce dual-artifact readiness (`SIDE_A` + `Side B`) with one deterministic verdict.
 - Why: first launch gate closure must be machine-checkable (`all_ready`) and not depend on manual JSON inspection.
 - Evidence:
   - `cargo test -q -p chimera-cli tests_launch_preflight_verify_json`
@@ -397,17 +397,17 @@ CHIMERA-PQ mesh MVP.
   - `docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md` updated with verify command and expected output.
 - Follow-up: execute real environment preflight on both peers and then run `launch-preflight-verify` to produce `docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json` as launch evidence.
 
-- Decision: harden `mesh launch-preflight-verify` with cross-report namespace consistency gate and explicit blocker reasons (`vps_report_not_ready`, `laptop_report_not_ready`, `namespace_missing`, `namespace_mismatch`).
+- Decision: harden `mesh launch-preflight-verify` with cross-report namespace consistency gate and explicit blocker reasons (`side_a_report_not_ready`, `side_b_report_not_ready`, `namespace_missing`, `namespace_mismatch`).
 - Why: dual-host readiness must fail closed when reports are structurally good but semantically mismatched (different namespaces).
 - Evidence:
   - `cargo test -q -p chimera-cli tests_launch_preflight_verify_json`
   - `cargo test -q -p chimera-cli`
   - `cargo clippy -q -p chimera-cli --all-targets -- -D warnings`
   - `bash scripts/anti_monolith_guard.sh`
-- Follow-up: run real VPS/laptop preflight pair and archive resulting `MESH_LAUNCH_PREFLIGHT_VERIFY.json` as launch gate proof.
+- Follow-up: run real SIDE_A/side_b preflight pair and archive resulting `MESH_LAUNCH_PREFLIGHT_VERIFY.json` as launch gate proof.
 
 - Decision: add one-command smoke gate for launch-verify flow (`just mesh-launch-preflight-verify-smoke`) plus script selfcheck.
-- Why: ensures `mesh launch-preflight-verify` remains runnable and deterministic in automation before real VPS↔laptop evidence collection.
+- Why: ensures `mesh launch-preflight-verify` remains runnable and deterministic in automation before real SIDE_A↔side_b evidence collection.
 - Evidence:
   - `just mesh-launch-preflight-verify-smoke-selfcheck`
   - `just mesh-launch-preflight-verify-smoke`
@@ -415,7 +415,7 @@ CHIMERA-PQ mesh MVP.
   - `cargo test -q -p chimera-cli`
   - `cargo clippy -q -p chimera-cli --all-targets -- -D warnings`
   - `bash scripts/anti_monolith_guard.sh`
-- Follow-up: execute real pair preflights and replace synthetic smoke evidence with environment artifacts (`MESH_LAUNCH_PREFLIGHT_VPS.json`, `MESH_LAUNCH_PREFLIGHT_LAPTOP.json`, `MESH_LAUNCH_PREFLIGHT_VERIFY.json`).
+- Follow-up: execute real pair preflights and replace synthetic smoke evidence with environment artifacts (`MESH_LAUNCH_PREFLIGHT_SIDE_A.json`, `MESH_LAUNCH_PREFLIGHT_SIDE_B.json`, `MESH_LAUNCH_PREFLIGHT_VERIFY.json`).
 
 - Decision: add dedicated `chimera-lab` artifact guard for launch gate verify JSON (`mesh_launch_preflight_verify_guard`) and wire smoke/selfcheck targets in `justfile`.
 - Why: launch gate evidence now has an explicit schema+invariant validator (`ready|blocked`, boolean coherence, blockers policy, namespace/network_state constraints).
@@ -440,9 +440,9 @@ CHIMERA-PQ mesh MVP.
 - Follow-up: run wrapper on each host with swapped LOCAL/REMOTE settings and collect real artifacts for final verify gate.
 
 - Decision: add aggregated launch gate command `just mesh-launch-gate-selfcheck` (pair wrapper selfcheck + verify smoke + verify guard chain).
-- Why: provides one deterministic preflight quality gate before attempting real VPS↔laptop evidence collection.
+- Why: provides one deterministic preflight quality gate before attempting real SIDE_A↔side_b evidence collection.
 - Evidence:
   - `just mesh-launch-gate-selfcheck`
   - `cargo clippy -q -p chimera-cli -p chimera-mesh -p chimera-lab --all-targets -- -D warnings`
   - `bash scripts/anti_monolith_guard.sh`
-- Follow-up: run real-host pair commands (`just mesh-launch-preflight-vps`, `just mesh-launch-preflight-laptop`) and archive final verify artifact.
+- Follow-up: run real-host pair commands (`just mesh-launch-preflight-side_a`, `just mesh-launch-preflight-side_b`) and archive final verify artifact.

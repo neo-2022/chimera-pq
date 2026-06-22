@@ -5,10 +5,10 @@ Date: 2026-06-17
 
 ## ANALYSIS
 
-Objective: keep laptop/VPS stand install/update on the GitHub one-command path
+Objective: keep side_b/SIDE_A stand install/update on the GitHub one-command path
 while preventing a network stall before the published bootstrap script starts.
 
-Observed on the laptop stand:
+Observed on the side_b stand:
 
 - installed marker already showed `0.1.104`;
 - the unbounded outer command
@@ -27,7 +27,7 @@ Observed on the laptop stand:
 4. Add installer guard checks for the bounded command.
 5. Update operations/release docs.
 6. Run source/release gates, then publish a new GitHub Release/Latest and
-   repeat laptop/VPS installed-binary proof.
+   repeat side_b/SIDE_A installed-binary proof.
 
 ## TEAM_CRITIQUE
 
@@ -77,12 +77,12 @@ Accepted:
 - commit/release pipeline for `v0.1.106`;
 - bounded outer GitHub bootstrap as the correct fix for the observed hang;
 - `pipefail` as the required follow-up fix for the observed false success on
-  the laptop when the outer download failed;
+  the side_b when the outer download failed;
 - no security/privacy blocker in this install/update reliability change.
 
 Still blocked for strong claims:
 
-- installed-binary proof on laptop and VPS for the new release;
+- installed-binary proof on side_b and SIDE_A for the new release;
 - real runtime/datapath/transit/rollback proof.
 
 ## FIX
@@ -130,9 +130,9 @@ Release/update evidence:
 - required assets: `chimera.sh`, `chimera-pq-release.tar.gz`,
   `chimera-pq-release.tar.gz.sha256`;
 - release checksum: `621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97`;
-- laptop one-command install/update: PASS, installed `0.1.106`, checksum match;
-- VPS one-command install/update: PASS, installed `0.1.106`, checksum match;
-- negative pipefail proof: PASS on laptop and VPS, bad bootstrap URL returned
+- side_b one-command install/update: PASS, installed `0.1.106`, checksum match;
+- SIDE_A one-command install/update: PASS, installed `0.1.106`, checksum match;
+- negative pipefail proof: PASS on side_b and SIDE_A, bad bootstrap URL returned
   nonzero and left installed version unchanged.
 
 Not closed yet:
@@ -146,5 +146,5 @@ Not closed yet:
 Status: installed release/update pass; Real-World datapath pass is not closed.
 
 The bounded and pipefail-protected GitHub one-command install/update path is
-published and verified on laptop and VPS. This is not a Real-World datapath
+published and verified on side_b and SIDE_A. This is not a Real-World datapath
 PASS.

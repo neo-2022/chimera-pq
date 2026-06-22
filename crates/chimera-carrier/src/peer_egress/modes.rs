@@ -32,7 +32,7 @@ pub mod lab;
 mod local_ingress;
 
 pub use lab::{
-    run_bench, run_download_echo, run_download_probe, run_echo, run_probe, start_vps_runtime,
+    run_bench, run_download_echo, run_download_probe, run_echo, run_probe, start_side_a_runtime,
 };
 pub use local_ingress::{
     handle_local_client, handle_local_client_with_first_byte,
@@ -41,7 +41,7 @@ pub use local_ingress::{
     handle_local_client_with_registrations_and_first_byte, read_local_connect_destination,
 };
 
-pub fn run_vps(options: Options) -> Result<(), String> {
+pub fn run_side_a(options: Options) -> Result<(), String> {
     let peer_listener = bind_reuse_listener(&options.peer_listen)
         .map_err(|error| format!("bind peer listener failed: {error}"))?;
     let local_listener = bind_reuse_listener(&options.local_listen)
@@ -123,7 +123,7 @@ pub fn run_vps(options: Options) -> Result<(), String> {
             }
         });
         println!(
-            "chimera_peer_egress=vps_reverse_ready local={} peer={} resolved_local={} resolved_peer={}",
+            "chimera_peer_egress=side_a_reverse_ready local={} peer={} resolved_local={} resolved_peer={}",
             options.local_listen, options.peer_listen, resolved_local_listen, resolved_peer_listen
         );
         for incoming in local_listener.incoming() {
@@ -171,7 +171,7 @@ pub fn run_vps(options: Options) -> Result<(), String> {
             }
         });
         println!(
-            "chimera_peer_egress=vps_ready local={} peer={} resolved_local={} resolved_peer={}",
+            "chimera_peer_egress=side_a_ready local={} peer={} resolved_local={} resolved_peer={}",
             options.local_listen, options.peer_listen, resolved_local_listen, resolved_peer_listen
         );
         for incoming in local_listener.incoming() {
@@ -288,9 +288,9 @@ pub fn handle_reverse_local_client(mut local: TcpStream) -> Result<(), String> {
     crate::peer_egress::net::relay_plain(local, target)
 }
 
-pub fn run_laptop(options: Options) -> Result<(), String> {
+pub fn run_side_b(options: Options) -> Result<(), String> {
     println!(
-        "chimera_peer_egress=laptop_connecting server=<redacted> server_label={} pool={}",
+        "chimera_peer_egress=side_b_connecting server=<redacted> server_label={} pool={}",
         redacted_destination_label(
             options
                 .server
@@ -324,7 +324,7 @@ pub fn run_laptop(options: Options) -> Result<(), String> {
     }
 }
 
-pub fn laptop_worker(options: &Options) -> Result<(), String> {
+pub fn side_b_worker(options: &Options) -> Result<(), String> {
     outbound_peer_worker(options)
 }
 

@@ -1,8 +1,8 @@
-# CHIMERA Load Gate (Laptop)
+# CHIMERA Load Gate (Side B)
 
 - status: pass
 - reason: load_gate_ok
-- artifact: /home/art/Archives/WEAVE/chimera-pq/docs/load/CHIMERA_LOAD_300S_LAPTOP_20260522_103042.json
+- artifact: <repo-root>/docs/load/CHIMERA_LOAD_300S_SIDE_B_20260522_103042.json
 
 Thresholds:
 - min_success_rate: 0.95

@@ -251,23 +251,23 @@ impl Options {
                 )?,
                 server.unwrap_or_default(),
             ),
-            Mode::Vps => (
+            Mode::SideA => (
                 required_value(
                     local_listen,
-                    "vps mode requires --local-listen or CHIMERA_PEER_EGRESS_LOCAL_LISTEN",
+                    "side-a mode requires --local-listen or CHIMERA_PEER_EGRESS_LOCAL_LISTEN",
                 )?,
                 required_value(
                     peer_listen,
-                    "vps mode requires --peer-listen or CHIMERA_PEER_EGRESS_PEER_LISTEN",
+                    "side-a mode requires --peer-listen or CHIMERA_PEER_EGRESS_PEER_LISTEN",
                 )?,
                 server.unwrap_or_default(),
             ),
-            Mode::Laptop => (
+            Mode::SideB => (
                 local_listen.unwrap_or_default(),
                 peer_listen.unwrap_or_default(),
                 required_value(
                     server,
-                    "laptop mode requires --server or CHIMERA_PEER_EGRESS_SERVER",
+                    "side-b mode requires --server or CHIMERA_PEER_EGRESS_SERVER",
                 )?,
             ),
             Mode::Bench => (

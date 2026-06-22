@@ -37,12 +37,12 @@ chimera_peer_egress_bench=pass bytes=134217728 elapsed_ms=115 throughput_mib_s=1
 
 Topology:
 
-- VPS temporary ingress/peer listener.
-- Laptop temporary peer worker and temporary download echo target.
+- SIDE_A temporary ingress/peer listener.
+- Side B temporary peer worker and temporary download echo target.
 - No route/firewall/DNS/TUN changes.
 - No app-specific proxy settings.
 
-Passing download-direction command on VPS:
+Passing download-direction command on SIDE_A:
 
 ```bash
 timeout 60 /tmp/chimera-peer-egress-test5 --mode download-probe \
@@ -93,4 +93,4 @@ rust/no-hardcode guard: PASS
 
 Partially implemented.
 
-The encrypted mesh peer channel works and is verified on the laptop/VPS tandem for the response/download direction. The current remote path does not meet a higher 8 MiB/s gate; measured aggregate is about 5.25 MiB/s. Transparent OS/application capture is not yet proven by this artifact.
+The encrypted mesh peer channel works and is verified on the side_b/SIDE_A tandem for the response/download direction. The current remote path does not meet a higher 8 MiB/s gate; measured aggregate is about 5.25 MiB/s. Transparent OS/application capture is not yet proven by this artifact.

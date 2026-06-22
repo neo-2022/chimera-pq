@@ -42,8 +42,8 @@ fn validate_obj(obj: &serde_json::Map<String, Value>) -> Result<(), String> {
         return Err("mesh launch preflight verify guard: namespace is blank".to_string());
     }
     let all_ready = require_bool(obj, "all_ready")?;
-    let vps_ready = require_bool(obj, "vps_ready")?;
-    let laptop_ready = require_bool(obj, "laptop_ready")?;
+    let side_a_ready = require_bool(obj, "side_a_ready")?;
+    let side_b_ready = require_bool(obj, "side_b_ready")?;
     let blockers = obj
         .get("blockers")
         .and_then(Value::as_array)
@@ -63,7 +63,7 @@ fn validate_obj(obj: &serde_json::Map<String, Value>) -> Result<(), String> {
                     .to_string(),
             );
         }
-        if !vps_ready || !laptop_ready {
+        if !side_a_ready || !side_b_ready {
             return Err(
                 "mesh launch preflight verify guard: all_ready=true requires both peer flags true"
                     .to_string(),
@@ -117,8 +117,8 @@ mod tests {
         let mut m = Map::new();
         m.insert("status".into(), Value::String("ready".into()));
         m.insert("all_ready".into(), Value::Bool(true));
-        m.insert("vps_ready".into(), Value::Bool(true));
-        m.insert("laptop_ready".into(), Value::Bool(true));
+        m.insert("side_a_ready".into(), Value::Bool(true));
+        m.insert("side_b_ready".into(), Value::Bool(true));
         m.insert("namespace".into(), Value::String("cef-public".into()));
         m.insert("network_state".into(), Value::String("not_modified".into()));
         m.insert("blockers".into(), Value::Array(vec![]));
@@ -150,8 +150,8 @@ mod tests {
         let mut m = base_ready();
         m.insert("status".into(), Value::String("blocked".into()));
         m.insert("all_ready".into(), Value::Bool(false));
-        m.insert("vps_ready".into(), Value::Bool(false));
-        m.insert("laptop_ready".into(), Value::Bool(true));
+        m.insert("side_a_ready".into(), Value::Bool(false));
+        m.insert("side_b_ready".into(), Value::Bool(true));
         let err = match validate_obj(&m) {
             Ok(()) => unreachable!("must fail"),
             Err(err) => err,

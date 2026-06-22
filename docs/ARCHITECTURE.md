@@ -23,7 +23,7 @@ ingress, peer ingress, local egress, and peer transit/forwarding when policy
 allows it.
 
 The canonical runtime role for the shipped peer-egress binary is `node`.
-Legacy `client`, `gateway`, `server`, `vps`, and `laptop` labels remain
+Legacy `client`, `gateway`, `server`, `side_a`, and `side_b` labels remain
 transitional compatibility aliases only.
 
 Transit payload is closed third-party information. A transit node validates only

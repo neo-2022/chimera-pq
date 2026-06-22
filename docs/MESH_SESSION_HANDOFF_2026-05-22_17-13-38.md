@@ -25,7 +25,7 @@
   - `crates/chimera-cli/src/mesh_cli/tests_connect_launch_error_parity_options/`
   - `crates/chimera-cli/src/mesh_cli/tests_connect_launch_error_parity_options_required/`
 - Removed Python/device-specific defaults from:
-  - `scripts/chimera_load_5m_laptop.sh`
+  - `scripts/chimera_load_5m_side_b.sh`
   - Script now requires env/config values and uses shell/curl on the remote side.
 
 ## Validation
@@ -48,10 +48,10 @@
 - `probe --all` remains not bound to the health probe backend.
 - `connect/pin/autoconnect` are still command-local decisions, not persistent runtime state.
 - `chimera-pq` is still not a registered Amai project code; Amai continuity is recorded under project code `amai`.
-- Git status cannot be reported because `/home/art/Archives/WEAVE/chimera-pq` and `/home/art/Archives/WEAVE` are not git repositories in this workspace.
+- Git status cannot be reported because `<repo-root>` and `<workspace-root>` are not git repositories in this workspace.
 
 ## Safety
-- No OS routes, DNS, firewall, system proxy, Happ, MYWEAVE, router, or VPS settings were changed.
+- No OS routes, DNS, firewall, system proxy, Happ, MYWEAVE, router, or SIDE_A settings were changed.
 - Config inventory listing/best/explain remains read-only.
 
 ## Next Step

@@ -6,13 +6,13 @@ cd "$ROOT_DIR"
 
 MODE="${1:-staged}"
 PROFILE_SET="${2:-core}"
-VPS_ENDPOINT="${3:-${CHIMERA_MESH_VPS_ENDPOINT:-}}"
+SIDE_A_ENDPOINT="${3:-${CHIMERA_MESH_SIDE_A_ENDPOINT:-}}"
 
 case "$MODE" in
   staged|full) ;;
   *)
     echo "mesh launch preflight autopilot: mode must be staged or full"
-    echo "usage: mesh_launch_preflight_autopilot.sh [staged|full] [core|all] [vps_host:port]"
+    echo "usage: mesh_launch_preflight_autopilot.sh [staged|full] [core|all] [side_a_host:port]"
     exit 2
     ;;
 esac
@@ -21,13 +21,13 @@ case "$PROFILE_SET" in
   core|all) ;;
   *)
     echo "mesh launch preflight autopilot: profile set must be core or all"
-    echo "usage: mesh_launch_preflight_autopilot.sh [staged|full] [core|all] [vps_host:port]"
+    echo "usage: mesh_launch_preflight_autopilot.sh [staged|full] [core|all] [side_a_host:port]"
     exit 2
     ;;
 esac
 
-if ! [[ "$VPS_ENDPOINT" =~ ^[^:]+:[0-9]+$ ]]; then
-  echo "mesh launch preflight autopilot: vps endpoint must be host:port via arg or CHIMERA_MESH_VPS_ENDPOINT"
+if ! [[ "$SIDE_A_ENDPOINT" =~ ^[^:]+:[0-9]+$ ]]; then
+  echo "mesh launch preflight autopilot: side_a endpoint must be host:port via arg or CHIMERA_MESH_SIDE_A_ENDPOINT"
   exit 2
 fi
 
@@ -36,9 +36,9 @@ if [[ "$PROFILE_SET" == "all" ]]; then
   profiles+=("speed_first" "low_latency_private")
 fi
 
-echo "mesh launch preflight autopilot: mode=$MODE profile_set=$PROFILE_SET vps_endpoint=$VPS_ENDPOINT"
+echo "mesh launch preflight autopilot: mode=$MODE profile_set=$PROFILE_SET side_a_endpoint=$SIDE_A_ENDPOINT"
 
-just mesh-launch-preflight-auto-bind "$VPS_ENDPOINT"
+just mesh-launch-preflight-auto-bind "$SIDE_A_ENDPOINT"
 just mesh-launch-preflight-ready-check
 
 if [[ "$MODE" == "staged" ]]; then

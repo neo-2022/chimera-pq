@@ -31,7 +31,7 @@
 
 ## Safety / Scope (fact)
 - No OS route/DNS/firewall/system WEAVE changes.
-- No changes to Happ/MYWEAVE/router/VPS.
+- No changes to Happ/MYWEAVE/router/SIDE_A.
 - Work limited to source/tests in `chimera-pq`.
 
 ## Next Step (planned)

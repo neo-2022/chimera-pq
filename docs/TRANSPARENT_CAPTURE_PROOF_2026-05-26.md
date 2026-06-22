@@ -32,19 +32,19 @@ Loop prevention:
 - Strict tests used UID/GID `65534` for the transparent runtime child.
 - Capture was restricted to one proof CIDR and one proof TCP port.
 
-## VPS/Laptop Strict Auto-Failover Proof
+## SIDE_A/Side B Strict Auto-Failover Proof
 
 Safety constraints:
 
 - No SSH/default-route/DNS broad capture.
 - No browser/IDE/application proxy flags.
-- nft rule matched only `192.168.31.31/32` and one proof TCP port.
+- nft rule matched only `<stand-host-a-ip>/32` and one proof TCP port.
 - nft table was deleted after the test.
 
-Direct baseline from VPS before CHIMERA runtime:
+Direct baseline from SIDE_A before CHIMERA runtime:
 
 ```text
-vps_direct_without_chimera_fail
+side_a_direct_without_chimera_fail
 ```
 
 Runtime rule:
@@ -55,7 +55,7 @@ table inet chimera_runtime_held {
     type nat hook output priority dstnat; policy accept;
     meta skuid 65534 return
     oifname "lo" return
-    ip daddr 192.168.31.31 tcp dport 18203 redirect to :18204
+    ip daddr <stand-host-a-ip> tcp dport 18203 redirect to :18204
   }
 }
 ```
@@ -63,18 +63,18 @@ table inet chimera_runtime_held {
 Strict path logs:
 
 ```text
-event=transparent_flow_accepted destination=192.168.31.31:18203
-event=transparent_direct_failed reason=direct connect failed: 192.168.31.31:18203: connection timed out
-event=transparent_route_selected route=gateway destination=192.168.31.31:18203
-event=local_ingress_destination host=192.168.31.31 port=18203 native_client=true
-event=peer_connect_request_sent request=CONNECT 192.168.31.31 18203
+event=transparent_flow_accepted destination=<stand-host-a-ip>:18203
+event=transparent_direct_failed reason=direct connect failed: <stand-host-a-ip>:18203: connection timed out
+event=transparent_route_selected route=gateway destination=<stand-host-a-ip>:18203
+event=local_ingress_destination host=<stand-host-a-ip> port=18203 native_client=true
+event=peer_connect_request_sent request=CONNECT <stand-host-a-ip> 18203
 event=peer_connect_ack_received
-event=laptop_peer_request_received request=CONNECT 192.168.31.31 18203
-event=laptop_target_connected target=192.168.31.31:18203
-event=laptop_peer_connect_ack_sent target=192.168.31.31:18203
+event=side_b_peer_request_received request=CONNECT <stand-host-a-ip> 18203
+event=side_b_target_connected target=<stand-host-a-ip>:18203
+event=side_b_peer_connect_ack_sent target=<stand-host-a-ip>:18203
 ```
 
-Ordinary app/TCP command result from VPS, without proxy settings:
+Ordinary app/TCP command result from SIDE_A, without proxy settings:
 
 ```text
 nft_runtime_auto_failover=pass bytes=67108864 elapsed_ms=68458 throughput_mib_s=0.93
@@ -110,13 +110,13 @@ Cleanup verification:
 ```text
 ssh_ok_after_cleanup_attempt
 nft_cleanup_ok
-vps_exact_cleanup_done
-laptop_exact_cleanup_done
+side_a_exact_cleanup_done
+side_b_exact_cleanup_done
 ```
 
 ## Earlier Isolated REDIRECT Proof
 
-Local echo gateway proof on VPS:
+Local echo gateway proof on SIDE_A:
 
 ```text
 chimera_local_gateway_echo=ready listen=127.0.0.1:18135
@@ -156,11 +156,11 @@ Confirmed:
 - Transparent nft REDIRECT captures ordinary app TCP without app proxy flags.
 - SO_ORIGINAL_DST destination recovery works.
 - Direct failure triggers gateway route selection.
-- Gateway route uses encrypted peer-egress to the laptop peer.
+- Gateway route uses encrypted peer-egress to the side_b peer.
 - Cleanup was verified after tests.
 
 Not closed:
 
-- Long-flow app-level Rust probe reached `9.20 MiB/s` with ChaCha20-Poly1305 and `11.91 MiB/s` with AES-256-GCM for 64 MiB through transparent failover. Browser/IDE validation is still not closed because VPS has no Chromium/Firefox installed.
-- Browser/VSCode/Codium real UI validation has not been run under this new Rust runtime; VPS has no Chromium/Firefox available, laptop browser exists but current peer topology is VPS-app-side.
+- Long-flow app-level Rust probe reached `9.20 MiB/s` with ChaCha20-Poly1305 and `11.91 MiB/s` with AES-256-GCM for 64 MiB through transparent failover. Browser/IDE validation is still not closed because SIDE_A has no Chromium/Firefox installed.
+- Browser/VSCode/Codium real UI validation has not been run under this new Rust runtime; SIDE_A has no Chromium/Firefox available, side_b browser exists but current peer topology is SIDE_A-app-side.
 - Runtime packaging/system service integration is not yet finished.

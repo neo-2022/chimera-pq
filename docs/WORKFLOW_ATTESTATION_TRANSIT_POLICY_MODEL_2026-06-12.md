@@ -49,7 +49,7 @@ Stages:
     `chimera-lab` after the first cleanup.
   - Security engineer: no transit payload inspection/logging path was added.
   - DevOps: no local CHIMERA runtime start/stop and no host network mutation.
-  - Critic: full remote laptop/VPS datapath proof remains not run in this slice.
+  - Critic: full remote side_b/SIDE_A datapath proof remains not run in this slice.
 - FIX: done
   - Issue found: smoke/readiness scripts and checked JSON artifacts still used
     `gateway_ok`, `gateway_explain`, `suffix-gateway` and `"outbound":"gateway"`.
@@ -84,7 +84,7 @@ Stages:
     `parse_policy_text("legacy = default => gateway")` and
     `crates/chimera-lab/tests/fake_client_gateway.rs`.
   - No local runtime/network mutation was performed.
-  - Remote laptop/VPS real-world WEAVE datapath proof was not run in this slice.
+  - Remote side_b/SIDE_A real-world WEAVE datapath proof was not run in this slice.
 - REPORT: done
   - Final user report must state code/doc/proof-artifact status separately from
     remote real-world WEAVE datapath status.
@@ -92,5 +92,5 @@ Stages:
 Runtime/network statement:
 
 - Local CHIMERA runtime start/stop is not part of this change.
-- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, and VPS settings
+- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, and SIDE_A settings
   are out of scope for this code/doc update.

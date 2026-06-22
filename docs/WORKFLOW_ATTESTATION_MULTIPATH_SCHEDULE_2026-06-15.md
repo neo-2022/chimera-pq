@@ -26,7 +26,7 @@ Stages:
   - Security engineer: agreed only if explain avoids payload, destination and
     raw endpoint leakage and remains sealed-transit safe.
   - DevOps: agreed; planner/model-only change does not require GitHub release
-    or laptop/VPS runtime proof before source checks.
+    or side_b/SIDE_A runtime proof before source checks.
   - Critic: agreed only if reported as planner/model progress, not real
     multipath transfer or MVP/pass.
 - IMPLEMENTATION: done
@@ -52,7 +52,7 @@ Stages:
     for failover and health-reselection DPS paths.
   - Security engineer: no new privacy/security blocker; new schedule explain
     does not expose payload, destination, peer id or endpoint.
-  - DevOps: no release or laptop/VPS stand proof required for this source-only
+  - DevOps: no release or side_b/SIDE_A stand proof required for this source-only
     planner/model change.
   - Critic: accepted only as planner/model progress; not accepted as real
     carrier-bound multipath or MVP completion.
@@ -92,14 +92,14 @@ Stages:
   - No carrier/runtime datapath execution was added.
   - No local CHIMERA runtime start/stop or host network mutation was performed.
   - Remaining limitation: real carrier-bound multipath transfer still needs a
-    later runtime implementation and laptop/VPS stand proof through GitHub
+    later runtime implementation and side_b/SIDE_A stand proof through GitHub
     one-command release/update flow.
 - REPORT: done
 
 Runtime/network statement:
 
 - Local CHIMERA runtime start/stop is not part of this change.
-- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, laptop and VPS
+- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, side_b and SIDE_A
   settings are out of scope for this source-only planner/model update.
 
 ## 2026-06-15 Follow-Up: Carrier Binding Contract Narrowed
@@ -133,7 +133,7 @@ Verification:
 Not closed:
 
 - This is not real-world carrier-bound runtime PASS.
-- GitHub one-command release/update and SSH stand proof on laptop/VPS remain
+- GitHub one-command release/update and SSH stand proof on side_b/SIDE_A remain
   required before shipped-runtime claims.
 
 ## 2026-06-15 Follow-Up: Fail-Closed Binding And Reserve Budget
@@ -170,4 +170,4 @@ Not closed:
 
 - Full source gate and final sub-agent audit are still required before release.
 - Real-world carrier-bound runtime PASS remains unverified until GitHub
-  one-command release/update and SSH stand proof on laptop/VPS.
+  one-command release/update and SSH stand proof on side_b/SIDE_A.

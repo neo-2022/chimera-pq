@@ -44,7 +44,7 @@
 - Pressure-specific CLI logic remains in `route_explain_pressure.rs`.
 
 ## Safety / Scope (fact)
-- OS routes, DNS, firewall, Happ, MYWEAVE, router and VPS were not modified.
+- OS routes, DNS, firewall, Happ, MYWEAVE, router and SIDE_A were not modified.
 - CLI smoke stayed in explain mode and reported `network_state=not_modified`.
 
 ## Next Step (planned)

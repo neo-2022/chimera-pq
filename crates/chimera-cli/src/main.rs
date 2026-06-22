@@ -2840,7 +2840,7 @@ fn render_help_text(lang: Language) -> String {
             out.push_str("  chimera [--lang en|ru] connect <index|node_id> [--country DE,NL] [--status healthy,checking]\n");
             out.push_str("  chimera [--lang en|ru] pin <index|node_id> [--country DE,NL] [--status healthy,checking]\n");
             out.push_str("  chimera [--lang en|ru] mesh <route-explain|connect-probe|launch-preflight|launch-preflight-verify> --namespace <name> --node <name> (--policy-payload <payload> | --traffic-profile <high_speed_anonymous|privacy_first|speed_first|low_latency_private>) --peer <node@endpoint#region@load@reliability> [--peer ...] [--invite-token <token>] [--failed-node <id>] [--cooldown-node <id>] [--table-max-entries <n>] [--table-max-per-region <n>] [--table-stale-after <ticks>] [--timeout-ms <n>] [--json] [--out <file>]\n");
-            out.push_str("  chimera [--lang en|ru] mesh launch-preflight-verify --vps-report <file> --laptop-report <file> [--json] [--out <file>]\n");
+            out.push_str("  chimera [--lang en|ru] mesh launch-preflight-verify --side-a-report <file> --side-b-report <file> [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] policy validate <policy_file>\n");
             out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] diag rekey <age_sec> <packets_sent>\n");
@@ -2886,7 +2886,7 @@ fn render_help_text(lang: Language) -> String {
             out.push_str("  chimera [--lang en|ru] connect <index|node_id> [--country DE,NL] [--status healthy,checking]\n");
             out.push_str("  chimera [--lang en|ru] pin <index|node_id> [--country DE,NL] [--status healthy,checking]\n");
             out.push_str("  chimera [--lang en|ru] mesh <route-explain|connect-probe|launch-preflight|launch-preflight-verify> --namespace <имя> --node <имя> (--policy-payload <payload> | --traffic-profile <high_speed_anonymous|privacy_first|speed_first|low_latency_private>) --peer <node@endpoint#region@load@reliability> [--peer ...] [--invite-token <токен>] [--failed-node <id>] [--cooldown-node <id>] [--table-max-entries <n>] [--table-max-per-region <n>] [--table-stale-after <ticks>] [--timeout-ms <n>] [--json] [--out <файл>]\n");
-            out.push_str("  chimera [--lang en|ru] mesh launch-preflight-verify --vps-report <файл> --laptop-report <файл> [--json] [--out <файл>]\n");
+            out.push_str("  chimera [--lang en|ru] mesh launch-preflight-verify --side-a-report <файл> --side-b-report <файл> [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] policy validate <файл_policy>\n");
             out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] diag rekey <секунды> <пакеты>\n");

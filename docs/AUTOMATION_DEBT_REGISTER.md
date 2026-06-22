@@ -10,19 +10,19 @@ Purpose:
 
 ## Active Debt Items
 
-1. `DEBT-001`  
-Area: `egress/autonomy`  
-Problem: geo-bypass on VPS has no autonomous multi-region egress path without operator-provided upstream credentials/endpoints.  
-Current impact: blocked resources on VPS stay blocked in `full` and `split` modes.  
-Expected autonomous behavior: CHIMERA must auto-select working egress path (no manual upstream provisioning), then keep it healthy via watchdog/failover.  
+1. `DEBT-001`
+Area: `egress/autonomy`
+Problem: geo-bypass on SIDE_A has no autonomous multi-region egress path without operator-provided upstream credentials/endpoints.
+Current impact: blocked resources on SIDE_A stay blocked in `full` and `split` modes.
+Expected autonomous behavior: CHIMERA must auto-select working egress path (no manual upstream provisioning), then keep it healthy via watchdog/failover.
 Status: `open`
 
-2. `DEBT-002`  
-Area: `nat acceptance`  
-Problem: end-to-end nat verification is not one-command deterministic for both laptop+VPS in clean environments.  
-Current impact: operator has to chain several scripts and environment preparations manually.  
-Expected autonomous behavior: single command runs uninstall/install/start/full/split verification and emits machine-readable PASS/FAIL with blockers.  
-Status: `closed`  
+2. `DEBT-002`
+Area: `nat acceptance`
+Problem: end-to-end nat verification is not one-command deterministic for both side_b+SIDE_A in clean environments.
+Current impact: operator has to chain several scripts and environment preparations manually.
+Expected autonomous behavior: single command runs uninstall/install/start/full/split verification and emits machine-readable PASS/FAIL with blockers.
+Status: `closed`
 Evidence:
 - `scripts/chimera_autonomous_nat_guard.sh`
 - `just chimera-autonomous-nat-guard`
@@ -31,5 +31,5 @@ Evidence:
 
 Debt item can be moved to `closed` only when all are true:
 - autonomous command exists in repository scripts/justfile;
-- proof artifact is reproducible on laptop and VPS;
+- proof artifact is reproducible on side_b and SIDE_A;
 - no manual parameter editing was required during proof cycle.

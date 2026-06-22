@@ -49,12 +49,12 @@
   - `crates/chimera-cli/src/mesh_cli/tests_connect_launch_error_parity_options.rs`
   - `crates/chimera-cli/src/mesh_cli/tests_connect_launch_error_parity_options_required.rs`
 - `rust_no_hardcode_guard` still fails on pre-existing script Python usage:
-  - `scripts/chimera_load_5m_laptop.sh:103`
+  - `scripts/chimera_load_5m_side_b.sh:103`
 - `chimera-pq` is not registered as an Amai project code; Amai handoff was also recorded under project code `amai`.
 - Current CLI node source is explicit `--node` records. Persistent config-backed discovery/listing should be the next implementation step.
 
 ## Safety
-- No OS routes, DNS, firewall, system proxy, Happ, MYVPN, router, VPS runtime network settings changed by this code path.
+- No OS routes, DNS, firewall, system proxy, Happ, MYVPN, router, SIDE_A runtime network settings changed by this code path.
 - New `list`, `best`, and `explain` paths are read-only over supplied node records.
 
 ## Next Step

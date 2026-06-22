@@ -2,7 +2,7 @@
 
 ## Scope
 
-Question: where does remote VPS/laptop throughput get cut, and what was changed without weakening encryption?
+Question: where does remote SIDE_A/side_b throughput get cut, and what was changed without weakening encryption?
 
 ## Facts
 
@@ -34,7 +34,7 @@ single peer flow: error: throughput below gate: actual_mib_s=0.61 min_mib_s=1
 8 peer lanes:      chimera_peer_egress_download_probe=pass bytes=67108864 connections=8 elapsed_ms=7403 throughput_mib_s=8.64
 ```
 
-Available TCP congestion control on both VPS and laptop:
+Available TCP congestion control on both SIDE_A and side_b:
 
 ```text
 reno cubic
@@ -47,7 +47,7 @@ BBR is not available on these hosts, so CHIMERA cannot enable BBR per socket wit
 
 The current remote speed loss is not caused by AEAD or ML-KEM. Evidence: local encrypted datapath is above 1000 MiB/s.
 
-The measured remote loss is in the transport layer of a single WAN TCP/peer flow between VPS and laptop. Parallel lanes raise aggregate throughput, which means CPU/crypto has spare capacity and the path is congestion/window/backpressure limited.
+The measured remote loss is in the transport layer of a single WAN TCP/peer flow between SIDE_A and side_b. Parallel lanes raise aggregate throughput, which means CPU/crypto has spare capacity and the path is congestion/window/backpressure limited.
 
 ## Implemented Fix
 

@@ -1,11 +1,11 @@
 # CHIMERA Bidirectional E2E Smoke
 
 - generated_at: 2026-05-22T13:10:20Z
-- laptop_host: art@192.168.31.31
-- vps_host: root@91.124.19.180
+- side_b_host: <stand-user>@<stand-host-a>
+- side_a_host: <stand-admin>@<stand-host-b>
 
-## Laptop
+## Side B
 {"path_status":"unknown","path_reason":"unknown","gate_status":"unknown","gate_reason":"unknown"}
 
-## VPS
+## SIDE_A
 {"path_status":"unknown","path_reason":"unknown","gate_status":"unknown","gate_reason":"unknown"}

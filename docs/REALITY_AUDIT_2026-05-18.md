@@ -11,14 +11,14 @@
 - `just net-sim`
 - `just perf-smoke`
 
-2. Laptop practical proxy path works in current setup:
+2. Side B practical proxy path works in current setup:
 - `chimera-gateway.service` / `chimera-client.service` are active.
 - `chimera-socks-tunnel.service` is active.
 - SOCKS listener `127.0.0.1:11080` is present.
 - `curl --proxy socks5h://127.0.0.1:11080 https://www.youtube.com` returns `HTTP/2 200`.
 - direct route sanity check (`https://example.org`) returns `HTTP/2 200`.
 
-3. VPS service binaries run in current doctor/state style:
+3. SIDE_A service binaries run in current doctor/state style:
 - user services are active.
 - default verification artifacts still mostly report `network_state":"not_modified"`.
 
@@ -56,7 +56,7 @@
 - explicit apply-path checks now cover real `network_state":"modified"` runtime flow,
   but full automatic policy-driven system datapath remains incomplete.
 
-4. Current practical internet behavior on laptop is achieved by browser/proxy orchestration scripts and system proxy/PAC, not by native TUN datapath in core runtime.
+4. Current practical internet behavior on side_b is achieved by browser/proxy orchestration scripts and system proxy/PAC, not by native TUN datapath in core runtime.
 
 ## Verdict
 

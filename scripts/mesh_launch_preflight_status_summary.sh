@@ -4,12 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-vps_env="configs/mesh_launch_preflight.vps.env"
-laptop_env="configs/mesh_launch_preflight.laptop.env"
+side_a_env="configs/mesh_launch_preflight.side_a.env"
+side_b_env="configs/mesh_launch_preflight.side_b.env"
 
-if [[ ! -f "$vps_env" || ! -f "$laptop_env" ]]; then
+if [[ ! -f "$side_a_env" || ! -f "$side_b_env" ]]; then
   echo "mesh launch preflight status summary: missing env files"
-  echo "required: $vps_env and $laptop_env"
+  echo "required: $side_a_env and $side_b_env"
   exit 1
 fi
 
@@ -19,27 +19,27 @@ extract_value() {
   awk -F= -v k="$key" '$1==k{print substr($0, index($0,$2)); exit}' "$file"
 }
 
-vps_endpoint="$(extract_value CHIMERA_MESH_REMOTE_ENDPOINT "$vps_env")"
-laptop_endpoint="$(extract_value CHIMERA_MESH_REMOTE_ENDPOINT "$laptop_env")"
+side_a_endpoint="$(extract_value CHIMERA_MESH_REMOTE_ENDPOINT "$side_a_env")"
+side_b_endpoint="$(extract_value CHIMERA_MESH_REMOTE_ENDPOINT "$side_b_env")"
 
 echo "mesh launch preflight status summary"
-echo "- side_a remote endpoint: ${vps_endpoint:-<missing>}"
-echo "- side_b remote endpoint: ${laptop_endpoint:-<missing>}"
+echo "- side_a remote endpoint: ${side_a_endpoint:-<missing>}"
+echo "- side_b remote endpoint: ${side_b_endpoint:-<missing>}"
 
-if [[ -f docs/MESH_LAUNCH_PREFLIGHT_VPS.json ]]; then
-  vps_status="$(jq -r '.status // "unknown"' docs/MESH_LAUNCH_PREFLIGHT_VPS.json)"
-  vps_ready="$(jq -r '.ready_for_real_launch // false' docs/MESH_LAUNCH_PREFLIGHT_VPS.json)"
-  echo "- vps artifact: status=${vps_status}, ready_for_real_launch=${vps_ready}"
+if [[ -f docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json ]]; then
+  side_a_status="$(jq -r '.status // "unknown"' docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json)"
+  side_a_ready="$(jq -r '.ready_for_real_launch // false' docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json)"
+  echo "- side_a artifact: status=${side_a_status}, ready_for_real_launch=${side_a_ready}"
 else
-  echo "- vps artifact: missing"
+  echo "- side_a artifact: missing"
 fi
 
-if [[ -f docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json ]]; then
-  laptop_status="$(jq -r '.status // "unknown"' docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json)"
-  laptop_ready="$(jq -r '.ready_for_real_launch // false' docs/MESH_LAUNCH_PREFLIGHT_LAPTOP.json)"
-  echo "- laptop artifact: status=${laptop_status}, ready_for_real_launch=${laptop_ready}"
+if [[ -f docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json ]]; then
+  side_b_status="$(jq -r '.status // "unknown"' docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json)"
+  side_b_ready="$(jq -r '.ready_for_real_launch // false' docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json)"
+  echo "- side_b artifact: status=${side_b_status}, ready_for_real_launch=${side_b_ready}"
 else
-  echo "- laptop artifact: missing"
+  echo "- side_b artifact: missing"
 fi
 
 if [[ -f docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json ]]; then

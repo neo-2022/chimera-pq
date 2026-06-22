@@ -12,8 +12,8 @@ path over SSH.
 
 Authorized stand hosts:
 
-- laptop: authorized laptop SSH target, redacted in public proof
-- VPS: authorized VPS SSH target, reached through the laptop as SSH jump host;
+- side_b: authorized side_b SSH target, redacted in public proof
+- SIDE_A: authorized SIDE_A SSH target, reached through the side_b as SSH jump host;
   target value redacted in public proof
 
 The stand install/update command used GitHub Release/Latest only:
@@ -39,7 +39,7 @@ ANALYSIS -> PLAN -> TEAM_CRITIQUE -> IMPLEMENTATION -> TEAM_CHECK -> FIX
 - ANALYSIS: completed
 - PLAN: completed
 - TEAM_CRITIQUE: completed with real sub-agent roles
-- IMPLEMENTATION: completed on laptop and VPS through GitHub one-command
+- IMPLEMENTATION: completed on side_b and SIDE_A through GitHub one-command
 - TEAM_CHECK: completed through installed-binary proof on both hosts
 - FIX: proof_parser_corrected
 - RECHECK: completed through corrected route-explain parsing and bad-bootstrap
@@ -61,9 +61,9 @@ Real sub-agent roles used for this cycle:
 Agreed:
 
 - `v0.1.108` can be verified as a remote installed release/update proof after
-  laptop and VPS evidence is collected.
+  side_b and SIDE_A evidence is collected.
 - The update source must remain GitHub Release/Latest.
-- The VPS SSH jump host is only a transport path, not a release source.
+- The SIDE_A SSH jump host is only a transport path, not a release source.
 - Installed proof must include version, checksum, route-explain demand
   diagnostics, redaction, negative bad-bootstrap behavior, and unchanged network
   state on both hosts.
@@ -117,10 +117,10 @@ Release workflow evidence:
 
 ## SSH Preflight
 
-Laptop:
+Side B:
 
 ```text
-host=laptop ssh_ok=true
+host=side_b ssh_ok=true
 curl=present
 tar=present
 sha256sum=present
@@ -128,10 +128,10 @@ jq=present
 Linux 7.0.0-22-generic x86_64
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps ssh_ok=true via_jump=true
+host=side_a ssh_ok=true via_jump=true
 curl=present
 tar=present
 sha256sum=present
@@ -139,56 +139,56 @@ jq=present
 Linux 6.8.0-124-generic x86_64
 ```
 
-Direct SSH from the local PC to the VPS timed out during banner exchange in this
-session. The VPS proof was therefore run through the authorized laptop jump
+Direct SSH from the local PC to the SIDE_A timed out during banner exchange in this
+session. The SIDE_A proof was therefore run through the authorized side_b jump
 host. The jump host was not used as a release source.
 
 ## Install/Update Evidence
 
-Laptop:
+Side B:
 
 ```text
-host=laptop phase=before version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af expected_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af
-host=laptop install_rc=0
-host=laptop phase=after version=0.1.108 bundle_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 expected_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 archive_checksum_ok=true
-host=laptop launcher_version=chimera-runtime 0.1.108
-host=laptop cli_executable=true
+host=side_b phase=before version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af expected_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af
+host=side_b install_rc=0
+host=side_b phase=after version=0.1.108 bundle_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 expected_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 archive_checksum_ok=true
+host=side_b launcher_version=chimera-runtime 0.1.108
+host=side_b cli_executable=true
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps phase=before version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af expected_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af
-host=vps install_rc=0
-host=vps phase=after version=0.1.108 bundle_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 expected_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 archive_checksum_ok=true
-host=vps launcher_version=chimera-runtime 0.1.108
-host=vps cli_executable=true
+host=side_a phase=before version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af expected_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af
+host=side_a install_rc=0
+host=side_a phase=after version=0.1.108 bundle_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 expected_sha=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 archive_checksum_ok=true
+host=side_a launcher_version=chimera-runtime 0.1.108
+host=side_a cli_executable=true
 ```
 
 ## Installed Binary Proof
 
 Route-explain proof was run with installed `chimera-cli` and reserved TEST-NET
-simulation endpoints. The first laptop proof parser incorrectly treated
+simulation endpoints. The first side_b proof parser incorrectly treated
 `.explain` as an array and reported missing demand fields. The installed JSON
 stores `.explain` as a string, so the proof parser was corrected to parse pipe
 and semicolon separated explain lines. The corrected proof is recorded below.
 
-Laptop:
+Side B:
 
 ```text
-host=laptop corrected_proof=route_explain status_ok=true kind_ok=true contract_ok=true network_state=not_modified demand_policy=high demand_requested=2 demand_planned=2 demand_capacity_pct=90 demand_status=within_budget demand_fields_ok=true demand_math_ok=true lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
-host=laptop proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.108 checksum_after_bad=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 bad_unchanged=true bad_redaction_ok=true
-host=laptop corrected_proof=network routes_unchanged=true addr_normalized_unchanged=true resolv_unchanged=true network_unchanged=true
-host=laptop corrected_summary version_ok=true checksum_ok=true archive_checksum_ok=true route_explain_demand_ok=true redaction_ok=true bad_bootstrap_nonzero=true bad_unchanged=true network_unchanged=true
+host=side_b corrected_proof=route_explain status_ok=true kind_ok=true contract_ok=true network_state=not_modified demand_policy=high demand_requested=2 demand_planned=2 demand_capacity_pct=90 demand_status=within_budget demand_fields_ok=true demand_math_ok=true lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
+host=side_b proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.108 checksum_after_bad=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 bad_unchanged=true bad_redaction_ok=true
+host=side_b corrected_proof=network routes_unchanged=true addr_normalized_unchanged=true resolv_unchanged=true network_unchanged=true
+host=side_b corrected_summary version_ok=true checksum_ok=true archive_checksum_ok=true route_explain_demand_ok=true redaction_ok=true bad_bootstrap_nonzero=true bad_unchanged=true network_unchanged=true
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps proof=route_explain route_rc=0 status_ok=true kind_ok=true contract_ok=true network_state=not_modified demand_policy=high demand_requested=2 demand_planned=2 demand_capacity_pct=90 demand_status=within_budget demand_fields_ok=true demand_math_ok=true lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
-host=vps proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.108 checksum_after_bad=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 bad_unchanged=true bad_redaction_ok=true
-host=vps proof=network routes_unchanged=true addr_normalized_unchanged=true resolv_unchanged=true network_unchanged=true
-host=vps summary version_ok=true checksum_ok=true archive_checksum_ok=true route_explain_demand_ok=true redaction_ok=true bad_bootstrap_nonzero=true bad_unchanged=true network_unchanged=true
+host=side_a proof=route_explain route_rc=0 status_ok=true kind_ok=true contract_ok=true network_state=not_modified demand_policy=high demand_requested=2 demand_planned=2 demand_capacity_pct=90 demand_status=within_budget demand_fields_ok=true demand_math_ok=true lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
+host=side_a proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.108 checksum_after_bad=eded683686dcc089a683079e91d412bf38030ccc3564fa77aca1a19ccd2f6bd9 bad_unchanged=true bad_redaction_ok=true
+host=side_a proof=network routes_unchanged=true addr_normalized_unchanged=true resolv_unchanged=true network_unchanged=true
+host=side_a summary version_ok=true checksum_ok=true archive_checksum_ok=true route_explain_demand_ok=true redaction_ok=true bad_bootstrap_nonzero=true bad_unchanged=true network_unchanged=true
 ```
 
 Route-explain proof verified:
@@ -223,7 +223,7 @@ Closed:
 
 - GitHub Latest points to `v0.1.108`.
 - Required release assets are present.
-- Laptop and VPS were updated by GitHub one-command install/update only.
+- Side B and SIDE_A were updated by GitHub one-command install/update only.
 - Installed version and release bundle checksum match on both hosts.
 - Installed route-explain exposes demand-aware lane planning diagnostics,
   lane-admission diagnostics, and `sealed_opaque_only` transit payload policy.
@@ -235,7 +235,7 @@ Closed:
 Not closed by this document:
 
 - full Real-World datapath PASS;
-- node-to-node live carrier traffic between laptop and VPS;
+- node-to-node live carrier traffic between side_b and SIDE_A;
 - actual transit forwarding of third-party traffic;
 - transparent TUN/OS routing behavior;
 - DNS-to-route runtime binding;
@@ -245,8 +245,8 @@ Not closed by this document:
 
 ## Risks And Limits
 
-- Direct SSH from local PC to VPS timed out during banner exchange; VPS proof
-  used the authorized laptop jump host.
+- Direct SSH from local PC to SIDE_A timed out during banner exchange; SIDE_A proof
+  used the authorized side_b jump host.
 - The proof uses installed route-explain simulation for diagnostics and
   redaction. It does not prove live TUN/datapath traffic.
 - There is no separate signature artifact in this release proof; the verified

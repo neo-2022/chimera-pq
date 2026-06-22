@@ -1,1 +1,1 @@
-{"status":"blocked","all_ready":false,"vps_ready":false,"laptop_ready":false,"namespace":"cef-public","network_state":"not_modified","blockers":["vps_report_not_ready","laptop_report_not_ready"]}
+{"status":"blocked","all_ready":false,"side_a_ready":false,"side_b_ready":false,"namespace":"cef-public","network_state":"not_modified","blockers":["side_a_report_not_ready","side_b_report_not_ready"]}

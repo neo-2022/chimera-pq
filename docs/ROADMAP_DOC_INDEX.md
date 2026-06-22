@@ -26,13 +26,13 @@ Scope: all *.md/*.txt under docs/
 - `CHIMERA_BIDIRECTIONAL_E2E_SMOKE_2026-05-22_16-10-58.md` — CHIMERA Bidirectional E2E Smoke
 - `CHIMERA_BIDIRECTIONAL_E2E_SMOKE_2026-05-22_16-12-24.md` — CHIMERA Bidirectional E2E Smoke
 - `CHIMERA_FRESH_GATE_REPORT.md` — CHIMERA Fresh Gate Report
-- `CHIMERA_LOAD_GATE_LAPTOP.md` — CHIMERA Load Gate (Laptop)
+- `CHIMERA_LOAD_GATE_SIDE_B.md` — CHIMERA Load Gate (Side B)
 - `CHIMERA_MESH_LOAD_REPORT_2026-05-22.md` — CHIMERA Mesh Load Report (2026-05-22)
 - `CHIMERA_REMOTE_CYCLE_SMOKE_REPORT_2026-05-22_15-41-21.md` — CHIMERA Remote Cycle Smoke Report
 - `EXECUTION_MODE_NO_TIMELINES.md` — CHIMERA-PQ Execution Mode: No Timelines
 - `FINAL_M5_M6_REPORT.md` — FINAL M5/M6 Report
 - `GO_NO_GO.md` — GO/NO-GO Decision
-- `LAPTOP_FRESH_GATE_SUMMARY_2026-05-22.md` — Laptop Fresh Gate Summary (2026-05-22)
+- `SIDE_B_FRESH_GATE_SUMMARY_2026-05-22.md` — Side B Fresh Gate Summary (2026-05-22)
 - `M5_ARTIFACTS_REPORT.md` — M5 Artifacts Report
 - `M6_ARTIFACTS_REPORT.md` — M6 Artifacts Report
 - `MESH_DECISION_LOG.md` — MESH Decision Log

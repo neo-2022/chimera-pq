@@ -16,8 +16,8 @@ fn main() {
     };
     let result = match options.mode {
         chimera_carrier::peer_egress::options::Mode::Node => node::run_node(options),
-        chimera_carrier::peer_egress::options::Mode::Vps => modes::run_vps(options),
-        chimera_carrier::peer_egress::options::Mode::Laptop => modes::run_laptop(options),
+        chimera_carrier::peer_egress::options::Mode::SideA => modes::run_side_a(options),
+        chimera_carrier::peer_egress::options::Mode::SideB => modes::run_side_b(options),
         chimera_carrier::peer_egress::options::Mode::Bench => modes::run_bench(options),
         chimera_carrier::peer_egress::options::Mode::Echo => modes::run_echo(options),
         chimera_carrier::peer_egress::options::Mode::Probe => modes::run_probe(options),

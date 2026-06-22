@@ -82,5 +82,5 @@ From release readiness and MVP verification artifacts:
 
 ## Safety Note
 
-During default validation cycle, OS routes/DNS/firewall/proxy/router/VPS were not modified.
+During default validation cycle, OS routes/DNS/firewall/proxy/router/SIDE_A were not modified.
 Explicit runtime apply checks may modify local OS TUN/route/DNS and must be followed by rollback.

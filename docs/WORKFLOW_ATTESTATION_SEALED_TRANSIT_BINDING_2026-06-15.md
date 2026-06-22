@@ -26,7 +26,7 @@ Stages:
   - Security engineer: required missing/ambiguous/unknown binding fail-closed and
     no payload/destination/endpoint leakage.
   - DevOps: source-only checks are enough for this increment; release and
-    laptop/VPS proof are required before shipped runtime claims.
+    side_b/SIDE_A proof are required before shipped runtime claims.
   - Critic: accepted only as dispatch-contract progress, not real multipath
     runtime PASS.
 - IMPLEMENTATION: done
@@ -53,7 +53,7 @@ Stages:
   - Security engineer: accepted route/lane only as opaque metadata; required no
     payload/destination/endpoint leakage and fail-closed on missing/unknown
     binding.
-  - DevOps: confirmed GitHub one-command release/update and laptop/VPS SSH
+  - DevOps: confirmed GitHub one-command release/update and side_b/SIDE_A SSH
     evidence are required before shipped runtime claims.
   - Critic: rejected false PASS on parser-only work; required byte-identical
     forwarding, no pool fallback for bound transit, and dirty-tree caveat.
@@ -80,19 +80,19 @@ Stages:
 - FINAL_AUDIT: done
   - No CHIMERA runtime was started, stopped or restarted on the current PC.
   - No local DNS, route, firewall, proxy, VPN, Happ, MYVPN, router, notebook or
-    VPS setting was changed.
+    SIDE_A setting was changed.
   - Current status is source/unit/lab verified only. Real node-to-node
     carrier-bound sealed transit and GitHub one-command stand update remain
     unverified for this change.
 - REPORT: done
   - Status: source-level sealed-transit binding dispatch contract is verified.
   - Not closed: real runtime registration of binding to next-hop, release
-    publication, GitHub Latest verification, and SSH stand proof on notebook/VPS.
+    publication, GitHub Latest verification, and SSH stand proof on notebook/SIDE_A.
 
 Runtime/network statement:
 
 - Local CHIMERA runtime start/stop is not part of this change.
-- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, laptop and VPS
+- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, side_b and SIDE_A
   settings are out of scope for this source-level carrier contract update.
 - This is not a Real-World PASS and not a milestone close.
 
@@ -141,7 +141,7 @@ Not closed:
 
 - No local runtime was started.
 - New source has not been published as a GitHub release.
-- Laptop/VPS real-world proof remains `not verified` until one-command
+- Side B/SIDE_A real-world proof remains `not verified` until one-command
   GitHub install/update deploys this source.
 
 ## 2026-06-15 Follow-Up: Policy Gate And One-Command Wiring
@@ -177,5 +177,5 @@ Not closed:
 
 - Full source gate and final sub-agent audit are still required before release.
 - New source has not been published as a GitHub release.
-- Laptop/VPS real-world proof remains `not verified` until one-command
+- Side B/SIDE_A real-world proof remains `not verified` until one-command
   GitHub install/update deploys this source.

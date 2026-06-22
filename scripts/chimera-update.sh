@@ -60,8 +60,8 @@ read_local_install_role() {
     env_mode="$(awk -F= '/^CHIMERA_PEER_EGRESS_MODE=/{print $2; exit}' "$env_file" 2>/dev/null | tr -d '[:space:]')"
     case "$env_mode" in
       node|weave-node) echo "node"; return 0 ;;
-      vps) echo "server"; return 0 ;;
-      laptop|client) echo "client"; return 0 ;;
+      side_a) echo "server"; return 0 ;;
+      side_b|client) echo "client"; return 0 ;;
     esac
   fi
   echo "${CHIMERA_INSTALL_NODE_ROLE:-node}"

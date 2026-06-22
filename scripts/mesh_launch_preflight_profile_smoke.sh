@@ -11,15 +11,15 @@ profiles=(
   low_latency_private
 )
 
-VPS_ENV="configs/mesh_launch_preflight.vps.env.example"
-LAPTOP_ENV="configs/mesh_launch_preflight.laptop.env.example"
+SIDE_A_ENV="configs/mesh_launch_preflight.side_a.env.example"
+SIDE_B_ENV="configs/mesh_launch_preflight.side_b.env.example"
 
-if [[ ! -f "$VPS_ENV" ]]; then
-  echo "mesh launch preflight profile smoke: missing $VPS_ENV"
+if [[ ! -f "$SIDE_A_ENV" ]]; then
+  echo "mesh launch preflight profile smoke: missing $SIDE_A_ENV"
   exit 1
 fi
-if [[ ! -f "$LAPTOP_ENV" ]]; then
-  echo "mesh launch preflight profile smoke: missing $LAPTOP_ENV"
+if [[ ! -f "$SIDE_B_ENV" ]]; then
+  echo "mesh launch preflight profile smoke: missing $SIDE_B_ENV"
   exit 1
 fi
 
@@ -38,7 +38,7 @@ for profile in "${profiles[@]}"; do
 
   set -a
   # shellcheck disable=SC1090
-  source "$VPS_ENV"
+  source "$SIDE_A_ENV"
   CHIMERA_MESH_LOCAL_OUT="/tmp/chimera_mesh_launch_preflight_${profile}_side_a_local.json"
   CHIMERA_MESH_REMOTE_OUT="/tmp/chimera_mesh_launch_preflight_${profile}_side_a_remote.json"
   CHIMERA_MESH_VERIFY_OUT="/tmp/chimera_mesh_launch_preflight_${profile}_verify.json"
@@ -57,7 +57,7 @@ for profile in "${profiles[@]}"; do
 
   set -a
   # shellcheck disable=SC1090
-  source "$LAPTOP_ENV"
+  source "$SIDE_B_ENV"
   CHIMERA_MESH_LOCAL_OUT="/tmp/chimera_mesh_launch_preflight_${profile}_side_b_local.json"
   CHIMERA_MESH_REMOTE_OUT="/tmp/chimera_mesh_launch_preflight_${profile}_side_b_remote.json"
   CHIMERA_MESH_VERIFY_OUT="/tmp/chimera_mesh_launch_preflight_${profile}_verify.json"

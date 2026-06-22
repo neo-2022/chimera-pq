@@ -58,10 +58,10 @@ pub fn run_bench(options: Options) -> Result<(), String> {
     let local_addr = local_listener
         .local_addr()
         .map_err(|error| format!("read bench local addr failed: {error}"))?;
-    start_vps_runtime(peer_listener, local_listener, token.clone(), options.aead);
+    start_side_a_runtime(peer_listener, local_listener, token.clone(), options.aead);
 
     let worker_options = Options {
-        mode: Mode::Laptop,
+        mode: Mode::SideB,
         local_listen: String::new(),
         peer_listen: String::new(),
         state_file: None,
@@ -412,7 +412,7 @@ fn run_probe_connection(
     Ok(())
 }
 
-pub fn start_vps_runtime(
+pub fn start_side_a_runtime(
     peer_listener: TcpListener,
     local_listener: TcpListener,
     token: String,

@@ -65,10 +65,10 @@
 
 ## Remote Stand Status
 
-- Laptop `art@192.168.31.21`: SSH reachable; has `curl`; no `cargo`, `rustc`,
+- Side B `<stand-user>@<stand-host-a>`: SSH reachable; has `curl`; no `cargo`, `rustc`,
   or `git` found; `~/.local/share/chimera-pq` contains `runtime` only in the
   checked path.
-- VPS `root@91.124.19.180`: SSH reachable; has `cargo`, `rustc`, `git`, `curl`;
+- SIDE_A `<stand-admin>@<stand-host-b>`: SSH reachable; has `cargo`, `rustc`, `git`, `curl`;
   installed release marker shows `0.1.69`.
 - Current source was not installed on the stand because no new GitHub release
   containing this patch has been published in this session.
@@ -76,18 +76,18 @@
 ## Not Closed
 
 - No Real-World PASS for this source change yet.
-- Need GitHub release/update path first, then one-command install/update on VPS
-  and laptop over SSH.
+- Need GitHub release/update path first, then one-command install/update on SIDE_A
+  and side_b over SSH.
 - Need real carrier-bound transit proof after stand update.
 
 ## Safety
 
 - No CHIMERA runtime was started, stopped or restarted on the current PC.
-- No local DNS, routes, firewall, proxy, VPN, Happ, MYVPN, router, laptop or VPS
+- No local DNS, routes, firewall, proxy, VPN, Happ, MYVPN, router, side_b or SIDE_A
   network settings were changed by this source-level work.
 
 ## Next Step
 
-- Publish/build a GitHub release from current source, update VPS and laptop only
+- Publish/build a GitHub release from current source, update SIDE_A and side_b only
   through the documented one-command GitHub path, then run node-to-node
   carrier-bound sealed transit proof on the SSH stand.

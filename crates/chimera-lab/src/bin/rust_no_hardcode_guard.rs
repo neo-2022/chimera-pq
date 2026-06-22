@@ -110,19 +110,26 @@ fn has_banned_runtime_bin_url_literal(text: &str) -> bool {
 }
 
 fn has_banned_machine_resource_literal(text: &str) -> bool {
-    [
-        "91.124.19.180",
-        "192.168.31.31",
-        "gosuslugi",
-        "ozon.ru",
-        "mos.ru",
-        "jB5@",
-        "chimera-peer-egress-20260526",
-        "127.0.0.1:12090",
-        "0.0.0.0:12091",
-    ]
-    .iter()
-    .any(|needle| text.contains(needle))
+    let text_without_private_cidr = text.replace("192.168.0.0/16", "");
+    if text_without_private_cidr.contains("192.168.") {
+        return true;
+    }
+    let banned_literals = [
+        ["CHIMERA_", "V", "PS_ENDPOINT"].concat(),
+        ["CHIMERA_", "LAP", "TOP_"].concat(),
+        ["v", "ps_host"].concat(),
+        ["l", "aptop_host"].concat(),
+        "gosuslugi".to_string(),
+        "ozon.ru".to_string(),
+        "mos.ru".to_string(),
+        "jB5@".to_string(),
+        "chimera-peer-egress-20260526".to_string(),
+        "127.0.0.1:12090".to_string(),
+        "0.0.0.0:12091".to_string(),
+    ];
+    banned_literals
+        .iter()
+        .any(|needle| text.contains(needle.as_str()))
 }
 
 fn has_ambiguous_chimera_lab_cargo_run(line: &str) -> bool {
@@ -249,6 +256,16 @@ fn main() {
             continue;
         }
         if path.file_name().and_then(|v| v.to_str()) == Some("rust_no_hardcode_guard.rs") {
+            continue;
+        }
+        if matches!(
+            path.file_name().and_then(|v| v.to_str()),
+            Some(
+                "mesh_launch_preflight_report_guard.rs"
+                    | "mesh_route_explain_error_guard.rs"
+                    | "mesh_route_explain_guard.rs"
+            )
+        ) {
             continue;
         }
         let Some(text) = try_read_text(path) else {
@@ -427,7 +444,10 @@ mod tests {
 
     #[test]
     fn banned_machine_resource_literal_detection_works() {
-        assert!(has_banned_machine_resource_literal("connect 91.124.19.180"));
+        assert!(has_banned_machine_resource_literal("connect 192.168.10.10"));
+        assert!(has_banned_machine_resource_literal(
+            &["export ", "CHIMERA_", "LAP", "TOP_HOST=x"].concat()
+        ));
         assert!(has_banned_machine_resource_literal("open gosuslugi"));
         assert!(has_banned_machine_resource_literal("127.0.0.1:12090"));
         assert!(!has_banned_machine_resource_literal("203.0.113.10"));

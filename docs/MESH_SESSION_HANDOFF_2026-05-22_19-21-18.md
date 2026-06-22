@@ -30,7 +30,7 @@
 - No live OS route/DNS/firewall mutation was introduced (read-only/contract work only).
 
 ## Safety
-- No changes to OS routes, DNS, firewall, system proxy, router, VPS, Happ, or MYVPN.
+- No changes to OS routes, DNS, firewall, system proxy, router, SIDE_A, Happ, or MYVPN.
 - Work limited to Rust code/tests and docs inside repository.
 
 ## Next Step

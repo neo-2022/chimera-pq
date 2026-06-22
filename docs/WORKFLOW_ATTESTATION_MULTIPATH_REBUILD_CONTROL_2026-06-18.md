@@ -48,7 +48,7 @@ Status: done
 Status: done
 
 - Architect: accepted a runtime-owned guard, but blocked any Real-World claim
-  without laptop/VPS proof.
+  without side_b/SIDE_A proof.
 - Senior Rust: required state in `MeshRuntime`, a separate module, no mutation
   of pure `plan_path(&self)` or `plan_multipath_flow()`.
 - Tester: required tests for duplicate suppression, stale telemetry, urgent
@@ -57,7 +57,7 @@ Status: done
   counters and policy labels; no raw payload, peer id, endpoint, route id, flow
   id or fingerprint.
 - DevOps: required full source gates and a new GitHub Release/Latest before
-  laptop/VPS installed proof.
+  side_b/SIDE_A installed proof.
 - Critic: rejected a cache-as-truth design and required fail-closed behavior for
   stale/unsafe inputs.
 
@@ -155,7 +155,7 @@ Fix:
 
 Status: done
 
-Commands run from `/home/art/Archives/VPN/chimera-pq`:
+Commands run from `<repo-root>`:
 
 - `cargo fmt --all -- --check` PASS
 - `cargo test -q -p chimera-mesh tests_multipath_schedule::rebuild_control`
@@ -193,14 +193,14 @@ Status: partial
 Completed:
 
 - Architect final audit: PASS for source-level architecture; blocked only
-  Real-World/runtime claims without laptop/VPS proof.
+  Real-World/runtime claims without side_b/SIDE_A proof.
 - Senior Rust final audit: initially BLOCK due to rebuild reason injection risk;
   fix applied and full source recheck passed.
 
 Pending at document creation:
 
 - Architect final audit: PASS for source-level architecture; blocked only
-  Real-World/runtime claims without laptop/VPS proof.
+  Real-World/runtime claims without side_b/SIDE_A proof.
 - Senior Rust final audit: PASS after whitespace-injection fix.
 - Tester final audit: PASS after whitespace-injection fix.
 - Security final audit: PASS after allowlist, private-field/compile-fail, and
@@ -226,8 +226,8 @@ Closed:
 Not closed:
 
 - GitHub Release/Latest for this slice.
-- Laptop/VPS one-command update proof for this slice.
-- Live carrier traffic between laptop and VPS.
+- Side B/SIDE_A one-command update proof for this slice.
+- Live carrier traffic between side_b and SIDE_A.
 - Real sealed transit forwarding of third-party traffic.
 - Transparent TUN/OS routing.
 - DNS-to-route runtime binding.

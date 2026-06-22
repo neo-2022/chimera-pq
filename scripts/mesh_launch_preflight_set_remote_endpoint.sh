@@ -10,8 +10,8 @@ side="$1"
 endpoint="$2"
 
 case "$side" in
-  side_a) env_file="configs/mesh_launch_preflight.vps.env" ;;
-  side_b) env_file="configs/mesh_launch_preflight.laptop.env" ;;
+  side_a) env_file="configs/mesh_launch_preflight.side_a.env" ;;
+  side_b) env_file="configs/mesh_launch_preflight.side_b.env" ;;
   *)
     echo "mesh launch preflight set endpoint: side must be side_a or side_b"
     exit 1

@@ -109,8 +109,8 @@ workspace tests: passed
 ## Not Closed
 
 - GitHub Release/Latest publication for this change;
-- laptop/VPS one-command GitHub install/update proof;
-- live laptop/VPS bound multi-hop sealed transit delivery proof;
+- side_b/SIDE_A one-command GitHub install/update proof;
+- live side_b/SIDE_A bound multi-hop sealed transit delivery proof;
 - transparent TUN/OS routing proof;
 - DNS-to-route runtime binding proof;
 - split-mode failover/direct-preservation proof;
@@ -126,4 +126,4 @@ workspace tests: passed
   around package installation; if CI release blocks again, manual release from
   the exact pushed tag requires asset and checksum verification.
 - This evidence is source-level. Runtime claims require a published release and
-  SSH-only stand proof on laptop/VPS.
+  SSH-only stand proof on side_b/SIDE_A.

@@ -35,7 +35,7 @@ Host kernel: Linux 7.0.0-22-generic x86_64
 
 - The verification was executed by the agent end-to-end, no user action required.
 - Validation used a clean-room copy isolated from the primary working directory.
-- No OS route/firewall/proxy/router/VPS changes were performed during this check.
+- No OS route/firewall/proxy/router/SIDE_A changes were performed during this check.
 - Runtime DNS smoke only modifies a resolver test file under `/tmp` and rolls it back.
 - Runtime route smoke is strict for release gating and requires `apply_attempt_ok: true`.
 - Runtime forced-stop smoke is strict for release gating and requires `recover_ok: true` and `down_state_clean: true`.

@@ -54,7 +54,7 @@ Stages:
 - FINAL_AUDIT: done
   - No local runtime/network mutation found in this change.
   - No payload debug leak found in WEAVE transit wrapper test.
-  - No real laptop/VPS datapath proof was run in this change.
+  - No real side_b/SIDE_A datapath proof was run in this change.
 - REPORT: done
   - Final user report must state that the code/docs/test slice is verified, while
     remote real-world datapath proof remains not run in this change.
@@ -62,5 +62,5 @@ Stages:
 Runtime/network statement:
 
 - Local CHIMERA runtime start/stop was not part of this change.
-- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, and VPS settings
+- Local DNS, routes, firewall, proxy, Happ, MYVPN, VPN, router, and SIDE_A settings
   are out of scope for this code/doc update.

@@ -5,15 +5,15 @@ Date: 2026-06-18
 
 ## Objective
 
-Publish `v0.1.112` as GitHub Release/Latest and verify laptop/VPS install/update
+Publish `v0.1.112` as GitHub Release/Latest and verify side_b/SIDE_A install/update
 using only the GitHub one-command path over SSH.
 
 Also run a bounded SSH stand proof for the shipped WEAVE peer-egress runtime:
 
-- local ingress on VPS;
-- peer ingress on VPS;
-- peer egress on laptop;
-- sealed transit local-ingress forwarding branch on VPS.
+- local ingress on SIDE_A;
+- peer ingress on SIDE_A;
+- peer egress on side_b;
+- sealed transit local-ingress forwarding branch on SIDE_A.
 
 ## Council Notes
 
@@ -31,7 +31,7 @@ Accepted:
 
 Rejected:
 
-- calling `v0.1.111` laptop stand PASS after laptop install hung in the
+- calling `v0.1.111` side_b stand PASS after side_b install hung in the
   unbounded `wget` fallback;
 - using `scp`, `rsync`, local tarball, target artifacts, `git clone`, `cargo`
   or local PC runtime as stand proof;
@@ -48,10 +48,10 @@ v0.1.112 commit: ac403fa14cc5536cc489f08814564caf5f0de777
 
 `v0.1.111` result:
 
-- VPS updated and started successfully.
-- Laptop install found a real defect: `curl` timed out and `wget` fallback had
+- SIDE_A updated and started successfully.
+- Side B install found a real defect: `curl` timed out and `wget` fallback had
   no timeout, leaving a 0-byte archive download in progress.
-- The stuck laptop install was killed; laptop remained at `0.1.110` with the
+- The stuck side_b install was killed; side_b remained at `0.1.110` with the
   previous checksum.
 
 Fix in `v0.1.112`:
@@ -109,7 +109,7 @@ Canonical command used on both stand hosts:
 bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install'
 ```
 
-Laptop:
+Side B:
 
 ```text
 before_version=0.1.110
@@ -125,7 +125,7 @@ route_mode=split
 stop_status=ok
 ```
 
-VPS:
+SIDE_A:
 
 ```text
 before_version=0.1.111
@@ -154,15 +154,15 @@ unchanged=true
 
 ## Live WEAVE Stand Proof
 
-Temporary runtime only on laptop/VPS:
+Temporary runtime only on side_b/SIDE_A:
 
-- VPS WEAVE node:
+- SIDE_A WEAVE node:
   - local ingress: `127.0.0.1:19080`;
   - peer ingress: `0.0.0.0:19081`;
-- laptop WEAVE peer connected to VPS peer ingress;
-- laptop local echo target: `127.0.0.1:19091`.
+- side_b WEAVE peer connected to SIDE_A peer ingress;
+- side_b local echo target: `127.0.0.1:19091`.
 
-VPS node reported:
+SIDE_A node reported:
 
 ```text
 chimera_peer_egress=node_ready
@@ -191,7 +191,7 @@ raw_destination_in_node_logs=false
 CHIMERA peer logs:
 
 ```text
-chimera_peer_egress=laptop_connecting server=<redacted>
+chimera_peer_egress=side_b_connecting server=<redacted>
 event=outbound_peer_connected
 event=outbound_peer_request_received request=<redacted>
 event=outbound_peer_target_connecting target=<redacted>
@@ -220,7 +220,7 @@ Limit:
 Cleanup:
 
 ```text
-vps_temp_pid_alive=false
+side_a_temp_pid_alive=false
 peer.pid alive=false
 echo.pid alive=false
 ```
@@ -232,10 +232,10 @@ Closed:
 - `v0.1.112` GitHub Latest points to the new release;
 - required Latest assets are present;
 - release checksum matches on GitHub and installed hosts;
-- laptop and VPS install/update used GitHub one-command only;
+- side_b and SIDE_A install/update used GitHub one-command only;
 - `chimera.sh -start`, `-status`, `-stop` passed on both hosts;
 - bad bootstrap failed closed on both hosts;
-- live local-ingress -> peer-ingress -> peer-egress proof passed on laptop/VPS;
+- live local-ingress -> peer-ingress -> peer-egress proof passed on side_b/SIDE_A;
 - CHIMERA logs redacted raw destination and proof payload in the checked paths;
 - sealed transit local-ingress forwarding branch was exercised on the stand.
 
@@ -254,7 +254,7 @@ Not closed:
 - GitHub Actions release workflow was not usable in this run because it stuck on
   an infrastructure package-install step. Release was published manually from
   exact tag after local artifact verification.
-- Laptop GitHub download path is slow and initially timed out through `curl`;
+- Side B GitHub download path is slow and initially timed out through `curl`;
   bounded `wget` fallback in `v0.1.112` completed successfully.
 - The live proof used temporary high ports and explicit test echo target. It is
   a real SSH stand proof for WEAVE peer-egress, but not a full transparent VPN

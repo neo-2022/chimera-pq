@@ -12,8 +12,8 @@ path over SSH.
 
 Authorized stand hosts:
 
-- laptop: authorized laptop SSH target, redacted in public proof
-- VPS: authorized VPS SSH target, reached through the laptop as SSH jump host;
+- side_b: authorized side_b SSH target, redacted in public proof
+- SIDE_A: authorized SIDE_A SSH target, reached through the side_b as SSH jump host;
   target value redacted in public proof
 
 The stand install/update command used GitHub Release/Latest only:
@@ -35,7 +35,7 @@ ANALYSIS -> PLAN -> TEAM_CRITIQUE -> IMPLEMENTATION -> TEAM_CHECK -> FIX
 - ANALYSIS: completed
 - PLAN: completed
 - TEAM_CRITIQUE: completed with real sub-agent roles
-- IMPLEMENTATION: completed on laptop and VPS through GitHub one-command
+- IMPLEMENTATION: completed on side_b and SIDE_A through GitHub one-command
 - TEAM_CHECK: completed through installed-binary proof on both hosts
 - FIX: not_needed
 - RECHECK: completed through bad-bootstrap negative path on both hosts
@@ -57,7 +57,7 @@ Agreed:
 
 - `v0.1.107` can be verified as a remote installed release/update proof.
 - The update source must remain GitHub Release/Latest.
-- The VPS SSH jump host is only a transport path, not a release source.
+- The SIDE_A SSH jump host is only a transport path, not a release source.
 - Installed proof must include version, checksum, route-explain diagnostics,
   redaction, and negative bad-bootstrap behavior on both hosts.
 
@@ -99,20 +99,20 @@ CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/dow
 
 ## SSH Preflight
 
-Laptop:
+Side B:
 
 ```text
-host=laptop ssh_ok=true user=<redacted> home=<redacted>
+host=side_b ssh_ok=true user=<redacted> home=<redacted>
 curl=present
 tar=present
 sha256sum=present
 Linux 7.0.0-22-generic x86_64
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps ssh_ok=true user=<redacted> home=<redacted>
+host=side_a ssh_ok=true user=<redacted> home=<redacted>
 curl=present
 tar=present
 sha256sum=present
@@ -121,41 +121,41 @@ Linux 6.8.0-124-generic x86_64
 
 ## Install/Update Evidence
 
-Laptop:
+Side B:
 
 ```text
-host=laptop phase=before version=0.1.106 bundle_sha=621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97
-host=laptop install_rc=0
-host=laptop phase=after version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af network_unchanged=true
+host=side_b phase=before version=0.1.106 bundle_sha=621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97
+host=side_b install_rc=0
+host=side_b phase=after version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af network_unchanged=true
 ```
 
-Observed note: several `curl` attempts to GitHub timed out on the laptop, but
+Observed note: several `curl` attempts to GitHub timed out on the side_b, but
 the bounded retry path completed and installed `0.1.107`.
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps phase=before version=0.1.106 bundle_sha=621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97
-host=vps install_rc=0
-host=vps phase=after version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af network_unchanged=true
+host=side_a phase=before version=0.1.106 bundle_sha=621ea634eb3346f7c7ebbd2505b563036dbe87bfe57758a1f7cada4f60541a97
+host=side_a install_rc=0
+host=side_a phase=after version=0.1.107 bundle_sha=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af network_unchanged=true
 ```
 
 ## Installed Binary Proof
 
-Laptop:
+Side B:
 
 ```text
-host=laptop proof=installed version_marker=0.1.107 launcher_version="chimera-runtime 0.1.107" cli_executable=true version_ok=true marker_checksum_ok=true archive_checksum_ok=true
-host=laptop proof=route_explain lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
-host=laptop proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.107 checksum_after_bad=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af bad_unchanged=true bad_redaction_ok=true network_unchanged=true
+host=side_b proof=installed version_marker=0.1.107 launcher_version="chimera-runtime 0.1.107" cli_executable=true version_ok=true marker_checksum_ok=true archive_checksum_ok=true
+host=side_b proof=route_explain lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
+host=side_b proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.107 checksum_after_bad=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af bad_unchanged=true bad_redaction_ok=true network_unchanged=true
 ```
 
-VPS:
+SIDE_A:
 
 ```text
-host=vps proof=installed version_marker=0.1.107 launcher_version="chimera-runtime 0.1.107" cli_executable=true version_ok=true marker_checksum_ok=true archive_checksum_ok=true
-host=vps proof=route_explain lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
-host=vps proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.107 checksum_after_bad=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af bad_unchanged=true bad_redaction_ok=true network_unchanged=true
+host=side_a proof=installed version_marker=0.1.107 launcher_version="chimera-runtime 0.1.107" cli_executable=true version_ok=true marker_checksum_ok=true archive_checksum_ok=true
+host=side_a proof=route_explain lane_requested=2 lane_admitted=2 lane_rejected=0 capacity_status=within_budget lane_math_ok=true sealed_opaque_ok=true execution_status_ok=true binding_status_ok=true redaction_markers_ok=true redaction_ok=true
+host=side_a proof=bad_bootstrap bad_rc=22 bad_nonzero=true version_after_bad=0.1.107 checksum_after_bad=4ed938abf6009327445e3d1c4990bad4693204c8572d57283db0e3004fac92af bad_unchanged=true bad_redaction_ok=true network_unchanged=true
 ```
 
 Route-explain proof was run with installed `chimera-cli` and reserved TEST-NET
@@ -184,7 +184,7 @@ Closed:
 
 - GitHub Latest points to `v0.1.107`.
 - Required release assets are present.
-- Laptop and VPS were updated by GitHub one-command install/update only.
+- Side B and SIDE_A were updated by GitHub one-command install/update only.
 - Installed version and release bundle checksum match on both hosts.
 - Installed route-explain exposes lane-admission diagnostics and
   `sealed_opaque_only` transit payload policy.
@@ -195,7 +195,7 @@ Closed:
 Not closed by this document:
 
 - full Real-World datapath PASS;
-- node-to-node live carrier traffic between laptop and VPS;
+- node-to-node live carrier traffic between side_b and SIDE_A;
 - actual transit forwarding of third-party traffic;
 - transparent TUN/OS routing behavior;
 - DNS-to-route runtime binding;
@@ -205,7 +205,7 @@ Not closed by this document:
 
 ## Risks And Limits
 
-- GitHub timeouts were observed on the laptop before retry success; future
+- GitHub timeouts were observed on the side_b before retry success; future
   update proofs should continue to keep bounded retries and fail-closed behavior.
 - The proof uses installed route-explain simulation for diagnostics and
   redaction. It does not prove live TUN/datapath traffic.

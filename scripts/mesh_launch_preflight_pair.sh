@@ -137,17 +137,17 @@ if [[ ! -f "$CHIMERA_MESH_REMOTE_OUT" ]]; then
 fi
 
 if [[ "$CHIMERA_MESH_LOCAL_ROLE" == "side_a" ]]; then
-  VERIFY_VPS_REPORT="$CHIMERA_MESH_LOCAL_OUT"
-  VERIFY_LAPTOP_REPORT="$CHIMERA_MESH_REMOTE_OUT"
+  VERIFY_SIDE_A_REPORT="$CHIMERA_MESH_LOCAL_OUT"
+  VERIFY_SIDE_B_REPORT="$CHIMERA_MESH_REMOTE_OUT"
 else
-  VERIFY_VPS_REPORT="$CHIMERA_MESH_REMOTE_OUT"
-  VERIFY_LAPTOP_REPORT="$CHIMERA_MESH_LOCAL_OUT"
+  VERIFY_SIDE_A_REPORT="$CHIMERA_MESH_REMOTE_OUT"
+  VERIFY_SIDE_B_REPORT="$CHIMERA_MESH_LOCAL_OUT"
 fi
 
 echo "[mesh-launch-preflight-pair] verify pair -> ${VERIFY_OUT}"
 cargo run -q -p chimera-cli -- mesh launch-preflight-verify \
-  --vps-report "$VERIFY_VPS_REPORT" \
-  --laptop-report "$VERIFY_LAPTOP_REPORT" \
+  --side-a-report "$VERIFY_SIDE_A_REPORT" \
+  --side-b-report "$VERIFY_SIDE_B_REPORT" \
   --json \
   --out "$VERIFY_OUT"
 

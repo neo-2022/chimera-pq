@@ -56,7 +56,7 @@ Roles:
 - Security engineer: accepted the control-plane policy approach; transit
   payload must remain opaque/sealed and must not choose multipath mode.
 - DevOps: release delivery remains blocked until commit, tag, GitHub
-  Release/Latest and one-command install/update on laptop and VPS.
+  Release/Latest and one-command install/update on side_b and SIDE_A.
 - Critic: forbade `Real-World PASS`, `M4/M5 closed`, `ship-ready` or runtime
   claims without remote evidence.
 
@@ -149,8 +149,8 @@ Accepted:
 Not closed:
 
 - GitHub Release/Latest for this source.
-- One-command install/update on laptop `art@192.168.31.21`.
-- One-command install/update on VPS `root@91.124.19.180`.
+- One-command install/update on side_b `<stand-user>@<stand-host-a>`.
+- One-command install/update on SIDE_A `<stand-admin>@<stand-host-b>`.
 - Remote installed-binary multipath/replan proof.
 - Remote Real-World datapath proof and rollback proof.
 
