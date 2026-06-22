@@ -1,5 +1,6 @@
 use super::*;
 
+mod debug_redaction;
 mod proof;
 
 #[test]

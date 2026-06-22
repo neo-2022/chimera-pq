@@ -20,6 +20,10 @@ const LIVE_TRANSIT_LANE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const LIVE_TRANSIT_LANE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 type LiveTransitLaneSnapshot = Result<Arc<TransitLaneDocument>, String>;
 
+#[cfg(test)]
+#[path = "live_bindings_extra_tests.rs"]
+mod extra_tests;
+
 #[derive(Clone)]
 pub struct LiveTransitLaneRegistry {
     snapshot: Arc<Mutex<LiveTransitLaneSnapshot>>,
@@ -32,6 +36,7 @@ impl LiveTransitLaneRegistry {
     ) -> Result<Self, String> {
         let initial =
             load_live_transit_lane_document(options.transit_lane_bindings_file.as_deref())?;
+        validate_live_transit_lane_document_contract(options, &initial)?;
         let snapshot = Arc::new(Mutex::new(Ok(Arc::new(initial.clone()))));
         let registry = Self {
             snapshot: snapshot.clone(),
@@ -111,20 +116,28 @@ fn watch_live_transit_lane_registrations(
         thread::sleep(LIVE_TRANSIT_LANE_POLL_INTERVAL);
         match load_transit_lane_document(&path) {
             Ok(document) => {
-                replace_live_transit_lane_snapshot(&snapshot, Ok(document.clone()));
-                reconcile_live_transit_lane_workers(
-                    &mut workers,
-                    document.registrations(),
-                    &dispatcher,
-                    |registration, cancel| {
-                        spawn_live_transit_lane_worker(
-                            options.clone(),
-                            registration.clone(),
-                            dispatcher.clone(),
-                            cancel,
-                        )
-                    },
-                );
+                match validate_live_transit_lane_document_contract(&options, &document) {
+                    Ok(()) => {
+                        replace_live_transit_lane_snapshot(&snapshot, Ok(document.clone()));
+                        reconcile_live_transit_lane_workers(
+                            &mut workers,
+                            document.registrations(),
+                            &dispatcher,
+                            |registration, cancel| {
+                                spawn_live_transit_lane_worker(
+                                    options.clone(),
+                                    registration.clone(),
+                                    dispatcher.clone(),
+                                    cancel,
+                                )
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        replace_live_transit_lane_snapshot(&snapshot, Err(error));
+                        clear_live_transit_lane_workers(&mut workers, &dispatcher);
+                    }
+                }
             }
             Err(error) => {
                 replace_live_transit_lane_snapshot(&snapshot, Err(error));
@@ -145,6 +158,19 @@ fn replace_live_transit_lane_snapshot(
         Ok(document) => Ok(Arc::new(document)),
         Err(error) => Err(error),
     };
+}
+
+fn validate_live_transit_lane_document_contract(
+    options: &Options,
+    document: &TransitLaneDocument,
+) -> Result<(), String> {
+    if options.allow_bound_transit && document.mesh_path_plan()?.is_none() {
+        return Err(
+            "live sealed transit lane document requires a mesh plan snapshot when bound transit is enabled"
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 fn reconcile_live_transit_lane_workers<F>(

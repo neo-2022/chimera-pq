@@ -22,8 +22,14 @@ impl std::fmt::Debug for Options {
             .field("transit_lane_bindings_file", &"<redacted>")
             .field("transit_payload_bytes", &self.transit_payload_bytes)
             .field("transit_packet_number", &self.transit_packet_number)
-            .field("transit_route_id", &self.transit_route_id)
-            .field("transit_lane_index", &self.transit_lane_index)
+            .field(
+                "transit_route_id",
+                &self.transit_route_id.map(|_| "<opaque>"),
+            )
+            .field(
+                "transit_lane_index",
+                &self.transit_lane_index.map(|_| "<opaque>"),
+            )
             .finish()
     }
 }
