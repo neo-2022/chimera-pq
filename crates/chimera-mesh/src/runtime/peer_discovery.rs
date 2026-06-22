@@ -11,14 +11,18 @@ impl MeshRuntime {
     ) -> Result<(), String> {
         let source = source.trim();
         validate_source_name(source, "mesh discovery source")?;
-        self.tick = self.tick.saturating_add(1);
-        self.sources.insert(source.to_string());
         let mut batch_seen: BTreeSet<&str> = BTreeSet::new();
         for record in records {
             record.validate()?;
             if !batch_seen.insert(record.node_id.as_str()) {
                 return Err("mesh discovery batch contains duplicate node_id".to_string());
             }
+        }
+
+        let before_fingerprint = self.rebuild_trigger_fingerprint();
+        self.tick = self.tick.saturating_add(1);
+        self.sources.insert(source.to_string());
+        for record in records {
             let previous_meta = self.peer_meta.get(&record.node_id).cloned();
             if self.peers.contains_key(&record.node_id) {
                 if let Some(ctx) =
@@ -41,9 +45,11 @@ impl MeshRuntime {
                     selection_score: 0,
                 },
             );
+            let identity_marker = self.allocate_peer_identity_marker();
             self.peer_meta.insert(
                 record.node_id.clone(),
                 MeshPeerMeta {
+                    identity_marker,
                     last_seen_tick: self.tick,
                     update_events: 1,
                     replacement_events: 0,
@@ -60,6 +66,10 @@ impl MeshRuntime {
         self.evict_stale_peers();
         self.evict_stale_health();
         self.enforce_peer_table_limits();
+        self.mark_pending_multipath_rebuild(
+            MeshMultipathRebuildTriggerCause::PeerTableChanged,
+            before_fingerprint,
+        )?;
         Ok(())
     }
 }

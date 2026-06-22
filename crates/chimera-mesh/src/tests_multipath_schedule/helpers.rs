@@ -19,6 +19,10 @@ pub(super) fn runtime_with_peers(records: Vec<MeshDiscoveryRecord>) -> MeshRunti
     runtime
 }
 
+pub(super) fn seeded_runtime() -> MeshRuntime {
+    runtime_with_peers(vec![record("node-a", "198.51.100.31:443", "eu", 10, 95)])
+}
+
 pub(super) fn record(
     node_id: &str,
     endpoint: &str,

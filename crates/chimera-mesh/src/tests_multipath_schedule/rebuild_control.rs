@@ -3,7 +3,7 @@ use crate::{
     MeshRuntime, MultipathDemand, MultipathMode,
 };
 
-use super::{explain_has, record, request, runtime_with_peers};
+use super::{explain_has, record, request, runtime_with_peers, seeded_runtime};
 
 fn policy() -> MeshMultipathRebuildPolicy {
     MeshMultipathRebuildPolicy::new(3, 4)
@@ -56,10 +56,6 @@ fn advance_tick(runtime: &mut MeshRuntime, source: &str) {
     runtime
         .merge_discovery(source, &[])
         .unwrap_or_else(|e| unreachable!("empty discovery tick should succeed: {e}"));
-}
-
-fn seeded_runtime() -> MeshRuntime {
-    runtime_with_peers(vec![record("node-a", "198.51.100.31:443", "eu", 10, 95)])
 }
 
 #[test]
@@ -333,6 +329,21 @@ fn stale_telemetry_fails_closed_instead_of_using_debounce() {
 
     assert_eq!(decision.action, MeshMultipathRebuildAction::FailClosed);
     assert_eq!(decision.reason, "stale_telemetry");
+    assert!(decision.stale);
+    assert!(!decision.rebuild_allowed);
+}
+
+#[test]
+fn telemetry_from_future_fails_closed() {
+    let mut runtime = seeded_runtime();
+    let future = soft_signal("demand_rebuild_recommended", 1, 0x1001, 1, 100);
+
+    let decision = runtime
+        .evaluate_multipath_rebuild(&future, &policy())
+        .unwrap_or_else(|e| unreachable!("future signal should evaluate: {e}"));
+
+    assert_eq!(decision.action, MeshMultipathRebuildAction::FailClosed);
+    assert_eq!(decision.reason, "telemetry_from_future");
     assert!(decision.stale);
     assert!(!decision.rebuild_allowed);
 }

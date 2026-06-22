@@ -21,7 +21,7 @@ pub enum MeshJoinMode {
     PublicDiscovery,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MeshDiscoveryRecord {
     pub node_id: String,
     pub endpoint: String,
@@ -49,7 +49,7 @@ impl MeshDiscoveryRecord {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MeshPeerState {
     pub node_id: String,
     pub endpoint: String,
@@ -84,7 +84,7 @@ impl MeshPeerPerformance {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MeshPathPlan {
     pub namespace: String,
     pub join_mode: MeshJoinMode,

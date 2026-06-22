@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod model;
+mod model_debug;
 mod multipath_model;
 mod nodes_explain;
 mod nodes_grouping;

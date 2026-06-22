@@ -88,6 +88,33 @@ fn multipath_plan_public_explain_redacts_peer_identity_endpoint_and_connect_plan
 }
 
 #[test]
+fn mesh_plan_and_peer_debug_redact_identity_and_endpoint() {
+    let discovery = record("node-sensitive-a", "198.51.100.31:443", "eu", 20, 90);
+    let discovery_debug = format!("{discovery:?}");
+    assert!(!discovery_debug.contains("node-sensitive-a"));
+    assert!(!discovery_debug.contains("198.51.100.31"));
+    assert!(discovery_debug.contains("<redacted>"));
+
+    let runtime = runtime_with_peers(vec![discovery]);
+    let plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7010",
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+    let peer_debug = format!("{:?}", plan.selected_peers[0]);
+    let plan_debug = format!("{plan:?}");
+
+    assert!(!peer_debug.contains("node-sensitive-a"));
+    assert!(!peer_debug.contains("198.51.100.31"));
+    assert!(peer_debug.contains("<redacted>"));
+    assert!(!plan_debug.contains("node-sensitive-a"));
+    assert!(!plan_debug.contains("198.51.100.31"));
+    assert!(!plan_debug.contains("7010"));
+    assert!(plan_debug.contains("selected_peer_count"));
+}
+
+#[test]
 fn multipath_schedule_debug_redacts_lane_peer_identity() {
     let runtime = runtime_with_peers(vec![
         record("node-sensitive-a", "198.51.100.31:443", "eu", 20, 90),

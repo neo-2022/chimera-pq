@@ -1,6 +1,6 @@
 use crate::{
     MeshCarrierLaneBinding, MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathLaneRole,
-    MeshRouteBindingId, plan_multipath_flow,
+    MeshMultipathMode, MeshRouteBindingId, plan_multipath_flow,
 };
 
 use super::{
@@ -112,6 +112,35 @@ fn missing_route_binding_fails_closed_without_lane_selection() {
     assert_eq!(plan.selected_lane_id, None);
     assert!(!plan.route_binding_configured);
     assert_eq!(plan.active_binding_count, 0);
+}
+
+#[test]
+fn multipath_schedule_prefers_high_reliability_and_low_load_weight() {
+    let runtime = runtime_with_peers(vec![
+        record("node-strong", "198.51.100.31:443", "eu", 10, 95),
+        record("node-weaker", "198.51.100.32:443", "eu", 60, 75),
+    ]);
+
+    let plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard;mesh_route_binding_id=7005",
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+
+    assert_eq!(plan.selected_peers[0].node_id, "node-strong");
+    assert_eq!(plan.selected_peers[1].node_id, "node-weaker");
+    assert_eq!(plan.multipath_schedule.mode, MeshMultipathMode::FlowShard);
+    assert_eq!(plan.multipath_schedule.lanes[0].peer_node_id, "node-strong");
+    assert_eq!(plan.multipath_schedule.lanes[1].peer_node_id, "node-weaker");
+    assert!(
+        plan.multipath_schedule.lanes[0].weight_pct > plan.multipath_schedule.lanes[1].weight_pct
+    );
+    assert!(
+        plan.multipath_schedule.lanes[0].capacity_weight_pct
+            > plan.multipath_schedule.lanes[1].capacity_weight_pct
+    );
+    assert_active_weight_contract(&plan);
 }
 
 #[test]

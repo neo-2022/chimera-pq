@@ -26,6 +26,7 @@ pub(crate) fn apply_discovery_update(
         existing.reliability_score = record.reliability_score;
         existing.load_score = record.load_score;
         MeshPeerMeta {
+            identity_marker: previous_meta.map_or(0, |meta| meta.identity_marker),
             last_seen_tick: tick,
             update_events: previous.updates.saturating_add(1),
             replacement_events: previous.replacements.saturating_add(1),
@@ -40,6 +41,7 @@ pub(crate) fn apply_discovery_update(
             score_gain >= effective_replacement_min_score_delta && !churn_replacement_allowed;
         let blocked_by_threshold = score_gain < effective_replacement_min_score_delta;
         MeshPeerMeta {
+            identity_marker: previous_meta.map_or(0, |meta| meta.identity_marker),
             last_seen_tick: tick,
             update_events: previous.updates.saturating_add(1),
             replacement_events: previous.replacements,
@@ -90,6 +92,7 @@ pub(crate) fn insert_new_discovery_peer(
     record: &MeshDiscoveryRecord,
     tick: u64,
     replacement_min_score_delta: i32,
+    identity_marker: u64,
 ) {
     peers.insert(
         record.node_id.clone(),
@@ -107,6 +110,7 @@ pub(crate) fn insert_new_discovery_peer(
     peer_meta.insert(
         record.node_id.clone(),
         MeshPeerMeta {
+            identity_marker,
             last_seen_tick: tick,
             update_events: 1,
             replacement_events: 0,

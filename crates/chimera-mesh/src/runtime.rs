@@ -25,6 +25,7 @@ mod multipath_lane_admission;
 mod multipath_rebuild_bridge;
 mod multipath_rebuild_control;
 mod multipath_rebuild_model;
+mod multipath_rebuild_trigger;
 mod multipath_schedule;
 #[cfg(test)]
 mod multipath_schedule_tests;
@@ -70,6 +71,7 @@ pub use multipath_rebuild_model::{
     MeshMultipathRebuildAction, MeshMultipathRebuildDecision, MeshMultipathRebuildPolicy,
     MeshMultipathRebuildSignal, MeshMultipathRebuildUrgency,
 };
+use multipath_rebuild_trigger::MeshMultipathRebuildTriggerCause;
 use multipath_schedule::{
     build_multipath_schedule, replace_multipath_schedule, schedule_mode_from_multipath_hint,
 };
@@ -82,6 +84,7 @@ use status_runtime::{build_status_explain, build_status_report};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MeshPeerMeta {
+    identity_marker: u64,
     last_seen_tick: u64,
     update_events: u64,
     replacement_events: u64,
@@ -144,6 +147,8 @@ pub struct MeshRuntime {
     table_policy: MeshPeerTablePolicy,
     profile_state: MeshProfileState,
     multipath_rebuild_state: MeshMultipathRebuildState,
+    pending_multipath_rebuild: Option<MeshMultipathRebuildSignal>,
+    next_peer_identity_marker: u64,
     last_table_enforcement_report: MeshPeerTableEnforcementReport,
     tick: u64,
 }
@@ -158,6 +163,7 @@ impl std::fmt::Debug for MeshRuntime {
             .field("table_policy", &self.table_policy)
             .field("profile_state", &self.profile_state)
             .field("multipath_rebuild_state", &self.multipath_rebuild_state)
+            .field("pending_multipath_rebuild", &self.pending_multipath_rebuild)
             .field(
                 "last_table_enforcement_report",
                 &self.last_table_enforcement_report,
@@ -306,6 +312,8 @@ impl MeshRuntime {
                 degrade_cleared_since_tick: None,
             },
             multipath_rebuild_state: MeshMultipathRebuildState::default(),
+            pending_multipath_rebuild: None,
+            next_peer_identity_marker: 1,
             last_table_enforcement_report: MeshPeerTableEnforcementReport {
                 tick: 0,
                 total_peers_before: 0,
@@ -381,6 +389,12 @@ impl MeshRuntime {
 
     pub fn peer_table_policy_snapshot(&self) -> MeshPeerTablePolicy {
         self.table_policy.clone()
+    }
+
+    pub(super) fn allocate_peer_identity_marker(&mut self) -> u64 {
+        let marker = self.next_peer_identity_marker;
+        self.next_peer_identity_marker = self.next_peer_identity_marker.saturating_add(1);
+        marker
     }
 
     pub fn status_report(&self) -> MeshRuntimeStatusReport {

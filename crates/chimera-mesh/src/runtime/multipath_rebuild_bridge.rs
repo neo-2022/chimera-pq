@@ -1,12 +1,28 @@
 use super::multipath_demand::{DEMAND_POLICY_SOURCE_CONTROL, DEMAND_POLICY_SOURCE_DEFAULT};
 use super::{
-    MeshJoinRequest, MeshMultipathRebuildDecision, MeshMultipathRebuildPolicy,
-    MeshMultipathRebuildSignal, MeshPathPlan, MeshPathPolicy, MeshRuntime,
-    replace_multipath_schedule,
+    MeshJoinRequest, MeshMultipathRebuildAction, MeshMultipathRebuildDecision,
+    MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal, MeshPathPlan, MeshPathPolicy,
+    MeshRuntime, replace_multipath_schedule,
 };
 use crate::policy::MultipathDemand;
 
 impl MeshRuntime {
+    pub fn plan_path_with_pending_multipath_rebuild(
+        &mut self,
+        request: &MeshJoinRequest,
+        planning_policy: &MeshPathPolicy,
+        rebuild_policy: &MeshMultipathRebuildPolicy,
+    ) -> Result<(MeshPathPlan, Option<MeshMultipathRebuildDecision>), String> {
+        let mut plan = self.plan_path(request, planning_policy)?;
+        let decision = self.apply_pending_multipath_rebuild_with_policy_to_plan(
+            request,
+            planning_policy,
+            &mut plan,
+            rebuild_policy,
+        )?;
+        Ok((plan, decision))
+    }
+
     pub fn apply_multipath_rebuild_to_plan(
         &mut self,
         plan: &mut MeshPathPlan,
@@ -49,6 +65,39 @@ impl MeshRuntime {
 
         plan.explain.extend(decision.explain.iter().cloned());
         Ok(decision)
+    }
+
+    pub fn apply_pending_multipath_rebuild_with_policy_to_plan(
+        &mut self,
+        request: &MeshJoinRequest,
+        planning_policy: &MeshPathPolicy,
+        plan: &mut MeshPathPlan,
+        rebuild_policy: &MeshMultipathRebuildPolicy,
+    ) -> Result<Option<MeshMultipathRebuildDecision>, String> {
+        let Some(signal) = self.take_pending_multipath_rebuild_signal() else {
+            return Ok(None);
+        };
+        match self.apply_multipath_rebuild_with_policy_to_plan(
+            request,
+            planning_policy,
+            plan,
+            &signal,
+            rebuild_policy,
+        ) {
+            Ok(decision) => {
+                if decision.action == MeshMultipathRebuildAction::FailClosed {
+                    return Err(format!(
+                        "mesh multipath pending rebuild failed closed: {}",
+                        decision.reason
+                    ));
+                }
+                Ok(Some(decision))
+            }
+            Err(error) => {
+                self.restore_pending_multipath_rebuild_signal(signal);
+                Err(error)
+            }
+        }
     }
 }
 

@@ -50,6 +50,79 @@ fn runtime_switch_recommendation_is_blocked_by_antiflap_budget_guard() {
             .merge_discovery("seed-b", &replacement_records)
             .is_ok()
     );
+    let health_records = vec![
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-a".to_string(),
+            endpoint: "198.51.100.222:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-b".to_string(),
+            endpoint: "198.51.100.223:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-c".to_string(),
+            endpoint: "198.51.100.224:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-d".to_string(),
+            endpoint: "198.51.100.225:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-e".to_string(),
+            endpoint: "198.51.100.226:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-f".to_string(),
+            endpoint: "198.51.100.227:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-g".to_string(),
+            endpoint: "198.51.100.228:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-h".to_string(),
+            endpoint: "198.51.100.229:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-i".to_string(),
+            endpoint: "198.51.100.230:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-j".to_string(),
+            endpoint: "198.51.100.231:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-c", &health_records).is_ok());
     assert!(
         runtime
             .update_health_state(&[

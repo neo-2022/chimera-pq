@@ -11,6 +11,7 @@ pub(super) struct ExistingPeerUpdateContext {
     pub(super) previous_degraded: u64,
     pub(super) previous_churn_blocks: u64,
     pub(super) previous_threshold_blocks: u64,
+    pub(super) previous_identity_marker: u64,
 }
 
 pub(super) fn existing_peer_update_context(
@@ -69,6 +70,7 @@ pub(super) fn existing_peer_update_context(
         } else {
             0
         },
+        previous_identity_marker: previous_meta.map_or(0, |meta| meta.identity_marker),
     })
 }
 
@@ -91,6 +93,7 @@ pub(super) fn apply_existing_peer_update(
         runtime.peer_meta.insert(
             record.node_id.clone(),
             MeshPeerMeta {
+                identity_marker: ctx.previous_identity_marker,
                 last_seen_tick: runtime.tick,
                 update_events: ctx.previous_updates.saturating_add(1),
                 replacement_events: ctx.previous_replacements.saturating_add(1),
@@ -112,6 +115,7 @@ pub(super) fn apply_existing_peer_update(
     runtime.peer_meta.insert(
         record.node_id.clone(),
         MeshPeerMeta {
+            identity_marker: ctx.previous_identity_marker,
             last_seen_tick: runtime.tick,
             update_events: ctx.previous_updates.saturating_add(1),
             replacement_events: ctx.previous_replacements,

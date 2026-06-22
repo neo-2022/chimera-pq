@@ -20,6 +20,23 @@ fn runtime_switch_recommendation_is_blocked_when_candidate_confidence_is_low() {
         },
     ];
     assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let health_records = vec![
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-a".to_string(),
+            endpoint: "198.51.100.222:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+        MeshDiscoveryRecord {
+            node_id: "ghost-health-b".to_string(),
+            endpoint: "198.51.100.223:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 100,
+            reliability_score: 0,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-c", &health_records).is_ok());
     assert!(
         runtime
             .update_health_state(&[

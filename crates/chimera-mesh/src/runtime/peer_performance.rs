@@ -14,6 +14,7 @@ impl MeshRuntime {
             }
             validated.push((item.node_id.clone(), item.latency_ms, item.throughput_mbps));
         }
+        let before_fingerprint = self.rebuild_trigger_fingerprint();
         for (node_id, latency_ms, throughput_mbps) in validated {
             let peer = self
                 .peers
@@ -26,6 +27,10 @@ impl MeshRuntime {
                 peer.throughput_mbps = Some(throughput_mbps);
             }
         }
+        self.mark_pending_multipath_rebuild(
+            MeshMultipathRebuildTriggerCause::PeerPerformanceChanged,
+            before_fingerprint,
+        )?;
         Ok(())
     }
 }

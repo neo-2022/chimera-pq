@@ -2,17 +2,39 @@ use super::*;
 
 impl MeshRuntime {
     pub fn update_health_state(&mut self, health: &[MeshPeerHealth]) -> Result<(), String> {
+        let mut validated = Vec::with_capacity(health.len());
         for item in health {
             validate_runtime_node_id(&item.node_id, "mesh health node_id")?;
+            if !self.peers.contains_key(&item.node_id) {
+                return Err("mesh health state references unknown node".to_string());
+            }
+            validated.push(item.clone());
+        }
+        let before_fingerprint = self.rebuild_trigger_fingerprint();
+        let urgent = validated
+            .iter()
+            .any(|item| !item.healthy || item.cooldown_active);
+        for item in validated {
             self.health_state.insert(
                 item.node_id.clone(),
                 MeshHealthMeta {
-                    health: item.clone(),
+                    health: item,
                     last_updated_tick: self.tick,
                 },
             );
         }
         self.refresh_profile_state_after_health_update();
+        if urgent {
+            self.mark_pending_multipath_rebuild(
+                MeshMultipathRebuildTriggerCause::UrgentFailover,
+                before_fingerprint,
+            )?;
+        } else {
+            self.mark_pending_multipath_rebuild(
+                MeshMultipathRebuildTriggerCause::PeerHealthChanged,
+                before_fingerprint,
+            )?;
+        }
         Ok(())
     }
 
