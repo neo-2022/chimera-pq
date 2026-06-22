@@ -39,6 +39,7 @@ fn carrier_lane_binding_fails_closed_when_lane_peer_is_not_selected() -> Result<
             None,
             selected_peers.len(),
             90,
+            90,
         ),
         lanes,
         "initial_plan",
@@ -56,7 +57,7 @@ fn carrier_lane_binding_fails_closed_when_lane_peer_is_not_selected() -> Result<
 }
 
 #[test]
-fn aggregate_buffered_limits_active_lanes_to_capacity_budget() -> Result<(), String> {
+fn aggregate_buffered_limits_active_lanes_to_nonzero_capacity_slots() -> Result<(), String> {
     let selected_peers = (0..95)
         .map(|idx| peer(&format!("node-{idx}")))
         .collect::<Vec<MeshPeerState>>();
@@ -70,7 +71,7 @@ fn aggregate_buffered_limits_active_lanes_to_capacity_budget() -> Result<(), Str
 
     assert_eq!(
         schedule.active_lane_count,
-        schedule.transit_capacity_budget_pct as usize
+        schedule.lane_admission_admitted_active_lane_count
     );
     assert_eq!(
         schedule.active_capacity_sum_pct,

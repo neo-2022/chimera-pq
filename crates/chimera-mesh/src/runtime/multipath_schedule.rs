@@ -4,7 +4,9 @@ use crate::multipath_model::{
 };
 
 use super::multipath_demand::{MultipathDemandPlan, plan_multipath_demand};
-use super::multipath_lane_admission::evaluate_lane_admission;
+use super::multipath_lane_admission::{
+    evaluate_lane_admission, max_active_lane_count_for_capacity,
+};
 use super::multipath_weights::{active_lane_weights, capacity_weights_from_relative_weights};
 use crate::policy::MultipathDemand;
 
@@ -39,10 +41,12 @@ fn build_multipath_schedule_with_reason(
     demand: Option<MultipathDemand>,
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
+    let max_active_lane_count = max_active_lane_count_for_capacity(TRANSIT_CAPACITY_BUDGET_PCT);
     let demand_plan = plan_multipath_demand(
         &mode,
         demand,
         selected_peers.len(),
+        max_active_lane_count,
         TRANSIT_CAPACITY_BUDGET_PCT,
     );
     let lanes = build_lanes(selected_peers, &mode, demand_plan.planned_active_lane_count);
@@ -218,8 +222,7 @@ fn build_active_lanes(
     selected_peers: &[MeshPeerState],
     max_active: usize,
 ) -> Vec<MeshMultipathLane> {
-    let active_limit = max_active.min(usize::from(TRANSIT_CAPACITY_BUDGET_PCT));
-    let active_peers: Vec<&MeshPeerState> = selected_peers.iter().take(active_limit).collect();
+    let active_peers: Vec<&MeshPeerState> = selected_peers.iter().take(max_active).collect();
     let weights = active_lane_weights(&active_peers);
     let capacity_weights =
         capacity_weights_from_relative_weights(&weights, TRANSIT_CAPACITY_BUDGET_PCT);
@@ -262,9 +265,10 @@ pub(super) fn schedule_from_lanes(
     lanes: Vec<MeshMultipathLane>,
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
+    let max_active_lane_count = max_active_lane_count_for_capacity(TRANSIT_CAPACITY_BUDGET_PCT);
     let lane_admission = evaluate_lane_admission(
         demand_plan.requested_active_lane_count,
-        TRANSIT_CAPACITY_BUDGET_PCT,
+        max_active_lane_count,
     );
     let active_lane_count = lanes
         .iter()

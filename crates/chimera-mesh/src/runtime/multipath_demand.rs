@@ -30,6 +30,7 @@ pub(super) fn plan_multipath_demand(
     mode: &MeshMultipathMode,
     demand: Option<MultipathDemand>,
     selected_peer_count: usize,
+    max_active_lane_count: usize,
     transit_capacity_budget_pct: u8,
 ) -> MultipathDemandPlan {
     let policy_source = if demand.is_some() {
@@ -40,8 +41,7 @@ pub(super) fn plan_multipath_demand(
     let demand = demand.unwrap_or(default_demand_for_mode(mode));
     let requested_active_lane_count =
         requested_active_lanes_for_demand(mode, demand, selected_peer_count);
-    let capacity_limit = usize::from(transit_capacity_budget_pct);
-    let planned_active_lane_count = requested_active_lane_count.min(capacity_limit);
+    let planned_active_lane_count = requested_active_lane_count.min(max_active_lane_count);
     let unmet_lane_count = requested_active_lane_count.saturating_sub(planned_active_lane_count);
     let admitted_lane_capacity_pct =
         admitted_capacity_pct(planned_active_lane_count, transit_capacity_budget_pct);
@@ -120,6 +120,7 @@ mod tests {
             Some(MultipathDemand::Low),
             6,
             90,
+            90,
         );
 
         assert_eq!(plan.requested_active_lane_count, 1);
@@ -129,11 +130,12 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_bulk_demand_is_capped_by_transit_budget() {
+    fn aggregate_bulk_demand_is_capped_by_active_lane_capacity() {
         let plan = plan_multipath_demand(
             &MeshMultipathMode::AggregateBuffered,
             Some(MultipathDemand::Bulk),
             95,
+            90,
             90,
         );
 

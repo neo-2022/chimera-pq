@@ -208,7 +208,7 @@ fn aggregate_buffered_capacity_uses_all_selected_active_lanes() {
 }
 
 #[test]
-fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
+fn aggregate_buffered_active_lanes_have_nonzero_capacity_within_transit_budget() {
     let records = (0..95)
         .map(|idx| {
             let node = format!("node-{idx}");
@@ -239,7 +239,7 @@ fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
     assert_eq!(
         plan.multipath_schedule
             .lane_admission_admitted_active_lane_count,
-        plan.multipath_schedule.transit_capacity_budget_pct as usize
+        plan.multipath_schedule.active_lane_count
     );
     assert_eq!(
         plan.multipath_schedule
@@ -256,8 +256,8 @@ fn aggregate_buffered_active_lanes_do_not_exceed_transit_capacity_budget() {
             .lane_admission_admitted_active_lane_count
     );
     assert!(
-        plan.multipath_schedule.active_lane_count
-            <= plan.multipath_schedule.transit_capacity_budget_pct as usize
+        plan.multipath_schedule.active_capacity_sum_pct
+            <= plan.multipath_schedule.transit_capacity_budget_pct as u16
     );
     assert_eq!(plan.multipath_schedule.active_capacity_sum_pct, 90);
     assert!(

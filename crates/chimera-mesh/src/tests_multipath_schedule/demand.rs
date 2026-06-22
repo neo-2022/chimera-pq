@@ -131,8 +131,8 @@ fn aggregate_bulk_demand_reports_budget_saturation_without_exceeding_transit_bud
     );
     assert_eq!(plan.multipath_schedule.active_capacity_sum_pct, 90);
     assert!(
-        plan.multipath_schedule.active_lane_count
-            <= plan.multipath_schedule.transit_capacity_budget_pct as usize
+        plan.multipath_schedule.active_capacity_sum_pct
+            <= plan.multipath_schedule.transit_capacity_budget_pct as u16
     );
     assert_active_weight_contract(&plan);
     assert!(explain_has(
