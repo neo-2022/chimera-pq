@@ -110,6 +110,13 @@ rg -n 'run_rejects_non_nft_override_case' "$ROOT_DIR/scripts/chimera_stop_contra
 rg -n 'restart_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_restart_failure_guard"
 rg -n 'uninstall_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_uninstall_failure_guard"
 rg -n 'CHIMERA_NFT_PRIVILEGE_MODE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_nft_privilege_mode"
+rg -n '^  transparent_uid="\$\(id -u\)"$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_uid_not_current_user"
+rg -n '^  transparent_gid="\$\(id -g\)"$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_gid_not_current_user"
+rg -n 'CHIMERA_TRANSPARENT_RUNTIME_UID:-\$transparent_uid' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_uid_default_not_current_user"
+rg -n 'CHIMERA_TRANSPARENT_RUNTIME_GID:-\$transparent_gid' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_gid_default_not_current_user"
+if rg -n 'CHIMERA_TRANSPARENT_RUNTIME_UID.*:-0|CHIMERA_TRANSPARENT_RUNTIME_GID.*:-0' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
+  fail "installer_transparent_runtime_uid_gid_must_not_default_to_zero"
+fi
 rg -n 'prepare_transparent_runtime_env' "$ROOT_DIR/scripts/chimera-runner.sh" >/dev/null || fail "runner_missing_transparent_nft_mode_mapping"
 rg -n 'CHIMERA_NFT_PRIVILEGE_MODE="sudo"' "$ROOT_DIR/scripts/chimera-runner.sh" >/dev/null || fail "runner_missing_legacy_sudo_to_nft_mapping"
 if rg -n 'exec sudo|sudo -n env|sudo -n bash' "$ROOT_DIR/scripts/chimera-runner.sh" >/dev/null; then

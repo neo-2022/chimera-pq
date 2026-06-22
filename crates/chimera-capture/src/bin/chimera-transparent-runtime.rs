@@ -180,6 +180,14 @@ impl Options {
         if direct_mode != "auto" && direct_mode != "disabled" {
             return Err("direct-mode must be auto or disabled".to_string());
         }
+        let exempt_uid = exempt_uid.or(transparent_uid).ok_or_else(|| {
+            "missing --exempt-uid/--transparent-uid or CHIMERA_REDIRECT_EXEMPT_UID".to_string()
+        })?;
+        if let Some(transparent_uid) = transparent_uid
+            && transparent_uid != exempt_uid
+        {
+            return Err("transparent-uid must match exempt-uid to avoid redirect loop".to_string());
+        }
         Ok(Self {
             transparent_bin,
             listen: required_value(listen, "missing --listen or CHIMERA_TRANSPARENT_TCP_LISTEN")?,
@@ -193,9 +201,7 @@ impl Options {
             initial_read_timeout_ms,
             table_name,
             chain_name,
-            exempt_uid: exempt_uid.or(transparent_uid).ok_or_else(|| {
-                "missing --exempt-uid/--transparent-uid or CHIMERA_REDIRECT_EXEMPT_UID".to_string()
-            })?,
+            exempt_uid,
             transparent_uid,
             transparent_gid,
             bypass_cidrs_v4,
@@ -457,5 +463,24 @@ mod tests {
             "65534".to_string(),
         ];
         assert!(Options::parse(&args).is_err());
+    }
+
+    #[test]
+    fn options_reject_transparent_uid_exempt_uid_mismatch() {
+        let args = vec![
+            "--listen".to_string(),
+            "127.0.0.1:18144".to_string(),
+            "--transit-local".to_string(),
+            "127.0.0.1:18142".to_string(),
+            "--exempt-uid".to_string(),
+            "1000".to_string(),
+            "--transparent-uid".to_string(),
+            "1001".to_string(),
+        ];
+        let error = match Options::parse(&args) {
+            Ok(_) => unreachable!("uid mismatch must fail closed"),
+            Err(error) => error,
+        };
+        assert!(error.contains("transparent-uid must match exempt-uid"));
     }
 }

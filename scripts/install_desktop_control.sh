@@ -363,8 +363,10 @@ configure_peer_egress_env() {
 }
 
 configure_transparent_runtime_env() {
-  local exempt_uid
+  local exempt_uid transparent_uid transparent_gid
   exempt_uid="$(id -u)"
+  transparent_uid="$(id -u)"
+  transparent_gid="$(id -g)"
   local listen="${CHIMERA_TRANSPARENT_TCP_LISTEN:-127.0.0.1:18134}"
   local transit_local="${CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL:-${CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL:-127.0.0.1:18135}}"
   mkdir -p "$(dirname "$TRANSPARENT_RUNTIME_ENV_FILE")"
@@ -379,8 +381,8 @@ configure_transparent_runtime_env() {
     write_env_kv 'CHIMERA_REDIRECT_TABLE' "${CHIMERA_REDIRECT_TABLE:-chimera_redirect}"
     write_env_kv 'CHIMERA_REDIRECT_CHAIN' "${CHIMERA_REDIRECT_CHAIN:-output}"
     write_env_kv 'CHIMERA_REDIRECT_EXEMPT_UID' "${CHIMERA_REDIRECT_EXEMPT_UID:-$exempt_uid}"
-    write_env_kv 'CHIMERA_TRANSPARENT_RUNTIME_UID' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-0}"
-    write_env_kv 'CHIMERA_TRANSPARENT_RUNTIME_GID' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-0}"
+    write_env_kv 'CHIMERA_TRANSPARENT_RUNTIME_UID' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-$transparent_uid}"
+    write_env_kv 'CHIMERA_TRANSPARENT_RUNTIME_GID' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-$transparent_gid}"
     write_env_kv 'CHIMERA_NFT_PRIVILEGE_MODE' "${CHIMERA_NFT_PRIVILEGE_MODE:-sudo}"
     write_env_kv 'CHIMERA_RUNNER_USE_SUDO' "${CHIMERA_RUNNER_USE_SUDO:-1}"
   } >"$TRANSPARENT_RUNTIME_ENV_FILE"
