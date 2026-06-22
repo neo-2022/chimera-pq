@@ -71,6 +71,7 @@ jobs:
           bash scripts/chimera_update_contract_smoke.sh
           bash scripts/chimera_start_contract_smoke.sh
           bash scripts/chimera_stop_contract_smoke.sh
+          bash scripts/chimera_runner_sudo_contract_smoke.sh
 
       - name: Build Release Bundle
         env:

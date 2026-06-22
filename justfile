@@ -1062,6 +1062,19 @@ mesh-control-plane-env-smoke-selfcheck:
     rg -q 'peer_egress_transit_lane_bindings_publish=ok' scripts/mesh_control_plane_env_smoke.sh
     rg -q 'mesh control-plane env smoke: PASS' scripts/mesh_control_plane_env_smoke.sh
 
+chimera-runner-sudo-contract-smoke:
+    bash scripts/chimera_runner_sudo_contract_smoke.sh
+
+chimera-runner-sudo-contract-smoke-selfcheck:
+    test -x scripts/chimera_runner_sudo_contract_smoke.sh
+    bash -n scripts/chimera_runner_sudo_contract_smoke.sh
+    rg -q 'prepare_transparent_runtime_env' scripts/chimera-runner.sh
+    rg -q 'CHIMERA_NFT_PRIVILEGE_MODE="sudo"' scripts/chimera-runner.sh
+    ! rg -q 'exec sudo|sudo -n env|sudo -n bash' scripts/chimera-runner.sh
+    rg -q 'case_legacy_runner_sudo_maps_to_nft_sudo_mode' scripts/chimera_runner_sudo_contract_smoke.sh
+    rg -q 'case_sudo_flag_does_not_apply_to_other_targets' scripts/chimera_runner_sudo_contract_smoke.sh
+    rg -q 'case_runner_contains_no_sudo_reexec' scripts/chimera_runner_sudo_contract_smoke.sh
+
 mesh-launch-preflight-env-guard-side-a:
     test -x scripts/mesh_launch_preflight_env_guard.sh
     test -f configs/mesh_launch_preflight.side_a.env

@@ -741,10 +741,6 @@ start_runner_background() {
   local log_file="${3:?log_file_required}"
   local env_file="${4:?env_file_required}"
   local target="${5:?target_required}"
-  local use_sudo="0"
-  if [[ -f "$env_file" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$env_file"; then
-    use_sudo="1"
-  fi
 
   if pidfile_running "$pid_file"; then
     local pid
@@ -756,37 +752,20 @@ start_runner_background() {
   ensure_parent_dir "$pid_file"
   ensure_parent_dir "$log_file"
 
-  if [[ "$use_sudo" == "1" ]]; then
-    nohup sudo -n bash -lc '
-      set -euo pipefail
-      env_file="$1"
-      runner="$2"
-      target="$3"
-      if [[ ! -f "$env_file" ]]; then
-        echo "error: missing env file: $env_file" >&2
-        exit 1
-      fi
-      set -a
-      # shellcheck disable=SC1090
-      source "$env_file"
-      exec "$runner" "$target"
-    ' _ "$env_file" "$CHIMERA_RUNNER" "$target" >>"$log_file" 2>&1 &
-  else
-    nohup bash -lc '
-      set -euo pipefail
-      env_file="$1"
-      runner="$2"
-      target="$3"
-      if [[ ! -f "$env_file" ]]; then
-        echo "error: missing env file: $env_file" >&2
-        exit 1
-      fi
-      set -a
-      # shellcheck disable=SC1090
-      source "$env_file"
-      exec "$runner" "$target"
-    ' _ "$env_file" "$CHIMERA_RUNNER" "$target" >>"$log_file" 2>&1 &
-  fi
+  nohup bash -lc '
+    set -euo pipefail
+    env_file="$1"
+    runner="$2"
+    target="$3"
+    if [[ ! -f "$env_file" ]]; then
+      echo "error: missing env file: $env_file" >&2
+      exit 1
+    fi
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    exec "$runner" "$target"
+  ' _ "$env_file" "$CHIMERA_RUNNER" "$target" >>"$log_file" 2>&1 &
 
   local pid=$!
   printf '%s\n' "$pid" >"$pid_file"
@@ -2078,31 +2057,12 @@ start_runtime() {
     else
       client_status="failed"
     fi
-    if [[ -f "$PEER_EGRESS_ENV_FILE" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$PEER_EGRESS_ENV_FILE"; then
-      sudo -n bash -lc '
-        set -euo pipefail
-        env_file="$1"
-        shift
-        if [[ -f "$env_file" ]]; then
-          set -a
-          # shellcheck disable=SC1090
-          source "$env_file"
-        fi
-        exec "$@"
-      ' _ "$PEER_EGRESS_ENV_FILE" "$CHIMERA_RUNNER" cli up \
-        --config "$CLIENT_CONFIG_FILE" \
-        --state-file "$STATE_FILE" \
-        --apply-tun true \
-        --apply-route true \
-        --apply-dns true >/dev/null 2>&1 || true
-    else
-      run_chimera_cli up \
-        --config "$CLIENT_CONFIG_FILE" \
-        --state-file "$STATE_FILE" \
-        --apply-tun true \
-        --apply-route true \
-        --apply-dns true >/dev/null 2>&1 || true
-    fi
+    run_chimera_cli up \
+      --config "$CLIENT_CONFIG_FILE" \
+      --state-file "$STATE_FILE" \
+      --apply-tun true \
+      --apply-route true \
+      --apply-dns true >/dev/null 2>&1 || true
     site_auto_watch_start >/dev/null 2>&1 || true
   else
     site_auto_watch_stop >/dev/null 2>&1 || true
@@ -2138,31 +2098,12 @@ stop_runtime() {
   fi
   stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
   stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
-  if [[ -f "$PEER_EGRESS_ENV_FILE" ]] && grep -q '^CHIMERA_RUNNER_USE_SUDO=1$' "$PEER_EGRESS_ENV_FILE"; then
-    sudo -n bash -lc '
-      set -euo pipefail
-      env_file="$1"
-      shift
-      if [[ -f "$env_file" ]]; then
-        set -a
-        # shellcheck disable=SC1090
-        source "$env_file"
-      fi
-      exec "$@"
-    ' _ "$PEER_EGRESS_ENV_FILE" "$CHIMERA_RUNNER" cli down \
-      --config "$CLIENT_CONFIG_FILE" \
-      --state-file "$STATE_FILE" \
-      --apply-tun true \
-      --apply-route true \
-      --apply-dns true >/dev/null 2>&1 || true
-  else
-    run_chimera_cli down \
-      --config "$CLIENT_CONFIG_FILE" \
-      --state-file "$STATE_FILE" \
-      --apply-tun true \
-      --apply-route true \
-      --apply-dns true >/dev/null 2>&1 || true
-  fi
+  run_chimera_cli down \
+    --config "$CLIENT_CONFIG_FILE" \
+    --state-file "$STATE_FILE" \
+    --apply-tun true \
+    --apply-route true \
+    --apply-dns true >/dev/null 2>&1 || true
   cleanup_transparent_redirect_rules || cleanup_rc=$?
   if [[ "$cleanup_rc" -ne 0 ]]; then
     echo "stop_status=fail mode=direct reason=transparent_redirect_cleanup_failed"

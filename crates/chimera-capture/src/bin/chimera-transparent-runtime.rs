@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use std::env;
-use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::{
@@ -11,6 +10,7 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
+use chimera_capture::nft_exec::run_nft_script;
 use chimera_capture::redirect::{TransparentRedirectPlan, default_bypass_cidrs_v4};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -337,30 +337,7 @@ fn supervise_child(
 }
 
 fn run_nft(script: &str) -> Result<(), String> {
-    let mut child = Command::new("nft")
-        .arg("-f")
-        .arg("-")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("start nft failed: {error}"))?;
-    let Some(stdin) = child.stdin.as_mut() else {
-        return Err("nft stdin unavailable".to_string());
-    };
-    stdin
-        .write_all(script.as_bytes())
-        .map_err(|error| format!("write nft script failed: {error}"))?;
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("wait nft failed: {error}"))?;
-    if output.status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "nft failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    ))
+    run_nft_script(script)
 }
 
 fn install_signal_handlers(stopping: Arc<AtomicBool>) -> Result<(), String> {

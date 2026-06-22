@@ -30,6 +30,12 @@ run_with_fallback() {
   return 1
 }
 
+prepare_transparent_runtime_env() {
+  if [[ "${CHIMERA_RUNNER_USE_SUDO:-0}" == "1" && -z "${CHIMERA_NFT_PRIVILEGE_MODE:-}" ]]; then
+    export CHIMERA_NFT_PRIVILEGE_MODE="sudo"
+  fi
+}
+
 target="${1:-}"
 shift || true
 case "$target" in
@@ -48,6 +54,7 @@ case "$target" in
     run_with_fallback "$ROOT_DIR/bin/chimera-peer-egress" "chimera-carrier" --mode "$peer_egress_mode" "$@"
     ;;
   transparent-runtime)
+    prepare_transparent_runtime_env
     run_with_fallback "$ROOT_DIR/bin/chimera-transparent-runtime" "chimera-capture" "$@"
     ;;
   -h|--help|help|"")

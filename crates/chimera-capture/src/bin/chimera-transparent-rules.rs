@@ -1,9 +1,8 @@
 #![forbid(unsafe_code)]
 
 use std::env;
-use std::io::Write;
-use std::process::{Command, Stdio};
 
+use chimera_capture::nft_exec::run_nft_script;
 use chimera_capture::redirect::{TransparentRedirectPlan, default_bypass_cidrs_v4};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,34 +177,7 @@ fn main() {
 }
 
 fn run_nft(script: &str) -> Result<(), chimera_core::ChimeraError> {
-    let mut child = Command::new("nft")
-        .arg("-f")
-        .arg("-")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| {
-            chimera_core::ChimeraError::Unsupported(format!("start nft failed: {error}"))
-        })?;
-    let Some(stdin) = child.stdin.as_mut() else {
-        return Err(chimera_core::ChimeraError::Unsupported(
-            "nft stdin unavailable".to_string(),
-        ));
-    };
-    stdin.write_all(script.as_bytes()).map_err(|error| {
-        chimera_core::ChimeraError::Unsupported(format!("write nft script failed: {error}"))
-    })?;
-    let output = child.wait_with_output().map_err(|error| {
-        chimera_core::ChimeraError::Unsupported(format!("wait nft failed: {error}"))
-    })?;
-    if output.status.success() {
-        return Ok(());
-    }
-    Err(chimera_core::ChimeraError::Unsupported(format!(
-        "nft failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    )))
+    run_nft_script(script).map_err(chimera_core::ChimeraError::Unsupported)
 }
 
 fn env_value(name: &str) -> Option<String> {

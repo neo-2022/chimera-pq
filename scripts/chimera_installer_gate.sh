@@ -109,6 +109,19 @@ rg -n 'sudo_execution_failure_fails_stop' "$ROOT_DIR/scripts/chimera_stop_contra
 rg -n 'run_rejects_non_nft_override_case' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_nft_override_guard"
 rg -n 'restart_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_restart_failure_guard"
 rg -n 'uninstall_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_uninstall_failure_guard"
+rg -n 'CHIMERA_NFT_PRIVILEGE_MODE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_nft_privilege_mode"
+rg -n 'prepare_transparent_runtime_env' "$ROOT_DIR/scripts/chimera-runner.sh" >/dev/null || fail "runner_missing_transparent_nft_mode_mapping"
+rg -n 'CHIMERA_NFT_PRIVILEGE_MODE="sudo"' "$ROOT_DIR/scripts/chimera-runner.sh" >/dev/null || fail "runner_missing_legacy_sudo_to_nft_mapping"
+if rg -n 'exec sudo|sudo -n env|sudo -n bash' "$ROOT_DIR/scripts/chimera-runner.sh" >/dev/null; then
+  fail "runner_contains_broad_sudo_reexec"
+fi
+rg -n 'NftPrivilegeMode::Sudo' "$ROOT_DIR/crates/chimera-capture/src/nft_exec.rs" >/dev/null || fail "capture_missing_nft_sudo_mode"
+if rg -n 'Command::new\("nft"\)' "$ROOT_DIR/crates/chimera-capture/src/bin/chimera-transparent-runtime.rs" "$ROOT_DIR/crates/chimera-capture/src/bin/chimera-transparent-rules.rs" >/dev/null; then
+  fail "transparent_runtime_uses_path_nft_directly"
+fi
+rg -n 'case_legacy_runner_sudo_maps_to_nft_sudo_mode' "$ROOT_DIR/scripts/chimera_runner_sudo_contract_smoke.sh" >/dev/null || fail "runner_sudo_smoke_missing_legacy_mapping_case"
+rg -n 'case_sudo_flag_does_not_apply_to_other_targets' "$ROOT_DIR/scripts/chimera_runner_sudo_contract_smoke.sh" >/dev/null || fail "runner_sudo_smoke_missing_target_scope_case"
+rg -n 'case_runner_contains_no_sudo_reexec' "$ROOT_DIR/scripts/chimera_runner_sudo_contract_smoke.sh" >/dev/null || fail "runner_sudo_smoke_missing_no_reexec_case"
 rg -n 'valid_chimera_redirect_table' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_chimera_redirect_table_ownership_guard"
 resolve_nft_block="$(
   awk '

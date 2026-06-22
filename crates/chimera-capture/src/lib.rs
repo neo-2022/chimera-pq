@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod nft_exec;
 pub mod redirect;
 
 use chimera_core::{ChimeraError, ChimeraResult};
