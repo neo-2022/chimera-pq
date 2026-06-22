@@ -50,6 +50,7 @@ SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runt
 CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
 PEER_EGRESS_ENV_FILE="${PEER_EGRESS_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env}"
 PEER_EGRESS_STATE_FILE="${PEER_EGRESS_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state}"
+MESH_CONTROL_PLANE_ENV_FILE="${MESH_CONTROL_PLANE_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh-control-plane.env}"
 MESH_DISCOVERY_OUT_FILE="${MESH_DISCOVERY_OUT_FILE:-$ROOT_DIR/mesh_nodes.discovery.json}"
 MESH_DISCOVERY_PUBKEY_OUT_FILE="${MESH_DISCOVERY_PUBKEY_OUT_FILE:-$ROOT_DIR/mesh_nodes.discovery.pubkey}"
 TRANSPARENT_RUNTIME_ENV_FILE="${TRANSPARENT_RUNTIME_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env}"
@@ -224,7 +225,7 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
   local -a peer_args route_args
   local peer_spec rc
 
-  control_plane_env_file="${CHIMERA_MESH_CONTROL_PLANE_ENV_FILE:-${CHIMERA_MESH_PRELAUNCH_ENV_FILE:-${CHIMERA_MESH_LAUNCH_ENV_FILE:-}}}"
+  control_plane_env_file="${CHIMERA_MESH_CONTROL_PLANE_ENV_FILE:-${CHIMERA_MESH_PRELAUNCH_ENV_FILE:-${CHIMERA_MESH_LAUNCH_ENV_FILE:-$MESH_CONTROL_PLANE_ENV_FILE}}}"
   if [[ -n "$control_plane_env_file" && -f "$control_plane_env_file" ]]; then
     # shellcheck disable=SC1090
     source "$control_plane_env_file"

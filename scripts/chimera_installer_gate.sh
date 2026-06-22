@@ -155,6 +155,7 @@ fi
 rg -n 'chimera-release/bin/chimera-bootstrap' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_bootstrap_binary_content_guard"
 rg -n 'chimera-release/scripts/install_release\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_installer_content_guard"
 rg -n 'chimera-release/scripts/chimera-update\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_module_content_guard"
+rg -n 'mesh_control_plane_env_from_preflight\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_control_plane_env_writer"
 rg -n '^[[:space:]]*--base-url http://node\.example:18179' "$ROOT_DIR/docs/OPERATIONS.md" >/dev/null || fail "operations_missing_peer_release_base_url_example"
 rg -n 'serve_release\(Path::new\(&root\), &listen, base_url\.as_deref\(\)\)' "$ROOT_DIR/crates/chimera-bootstrap/src/main.rs" >/dev/null || fail "bootstrap_missing_peer_release_base_url_wiring"
 rg -n '\.sha256' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_checksum_output"
@@ -174,6 +175,10 @@ rg -n '^INSTALL_NODE_ROLE="\$\{CHIMERA_INSTALL_NODE_ROLE:-node\}"' "$ROOT_DIR/sc
 rg -n 'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transit_lane_bindings_env"
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_shell_safe_env_writer"
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_shell_safe_env_writer"
+rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/mesh_control_plane_env_from_preflight.sh" >/dev/null || fail "mesh_control_plane_env_writer_not_shell_safe"
+rg -n 'missing_route_binding_id' "$ROOT_DIR/scripts/mesh_control_plane_env_from_preflight.sh" >/dev/null || fail "mesh_control_plane_env_writer_missing_route_binding_guard"
+rg -n 'mesh-control-plane\.env' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_default_mesh_control_plane_env"
+rg -n 'mesh_control_plane_env_smoke' "$ROOT_DIR/justfile" >/dev/null || fail "justfile_missing_mesh_control_plane_env_smoke"
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_upsert_env_not_shell_safe"
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_upsert_env_not_shell_safe"
 if rg -n 'awk -v .*quoted_value|awk -v .*line=' "$ROOT_DIR/scripts/install_desktop_control.sh" "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null; then

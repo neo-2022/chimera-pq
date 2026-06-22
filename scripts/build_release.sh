@@ -79,6 +79,7 @@ cp -p "${ROOT_DIR}/scripts/chimera-sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-update.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-update-runtime-state.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-update-rerun.sh" "${RELEASE_DIR}/scripts/"
+cp -p "${ROOT_DIR}/scripts/mesh_control_plane_env_from_preflight.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera.sh" "${RELEASE_DIR}/scripts/"
 
 sed -i \
@@ -106,6 +107,7 @@ grep -q '^chimera-release/scripts/chimera-update-runtime-state\.sh$' "${ROOT_DIR
 grep -q '^chimera-release/scripts/chimera-update-rerun\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 
 echo "build_release: done"
 echo "  archive:   target/${ARCHIVE_NAME}"

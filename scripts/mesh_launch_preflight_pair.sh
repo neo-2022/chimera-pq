@@ -17,6 +17,7 @@ cd "$ROOT_DIR"
 # - CHIMERA_MESH_TRAFFIC_PROFILE
 # - CHIMERA_MESH_TIMEOUT_MS
 # - CHIMERA_MESH_VERIFY_OUT
+# - CHIMERA_MESH_CONTROL_PLANE_ENV_FILE
 # - CHIMERA_MESH_ALLOW_REMOTE_MISSING (0|1, default: 0)
 # - CHIMERA_MESH_EXTRA_PEERS (comma or newline separated peer specs:
 #   node@endpoint#region@load@reliability)
@@ -121,6 +122,8 @@ cargo run -q -p chimera-cli -- mesh launch-preflight \
   --timeout-ms "$TIMEOUT_MS" \
   --json \
   --out "$CHIMERA_MESH_LOCAL_OUT"
+
+bash scripts/mesh_control_plane_env_from_preflight.sh
 
 if [[ ! -f "$CHIMERA_MESH_REMOTE_OUT" ]]; then
   if [[ "$ALLOW_REMOTE_MISSING" == "1" ]]; then

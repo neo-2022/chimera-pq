@@ -1023,9 +1023,12 @@ mesh-launch-preflight-pair:
 
 mesh-launch-preflight-pair-selfcheck:
     test -x scripts/mesh_launch_preflight_pair.sh
+    test -x scripts/mesh_control_plane_env_from_preflight.sh
     bash -n scripts/mesh_launch_preflight_pair.sh
+    bash -n scripts/mesh_control_plane_env_from_preflight.sh
     rg -q 'CHIMERA_MESH_LOCAL_ROLE' scripts/mesh_launch_preflight_pair.sh
     rg -q 'CHIMERA_MESH_ALLOW_REMOTE_MISSING' scripts/mesh_launch_preflight_pair.sh
+    rg -q 'mesh_control_plane_env_from_preflight.sh' scripts/mesh_launch_preflight_pair.sh
     rg -q 'CHIMERA_MESH_NAMESPACE' scripts/mesh_launch_preflight_pair.sh
     rg -q 'CHIMERA_MESH_TRAFFIC_PROFILE' scripts/mesh_launch_preflight_pair.sh
     rg -q 'mesh launch-preflight' scripts/mesh_launch_preflight_pair.sh
@@ -1039,6 +1042,18 @@ mesh-launch-preflight-pair-selfcheck:
     rg -q 'expected format: node@endpoint:port#region@load@reliability' scripts/mesh_launch_preflight_pair.sh
     rg -q 'verify skipped by CHIMERA_MESH_ALLOW_REMOTE_MISSING=1' scripts/mesh_launch_preflight_pair.sh
     rg -q 'missing remote artifact' scripts/mesh_launch_preflight_pair.sh
+
+mesh-control-plane-env-smoke:
+    bash scripts/mesh_control_plane_env_smoke.sh
+
+mesh-control-plane-env-smoke-selfcheck:
+    test -x scripts/mesh_control_plane_env_smoke.sh
+    bash -n scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'mesh_control_plane_env_from_preflight.sh' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'missing_route_binding_id' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'publish_peer_egress_transit_lane_bindings_from_control_plane' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'peer_egress_transit_lane_bindings_publish=ok' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'mesh control-plane env smoke: PASS' scripts/mesh_control_plane_env_smoke.sh
 
 mesh-launch-preflight-env-guard-side-a:
     test -x scripts/mesh_launch_preflight_env_guard.sh
@@ -1431,6 +1446,8 @@ mesh-launch-gate-selfcheck:
     just mesh-launch-preflight-env-pair-guard-selfcheck
     just mesh-launch-preflight-env-pair-guard
     just mesh-launch-preflight-pair-selfcheck
+    just mesh-control-plane-env-smoke-selfcheck
+    just mesh-control-plane-env-smoke
     just mesh-launch-preflight-profile-staged-selfcheck
     just mesh-launch-preflight-profile-two-phase-fastcheck-selfcheck
     just mesh-launch-preflight-report-guard-selfcheck
