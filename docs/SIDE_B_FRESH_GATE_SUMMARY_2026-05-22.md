@@ -22,7 +22,7 @@ Load gate metrics:
 - total_fail: 1
 
 Runtime proofs:
-- path_proof: status=pass, reason=distinct_path_ip, direct_ip=193.243.173.95, chimera_ip=<stand-host-b-ip>
+- path_proof: status=pass, reason=distinct_path_ip, direct_ip=<stand-direct-public-ip>, chimera_ip=<stand-host-b-ip>
 - channel_audit: status=pass, reason=channel_separation_observed
 - e2e_gate: status=pass, reason=channel_audit_and_selected_routes_ok
 
