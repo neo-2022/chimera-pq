@@ -25,6 +25,7 @@ run_case() {
   cp "$ROOT_DIR/scripts/chimera-sh" "$install_root/scripts/chimera-sh"
   cp "$ROOT_DIR/scripts/chimera-update.sh" "$install_root/scripts/chimera-update.sh"
   cp "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" "$install_root/scripts/chimera-update-runtime-state.sh"
+  cp "$ROOT_DIR/scripts/chimera-update-rerun.sh" "$install_root/scripts/chimera-update-rerun.sh"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
   cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
   cp "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" "$install_root/scripts/chimera_runtime_bootstrap.sh"
