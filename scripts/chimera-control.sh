@@ -219,7 +219,52 @@ publish_mesh_discovery_snapshot() {
   fi
 }
 
+peer_egress_transit_lane_bindings_publish_skip() {
+  local strict="${1:?strict_required}"
+  local reason="${2:?reason_required}"
+  local exit_code="${3:-1}"
+  local suffix="${4:-}"
+  printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=${reason}${suffix}" >&2
+  if [[ "$strict" == "1" ]]; then
+    return "$exit_code"
+  fi
+  return 0
+}
+
+validate_mesh_control_plane_env_file_for_source() {
+  local file="${1:?file_required}"
+  local line key rhs
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$(trim_ascii "$line")" || "$line" == \#* ]] && continue
+    [[ "$line" == *=* ]] || return 1
+    key="${line%%=*}"
+    rhs="${line#*=}"
+    case "$key" in
+      CHIMERA_MESH_NAMESPACE|CHIMERA_MESH_LOCAL_NODE|CHIMERA_MESH_POLICY_PAYLOAD|CHIMERA_MESH_TRAFFIC_PROFILE|CHIMERA_MESH_REMOTE_PEER_SPEC|CHIMERA_MESH_EXTRA_PEERS) ;;
+      *) return 1 ;;
+    esac
+    if printf '%s' "$rhs" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+      return 1
+    fi
+    case "$rhs" in
+      *'$('*|*'${'*|*'`'*) return 1 ;;
+    esac
+    if printf '%s' "$rhs" | grep -Eq '(^|[^\\])[;|&<>]'; then
+      return 1
+    fi
+  done <"$file"
+}
+
 publish_peer_egress_transit_lane_bindings_from_control_plane() {
+  local strict_publish=0
+  case "${1:-best-effort}" in
+    best-effort|--best-effort|"") strict_publish=0 ;;
+    strict|--strict) strict_publish=1 ;;
+    *)
+      echo "error: publish transit lane bindings mode must be strict|best-effort" >&2
+      return 2
+      ;;
+  esac
   local control_plane_env_file existing_bindings_file existing_allow_bound_transit
   local namespace local_node policy_payload traffic_profile out_file
   local -a peer_args route_args
@@ -227,6 +272,10 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
 
   control_plane_env_file="${CHIMERA_MESH_CONTROL_PLANE_ENV_FILE:-${CHIMERA_MESH_PRELAUNCH_ENV_FILE:-${CHIMERA_MESH_LAUNCH_ENV_FILE:-$MESH_CONTROL_PLANE_ENV_FILE}}}"
   if [[ -n "$control_plane_env_file" && -f "$control_plane_env_file" ]]; then
+    if ! validate_mesh_control_plane_env_file_for_source "$control_plane_env_file"; then
+      peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "invalid_control_plane_env"
+      return $?
+    fi
     # shellcheck disable=SC1090
     source "$control_plane_env_file"
   fi
@@ -249,13 +298,13 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
   fi
   existing_bindings_file="$(trim_ascii "$existing_bindings_file")"
   existing_allow_bound_transit="$(trim_ascii "$existing_allow_bound_transit")"
-  if [[ -n "$existing_bindings_file" ]]; then
+  if [[ -n "$existing_bindings_file" && "$strict_publish" -eq 0 ]]; then
     printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=already_configured" >&2
     return 0
   fi
   if [[ ! -f "$PEER_EGRESS_ENV_FILE" ]]; then
-    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=peer_env_missing" >&2
-    return 0
+    peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "peer_env_missing"
+    return $?
   fi
 
   namespace="$(trim_ascii "${CHIMERA_MESH_NAMESPACE:-}")"
@@ -263,16 +312,16 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
   policy_payload="$(trim_ascii "${CHIMERA_MESH_POLICY_PAYLOAD:-}")"
   traffic_profile="$(trim_ascii "${CHIMERA_MESH_TRAFFIC_PROFILE:-}")"
   if [[ -z "$namespace" || -z "$local_node" ]]; then
-    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=missing_authoritative_mesh_context" >&2
-    return 0
+    peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "missing_authoritative_mesh_context"
+    return $?
   fi
   if [[ -z "$policy_payload" && -z "$traffic_profile" ]]; then
-    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=missing_authoritative_policy" >&2
-    return 0
+    peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "missing_authoritative_policy"
+    return $?
   fi
   if [[ "${existing_allow_bound_transit:-${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT:-false}}" != "true" ]]; then
-    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=bound_transit_disabled" >&2
-    return 0
+    peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "bound_transit_disabled"
+    return $?
   fi
 
   peer_args=()
@@ -291,8 +340,8 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
     peer_args+=("${CHIMERA_MESH_REMOTE_NODE}@${CHIMERA_MESH_REMOTE_ENDPOINT}@${CHIMERA_MESH_REMOTE_REGION}@${CHIMERA_MESH_REMOTE_LOAD_SCORE}@${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE}")
   fi
   if [[ "${#peer_args[@]}" -eq 0 ]]; then
-    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=missing_authoritative_peer_list" >&2
-    return 0
+    peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "missing_authoritative_peer_list"
+    return $?
   fi
 
   out_file="${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress-transit-lane-bindings.csv}"
@@ -320,15 +369,75 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
       return 0
     fi
     rm -f "$out_file"
-    printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=generated_file_missing" >&2
-    return 0
+    peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "generated_file_missing"
+    return $?
   else
     rc=$?
   fi
 
   rm -f "$out_file"
-  printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=control_plane_derivation_failed exit=$rc" >&2
+  peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "control_plane_derivation_failed" "$rc" " exit=$rc"
+  return $?
+}
+
+mesh_control_plane_has_preflight_env() {
+  [[ -n "${CHIMERA_MESH_NAMESPACE:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_LOCAL_NODE:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_POLICY_PAYLOAD:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_TRAFFIC_PROFILE:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_REMOTE_NODE:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_EXTRA_PEERS:-}" ]] && return 0
+  return 1
+}
+
+mesh_control_plane_env_from_preflight() {
+  local strict="${1:?strict_required}"
+  local control_plane_env_file writer output rc
+  control_plane_env_file="${CHIMERA_MESH_CONTROL_PLANE_ENV_FILE:-${CHIMERA_MESH_PRELAUNCH_ENV_FILE:-${CHIMERA_MESH_LAUNCH_ENV_FILE:-$MESH_CONTROL_PLANE_ENV_FILE}}}"
+  writer="$ROOT_DIR/scripts/mesh_control_plane_env_from_preflight.sh"
+  if [[ ! -x "$writer" ]]; then
+    echo "mesh_control_plane_env=skipped reason=writer_missing" >&2
+    [[ "$strict" == "1" ]] && return 1
+    return 0
+  fi
+  if ! mesh_control_plane_has_preflight_env; then
+    if [[ "$strict" != "1" && -f "$control_plane_env_file" ]]; then
+      echo "mesh_control_plane_env=skipped reason=existing_control_plane_env"
+      return 0
+    fi
+    echo "mesh_control_plane_env=skipped reason=missing_authoritative_mesh_context" >&2
+    [[ "$strict" == "1" ]] && return 1
+    return 0
+  fi
+
+  rc=0
+  output="$(CHIMERA_MESH_CONTROL_PLANE_ENV_FILE="$control_plane_env_file" "$writer" "$control_plane_env_file" 2>&1)" || rc=$?
+  [[ -n "$output" ]] && printf '%s\n' "$output"
+  if [[ "$rc" -ne 0 ]]; then
+    [[ "$strict" == "1" ]] && return "$rc"
+    return 0
+  fi
+  if [[ "$output" == *"mesh_control_plane_env=ok"* ]]; then
+    return 0
+  fi
+  [[ "$strict" == "1" ]] && return 1
   return 0
+}
+
+mesh_bind_control_plane() {
+  local strict=1
+  case "${1:-}" in
+    ""|--strict|strict) strict=1 ;;
+    --best-effort|best-effort) strict=0 ;;
+    *)
+      echo "error: mesh-bind-control-plane accepts --strict or --best-effort" >&2
+      return 2
+      ;;
+  esac
+  mesh_control_plane_env_from_preflight "$strict"
+  publish_peer_egress_transit_lane_bindings_from_control_plane "$([[ "$strict" == "1" ]] && echo strict || echo best-effort)"
 }
 
 ensure_upstream_env_bootstrapped() {
@@ -450,6 +559,8 @@ Commands:
                 Show upstream health snapshot + recent watchdog switch history
   upstream-failover-smoke [wait_sec]
                 Force local tunnel drop and print recovery audit
+  mesh-bind-control-plane [--strict|--best-effort]
+                Generate mesh control-plane env and publish transit lane bindings
   apps-running  Show running applications (process names)
   services-running
                 Show running user services
@@ -2405,6 +2516,10 @@ main() {
       ;;
     upstream-failover-smoke)
       upstream_failover_smoke "${2:-10}"
+      ;;
+    mesh-bind-control-plane)
+      shift || true
+      mesh_bind_control_plane "${1:---strict}"
       ;;
     apps-running)
       apps_running

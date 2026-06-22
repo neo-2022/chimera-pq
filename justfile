@@ -1052,6 +1052,13 @@ mesh-control-plane-env-smoke-selfcheck:
     rg -q 'mesh_control_plane_env_from_preflight.sh' scripts/mesh_control_plane_env_smoke.sh
     rg -q 'missing_route_binding_id' scripts/mesh_control_plane_env_smoke.sh
     rg -q 'publish_peer_egress_transit_lane_bindings_from_control_plane' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'mesh-bind-control-plane' scripts/chimera-control.sh
+    rg -q 'mesh-bind-control-plane' scripts/chimera-sh
+    rg -q 'exec "\$CONTROL" mesh-bind-control-plane "\$\{@:2\}"' scripts/chimera-sh
+    rg -q -- '--strict' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'stale-transit-lane-bindings' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'invalid_control_plane_env' scripts/mesh_control_plane_env_smoke.sh
+    rg -q 'validate_mesh_control_plane_env_file_for_source' scripts/chimera-control.sh
     rg -q 'peer_egress_transit_lane_bindings_publish=ok' scripts/mesh_control_plane_env_smoke.sh
     rg -q 'mesh control-plane env smoke: PASS' scripts/mesh_control_plane_env_smoke.sh
 

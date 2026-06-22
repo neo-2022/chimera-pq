@@ -46,6 +46,7 @@ Usage:
   chimera-sh -status
   chimera-sh -mesh <args...>
   chimera-sh -connect <index|node_id> [mesh node filters...]
+  chimera-sh -mesh-bind-control-plane [--strict|--best-effort]
   chimera-sh -version
   chimera-sh -doctor
   chimera-sh -logs
@@ -153,6 +154,18 @@ main() {
         exit 1
       }
       CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh nodes connect "${@:2}"
+      ;;
+    -mesh-bind-control-plane|mesh-bind-control-plane)
+      ensure_runtime_files || {
+        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        exit 1
+      }
+      require_file "$CONTROL"
+      auto_update_if_needed "$cmd" "${@:2}" || {
+        echo "error: CHIMERA runtime is not aligned with latest release. Update required before mesh bind control-plane." >&2
+        exit 1
+      }
+      CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh-bind-control-plane "${@:2}"
       ;;
     -status)
       ensure_runtime_files || {
