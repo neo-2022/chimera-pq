@@ -19,6 +19,7 @@ pub mod startup_contract;
 pub mod transit;
 pub mod transit_binding;
 pub mod transit_dispatch;
+pub(crate) mod transit_document;
 pub(crate) mod transit_lane_selection;
 pub mod wire;
 

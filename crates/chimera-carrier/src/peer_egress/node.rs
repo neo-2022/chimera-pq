@@ -6,7 +6,8 @@ use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_ser
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
 use crate::peer_egress::modes::{
     handle_local_client_with_lane_document_and_first_byte,
-    handle_local_client_with_peer_pool_and_first_byte, outbound_peer_worker_with_next_hop,
+    handle_local_client_with_peer_pool_and_first_byte,
+    outbound_peer_worker_with_next_hop_and_lane_document,
 };
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
@@ -113,13 +114,27 @@ pub fn run_node(options: Options) -> Result<(), String> {
             let worker = options.clone();
             let outbound_pool = peer_pool.clone();
             let outbound_dispatcher = transit_dispatcher.clone();
+            let outbound_lane_registry = live_transit_lane_registry.clone();
             thread::spawn(move || {
                 loop {
-                    if let Err(error) = outbound_peer_worker_with_next_hop(
-                        &worker,
-                        Some(outbound_pool.clone()),
-                        Some(outbound_dispatcher.clone()),
-                    ) {
+                    let result = match outbound_lane_registry.snapshot() {
+                        Ok(document) if document.is_empty() => {
+                            outbound_peer_worker_with_next_hop_and_lane_document(
+                                &worker,
+                                Some(outbound_pool.clone()),
+                                Some(outbound_dispatcher.clone()),
+                                None,
+                            )
+                        }
+                        Ok(document) => outbound_peer_worker_with_next_hop_and_lane_document(
+                            &worker,
+                            Some(outbound_pool.clone()),
+                            Some(outbound_dispatcher.clone()),
+                            Some(document.as_ref()),
+                        ),
+                        Err(error) => Err(error),
+                    };
+                    if let Err(error) = result {
                         eprintln!(
                             "event=weave_outbound_peer_worker_error reason_class={}",
                             redacted_log_reason(&error)

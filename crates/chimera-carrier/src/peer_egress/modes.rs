@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::peer_egress::handshake::{
     authenticate_peer, establish_secure_peer_client, establish_secure_peer_server,
 };
+use crate::peer_egress::lane_binding::TransitLaneDocument;
 use crate::peer_egress::net::{
     bind_reuse_listener, connect_tcp, pipe_secure_peer_with_plain, tune_tcp,
 };
@@ -23,6 +24,7 @@ use crate::peer_egress::transit::{
 use crate::peer_egress::transit_dispatch::{
     SharedTransitNextHopDispatcher, new_shared_transit_dispatcher,
 };
+use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_ack_ok};
 
 pub mod lab;
@@ -192,16 +194,34 @@ pub fn run_vps(options: Options) -> Result<(), String> {
 }
 
 pub fn handle_reverse_peer(
-    mut peer: SecurePeerStream,
+    peer: SecurePeerStream,
     policy: PeerTransitPolicy,
     bound_policy: BoundPeerTransitPolicy,
     pool: SharedPeerPool,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
 ) -> Result<(), String> {
+    handle_reverse_peer_with_lane_document(peer, policy, bound_policy, pool, dispatcher, None)
+}
+
+pub fn handle_reverse_peer_with_lane_document(
+    mut peer: SecurePeerStream,
+    policy: PeerTransitPolicy,
+    bound_policy: BoundPeerTransitPolicy,
+    pool: SharedPeerPool,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    lane_document: Option<&TransitLaneDocument>,
+) -> Result<(), String> {
     let destination = match read_peer_message(&mut peer, 512)? {
         PeerMessage::Connect(destination) => destination,
         PeerMessage::SealedTransit(frame) => {
-            return forward_peer_sealed_transit_to_next_hop(peer, policy, Some(pool), frame);
+            return forward_peer_sealed_transit_with_document_or_pool(
+                peer,
+                policy,
+                Some(pool),
+                dispatcher,
+                lane_document,
+                frame,
+            );
         }
         PeerMessage::BoundSealedTransit(frame) => {
             return forward_bound_peer_sealed_transit_to_next_hop(
@@ -317,6 +337,20 @@ pub fn outbound_peer_worker_with_next_hop(
     next_hops: Option<SharedPeerPool>,
     next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
 ) -> Result<(), String> {
+    outbound_peer_worker_with_next_hop_and_lane_document(
+        options,
+        next_hops,
+        next_hop_dispatcher,
+        None,
+    )
+}
+
+pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
+    options: &Options,
+    next_hops: Option<SharedPeerPool>,
+    next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
+    lane_document: Option<&TransitLaneDocument>,
+) -> Result<(), String> {
     let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
         .map_err(|error| format!("connect outbound peer failed: {error}"))?;
     tune_tcp(&peer)?;
@@ -330,10 +364,12 @@ pub fn outbound_peer_worker_with_next_hop(
     let destination = match read_peer_message(&mut peer, 512)? {
         PeerMessage::Connect(destination) => destination,
         PeerMessage::SealedTransit(frame) => {
-            return forward_peer_sealed_transit_to_next_hop(
+            return forward_peer_sealed_transit_with_document_or_pool(
                 peer,
                 PeerTransitPolicy::from_bool(options.allow_pool_transit),
                 next_hops,
+                next_hop_dispatcher,
+                lane_document,
                 frame,
             );
         }
@@ -366,6 +402,22 @@ pub fn outbound_peer_worker_with_next_hop(
         "event=outbound_peer_connect_ack_sent target=<redacted> destination_id={destination_id}"
     );
     pipe_secure_peer_with_plain(peer, target)
+}
+
+fn forward_peer_sealed_transit_with_document_or_pool(
+    peer: SecurePeerStream,
+    policy: PeerTransitPolicy,
+    next_hops: Option<SharedPeerPool>,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    lane_document: Option<&TransitLaneDocument>,
+    first: crate::peer_egress::transit::TransitRelayFrame,
+) -> Result<(), String> {
+    if let Some(document) = lane_document
+        && !document.is_empty()
+    {
+        return forward_peer_sealed_transit_with_lane_document(peer, document, dispatcher, first);
+    }
+    forward_peer_sealed_transit_to_next_hop(peer, policy, next_hops, first)
 }
 
 #[cfg(test)]
