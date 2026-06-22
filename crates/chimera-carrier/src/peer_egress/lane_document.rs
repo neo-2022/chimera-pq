@@ -86,6 +86,12 @@ impl TransitLaneDocument {
             .map(|snapshot| snapshot.plan.clone()))
     }
 
+    pub fn require_mesh_path_plan(&self) -> Result<MeshPathPlan, String> {
+        self.mesh_path_plan()?.ok_or_else(|| {
+            "live sealed transit lane document requires a mesh plan snapshot".to_string()
+        })
+    }
+
     pub fn is_empty(&self) -> bool {
         self.registrations.is_empty() && self.plan_snapshot.is_none()
     }

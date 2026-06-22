@@ -178,9 +178,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 let pool_transit_policy = PeerTransitPolicy::from_bool(options.allow_pool_transit);
                 thread::spawn(move || {
                     let result = match live_transit_lane_registry.snapshot() {
-                        Ok(transit_lane_document)
-                            if transit_lane_document.registrations().is_empty() =>
-                        {
+                        Ok(transit_lane_document) if transit_lane_document.is_empty() => {
                             relay_local_sealed_transit_to_next_hop(
                                 local,
                                 pool_transit_policy,
@@ -238,9 +236,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 let transit_dispatcher = transit_dispatcher.clone();
                 thread::spawn(move || {
                     let result = match live_transit_lane_registry.snapshot() {
-                        Ok(transit_lane_document)
-                            if transit_lane_document.registrations().is_empty() =>
-                        {
+                        Ok(transit_lane_document) if transit_lane_document.is_empty() => {
                             handle_local_client_with_peer_pool_and_first_byte(
                                 local, peer_pool, first[0],
                             )

@@ -41,15 +41,16 @@ fn options_with_lane_file(path: &str, allow_bound_transit: bool) -> Options {
 }
 
 #[test]
-fn live_registry_rejects_registration_only_document_for_bound_transit() -> Result<(), String> {
+fn live_registry_rejects_any_registration_only_document() -> Result<(), String> {
     let document = TransitLaneDocument::new(vec![registration(77, 1, "198.51.100.77:443")?], None);
-    assert!(
-        validate_live_transit_lane_document_contract(
-            &options_with_lane_file("/tmp/chimera-registration-only.csv", false),
-            &document
-        )
-        .is_ok()
-    );
+    let error = match validate_live_transit_lane_document_contract(
+        &options_with_lane_file("/tmp/chimera-registration-only.csv", false),
+        &document,
+    ) {
+        Ok(_) => return Err("live transit document without bound transit must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("allow_bound_transit=true"));
 
     let error = match validate_live_transit_lane_document_contract(
         &options_with_lane_file("/tmp/chimera-registration-only.csv", true),

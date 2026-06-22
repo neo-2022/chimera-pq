@@ -168,16 +168,8 @@ pub fn relay_local_sealed_transit_with_lane_document_and_first_byte(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first_byte: u8,
 ) -> Result<(), String> {
-    if let Some(plan) = document.mesh_path_plan()? {
-        relay_local_sealed_transit_to_planned_next_hop(local, &plan, dispatcher, first_byte)
-    } else {
-        relay_local_sealed_transit_with_registrations(
-            local,
-            document.registrations(),
-            dispatcher,
-            first_byte,
-        )
-    }
+    let plan = document.require_mesh_path_plan()?;
+    relay_local_sealed_transit_to_planned_next_hop(local, &plan, dispatcher, first_byte)
 }
 
 fn relay_local_sealed_transit_after_first(

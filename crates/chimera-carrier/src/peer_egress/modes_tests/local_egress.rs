@@ -15,6 +15,9 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::thread;
 
+#[path = "local_egress_strict_document.rs"]
+mod strict_document_tests;
+
 fn binding(route: u64, lane: u16) -> TransitPathBinding {
     TransitPathBinding::new(
         TransitRouteId::new(route).unwrap_or_else(|e| unreachable!("{e}")),

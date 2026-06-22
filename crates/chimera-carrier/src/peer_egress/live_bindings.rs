@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use self::contract::validate_live_transit_lane_document_contract;
 use crate::peer_egress::handshake::establish_secure_peer_client;
 use crate::peer_egress::lane_binding::{
     TransitLaneDocument, TransitLaneRegistration, load_transit_lane_document,
@@ -19,6 +20,8 @@ use std::io::Write;
 const LIVE_TRANSIT_LANE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const LIVE_TRANSIT_LANE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 type LiveTransitLaneSnapshot = Result<Arc<TransitLaneDocument>, String>;
+
+mod contract;
 
 #[cfg(test)]
 #[path = "live_bindings_extra_tests.rs"]
@@ -158,19 +161,6 @@ fn replace_live_transit_lane_snapshot(
         Ok(document) => Ok(Arc::new(document)),
         Err(error) => Err(error),
     };
-}
-
-fn validate_live_transit_lane_document_contract(
-    options: &Options,
-    document: &TransitLaneDocument,
-) -> Result<(), String> {
-    if options.allow_bound_transit && document.mesh_path_plan()?.is_none() {
-        return Err(
-            "live sealed transit lane document requires a mesh plan snapshot when bound transit is enabled"
-                .to_string(),
-        );
-    }
-    Ok(())
 }
 
 fn reconcile_live_transit_lane_workers<F>(
