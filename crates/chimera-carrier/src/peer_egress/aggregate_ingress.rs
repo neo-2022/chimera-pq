@@ -36,6 +36,12 @@ pub(crate) enum AggregateTransitIngressStatus {
     Complete(TransitRelayFrame),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AggregatePeerIngressOutcome {
+    Pending,
+    Complete(TransitRelayFrame),
+}
+
 pub(crate) struct AggregateTransitIngressRegistry {
     state: Mutex<AggregateIngressState>,
 }
@@ -131,6 +137,18 @@ pub(crate) fn new_shared_aggregate_transit_ingress_registry(
     limits: AggregateTransitIngressLimits,
 ) -> Result<SharedAggregateTransitIngressRegistry, String> {
     Ok(Arc::new(AggregateTransitIngressRegistry::new(limits)?))
+}
+
+pub(crate) fn accept_peer_aggregate_ingress_shard(
+    registry: &SharedAggregateTransitIngressRegistry,
+    shard: AggregateTransitShardFrame,
+) -> Result<AggregatePeerIngressOutcome, String> {
+    match registry.accept_shard(shard)? {
+        AggregateTransitIngressStatus::Pending => Ok(AggregatePeerIngressOutcome::Pending),
+        AggregateTransitIngressStatus::Complete(frame) => {
+            Ok(AggregatePeerIngressOutcome::Complete(frame))
+        }
+    }
 }
 
 struct AggregateIngressState {

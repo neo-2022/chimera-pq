@@ -317,7 +317,7 @@ pub fn forward_peer_sealed_transit_with_registrations(
     forward_peer_sealed_transit_pair(source, next_peer, first)
 }
 
-fn pop_unbound_pool_transit_next_hop(
+pub(crate) fn pop_unbound_pool_transit_next_hop(
     policy: PeerTransitPolicy,
     next_hops: Option<SharedPeerPool>,
     flow_key: MeshMultipathFlowKey,

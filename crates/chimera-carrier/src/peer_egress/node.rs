@@ -2,12 +2,15 @@ use std::io::Read;
 use std::thread;
 use std::time::Duration;
 
+use crate::peer_egress::aggregate_ingress::{
+    AggregateTransitIngressLimits, new_shared_aggregate_transit_ingress_registry,
+};
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
 use crate::peer_egress::modes::{
     handle_local_client_with_lane_document_and_first_byte,
     handle_local_client_with_peer_pool_and_first_byte,
-    outbound_peer_worker_with_next_hop_and_lane_document,
+    outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress,
 };
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
@@ -73,6 +76,8 @@ pub fn run_node(options: Options) -> Result<(), String> {
     let aead = options.aead;
     let peer_pool = new_shared_pool();
     let transit_dispatcher = new_shared_transit_dispatcher();
+    let aggregate_ingress =
+        new_shared_aggregate_transit_ingress_registry(AggregateTransitIngressLimits::default())?;
     let live_transit_lane_registry =
         LiveTransitLaneRegistry::start(&options, transit_dispatcher.clone())?;
     let peer_ingress_pool = peer_pool.clone();
@@ -115,23 +120,28 @@ pub fn run_node(options: Options) -> Result<(), String> {
             let outbound_pool = peer_pool.clone();
             let outbound_dispatcher = transit_dispatcher.clone();
             let outbound_lane_registry = live_transit_lane_registry.clone();
+            let outbound_aggregate_ingress = aggregate_ingress.clone();
             thread::spawn(move || {
                 loop {
                     let result = match outbound_lane_registry.snapshot() {
                         Ok(document) if document.is_empty() => {
-                            outbound_peer_worker_with_next_hop_and_lane_document(
+                            outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress(
                                 &worker,
                                 Some(outbound_pool.clone()),
                                 Some(outbound_dispatcher.clone()),
                                 None,
+                                Some(outbound_aggregate_ingress.clone()),
                             )
                         }
-                        Ok(document) => outbound_peer_worker_with_next_hop_and_lane_document(
-                            &worker,
-                            Some(outbound_pool.clone()),
-                            Some(outbound_dispatcher.clone()),
-                            Some(document.as_ref()),
-                        ),
+                        Ok(document) => {
+                            outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress(
+                                &worker,
+                                Some(outbound_pool.clone()),
+                                Some(outbound_dispatcher.clone()),
+                                Some(document.as_ref()),
+                                Some(outbound_aggregate_ingress.clone()),
+                            )
+                        }
                         Err(error) => Err(error),
                     };
                     if let Err(error) = result {

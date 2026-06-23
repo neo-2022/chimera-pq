@@ -4,6 +4,11 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::peer_egress::aggregate_ingress::{
+    AggregateTransitIngressLimits, SharedAggregateTransitIngressRegistry,
+    new_shared_aggregate_transit_ingress_registry,
+};
+use crate::peer_egress::aggregate_peer_ingress::handle_aggregate_peer_ingress_shard;
 use crate::peer_egress::handshake::{
     authenticate_peer, establish_secure_peer_client, establish_secure_peer_server,
 };
@@ -73,11 +78,14 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
     let peer_transit_policy = PeerTransitPolicy::from_bool(options.allow_pool_transit);
     let bound_transit_policy = BoundPeerTransitPolicy::from_bool(options.allow_bound_transit);
     let transit_dispatcher = new_shared_transit_dispatcher();
+    let aggregate_ingress =
+        new_shared_aggregate_transit_ingress_registry(AggregateTransitIngressLimits::default())?;
     if reverse_connect {
         let peer_pool = new_shared_pool();
         let r_pool = peer_pool.clone();
         let r_token = token.clone();
         let r_dispatcher = transit_dispatcher.clone();
+        let r_aggregate_ingress = aggregate_ingress.clone();
         thread::spawn(move || {
             for incoming in peer_listener.incoming() {
                 let Ok(mut stream) = incoming else {
@@ -98,14 +106,19 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
                         let policy = peer_transit_policy;
                         let bound_policy = bound_transit_policy;
                         let dispatcher = r_dispatcher.clone();
+                        let aggregate_ingress = r_aggregate_ingress.clone();
                         thread::spawn(move || {
-                            if let Err(error) = handle_reverse_peer(
-                                peer,
-                                policy,
-                                bound_policy,
-                                pool,
-                                Some(dispatcher),
-                            ) {
+                            if let Err(error) =
+                                handle_reverse_peer_with_lane_document_and_aggregate_ingress(
+                                    peer,
+                                    policy,
+                                    bound_policy,
+                                    pool,
+                                    Some(dispatcher),
+                                    None,
+                                    Some(aggregate_ingress),
+                                )
+                            {
                                 eprintln!(
                                     "event=reverse_peer_error reason_class={}",
                                     redacted_log_reason(&error)
@@ -204,12 +217,32 @@ pub fn handle_reverse_peer(
 }
 
 pub fn handle_reverse_peer_with_lane_document(
+    peer: SecurePeerStream,
+    policy: PeerTransitPolicy,
+    bound_policy: BoundPeerTransitPolicy,
+    pool: SharedPeerPool,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    lane_document: Option<&TransitLaneDocument>,
+) -> Result<(), String> {
+    handle_reverse_peer_with_lane_document_and_aggregate_ingress(
+        peer,
+        policy,
+        bound_policy,
+        pool,
+        dispatcher,
+        lane_document,
+        None,
+    )
+}
+
+pub(crate) fn handle_reverse_peer_with_lane_document_and_aggregate_ingress(
     mut peer: SecurePeerStream,
     policy: PeerTransitPolicy,
     bound_policy: BoundPeerTransitPolicy,
     pool: SharedPeerPool,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     lane_document: Option<&TransitLaneDocument>,
+    aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
 ) -> Result<(), String> {
     let destination = match read_peer_message(&mut peer, 512)? {
         PeerMessage::Connect(destination) => destination,
@@ -231,8 +264,16 @@ pub fn handle_reverse_peer_with_lane_document(
                 frame,
             );
         }
-        PeerMessage::AggregateSealedTransit(_) => {
-            return Err("unexpected aggregate transit shard before request".to_string());
+        PeerMessage::AggregateSealedTransit(shard) => {
+            handle_aggregate_peer_ingress_shard(
+                shard,
+                aggregate_ingress,
+                policy,
+                Some(pool),
+                dispatcher,
+                lane_document,
+            )?;
+            return Ok(());
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
     };
@@ -354,6 +395,22 @@ pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
     next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
     lane_document: Option<&TransitLaneDocument>,
 ) -> Result<(), String> {
+    outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress(
+        options,
+        next_hops,
+        next_hop_dispatcher,
+        lane_document,
+        None,
+    )
+}
+
+pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress(
+    options: &Options,
+    next_hops: Option<SharedPeerPool>,
+    next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
+    lane_document: Option<&TransitLaneDocument>,
+    aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
+) -> Result<(), String> {
     let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
         .map_err(|error| format!("connect outbound peer failed: {error}"))?;
     tune_tcp(&peer)?;
@@ -384,8 +441,16 @@ pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
                 frame,
             );
         }
-        PeerMessage::AggregateSealedTransit(_) => {
-            return Err("unexpected aggregate transit shard before request".to_string());
+        PeerMessage::AggregateSealedTransit(shard) => {
+            handle_aggregate_peer_ingress_shard(
+                shard,
+                aggregate_ingress,
+                PeerTransitPolicy::from_bool(options.allow_pool_transit),
+                next_hops,
+                next_hop_dispatcher,
+                lane_document,
+            )?;
+            return Ok(());
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
     };

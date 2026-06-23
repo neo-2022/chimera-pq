@@ -2,6 +2,7 @@
 pub(crate) mod aggregate_dispatch;
 #[allow(dead_code)]
 pub(crate) mod aggregate_ingress;
+pub(crate) mod aggregate_peer_ingress;
 #[allow(dead_code)]
 pub(crate) mod aggregate_reassembly;
 #[allow(dead_code)]

@@ -1,4 +1,5 @@
 mod aggregate_midstream;
+mod aggregate_peer_ingress;
 mod forwarding;
 mod helpers;
 mod midstream;
