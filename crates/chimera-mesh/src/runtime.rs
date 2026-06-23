@@ -19,6 +19,9 @@ mod diagnostic_redaction;
 mod dps_payload_explain;
 mod health_state_utils;
 mod join_mode;
+mod multipath_aggregate;
+#[cfg(test)]
+mod multipath_aggregate_tests;
 mod multipath_demand;
 mod multipath_flow;
 mod multipath_lane_admission;
@@ -63,6 +66,10 @@ mod table_consistency;
 use candidate_filter::collect_candidates;
 use dps_payload_explain::annotate_dps_payload_explain;
 pub use join_mode::evaluate_join_mode;
+pub use multipath_aggregate::{
+    MeshMultipathAggregateAction, MeshMultipathAggregatePlan, MeshMultipathAggregateShard,
+    plan_multipath_aggregate_object,
+};
 pub use multipath_flow::{
     MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathFlowPlan, plan_multipath_flow,
 };

@@ -49,10 +49,12 @@ pub use policy_hints::{
     traffic_hints_from_dps_payload,
 };
 pub use runtime::{
-    MeshConnectAttempt, MeshConnectProbeReport, MeshMultipathFlowAction, MeshMultipathFlowKey,
-    MeshMultipathFlowPlan, MeshMultipathRebuildAction, MeshMultipathRebuildDecision,
-    MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal, MeshMultipathRebuildUrgency,
-    MeshPeerTableEnforcementReport, MeshRuntime, MeshRuntimeStatusReport, evaluate_join_mode,
+    MeshConnectAttempt, MeshConnectProbeReport, MeshMultipathAggregateAction,
+    MeshMultipathAggregatePlan, MeshMultipathAggregateShard, MeshMultipathFlowAction,
+    MeshMultipathFlowKey, MeshMultipathFlowPlan, MeshMultipathRebuildAction,
+    MeshMultipathRebuildDecision, MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal,
+    MeshMultipathRebuildUrgency, MeshPeerTableEnforcementReport, MeshRuntime,
+    MeshRuntimeStatusReport, evaluate_join_mode, plan_multipath_aggregate_object,
     plan_multipath_flow,
 };
 pub use weave_contract::{
