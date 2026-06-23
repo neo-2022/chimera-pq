@@ -385,6 +385,11 @@ fn pipe_sealed_transit_direction(
                     crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
                 )? {
                     PeerMessage::SealedTransit(frame) => frame,
+                    PeerMessage::AggregateSealedTransit(_) => {
+                        return Err(
+                            "sealed transit stream received aggregate transit frame".to_string()
+                        );
+                    }
                     PeerMessage::Connect(_) => {
                         return Err("sealed transit stream received connect message".to_string());
                     }

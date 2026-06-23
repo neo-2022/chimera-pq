@@ -231,6 +231,9 @@ pub fn handle_reverse_peer_with_lane_document(
                 frame,
             );
         }
+        PeerMessage::AggregateSealedTransit(_) => {
+            return Err("unexpected aggregate transit shard before request".to_string());
+        }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
     };
     let target_addr = destination.connect_addr();
@@ -380,6 +383,9 @@ pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
                 next_hop_dispatcher,
                 frame,
             );
+        }
+        PeerMessage::AggregateSealedTransit(_) => {
+            return Err("unexpected aggregate transit shard before request".to_string());
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
     };

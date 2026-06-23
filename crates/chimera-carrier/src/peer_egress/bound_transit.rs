@@ -56,6 +56,11 @@ fn pipe_bound_transit_direction(
                 Some(frame) => frame,
                 None => match read_bound_peer_message(&mut reader)? {
                     PeerMessage::BoundSealedTransit(frame) => frame,
+                    PeerMessage::AggregateSealedTransit(_) => {
+                        return Err(
+                            "bound transit stream received aggregate transit frame".to_string()
+                        );
+                    }
                     PeerMessage::SealedTransit(_) => {
                         return Err(
                             "bound transit stream received unbound transit frame".to_string()

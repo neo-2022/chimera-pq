@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
@@ -49,6 +49,36 @@ impl TransitNextHopDispatcher {
         peers
             .remove(&binding)
             .ok_or_else(|| "sealed transit path binding unavailable".to_string())
+    }
+
+    pub fn pop_many_for(
+        &self,
+        bindings: &[TransitPathBinding],
+    ) -> Result<Vec<(TransitPathBinding, SecurePeerStream)>, String> {
+        if bindings.is_empty() {
+            return Err("sealed transit path binding set empty".to_string());
+        }
+        let mut unique = BTreeSet::new();
+        if bindings.iter().any(|binding| !unique.insert(*binding)) {
+            return Err("sealed transit path binding set ambiguous".to_string());
+        }
+
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
+        if bindings.iter().any(|binding| !peers.contains_key(binding)) {
+            return Err("sealed transit path binding set unavailable".to_string());
+        }
+
+        let mut claimed = Vec::with_capacity(bindings.len());
+        for binding in bindings {
+            let peer = peers
+                .remove(binding)
+                .ok_or_else(|| "sealed transit path binding set unavailable".to_string())?;
+            claimed.push((*binding, peer));
+        }
+        Ok(claimed)
     }
 
     pub fn contains_binding(&self, binding: TransitPathBinding) -> Result<bool, String> {
@@ -157,6 +187,45 @@ mod tests {
         let claimed_again = dispatcher.pop_for(binding)?;
         drop(claimed_again);
         assert!(dispatcher.pop_for(binding).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_pops_many_bindings_atomically() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let first = binding(7, 1);
+        let second = binding(7, 2);
+        let missing = binding(7, 3);
+        dispatcher.register(first, test_peer_stream()?)?;
+        dispatcher.register(second, test_peer_stream()?)?;
+
+        let error = match dispatcher.pop_many_for(&[first, missing]) {
+            Ok(_) => return Err("partial binding set must fail".to_string()),
+            Err(error) => error,
+        };
+        assert!(error.contains("unavailable"));
+        assert!(dispatcher.contains_binding(first)?);
+        assert!(dispatcher.contains_binding(second)?);
+
+        let claimed = dispatcher.pop_many_for(&[first, second])?;
+        assert_eq!(claimed.len(), 2);
+        assert!(!dispatcher.contains_binding(first)?);
+        assert!(!dispatcher.contains_binding(second)?);
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_rejects_duplicate_many_binding_claim() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let binding = binding(7, 1);
+        dispatcher.register(binding, test_peer_stream()?)?;
+
+        let error = match dispatcher.pop_many_for(&[binding, binding]) {
+            Ok(_) => return Err("duplicate binding set must fail".to_string()),
+            Err(error) => error,
+        };
+        assert!(error.contains("ambiguous"));
+        assert!(dispatcher.contains_binding(binding)?);
         Ok(())
     }
 

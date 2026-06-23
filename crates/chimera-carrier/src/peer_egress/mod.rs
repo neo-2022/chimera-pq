@@ -1,3 +1,7 @@
+#[allow(dead_code)]
+pub(crate) mod aggregate_reassembly;
+#[allow(dead_code)]
+pub(crate) mod aggregate_wire;
 pub(crate) mod bound_transit;
 pub mod handshake;
 pub mod lane_binding;

@@ -1,5 +1,9 @@
 use core::fmt;
 
+use crate::peer_egress::aggregate_wire::{
+    AGGREGATE_TRANSIT_MAGIC, AggregateTransitShardFrame, encode_aggregate_transit_shard_frame,
+    validate_aggregate_transit_shard_frame,
+};
 use crate::peer_egress::protocol::{Destination, SecurePeerStream, parse_peer_connect_destination};
 use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_frame};
 use crate::peer_egress::transit_binding::{
@@ -12,6 +16,7 @@ pub(crate) enum PeerMessage {
     AckOk,
     SealedTransit(TransitRelayFrame),
     BoundSealedTransit(BoundTransitRelayFrame),
+    AggregateSealedTransit(AggregateTransitShardFrame),
 }
 
 impl fmt::Debug for PeerMessage {
@@ -28,6 +33,10 @@ impl fmt::Debug for PeerMessage {
                 .finish(),
             Self::BoundSealedTransit(frame) => f
                 .debug_struct("PeerMessage::BoundSealedTransit")
+                .field("frame", frame)
+                .finish(),
+            Self::AggregateSealedTransit(frame) => f
+                .debug_struct("PeerMessage::AggregateSealedTransit")
                 .field("frame", frame)
                 .finish(),
         }
@@ -70,10 +79,22 @@ pub(crate) fn write_bound_sealed_transit_message(
     peer.write_secure_payload(&encode_bound_transit_relay_frame(frame))
 }
 
+#[allow(dead_code)]
+pub(crate) fn write_aggregate_sealed_transit_message(
+    peer: &mut SecurePeerStream,
+    frame: &AggregateTransitShardFrame,
+) -> Result<(), String> {
+    peer.write_secure_payload(&encode_aggregate_transit_shard_frame(frame))
+}
+
 pub(crate) fn parse_peer_payload(
     payload: Vec<u8>,
     max_line_len: usize,
 ) -> Result<PeerMessage, String> {
+    if payload.first() == Some(&AGGREGATE_TRANSIT_MAGIC) {
+        return validate_aggregate_transit_shard_frame(&payload)
+            .map(PeerMessage::AggregateSealedTransit);
+    }
     if payload.first() == Some(&BOUND_TRANSIT_MAGIC) {
         return validate_bound_transit_relay_frame(&payload).map(PeerMessage::BoundSealedTransit);
     }
@@ -98,7 +119,11 @@ pub(crate) fn parse_peer_payload(
 mod tests {
     use super::{
         PeerMessage, parse_peer_payload, read_peer_message, write_ack_ok,
-        write_bound_sealed_transit_message, write_connect_message, write_sealed_transit_message,
+        write_aggregate_sealed_transit_message, write_bound_sealed_transit_message,
+        write_connect_message, write_sealed_transit_message,
+    };
+    use crate::peer_egress::aggregate_wire::{
+        AggregateObjectId, AggregateTransitShardFrame, encode_aggregate_transit_shard_frame,
     };
     use chimera_session::{Frame, FrameKind};
 
@@ -238,6 +263,39 @@ mod tests {
     }
 
     #[test]
+    fn peer_payload_classifies_aggregate_sealed_transit_without_payload_debug_leak()
+    -> Result<(), String> {
+        let binding = crate::peer_egress::transit_binding::TransitPathBinding::new(
+            crate::peer_egress::transit_binding::TransitRouteId::new(7)?,
+            crate::peer_egress::transit_binding::TransitLaneId::new(2)?,
+        );
+        let frame = AggregateTransitShardFrame::new(
+            binding,
+            AggregateObjectId::new(99)?,
+            32,
+            2,
+            0,
+            0,
+            b"aggregate shard payload".to_vec(),
+        )?;
+        let encoded = encode_aggregate_transit_shard_frame(&frame);
+        let message = parse_peer_payload(encoded.clone(), 512)?;
+        let debug = format!("{message:?}");
+
+        match message {
+            PeerMessage::AggregateSealedTransit(parsed) => {
+                assert_eq!(parsed.binding(), binding);
+                assert_eq!(parsed.aggregate_id(), frame.aggregate_id());
+                assert_eq!(parsed.shard_bytes(), frame.shard_bytes());
+            }
+            other => return Err(format!("unexpected message: {other:?}")),
+        }
+        assert!(debug.contains("<sealed>"));
+        assert!(!debug.contains("aggregate shard payload"));
+        Ok(())
+    }
+
+    #[test]
     fn peer_payload_rejects_malformed_sealed_transit_without_text_fallback() {
         let mut encoded = encoded_frame(FrameKind::Data, 18, b"opaque");
         encoded.truncate(encoded.len() - 1);
@@ -326,6 +384,43 @@ mod tests {
             other => return Err(format!("unexpected bound transit message: {other:?}")),
         }
         assert!(!debug.contains("bound sealed round trip"));
+        assert!(!debug.contains("route_id: 9"));
+        assert!(!debug.contains("lane_id: 3"));
+        Ok(())
+    }
+
+    #[test]
+    fn peer_wire_messages_round_trip_aggregate_sealed_transit() -> Result<(), String> {
+        let (mut left, mut right) = test_peer_pair()?;
+        let binding = crate::peer_egress::transit_binding::TransitPathBinding::new(
+            crate::peer_egress::transit_binding::TransitRouteId::new(9)?,
+            crate::peer_egress::transit_binding::TransitLaneId::new(3)?,
+        );
+        let frame = AggregateTransitShardFrame::new(
+            binding,
+            AggregateObjectId::new(99)?,
+            64,
+            4,
+            2,
+            32,
+            b"aggregate secure round trip".to_vec(),
+        )?;
+
+        write_aggregate_sealed_transit_message(&mut left, &frame)?;
+        let message = read_peer_message(
+            &mut right,
+            crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
+        )?;
+        let debug = format!("{message:?}");
+        match message {
+            PeerMessage::AggregateSealedTransit(parsed) => {
+                assert_eq!(parsed.binding(), binding);
+                assert_eq!(parsed.aggregate_id(), frame.aggregate_id());
+                assert_eq!(parsed.shard_bytes(), frame.shard_bytes());
+            }
+            other => return Err(format!("unexpected aggregate transit message: {other:?}")),
+        }
+        assert!(!debug.contains("aggregate secure round trip"));
         assert!(!debug.contains("route_id: 9"));
         assert!(!debug.contains("lane_id: 3"));
         Ok(())

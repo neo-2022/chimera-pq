@@ -39,6 +39,9 @@ fn require_peer_ack(peer: &mut SecurePeerStream) -> Result<(), String> {
         PeerMessage::AckOk => Ok(()),
         PeerMessage::Connect(_) => Err("peer returned unexpected connect request".to_string()),
         PeerMessage::SealedTransit(_) => Err("peer returned unexpected transit frame".to_string()),
+        PeerMessage::AggregateSealedTransit(_) => {
+            Err("peer returned unexpected aggregate transit frame".to_string())
+        }
         PeerMessage::BoundSealedTransit(_) => {
             Err("peer returned unexpected bound transit frame".to_string())
         }
