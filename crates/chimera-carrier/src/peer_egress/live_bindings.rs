@@ -185,7 +185,7 @@ fn reconcile_live_transit_lane_workers<F>(
 
     for (binding, cancel) in stale_bindings {
         cancel.store(true, Ordering::Relaxed);
-        let _ = dispatcher.pop_for(binding);
+        let _ = dispatcher.clear_binding(binding);
         workers.remove(&binding);
     }
 
@@ -214,7 +214,7 @@ fn clear_live_transit_lane_workers(
 ) {
     for (binding, worker) in std::mem::take(workers) {
         worker.cancel.store(true, Ordering::Relaxed);
-        let _ = dispatcher.pop_for(binding);
+        let _ = dispatcher.clear_binding(binding);
     }
 }
 
@@ -227,7 +227,7 @@ fn spawn_live_transit_lane_worker(
     thread::spawn(move || {
         loop {
             if cancel.load(Ordering::Relaxed) {
-                let _ = dispatcher.pop_for(registration.binding());
+                let _ = dispatcher.clear_binding(registration.binding());
                 return;
             }
             if let Err(error) = outbound_transit_lane_registration_worker(
@@ -236,7 +236,7 @@ fn spawn_live_transit_lane_worker(
                 dispatcher.clone(),
             ) {
                 if cancel.load(Ordering::Relaxed) {
-                    let _ = dispatcher.pop_for(registration.binding());
+                    let _ = dispatcher.clear_binding(registration.binding());
                     return;
                 }
                 eprintln!(
@@ -264,18 +264,18 @@ fn outbound_transit_lane_registration_worker(
         .and_then(|_| peer.write_all(b"\n"))
         .map_err(|error| format!("write token failed: {error}"))?;
     let peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
-    dispatcher.register(registration.binding(), peer)?;
+    let ticket = dispatcher.register(registration.binding(), peer)?;
     eprintln!("event=outbound_transit_lane_registered binding=<opaque>");
-    wait_until_transit_lane_claimed(&dispatcher, registration.binding())?;
+    wait_until_transit_lane_claimed(&dispatcher, ticket)?;
     eprintln!("event=outbound_transit_lane_claimed binding=<opaque>");
     Ok(())
 }
 
 fn wait_until_transit_lane_claimed(
     dispatcher: &SharedTransitNextHopDispatcher,
-    binding: TransitPathBinding,
+    ticket: crate::peer_egress::transit_dispatch::TransitNextHopTicket,
 ) -> Result<(), String> {
-    while dispatcher.contains_binding(binding)? {
+    while dispatcher.contains_ticket(ticket)? {
         thread::sleep(Duration::from_millis(100));
     }
     Ok(())

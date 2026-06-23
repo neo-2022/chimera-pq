@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
@@ -7,18 +7,50 @@ use crate::peer_egress::transit_binding::TransitPathBinding;
 
 #[derive(Default)]
 pub struct TransitNextHopDispatcher {
-    peers: Mutex<BTreeMap<TransitPathBinding, SecurePeerStream>>,
+    state: Mutex<TransitNextHopState>,
+}
+
+#[derive(Default)]
+struct TransitNextHopState {
+    peers: BTreeMap<TransitPathBinding, VecDeque<TransitNextHopEntry>>,
+    next_ticket_id: u64,
+}
+
+struct TransitNextHopEntry {
+    ticket: TransitNextHopTicket,
+    peer: SecurePeerStream,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TransitNextHopTicket {
+    binding: TransitPathBinding,
+    id: u64,
+}
+
+impl fmt::Debug for TransitNextHopTicket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TransitNextHopTicket")
+            .field("binding", &"<opaque>")
+            .field("id", &"<opaque>")
+            .finish()
+    }
 }
 
 impl fmt::Debug for TransitNextHopDispatcher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let bindings = self
-            .peers
+        let (bindings, streams) = self
+            .state
             .lock()
-            .map(|peers| peers.len())
+            .map(|state| {
+                (
+                    state.peers.len(),
+                    state.peers.values().map(VecDeque::len).sum::<usize>(),
+                )
+            })
             .unwrap_or_default();
         f.debug_struct("TransitNextHopDispatcher")
             .field("bindings", &bindings)
+            .field("streams", &streams)
             .field("peers", &"<redacted>")
             .finish()
     }
@@ -29,26 +61,44 @@ impl TransitNextHopDispatcher {
         &self,
         binding: TransitPathBinding,
         peer: SecurePeerStream,
-    ) -> Result<(), String> {
-        let mut peers = self
-            .peers
+    ) -> Result<TransitNextHopTicket, String> {
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        if peers.contains_key(&binding) {
-            return Err("sealed transit path binding ambiguous".to_string());
-        }
-        peers.insert(binding, peer);
-        Ok(())
+        let id = state
+            .next_ticket_id
+            .checked_add(1)
+            .ok_or_else(|| "sealed transit dispatch ticket overflow".to_string())?;
+        state.next_ticket_id = id;
+        let ticket = TransitNextHopTicket { binding, id };
+        state
+            .peers
+            .entry(binding)
+            .or_default()
+            .push_back(TransitNextHopEntry { ticket, peer });
+        Ok(ticket)
     }
 
     pub fn pop_for(&self, binding: TransitPathBinding) -> Result<SecurePeerStream, String> {
-        let mut peers = self
-            .peers
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        peers
-            .remove(&binding)
-            .ok_or_else(|| "sealed transit path binding unavailable".to_string())
+        let (entry, remove_binding) = {
+            let queue = state
+                .peers
+                .get_mut(&binding)
+                .ok_or_else(|| "sealed transit path binding unavailable".to_string())?;
+            let entry = queue
+                .pop_front()
+                .ok_or_else(|| "sealed transit path binding unavailable".to_string())?;
+            (entry, queue.is_empty())
+        };
+        if remove_binding {
+            state.peers.remove(&binding);
+        }
+        Ok(entry.peer)
     }
 
     pub fn pop_many_for(
@@ -63,30 +113,73 @@ impl TransitNextHopDispatcher {
             return Err("sealed transit path binding set ambiguous".to_string());
         }
 
-        let mut peers = self
-            .peers
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        if bindings.iter().any(|binding| !peers.contains_key(binding)) {
+        if bindings
+            .iter()
+            .any(|binding| state.peers.get(binding).is_none_or(VecDeque::is_empty))
+        {
             return Err("sealed transit path binding set unavailable".to_string());
         }
 
         let mut claimed = Vec::with_capacity(bindings.len());
         for binding in bindings {
-            let peer = peers
-                .remove(binding)
-                .ok_or_else(|| "sealed transit path binding set unavailable".to_string())?;
-            claimed.push((*binding, peer));
+            let (entry, remove_binding) = {
+                let queue = state
+                    .peers
+                    .get_mut(binding)
+                    .ok_or_else(|| "sealed transit path binding set unavailable".to_string())?;
+                let entry = queue
+                    .pop_front()
+                    .ok_or_else(|| "sealed transit path binding set unavailable".to_string())?;
+                (entry, queue.is_empty())
+            };
+            if remove_binding {
+                state.peers.remove(binding);
+            }
+            claimed.push((*binding, entry.peer));
         }
         Ok(claimed)
     }
 
     pub fn contains_binding(&self, binding: TransitPathBinding) -> Result<bool, String> {
-        let peers = self
-            .peers
+        let state = self
+            .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        Ok(peers.contains_key(&binding))
+        Ok(state
+            .peers
+            .get(&binding)
+            .is_some_and(|queue| !queue.is_empty()))
+    }
+
+    pub fn contains_ticket(&self, ticket: TransitNextHopTicket) -> Result<bool, String> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
+        Ok(state
+            .peers
+            .get(&ticket.binding)
+            .is_some_and(|queue| queue.iter().any(|entry| entry.ticket == ticket)))
+    }
+
+    pub fn clear_binding(&self, binding: TransitPathBinding) -> Result<usize, String> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
+        Ok(state.peers.remove(&binding).map_or(0, |queue| queue.len()))
+    }
+
+    pub fn binding_depth(&self, binding: TransitPathBinding) -> Result<usize, String> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
+        Ok(state.peers.get(&binding).map_or(0, VecDeque::len))
     }
 }
 
@@ -142,15 +235,22 @@ mod tests {
     }
 
     #[test]
-    fn dispatcher_rejects_duplicate_binding() -> Result<(), String> {
+    fn dispatcher_allows_parallel_streams_per_binding() -> Result<(), String> {
         let dispatcher = TransitNextHopDispatcher::default();
         let binding = binding(1, 1);
-        dispatcher.register(binding, test_peer_stream()?)?;
-        let error = match dispatcher.register(binding, test_peer_stream()?) {
-            Ok(()) => return Err("duplicate binding must fail".to_string()),
-            Err(error) => error,
-        };
-        assert!(error.contains("ambiguous"));
+        let first = dispatcher.register(binding, test_peer_stream()?)?;
+        let second = dispatcher.register(binding, test_peer_stream()?)?;
+
+        assert_ne!(first, second);
+        assert!(dispatcher.contains_ticket(first)?);
+        assert!(dispatcher.contains_ticket(second)?);
+        assert_eq!(dispatcher.binding_depth(binding)?, 2);
+        drop(dispatcher.pop_for(binding)?);
+        assert_eq!(dispatcher.binding_depth(binding)?, 1);
+        assert!(!dispatcher.contains_ticket(first)?);
+        assert!(dispatcher.contains_ticket(second)?);
+        drop(dispatcher.pop_for(binding)?);
+        assert!(!dispatcher.contains_binding(binding)?);
         Ok(())
     }
 
@@ -175,12 +275,14 @@ mod tests {
         let dispatcher = TransitNextHopDispatcher::default();
         let binding = binding(7, 1);
 
-        dispatcher.register(binding, test_peer_stream()?)?;
+        let ticket = dispatcher.register(binding, test_peer_stream()?)?;
         assert!(dispatcher.contains_binding(binding)?);
+        assert!(dispatcher.contains_ticket(ticket)?);
 
         let claimed_peer = dispatcher.pop_for(binding)?;
         drop(claimed_peer);
         assert!(!dispatcher.contains_binding(binding)?);
+        assert!(!dispatcher.contains_ticket(ticket)?);
 
         dispatcher.register(binding, test_peer_stream()?)?;
         assert!(dispatcher.contains_binding(binding)?);
@@ -226,6 +328,20 @@ mod tests {
         };
         assert!(error.contains("ambiguous"));
         assert!(dispatcher.contains_binding(binding)?);
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_clear_binding_removes_all_parallel_streams() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let binding = binding(8, 1);
+        let ticket = dispatcher.register(binding, test_peer_stream()?)?;
+        dispatcher.register(binding, test_peer_stream()?)?;
+
+        assert_eq!(dispatcher.clear_binding(binding)?, 2);
+        assert!(!dispatcher.contains_binding(binding)?);
+        assert!(!dispatcher.contains_ticket(ticket)?);
+        assert!(dispatcher.pop_for(binding).is_err());
         Ok(())
     }
 

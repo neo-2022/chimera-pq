@@ -1,5 +1,6 @@
 use chimera_mesh::{
-    MeshMultipathFlowAction, MeshMultipathFlowKey, MeshPathPlan, plan_multipath_flow,
+    MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathLaneRole, MeshPathPlan,
+    plan_multipath_flow,
 };
 
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
@@ -135,6 +136,9 @@ pub fn select_carrier_lane_from_registrations(
     if registrations.is_empty() {
         return Err("carrier lane selection has no registrations".to_string());
     }
+    if registrations_have_lane_plan(registrations) {
+        return select_weighted_carrier_lane_from_registrations(registrations, flow_key);
+    }
     if registrations.len() == 1 {
         return Ok(selection(SelectionInput::new(
             MeshMultipathFlowAction::Assigned,
@@ -171,6 +175,88 @@ pub fn select_carrier_lane_from_registrations(
             "carrier_lane_selection_privacy=sealed_opaque_only".to_string(),
         ],
     )))
+}
+
+fn registrations_have_lane_plan(registrations: &[TransitLaneRegistration]) -> bool {
+    registrations.iter().any(|registration| {
+        registration.role().is_some()
+            || registration.weight_pct().is_some()
+            || registration.capacity_weight_pct().is_some()
+    })
+}
+
+fn select_weighted_carrier_lane_from_registrations(
+    registrations: &[TransitLaneRegistration],
+    flow_key: MeshMultipathFlowKey,
+) -> Result<CarrierLaneSelection, String> {
+    let active = registrations
+        .iter()
+        .filter(|registration| registration.role() == Some(MeshMultipathLaneRole::Active))
+        .collect::<Vec<_>>();
+    if active.is_empty() {
+        return Err("carrier lane selection has no active planned registrations".to_string());
+    }
+
+    let mut total_capacity_weight_pct: u16 = 0;
+    let mut active_weights = Vec::with_capacity(active.len());
+    for registration in active {
+        let capacity_weight_pct = registration.capacity_weight_pct().ok_or_else(|| {
+            "carrier lane selection active registration capacity missing".to_string()
+        })?;
+        if capacity_weight_pct == 0 {
+            return Err("carrier lane selection active registration capacity is zero".to_string());
+        }
+        total_capacity_weight_pct = total_capacity_weight_pct
+            .checked_add(u16::from(capacity_weight_pct))
+            .ok_or_else(|| "carrier lane selection capacity overflow".to_string())?;
+        active_weights.push((registration, capacity_weight_pct));
+    }
+    if total_capacity_weight_pct == 0 {
+        return Err("carrier lane selection active registration capacity missing".to_string());
+    }
+
+    let mut bucket = u16::try_from(flow_key.select_slot_index(total_capacity_weight_pct as usize)?)
+        .map_err(|_| "carrier lane selection capacity bucket overflow".to_string())?;
+    for (registration, capacity_weight_pct) in &active_weights {
+        if bucket < u16::from(*capacity_weight_pct) {
+            return Ok(selection(SelectionInput::new(
+                MeshMultipathFlowAction::Assigned,
+                if active_weights.len() == 1 {
+                    CarrierLaneSelectionMode::SinglePath
+                } else {
+                    CarrierLaneSelectionMode::Multipath
+                },
+                "weighted_capacity_lane_selected",
+                Some(registration.binding()),
+                active_weights.len(),
+                "none",
+                vec![
+                    "carrier_lane_selection_action=assigned".to_string(),
+                    "carrier_lane_selection_reason=weighted_capacity_lane_selected".to_string(),
+                    format!(
+                        "carrier_lane_selection_mode={}",
+                        if active_weights.len() == 1 {
+                            CarrierLaneSelectionMode::SinglePath.as_str()
+                        } else {
+                            CarrierLaneSelectionMode::Multipath.as_str()
+                        }
+                    ),
+                    format!(
+                        "carrier_lane_selection_active_bindings={}",
+                        active_weights.len()
+                    ),
+                    format!(
+                        "carrier_lane_selection_total_capacity_weight_pct={total_capacity_weight_pct}"
+                    ),
+                    "carrier_lane_selection_weight_policy=capacity_weighted".to_string(),
+                    "carrier_lane_selection_privacy=sealed_opaque_only".to_string(),
+                ],
+            )));
+        }
+        bucket = bucket.saturating_sub(u16::from(*capacity_weight_pct));
+    }
+
+    Err("carrier lane selection weighted bucket did not match".to_string())
 }
 
 struct SelectionInput<'a> {
@@ -249,171 +335,5 @@ fn selection(input: SelectionInput<'_>) -> CarrierLaneSelection {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        CarrierLaneSelectionMode, select_carrier_lane_from_mesh_plan,
-        select_carrier_lane_from_registrations,
-    };
-    use crate::peer_egress::lane_binding::TransitLaneRegistration;
-    use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
-    use chimera_mesh::{
-        MeshDiscoveryRecord, MeshJoinRequest, MeshMultipathFlowAction, MeshMultipathFlowKey,
-        MeshRuntime,
-    };
-
-    fn registration(route: u64, lane: u16) -> Result<TransitLaneRegistration, String> {
-        TransitLaneRegistration::new(
-            TransitPathBinding::new(TransitRouteId::new(route)?, TransitLaneId::new(lane)?),
-            format!("198.51.100.{lane}:443"),
-        )
-    }
-
-    fn multipath_plan() -> Result<chimera_mesh::MeshPathPlan, String> {
-        let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
-        runtime.merge_discovery(
-            "seed-b",
-            &[
-                MeshDiscoveryRecord {
-                    node_id: "node-a".to_string(),
-                    endpoint: "198.51.100.31:443".to_string(),
-                    region: "eu".to_string(),
-                    load_score: 20,
-                    reliability_score: 90,
-                },
-                MeshDiscoveryRecord {
-                    node_id: "node-b".to_string(),
-                    endpoint: "198.51.100.32:443".to_string(),
-                    region: "eu".to_string(),
-                    load_score: 22,
-                    reliability_score: 91,
-                },
-            ],
-        )?;
-        runtime.plan_path_from_dps_payload(
-            &MeshJoinRequest {
-                namespace: "cef-public".to_string(),
-                node_name: "node-client".to_string(),
-                invite_token: None,
-            },
-            concat!(
-                "mesh_allowed_regions=eu;",
-                "mesh_multipath_mode=flow_shard;",
-                "mesh_route_binding_id=7003"
-            ),
-        )
-    }
-
-    #[test]
-    fn single_registration_preserves_single_path_behavior() -> Result<(), String> {
-        let registrations = vec![registration(7, 1)?];
-        let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-flow")?;
-        let selected = select_carrier_lane_from_registrations(&registrations, key)?;
-
-        assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
-        assert_eq!(selected.mode, CarrierLaneSelectionMode::SinglePath);
-        assert_eq!(selected.selected_lane_id, Some(1));
-        assert_eq!(selected.reason, "single_carrier_lane_selected");
-        assert!(!selected.rebuild_recommended);
-        Ok(())
-    }
-
-    #[test]
-    fn binding_backed_selection_uses_opaque_flow_key_for_multiple_lanes() -> Result<(), String> {
-        let registrations = vec![
-            registration(7, 1)?,
-            registration(7, 2)?,
-            registration(7, 3)?,
-        ];
-        let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-live-flow")?;
-        let expected_slot = key.select_slot_index(registrations.len())?;
-        let selected = select_carrier_lane_from_registrations(&registrations, key)?;
-
-        assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
-        assert_eq!(selected.mode, CarrierLaneSelectionMode::Multipath);
-        assert_eq!(
-            selected.selected_binding,
-            Some(registrations[expected_slot].binding())
-        );
-        assert_eq!(selected.reason, "opaque_flow_slot_selected");
-        Ok(())
-    }
-
-    #[test]
-    fn empty_binding_backed_selection_fails_closed() -> Result<(), String> {
-        let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-live-flow")?;
-        let error = match select_carrier_lane_from_registrations(&[], key) {
-            Ok(_) => return Err("empty live lane registrations must fail".to_string()),
-            Err(error) => error,
-        };
-
-        assert!(error.contains("no registrations"));
-        Ok(())
-    }
-
-    #[test]
-    fn plan_backed_selection_returns_live_carrier_lane_binding() -> Result<(), String> {
-        let plan = multipath_plan()?;
-        let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-plan-flow")?;
-        let selected = select_carrier_lane_from_mesh_plan(&plan, key);
-
-        assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
-        assert_eq!(selected.mode, CarrierLaneSelectionMode::Multipath);
-        assert!(matches!(selected.selected_lane_id, Some(1 | 2)));
-        assert_eq!(selected.reason, "active_carrier_binding_selected");
-        assert!(
-            selected
-                .explain
-                .iter()
-                .any(|line| line == "carrier_lane_selection_privacy=sealed_opaque_only")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn plan_without_route_binding_fails_closed_and_recommends_runtime_wiring() -> Result<(), String>
-    {
-        let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
-        runtime.merge_discovery(
-            "seed-b",
-            &[MeshDiscoveryRecord {
-                node_id: "node-a".to_string(),
-                endpoint: "198.51.100.31:443".to_string(),
-                region: "eu".to_string(),
-                load_score: 20,
-                reliability_score: 90,
-            }],
-        )?;
-        let plan = runtime.plan_path_from_dps_payload(
-            &MeshJoinRequest {
-                namespace: "cef-public".to_string(),
-                node_name: "node-client".to_string(),
-                invite_token: None,
-            },
-            "mesh_allowed_regions=eu;mesh_multipath_mode=flow_shard",
-        )?;
-        let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-plan-flow")?;
-        let selected = select_carrier_lane_from_mesh_plan(&plan, key);
-
-        assert_eq!(selected.action, MeshMultipathFlowAction::FailClosed);
-        assert_eq!(selected.selected_lane_id, None);
-        assert_eq!(selected.reason, "route_binding_missing");
-        assert!(selected.rebuild_recommended);
-        assert_eq!(selected.rebuild_reason, "active_lanes_below_plan");
-        Ok(())
-    }
-
-    #[test]
-    fn selection_debug_redacts_binding_and_flow_material() -> Result<(), String> {
-        let registrations = vec![registration(777, 2)?, registration(777, 3)?];
-        let key = MeshMultipathFlowKey::from_opaque_flow_id("SECRET_FLOW_SENTINEL")?;
-        let selected = select_carrier_lane_from_registrations(&registrations, key)?;
-        let debug = format!("{selected:?}");
-
-        assert!(debug.contains("<opaque>"));
-        assert!(!debug.contains("SECRET_FLOW_SENTINEL"));
-        assert!(!debug.contains("777"));
-        assert!(!debug.contains("lane_id: 2"));
-        assert!(!debug.contains("lane_id: 3"));
-        Ok(())
-    }
-}
+#[path = "live_lane_selection_tests.rs"]
+mod tests;

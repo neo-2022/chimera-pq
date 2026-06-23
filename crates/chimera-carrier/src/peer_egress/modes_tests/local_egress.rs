@@ -226,52 +226,13 @@ fn local_client_uses_document_backed_lane_selection_when_plan_snapshot_exists() 
         )?;
         crate::peer_egress::lane_binding::transit_lane_document_from_mesh_plan(&plan)?
     };
-    let rendered = crate::peer_egress::lane_binding::render_transit_lane_document(&document)?;
-    let mut rewritten = String::new();
-    let mut data_line_index = 0usize;
-    for line in rendered.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            rewritten.push_str(line);
-            rewritten.push('\n');
-            continue;
-        }
-        data_line_index += 1;
-        let parts: Vec<&str> = trimmed.split(',').map(str::trim).collect();
-        if parts.len() != 6 {
-            return Err("document-backed test requires plan-snapshot lane rows".to_string());
-        }
-        let role = if data_line_index == 2 {
-            "standby"
-        } else {
-            parts[3]
-        };
-        rewritten.push_str(&format!(
-            "{},{},{},{},{},{}\n",
-            parts[0], parts[1], parts[2], role, parts[4], parts[5]
-        ));
-    }
-    if data_line_index < 2 {
-        return Err("document-backed test requires at least two lane rows".to_string());
-    }
-    let document = crate::peer_egress::lane_binding::parse_transit_lane_document(&rewritten)?;
     local_client
         .set_read_timeout(Some(std::time::Duration::from_millis(250)))
         .map_err(|error| format!("set local timeout failed: {error}"))?;
     let plan = document
         .mesh_path_plan()?
         .ok_or_else(|| "plan snapshot missing".to_string())?;
-    let plan_selection =
-        crate::peer_egress::live_lane_selection::select_carrier_lane_from_mesh_plan(
-            &plan,
-            chimera_mesh::MeshMultipathFlowKey::from_opaque_flow_bytes(b"plan-binding-check")?,
-        );
-    let plan_binding = plan_selection
-        .selected_binding
-        .ok_or_else(|| "planned binding missing".to_string())?;
-
     let mut chosen_destination = None;
-    let fallback_bindings = document.registrations();
     for index in 0..256usize {
         let destination_host = format!("document-backed-{index}.example.org");
         let destination = format!("{destination_host}:443");
@@ -279,22 +240,22 @@ fn local_client_uses_document_backed_lane_selection_when_plan_snapshot_exists() 
             chimera_mesh::MeshMultipathFlowKey::from_opaque_flow_bytes(destination.as_bytes())?;
         let plan_selection =
             crate::peer_egress::live_lane_selection::select_carrier_lane_from_mesh_plan(&plan, key);
-        let fallback_selection =
+        let registration_selection =
             crate::peer_egress::live_lane_selection::select_carrier_lane_from_registrations(
-                fallback_bindings,
+                document.registrations(),
                 key,
             )?;
-        if plan_selection.selected_binding == Some(plan_binding)
-            && fallback_selection.selected_binding != Some(plan_binding)
-        {
-            chosen_destination = Some((destination_host, fallback_selection.selected_binding));
+        assert_eq!(
+            registration_selection.selected_binding,
+            plan_selection.selected_binding
+        );
+        if let Some(binding) = plan_selection.selected_binding {
+            chosen_destination = Some((destination_host, binding));
             break;
         }
     }
-    let (destination_host, fallback_binding) = chosen_destination.ok_or_else(|| {
-        "could not find destination matching plan and diverging from fallback".to_string()
-    })?;
-    assert_ne!(fallback_binding, Some(plan_binding));
+    let (destination_host, plan_binding) = chosen_destination
+        .ok_or_else(|| "could not find destination matching weighted plan".to_string())?;
 
     let dispatcher = new_shared_transit_dispatcher();
     dispatcher.register(plan_binding, selected_peer_writer)?;

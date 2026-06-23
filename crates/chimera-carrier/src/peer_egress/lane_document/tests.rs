@@ -133,6 +133,46 @@ fn document_round_trips_snapshot_and_rows() -> Result<(), String> {
 }
 
 #[test]
+fn document_rejects_rows_that_diverge_from_snapshot() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let rendered = render_transit_lane_document(&document)?;
+    let mut tampered = String::new();
+    let mut changed = false;
+    for line in rendered.lines() {
+        let trimmed = line.trim();
+        if !changed && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            let mut parts = trimmed.split(',').map(str::trim).collect::<Vec<_>>();
+            if parts.len() != 6 {
+                return Err("test requires plan-backed lane rows".to_string());
+            }
+            parts[3] = if parts[3] == "active" {
+                "standby"
+            } else {
+                "active"
+            };
+            tampered.push_str(&parts.join(","));
+            tampered.push('\n');
+            changed = true;
+            continue;
+        }
+        tampered.push_str(line);
+        tampered.push('\n');
+    }
+    if !changed {
+        return Err("test did not find a lane row to tamper".to_string());
+    }
+
+    let error = match parse_transit_lane_document(&tampered) {
+        Ok(_) => return Err("tampered lane row must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("mismatches plan snapshot"));
+    assert!(!error.contains("198.51.100"));
+    Ok(())
+}
+
+#[test]
 fn document_falls_back_to_registrations_without_snapshot() -> Result<(), String> {
     let document = TransitLaneDocument::new(
         vec![TransitLaneRegistration::new(

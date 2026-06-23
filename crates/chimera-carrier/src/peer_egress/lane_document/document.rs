@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::format::{parse_role, parse_u8_field};
 use super::registration::{parse_transit_lane_registrations, render_transit_lane_registrations};
@@ -152,6 +152,9 @@ pub fn parse_transit_lane_document(input: &str) -> Result<TransitLaneDocument, S
     } else {
         parse_transit_lane_registrations(&row_lines.join("\n"))?
     };
+    if let Some(plan) = plan_snapshot.as_ref() {
+        validate_transit_lane_document_rows_match_plan(&registrations, plan)?;
+    }
     Ok(TransitLaneDocument::new(
         registrations,
         plan_snapshot.map(TransitLanePlanSnapshot::new),
@@ -170,4 +173,48 @@ pub fn load_transit_lane_document(path: &str) -> Result<TransitLaneDocument, Str
 
 fn snapshot_needs_separator(document: &TransitLaneDocument) -> bool {
     document.plan_snapshot.is_some() && !document.registrations.is_empty()
+}
+
+fn validate_transit_lane_document_rows_match_plan(
+    registrations: &[TransitLaneRegistration],
+    plan: &chimera_mesh::MeshPathPlan,
+) -> Result<(), String> {
+    let bindings = &plan.multipath_schedule.carrier_lane_bindings;
+    if registrations.len() != bindings.len() {
+        return Err("sealed transit lane document row count mismatches plan snapshot".to_string());
+    }
+
+    let mut by_binding = BTreeMap::new();
+    for registration in registrations {
+        if by_binding
+            .insert(registration.binding(), registration)
+            .is_some()
+        {
+            return Err("sealed transit lane document duplicate row binding".to_string());
+        }
+    }
+
+    for binding in bindings {
+        let path_binding = super::transit_path_binding_from_mesh_lane(binding)?;
+        let registration = by_binding
+            .get(&path_binding)
+            .ok_or_else(|| "sealed transit lane document missing plan binding row".to_string())?;
+        if registration.endpoint() != binding.carrier_endpoint {
+            return Err(
+                "sealed transit lane document endpoint mismatches plan snapshot".to_string(),
+            );
+        }
+        if registration.role() != Some(binding.role.clone()) {
+            return Err("sealed transit lane document role mismatches plan snapshot".to_string());
+        }
+        if registration.weight_pct() != Some(binding.weight_pct) {
+            return Err("sealed transit lane document weight mismatches plan snapshot".to_string());
+        }
+        if registration.capacity_weight_pct() != Some(binding.capacity_weight_pct) {
+            return Err(
+                "sealed transit lane document capacity mismatches plan snapshot".to_string(),
+            );
+        }
+    }
+    Ok(())
 }
