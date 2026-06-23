@@ -123,7 +123,8 @@ mod tests {
         write_connect_message, write_sealed_transit_message,
     };
     use crate::peer_egress::aggregate_wire::{
-        AggregateObjectId, AggregateTransitShardFrame, encode_aggregate_transit_shard_frame,
+        AGGREGATE_TRANSIT_MAGIC, AggregateObjectId, AggregateTransitShardFrame,
+        encode_aggregate_transit_shard_frame,
     };
     use chimera_session::{Frame, FrameKind};
 
@@ -321,6 +322,18 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("bound sealed transit"));
+        assert!(!error.contains("OK"));
+    }
+
+    #[test]
+    fn peer_payload_rejects_malformed_aggregate_transit_without_text_fallback() {
+        let payload = vec![AGGREGATE_TRANSIT_MAGIC, b'O', b'K', b'\n'];
+
+        let error = match parse_peer_payload(payload, 512) {
+            Ok(message) => unreachable!("malformed aggregate transit frame must fail: {message:?}"),
+            Err(error) => error,
+        };
+        assert!(error.contains("aggregate transit shard"));
         assert!(!error.contains("OK"));
     }
 

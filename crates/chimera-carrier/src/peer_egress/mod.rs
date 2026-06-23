@@ -1,4 +1,6 @@
 #[allow(dead_code)]
+pub(crate) mod aggregate_dispatch;
+#[allow(dead_code)]
 pub(crate) mod aggregate_reassembly;
 #[allow(dead_code)]
 pub(crate) mod aggregate_wire;

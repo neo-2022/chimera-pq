@@ -5,7 +5,7 @@ use crate::peer_egress::aggregate_wire::{
     MAX_AGGREGATE_SHARD_COUNT,
 };
 use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_frame};
-use crate::peer_egress::transit_binding::TransitPathBinding;
+use crate::peer_egress::transit_binding::TransitRouteId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AggregateTransitReassemblyLimits {
@@ -43,7 +43,7 @@ impl fmt::Debug for AggregateTransitObjectReassembler {
             Some(state) => {
                 debug
                     .field("aggregate_id", &state.aggregate_id)
-                    .field("binding", &"<opaque>")
+                    .field("route_id", &"<opaque>")
                     .field("object_len", &"<redacted>")
                     .field("shard_count", &state.shard_count)
                     .field("received_shards", &state.received_shards);
@@ -99,7 +99,7 @@ impl AggregateTransitObjectReassembler {
 }
 
 struct ReassemblyState {
-    binding: TransitPathBinding,
+    route_id: TransitRouteId,
     aggregate_id: AggregateObjectId,
     object_len: usize,
     shard_count: usize,
@@ -117,7 +117,7 @@ impl ReassemblyState {
             return Err("aggregate reassembly limits exceeded".to_string());
         }
         Ok(Self {
-            binding: first.binding(),
+            route_id: first.binding().route_id(),
             aggregate_id: first.aggregate_id(),
             object_len: first.object_len(),
             shard_count,
@@ -127,8 +127,8 @@ impl ReassemblyState {
     }
 
     fn accept(&mut self, shard: AggregateTransitShardFrame) -> Result<(), String> {
-        if shard.binding() != self.binding {
-            return Err("aggregate reassembly binding mismatch".to_string());
+        if shard.binding().route_id() != self.route_id {
+            return Err("aggregate reassembly route binding mismatch".to_string());
         }
         if shard.aggregate_id() != self.aggregate_id
             || shard.object_len() != self.object_len
@@ -362,6 +362,31 @@ mod tests {
             AggregateTransitReassemblyStatus::Pending
         ));
         assert!(reassembler.accept(wrong_binding).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn reassembly_accepts_multiple_lanes_for_same_route() -> Result<(), String> {
+        let sealed = encoded_frame(b"sealed multi lane aggregate");
+        let aggregate_id = object_id(77);
+        let first = shard(aggregate_id, binding(7, 1), &sealed, 2, 0, 0, 8)?;
+        let second = shard(aggregate_id, binding(7, 2), &sealed, 2, 1, 8, sealed.len())?;
+        let mut reassembler = AggregateTransitObjectReassembler::default();
+
+        assert!(matches!(
+            reassembler.accept(first)?,
+            AggregateTransitReassemblyStatus::Pending
+        ));
+        let complete = reassembler.accept(second)?;
+
+        match complete {
+            AggregateTransitReassemblyStatus::Complete(frame) => {
+                assert_eq!(frame.sealed_bytes(), sealed.as_slice());
+            }
+            AggregateTransitReassemblyStatus::Pending => {
+                return Err("aggregate reassembly must complete".to_string());
+            }
+        }
         Ok(())
     }
 
