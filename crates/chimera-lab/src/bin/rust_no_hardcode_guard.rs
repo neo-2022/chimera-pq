@@ -119,6 +119,7 @@ fn has_banned_machine_resource_literal(text: &str) -> bool {
         ["CHIMERA_", "LAP", "TOP_"].concat(),
         ["v", "ps_host"].concat(),
         ["l", "aptop_host"].concat(),
+        ["note", "book"].concat(),
         "gosuslugi".to_string(),
         "ozon.ru".to_string(),
         "mos.ru".to_string(),
@@ -130,6 +131,17 @@ fn has_banned_machine_resource_literal(text: &str) -> bool {
     banned_literals
         .iter()
         .any(|needle| text.contains(needle.as_str()))
+}
+
+fn has_banned_product_doc_device_marker(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains("notebook")
+        || lower.contains("laptop")
+        || lower.contains("vps")
+        || text.contains("91.124.")
+        || text.contains("192.168.31.")
+        || text.contains("root@91.")
+        || text.contains("art@192.")
 }
 
 fn has_ambiguous_chimera_lab_cargo_run(line: &str) -> bool {
@@ -330,6 +342,38 @@ fn main() {
         std::process::exit(1);
     }
 
+    let mut product_doc_device_hits = Vec::new();
+    for doc in [Path::new("README.md"), Path::new("docs")] {
+        if doc.is_dir() {
+            let mut doc_files = Vec::new();
+            collect_files(doc, &mut doc_files);
+            for file in doc_files {
+                let Some(text) = try_read_text(&file) else {
+                    continue;
+                };
+                for (i, line) in text.lines().enumerate() {
+                    if has_banned_product_doc_device_marker(line) {
+                        product_doc_device_hits.push(format!("{}:{}", file.display(), i + 1));
+                    }
+                }
+            }
+        } else if doc.is_file() {
+            let text = read_to_string(doc);
+            for (i, line) in text.lines().enumerate() {
+                if has_banned_product_doc_device_marker(line) {
+                    product_doc_device_hits.push(format!("{}:{}", doc.display(), i + 1));
+                }
+            }
+        }
+    }
+    if !product_doc_device_hits.is_empty() {
+        eprintln!("rust/no-hardcode guard: product docs stand-specific device marker found");
+        for hit in product_doc_device_hits {
+            eprintln!("{hit}");
+        }
+        std::process::exit(1);
+    }
+
     let probe_rs = Path::new("crates/chimera-lab/src/bin/runtime_real_world_probe.rs");
     if !probe_rs.is_file() {
         fail(
@@ -448,10 +492,25 @@ mod tests {
         assert!(has_banned_machine_resource_literal(
             &["export ", "CHIMERA_", "LAP", "TOP_HOST=x"].concat()
         ));
+        assert!(has_banned_machine_resource_literal(
+            &["external ", "note", "book", " host"].concat()
+        ));
         assert!(has_banned_machine_resource_literal("open gosuslugi"));
         assert!(has_banned_machine_resource_literal("127.0.0.1:12090"));
         assert!(!has_banned_machine_resource_literal("203.0.113.10"));
         assert!(!has_banned_machine_resource_literal("192.168.0.0/16"));
+    }
+
+    #[test]
+    fn banned_product_doc_device_marker_detection_works() {
+        assert!(has_banned_product_doc_device_marker("notebook proof"));
+        assert!(has_banned_product_doc_device_marker("laptop proof"));
+        assert!(has_banned_product_doc_device_marker("VPS proof"));
+        assert!(has_banned_product_doc_device_marker("root@91.example"));
+        assert!(has_banned_product_doc_device_marker("192.168.31.21"));
+        assert!(!has_banned_product_doc_device_marker(
+            "external remote proof node"
+        ));
     }
 
     #[test]

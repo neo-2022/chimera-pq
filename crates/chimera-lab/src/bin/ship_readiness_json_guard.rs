@@ -196,7 +196,7 @@ fn main() {
     require_md_contains(&report_md_raw, "Runtime probe-access live external probe:");
     require_md_contains(
         &report_md_raw,
-        "Runtime probe-access SSH stand required for live probe:",
+        "Runtime probe-access external remote proof required for live probe:",
     );
     require_md_contains(
         &report_md_raw,
@@ -212,7 +212,7 @@ fn main() {
     require_md_contains(&report_md_raw, "Runtime real-world live external probe:");
     require_md_contains(
         &report_md_raw,
-        "Runtime real-world SSH stand required for live probe:",
+        "Runtime real-world external remote proof required for live probe:",
     );
     require_md_contains(&report_md_raw, "Runtime real-world datapath probe error:");
 

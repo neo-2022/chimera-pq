@@ -79,15 +79,15 @@ Stages:
   - `bash scripts/anti_monolith_guard.sh`: PASS.
 - FINAL_AUDIT: done
   - No CHIMERA runtime was started, stopped or restarted on the current PC.
-  - No local DNS, route, firewall, proxy, VPN, Happ, MYVPN, router, notebook or
-    SIDE_A setting was changed.
+  - No local DNS, route, firewall, proxy, VPN, Happ, MYVPN, router or external
+    proof-node setting was changed.
   - Current status is source/unit/lab verified only. Real node-to-node
     carrier-bound sealed transit and GitHub one-command stand update remain
     unverified for this change.
 - REPORT: done
   - Status: source-level sealed-transit binding dispatch contract is verified.
   - Not closed: real runtime registration of binding to next-hop, release
-    publication, GitHub Latest verification, and SSH stand proof on notebook/SIDE_A.
+    publication, GitHub Latest verification, and external remote proof.
 
 Runtime/network statement:
 

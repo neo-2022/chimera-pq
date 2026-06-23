@@ -32,7 +32,7 @@
 - PASS: `cargo fmt --all -- --check`
 
 ## Known Open Items
-- Real-world peer-update smoke on notebook/SIDE_A still needs SSH-run evidence.
+- Real-world peer-update smoke on external proof nodes still needs SSH-run evidence.
 - The peer trust boundary is operational/config-based; signed peer manifests are
   still a future hardening step.
 
@@ -41,5 +41,5 @@
 - No local CHIMERA start/stop was performed on the current PC.
 
 ## Next Step
-- Publish a new GitHub Release, then test GitHub-first install on the SIDE_A and
-  peer fallback on the notebook over SSH.
+- Publish a new GitHub Release, then test GitHub-first install and peer
+  fallback on external proof nodes over SSH.

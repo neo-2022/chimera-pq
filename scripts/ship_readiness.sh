@@ -273,12 +273,12 @@ Checks:
 - Runtime probe-access smoke (\`batch targets + totals/threshold report\`): \`${runtime_probe_access_smoke_ok}\`
 - Runtime probe-access mode: \`${runtime_probe_access_mode}\`
 - Runtime probe-access live external probe: \`${runtime_probe_access_live_external_probe}\`
-- Runtime probe-access SSH stand required for live probe: \`${runtime_probe_access_ssh_stand_required_for_live_probe}\`
+- Runtime probe-access external remote proof required for live probe: \`${runtime_probe_access_ssh_stand_required_for_live_probe}\`
 - Runtime probe-access ci-snapshot targets ok: \`${runtime_probe_access_ci_snapshot_targets_ok}\`
 - Runtime real-world probe smoke (\`transparent datapath snapshot only\`): \`${runtime_real_world_probe_smoke_ok}\`
 - Runtime real-world probe mode: \`${runtime_real_world_probe_mode}\`
 - Runtime real-world live external probe: \`${runtime_real_world_live_external_probe}\`
-- Runtime real-world SSH stand required for live probe: \`${runtime_real_world_ssh_stand_required_for_live_probe}\`
+- Runtime real-world external remote proof required for live probe: \`${runtime_real_world_ssh_stand_required_for_live_probe}\`
 - Runtime real-world direct probe ok: \`${runtime_real_world_direct_probe_ok}\`
 - Runtime real-world datapath probe attempted: \`${runtime_real_world_datapath_probe_attempted}\`
 - Runtime real-world datapath probe ok: \`${runtime_real_world_datapath_probe_ok}\`

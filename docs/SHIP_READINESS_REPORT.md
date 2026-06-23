@@ -41,12 +41,12 @@ Checks:
 - Runtime probe-access smoke (`batch targets + totals/threshold report`): `true`
 - Runtime probe-access mode: `ci_snapshot`
 - Runtime probe-access live external probe: `false`
-- Runtime probe-access SSH stand required for live probe: `true`
+- Runtime probe-access external remote proof required for live probe: `true`
 - Runtime probe-access ci-snapshot targets ok: `true`
 - Runtime real-world probe smoke (`transparent datapath snapshot only`): `true`
 - Runtime real-world probe mode: `ci_snapshot`
 - Runtime real-world live external probe: `false`
-- Runtime real-world SSH stand required for live probe: `true`
+- Runtime real-world external remote proof required for live probe: `true`
 - Runtime real-world direct probe ok: `false`
 - Runtime real-world datapath probe attempted: `false`
 - Runtime real-world datapath probe ok: `false`

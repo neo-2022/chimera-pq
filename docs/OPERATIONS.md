@@ -216,9 +216,9 @@ update-first check before starting or connecting.
 
 Peer update fallback:
 
-- GitHub Release/Latest remains the primary source for first install and stand
+- GitHub Release/Latest remains the primary source for first install and remote
   proof.
-- After a successful GitHub publish, refresh the notebook/SIDE_A mirror nodes to
+- After a successful GitHub publish, refresh trusted peer mirror nodes to
   the same release tree and serve them with `chimera-bootstrap serve-release`
   so peers can update from an already-installed Chimera when GitHub is
   unreachable.
@@ -282,7 +282,7 @@ The peer server exposes:
 The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `side_a`,
 and `side_b` remain compatibility labels only.
 
-Forbidden for side_b/SIDE_A stand proof:
+Forbidden for external remote proof:
 
 - `cargo build`, `cargo run`, or requiring `cargo` on the target;
 - `git clone` as the install source on the target;

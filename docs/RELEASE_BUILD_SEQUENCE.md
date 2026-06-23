@@ -14,7 +14,7 @@ Use this sequence for every bundle or bootstrap update.
    - keep `bin/` because it carries the shipped executables
 3. Build the release archive from the source tree root, then inspect its size.
    The release build must compile ready Linux binaries into `bin/`; the
-   notebook/SIDE_A install path must not require `cargo`.
+   external proof-node install path must not require `cargo`.
 4. Fail the release if the archive size is clearly wrong or contains build output.
 5. Generate checksum files and verify them against the archive.
 6. Update the public GitHub release/bootstrap path:
@@ -30,9 +30,9 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera-pq-release.tar.gz`
    - `chimera-pq-release.tar.gz.sha256`
 9. After the GitHub release is live, install that exact release on the
-   notebook/SIDE_A mirror nodes and publish them with
+   trusted peer mirror nodes and publish them with
    `chimera-bootstrap serve-release --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" --listen 0.0.0.0:18179 --base-url http://node.example:18179`
-   or an equivalent trusted base URL for the stand.
+   or an equivalent trusted base URL for remote proof.
 10. Verify the peer-update fallback contract remains update-only:
    - `chimera-sh` checks GitHub Latest first;
    - peer fallback is tried after GitHub Latest if it is unreachable, or if it
@@ -49,14 +49,14 @@ Use this sequence for every bundle or bootstrap update.
      metadata `sha256` to the checksum file;
    - if no trusted update source is reachable, CHIMERA keeps the installed
      version and emits `chimera_update=unavailable`;
-   - peer update evidence is not used as first-install stand proof.
+   - peer update evidence is not used as first-install remote proof.
 11. Verify the start contract before release:
    - `chimera-sh -start` prepares user-cache log targets before the systemd
      user start path;
    - `chimera-sh -start` returns non-zero if either node or transparent runtime
      service fails its active check;
    - false `start_status=ok` is a release-blocking regression.
-12. Smoke-test the install flow on the notebook/SIDE_A only through the GitHub
+12. Smoke-test the install flow on external proof nodes only through the GitHub
    one-command bootstrap.
    - the command must be wrapped with `bash -o pipefail -c`
    - the outer bootstrap download must use `curl --disable -fsSL --retry 3
@@ -71,6 +71,6 @@ Non-goals:
 - do not ship `WEAVE_brand/`
 - do not treat a first-install self-update loop as acceptable
 - do not use `rsync`, `scp`, local tarballs, `git clone`, `cargo build`, or
-  `cargo run` as side_b/SIDE_A stand install proof
+  `cargo run` as external remote install proof
 - do not extract any release archive before its checksum is verified
 - do not treat peer-update fallback as GitHub first-install proof

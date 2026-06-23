@@ -57,4 +57,5 @@
 ## Next Step
 
 - Wire `MeshPathPlan` into the live ingress path selection call sites in
-  `peer_egress`, then verify the resulting live selection on the SSH stand.
+  `peer_egress`, then verify the resulting live selection on external remote
+  proof nodes.

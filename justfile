@@ -362,6 +362,8 @@ rust-no-hardcode-guard-selfcheck:
     rg -q 'python usage found in runtime smoke scripts' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python usage found in scripts/\*\.sh' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'machine/resource-specific literal found' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'product docs stand-specific device marker found' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'has_banned_product_doc_device_marker' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python execution found in justfile' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python command found in docs/README' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -Fq 'resolve_non_empty_setting("CHIMERA_REAL_WORLD_DIRECT_URL"' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
@@ -2038,7 +2040,7 @@ ship-report-contract-check:
     rg -q 'Truth boundary:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime probe-access mode:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime probe-access live external probe:' docs/SHIP_READINESS_REPORT.md
-    rg -q 'Runtime probe-access SSH stand required for live probe:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime probe-access external remote proof required for live probe:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime probe-access ci-snapshot targets ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe attempted:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe ok:' docs/SHIP_READINESS_REPORT.md

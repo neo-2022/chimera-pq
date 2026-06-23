@@ -90,4 +90,4 @@
 
 - Publish/build a GitHub release from current source, update SIDE_A and side_b only
   through the documented one-command GitHub path, then run node-to-node
-  carrier-bound sealed transit proof on the SSH stand.
+  carrier-bound sealed transit proof on external remote proof nodes.
