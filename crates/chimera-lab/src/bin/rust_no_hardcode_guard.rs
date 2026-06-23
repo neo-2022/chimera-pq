@@ -144,6 +144,19 @@ fn has_banned_product_doc_device_marker(text: &str) -> bool {
         || text.contains("art@192.")
 }
 
+fn has_banned_active_product_doc_stand_marker(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains("<stand-")
+        || lower.contains("stand-host")
+        || lower.contains("stand verification")
+        || lower.contains("stand proof")
+        || lower.contains("stand install")
+        || text.contains("CHIMERA_SIDE_A")
+        || text.contains("CHIMERA_SIDE_B")
+        || text.contains("SIDE_A +")
+        || text.contains("Side B/SIDE_A")
+}
+
 fn has_ambiguous_chimera_lab_cargo_run(line: &str) -> bool {
     let cleaned = line.split('#').next().unwrap_or_default().trim();
     if cleaned.is_empty() {
@@ -374,6 +387,30 @@ fn main() {
         std::process::exit(1);
     }
 
+    let mut active_product_doc_stand_hits = Vec::new();
+    for doc in [
+        Path::new("README.md"),
+        Path::new("docs/OPERATIONS.md"),
+        Path::new("docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md"),
+    ] {
+        if !doc.is_file() {
+            continue;
+        }
+        let text = read_to_string(doc);
+        for (i, line) in text.lines().enumerate() {
+            if has_banned_active_product_doc_stand_marker(line) {
+                active_product_doc_stand_hits.push(format!("{}:{}", doc.display(), i + 1));
+            }
+        }
+    }
+    if !active_product_doc_stand_hits.is_empty() {
+        eprintln!("rust/no-hardcode guard: active product docs contain external-stand markers");
+        for hit in active_product_doc_stand_hits {
+            eprintln!("{hit}");
+        }
+        std::process::exit(1);
+    }
+
     let probe_rs = Path::new("crates/chimera-lab/src/bin/runtime_real_world_probe.rs");
     if !probe_rs.is_file() {
         fail(
@@ -510,6 +547,25 @@ mod tests {
         assert!(has_banned_product_doc_device_marker("192.168.31.21"));
         assert!(!has_banned_product_doc_device_marker(
             "external remote proof node"
+        ));
+    }
+
+    #[test]
+    fn banned_active_product_doc_stand_marker_detection_works() {
+        assert!(has_banned_active_product_doc_stand_marker(
+            "connect <stand-host-b-ip>:443"
+        ));
+        assert!(has_banned_active_product_doc_stand_marker(
+            "Stand Install/Update Contract"
+        ));
+        assert!(has_banned_active_product_doc_stand_marker(
+            "CHIMERA_SIDE_B_HOST"
+        ));
+        assert!(has_banned_active_product_doc_stand_marker(
+            "Side B/SIDE_A stand verification"
+        ));
+        assert!(!has_banned_active_product_doc_stand_marker(
+            "external proof node_a and node_b"
         ));
     }
 

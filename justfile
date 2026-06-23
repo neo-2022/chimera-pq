@@ -1386,9 +1386,9 @@ mesh-launch-preflight-doc-quickcheck-selfcheck:
     rg -q '^just mesh-launch-preflight-ready-check$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-ready-hint$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-status-summary$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
-    rg -q '^just mesh-launch-preflight-unblock-and-run <side_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
-    rg -q '^just mesh-launch-preflight-set-real-endpoints <side_b_host:port> <side_a_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
-    rg -q '^just mesh-launch-preflight-set-remote-endpoint side_a <side_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-unblock-and-run <node_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-set-real-endpoints <node_b_host:port> <node_a_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-set-remote-endpoint side_a <node_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^Full gate note:$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^- `just mesh-launch-gate-selfcheck` now includes this fast fail-fast block before heavier smoke runs\.$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md

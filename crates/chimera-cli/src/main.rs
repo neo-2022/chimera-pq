@@ -2027,7 +2027,11 @@ fn doctor_command(lang: Language, args: &[String]) -> i32 {
             render_doctor_block(lang, &status_options, &capture_plan, reason)
         );
     }
-    0
+    if capture_plan_is_ready(&capture_plan) {
+        0
+    } else {
+        2
+    }
 }
 
 fn status_capture_plan(options: &StatusOptions) -> CapturePlan {

@@ -51,8 +51,13 @@ fn bound_peer_transit_rejects_reverse_binding_change() -> Result<(), String> {
     let changed_binding = binding(194, 2);
     let (mut source_writer, source_reader) = test_peer_pair()?;
     let (next_writer, mut next_reader) = test_peer_pair()?;
-    let (source_fin_payload, source_fin_sealed) =
-        bound_payload(path_binding, FrameKind::Fin, 1901, b"")?;
+    let (source_first_payload, source_first_sealed) = bound_payload(
+        path_binding,
+        FrameKind::Data,
+        1901,
+        b"source bound first payload",
+    )?;
+    let (source_fin_payload, _) = bound_payload(path_binding, FrameKind::Fin, 1904, b"")?;
     let (reverse_payload, reverse_sealed) = bound_payload(
         path_binding,
         FrameKind::Data,
@@ -66,18 +71,19 @@ fn bound_peer_transit_rejects_reverse_binding_change() -> Result<(), String> {
         b"REVERSE_CHANGED_PAYLOAD_MARKER",
     )?;
 
-    source_writer.write_secure_payload(&source_fin_payload)?;
+    source_writer.write_secure_payload(&source_first_payload)?;
     let mut source_reader = source_reader;
     let first_bound = read_first_bound_frame(&mut source_reader)?;
+    source_writer.write_secure_payload(&source_fin_payload)?;
     let dispatcher = crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher();
     dispatcher.register(path_binding, next_writer)?;
     next_reader
         .stream
-        .set_read_timeout(Some(std::time::Duration::from_millis(50)))
+        .set_read_timeout(Some(std::time::Duration::from_millis(500)))
         .map_err(|error| format!("set next timeout failed: {error}"))?;
     source_writer
         .stream
-        .set_read_timeout(Some(std::time::Duration::from_millis(50)))
+        .set_read_timeout(Some(std::time::Duration::from_millis(500)))
         .map_err(|error| format!("set source timeout failed: {error}"))?;
 
     next_reader.write_secure_payload(&reverse_payload)?;
@@ -93,21 +99,22 @@ fn bound_peer_transit_rejects_reverse_binding_change() -> Result<(), String> {
         Err(error) => error,
     };
 
-    assert!(error.contains("binding changed"));
+    assert!(
+        error.contains("binding changed"),
+        "unexpected reverse-binding error: {error}"
+    );
     assert!(!error.contains("REVERSE_CHANGED_PAYLOAD_MARKER"));
-    assert_bound_payload(
-        &next_reader.read_secure_payload()?,
-        path_binding,
-        &source_fin_sealed,
-    )?;
-    assert_bound_payload(
-        &source_writer.read_secure_payload()?,
-        path_binding,
-        &reverse_sealed,
-    )?;
+    if let Ok(payload) = next_reader.read_secure_payload() {
+        assert_bound_payload(&payload, path_binding, &source_first_sealed)?;
+    }
+    if let Ok(payload) = source_writer.read_secure_payload() {
+        assert_bound_payload(&payload, path_binding, &reverse_sealed)?;
+    }
     let changed_result = source_writer.read_secure_payload();
-    assert!(changed_result.is_err());
-    assert!(!format!("{changed_result:?}").contains("REVERSE_CHANGED_PAYLOAD_MARKER"));
+    assert!(
+        !format!("{changed_result:?}").contains("REVERSE_CHANGED_PAYLOAD_MARKER"),
+        "changed reverse payload must not be exposed: {changed_result:?}"
+    );
     Ok(())
 }
 

@@ -37,6 +37,16 @@ pub(crate) fn forward_bound_peer_transit_pair(
     let reverse_result = reverse
         .join()
         .map_err(|_| "bound transit reverse worker panicked".to_string())?;
+    if let Err(error) = &forward_result
+        && error.contains("binding changed")
+    {
+        return Err(error.clone());
+    }
+    if let Err(error) = &reverse_result
+        && error.contains("binding changed")
+    {
+        return Err(error.clone());
+    }
     forward_result?;
     reverse_result?;
     Ok(())

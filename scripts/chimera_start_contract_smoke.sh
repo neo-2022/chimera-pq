@@ -41,7 +41,7 @@ run_case() {
   if [[ "$client_ready" == "1" ]]; then
     cat >"$client_conf" <<'EOF'
 carrier.profile = in-memory
-carrier.addr = 198.51.100.10:443
+carrier.addr = carrier.mesh:443
 carrier.server_name = gateway.local
 capture.mode = tun
 capture.tun_supported = true

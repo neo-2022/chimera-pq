@@ -170,17 +170,17 @@ mode:
 This keeps install/start one-command for end users and removes manual
 third-party installation from required flow.
 
-## Stand Install/Update Contract
+## External Proof Install/Update Contract
 
-Side B/SIDE_A stand verification must use the published GitHub one-command path.
-Source-tree installs are development-only and do not prove that the shipped
-CHIMERA release works.
+External proof-node verification must use the published GitHub one-command
+path. Source-tree installs are development-only and do not prove that the
+shipped CHIMERA release works.
 
-Required stand flow:
+Required external proof flow:
 
 1. Publish the fixed build as a GitHub Release and verify that
    `releases/latest` points to that version.
-2. Run the GitHub bootstrap command on the stand over SSH.
+2. Run the GitHub bootstrap command on each authorized proof node over SSH.
 3. The bootstrap downloads the latest release bundle, verifies version/checksum,
    installs ready binaries, and runs the normal installer.
 4. Before `start`, `restart`, or peer connect, CHIMERA checks for a newer
@@ -188,7 +188,7 @@ Required stand flow:
 5. If a newer version is found, the order is always:
    `update -> verify installed version/checksum -> start/connect`.
 
-Canonical stand command:
+Canonical remote proof command:
 
 ```bash
 bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install'
@@ -249,7 +249,7 @@ Peer update fallback:
   version and emits `chimera_update=unavailable`; network outage alone is not
   a release block.
 - Peer update is update-only fallback. It is not acceptable evidence for the
-  GitHub one-command first-install stand proof.
+  GitHub one-command first-install external proof.
 - Checksum verification gives bundle integrity. Peer-source provenance must be
   bounded operationally by a trusted peer list until signed release manifests
   are added.
@@ -292,7 +292,7 @@ Forbidden for external remote proof:
 
 Scripts that accept a local directory or local tarball are allowed only for
 development/debug packaging checks. They are not acceptable evidence for
-real-world stand verification. Local release sources require explicit
+real-world external proof verification. Local release sources require explicit
 `CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1`, and local tarballs still require a
 matching checksum file before extraction.
 
@@ -346,45 +346,48 @@ Team gate (single command):
 
 1. `just chimera-ops-gate`
 2. `just chimera-ops-gate-quiet` (same checks with reduced console noise)
-3. `just chimera-ops-gate-fresh` (same checks + forced fresh side_b load run + unified fresh report)
-4. `just chimera-side-b-fresh-gate-sync` (run fresh gate on side_b and sync artifacts locally)
+3. `just chimera-ops-gate-fresh` (same checks + forced fresh external
+   proof-node load run + unified fresh report)
+4. `just chimera-side-b-fresh-gate-sync` (legacy lab task; run fresh gate on the
+   configured external proof node and sync artifacts locally)
 
 This runs:
 
 - path-proof selfcheck;
 - channel-audit selfcheck;
 - e2e gate selfcheck;
-- side_b load-gate selfcheck;
+- external proof-node load-gate selfcheck;
 - runtime verify;
 - end-to-end channel gate.
 - e2e gate artifact guard (`status`, contract fields, freshness).
-- side_b load gate (`status`, min success-rate, min request volume).
+- external proof-node load gate (`status`, min success-rate, min request volume).
 - unified fresh gate report (`docs/CHIMERA_FRESH_GATE_REPORT.json` + `.md`).
 
 Direct guard run:
 
 1. `just chimera-e2e-channel-gate-guard`
 
-Side B real-world load run (parallel, default 300s):
+External proof-node real-world load run (parallel, default 300s):
 
 1. `just chimera-load-side-b`
 2. selfcheck only: `just chimera-load-side-b-selfcheck`
 3. strict gate from latest load artifact: `just chimera-load-gate-side-b`
 4. gate selfcheck only: `just chimera-load-gate-side-b-selfcheck`
 
-Optional env overrides:
+Proof-node host/user/path values must live in private operator notes or an
+external shell environment. Do not copy concrete external proof-machine details
+into CHIMERA product docs, release artifacts, defaults, or source-controlled
+config.
 
-- `CHIMERA_SIDE_B_HOST`
-- `CHIMERA_SIDE_B_USER`
-- `CHIMERA_SIDE_B_PASS`
-- `CHIMERA_SIDE_B_REPO`
+Optional load/gate env overrides:
 - `CHIMERA_LOAD_DURATION_SEC`
 - `CHIMERA_LOAD_TIMEOUT_SEC`
 - `CHIMERA_LOAD_CONNECT_TIMEOUT_SEC`
 - `CHIMERA_LOAD_GATE_MIN_SUCCESS_RATE` (default `0.95`)
 - `CHIMERA_LOAD_GATE_MIN_TOTAL_REQUESTS` (default `100`)
 - `CHIMERA_LOAD_GATE_MAX_AGE_SEC` (default `3600`)
-- `CHIMERA_LOAD_GATE_FORCE_FRESH` (`1` = always run a new side_b load before gate)
+- `CHIMERA_LOAD_GATE_FORCE_FRESH` (`1` = always run a new external proof-node
+  load before gate)
 
 Additional selfcheck for app/service routing config:
 

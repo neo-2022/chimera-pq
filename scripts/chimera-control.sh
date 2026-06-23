@@ -693,7 +693,7 @@ client_config_ready() {
     }
   ' "$config_path" 2>/dev/null || true)"
   case "$addr" in
-    ""|203.0.113.10:443|127.0.0.1:443) return 1 ;;
+    ""|127.0.0.1:443|192.0.2.*|198.51.100.*|203.0.113.*) return 1 ;;
     *) return 0 ;;
   esac
 }
@@ -1972,13 +1972,30 @@ logs_tail() {
   tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null || true
 }
 
+write_doctor_fail_json() {
+  local out="${1:?out_required}"
+  local reason="${2:?reason_required}"
+  mkdir -p "$(dirname "$out")" >/dev/null 2>&1 || true
+  cat >"$out" <<EOF
+{"status":"fail","kind":"doctor","message_en":"Doctor check is blocked until CHIMERA endpoint configuration is ready.","message_ru":"Проверка doctor заблокирована до настройки endpoint CHIMERA.","reason":"${reason}","secrets":"<redacted>","client_config_ready":false,"network_state":"not_modified"}
+EOF
+}
+
 doctor_run() {
-  mkdir -p "$(dirname "$ROOT_DIR/docs/doctor_latest.json")" >/dev/null 2>&1 || true
-  if run_chimera_cli doctor --config "$CLIENT_CONFIG_FILE" --json --out "$ROOT_DIR/docs/doctor_latest.json"; then
+  local out_file="$ROOT_DIR/docs/doctor_latest.json"
+  local config_path rc=0
+  mkdir -p "$(dirname "$out_file")" >/dev/null 2>&1 || true
+  if ! client_config_ready; then
+    write_doctor_fail_json "$out_file" "client_endpoint_unconfigured"
+    echo "doctor_status=fail reason=client_endpoint_unconfigured" >&2
+    return 2
+  fi
+  config_path="$(client_config_path)"
+  run_chimera_cli doctor --config "$config_path" --json --out "$out_file" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
     echo "doctor_status=ok"
     return 0
   fi
-  local rc=$?
   echo "doctor_status=fail exit=$rc" >&2
   return "$rc"
 }

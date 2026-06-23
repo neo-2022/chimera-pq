@@ -51,7 +51,7 @@ read_local_install_role() {
   local install_role_file
   install_role_file="$(install_node_role_file)"
   if [[ -f "$install_role_file" ]]; then
-    tr -d '[:space:]' < "$install_role_file"
+    normalize_install_role "$(tr -d '[:space:]' < "$install_role_file")"
     return 0
   fi
   local env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
@@ -60,11 +60,17 @@ read_local_install_role() {
     env_mode="$(awk -F= '/^CHIMERA_PEER_EGRESS_MODE=/{print $2; exit}' "$env_file" 2>/dev/null | tr -d '[:space:]')"
     case "$env_mode" in
       node|weave-node) echo "node"; return 0 ;;
-      side_a) echo "server"; return 0 ;;
-      side_b|client) echo "client"; return 0 ;;
+      client) echo "client"; return 0 ;;
     esac
   fi
-  echo "${CHIMERA_INSTALL_NODE_ROLE:-node}"
+  normalize_install_role "${CHIMERA_INSTALL_NODE_ROLE:-node}"
+}
+
+normalize_install_role() {
+  case "${1:-node}" in
+    node|weave-node|client|server) printf '%s\n' "$1" ;;
+    *) printf '%s\n' "node" ;;
+  esac
 }
 
 trim_ascii() {

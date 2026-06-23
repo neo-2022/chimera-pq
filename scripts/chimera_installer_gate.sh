@@ -131,6 +131,132 @@ EOF
   rm -rf "$tmp_dir"
 }
 
+run_installer_unconfigured_client_template_smoke() {
+  local tmp_dir install_root fake_bin output rc client_conf
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh \
+    chimera_runtime_bootstrap.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  mesh)
+    exit 1
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/client.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = gateway.local
+capture.mode = auto
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/upstream_proxy.env.example" <<'EOF'
+CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000
+EOF
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-client.service" \
+    "$install_root/deploy/systemd-user/chimera-gateway.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || {
+    echo "$output" >&2
+    fail "installer_unconfigured_client_template_smoke_failed"
+  }
+  [[ "$output" == *"peer_config_node_endpoint=none"* ]] || fail "installer_missing_unconfigured_endpoint_diagnostic"
+  client_conf="$install_root/configs/client.conf"
+  [[ -f "$client_conf" ]] || fail "installer_missing_unconfigured_client_conf"
+  rg -q '^carrier\.addr = 203\.0\.113\.10:443$' "$client_conf" || fail "installer_client_conf_not_inert_placeholder"
+  rm -rf "$tmp_dir"
+}
+
 rg -n "installer_gate_prepare_upstream_env|transparent runtime|transparent runtime" \
   "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transparent_bootstrap"
 
@@ -318,7 +444,8 @@ rg -n -F 'chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh' "$R
 rg -n 'gh release view --json tagName' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_latest_verification_missing"
 rg -n 'release assets do not match required set' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_asset_set_guard_missing"
 rg -n 'configure_peer_egress_env "node"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_not_weave_node_first"
-rg -n '^INSTALL_NODE_ROLE="\$\{CHIMERA_INSTALL_NODE_ROLE:-node\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_default_role_not_node"
+rg -n 'INSTALL_NODE_ROLE="\$\(normalize_install_node_role "\$\{CHIMERA_INSTALL_NODE_ROLE:-node\}"\)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_default_role_not_normalized_node"
+rg -n 'normalize_install_role "\$\(tr -d' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "update_install_role_file_not_normalized"
 rg -n 'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transit_lane_bindings_env"
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_shell_safe_env_writer"
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_shell_safe_env_writer"
@@ -342,6 +469,15 @@ rg -n 'case_upstream_env_shell_quotes_peer_token' "$ROOT_DIR/scripts/chimera_upd
 if rg -n 'configure_peer_egress_env "(side_a|side_b)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
   fail "installer_writes_legacy_peer_egress_role"
 fi
+if rg -n 'CHIMERA_SIDE_[AB]|SIDE_A|SIDE_B|side_a|side_b' \
+  "$ROOT_DIR/scripts/install_desktop_control.sh" \
+  "$ROOT_DIR/scripts/chimera-update.sh" \
+  "$ROOT_DIR/scripts/chimera-control.sh" \
+  "$ROOT_DIR/scripts/chimera-sh" \
+  "$ROOT_DIR/scripts/chimera.sh" \
+  "$ROOT_DIR/scripts/install_release.sh" >/dev/null; then
+  fail "shipped_scripts_contain_stand_role_marker"
+fi
 rg -n '"node" \| "weave-node" => Ok\(Mode::Node\)' "$ROOT_DIR/crates/chimera-carrier/src/peer_egress/options_mode.rs" >/dev/null || fail "peer_egress_missing_node_mode"
 rg -n 'Mode::Node => node::run_node' "$ROOT_DIR/crates/chimera-carrier/src/bin/chimera-peer-egress.rs" >/dev/null || fail "peer_egress_binary_not_dispatching_node_mode"
 rg -n 'remote release checksum is unavailable' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_url_checksum_not_required"
@@ -357,6 +493,7 @@ if rg -n 'neo-2022/chimera/main/chimera\.sh|raw\.githubusercontent\.com/neo-2022
   "$ROOT_DIR/scripts/chimera.sh" "$ROOT_DIR/scripts/chimera-sh" "$ROOT_DIR/scripts/chimera_remote_cycle_smoke.sh" "$ROOT_DIR/scripts/install_release.sh" >/dev/null; then
   fail "legacy_wrong_repo_bootstrap_reference"
 fi
+run_installer_unconfigured_client_template_smoke
 run_installer_env_contract_smoke
 
 echo "installer_gate=pass"

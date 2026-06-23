@@ -6,7 +6,8 @@ Owner: CHIMERA-PQ mesh workline
 ## Objective (strict)
 
 Single active objective until closure:
-- first real CHIMERA mesh launch between two hosts (SIDE_A + side_b) with factual connectivity confirmation.
+- first real CHIMERA mesh launch between two generic nodes (`node_a` + `node_b`)
+  with factual connectivity confirmation.
 
 No parallel objective is allowed if it does not directly unblock this launch.
 
@@ -59,7 +60,7 @@ DoD evidence matrix:
    - `scripts/chimera-control.sh start` -> listener restored (`chimera_proxy_listener=up`)
    - e2e/report artifacts remain `network_state=not_modified`
 
-## Operator Runbook (Side A <-> Side B)
+## Operator Runbook (`node_a` <-> `node_b`)
 
 Goal of this runbook:
 - produce deterministic `mesh launch-preflight` JSON artifacts on both peers;
@@ -72,32 +73,32 @@ Notes:
 ### 1) Prepare peer specs
 
 Define two peer records (example format):
-- Side A peer: `node-a@<SIDE_A_IP>:<PORT>@eu@20@90`
-- Side B peer: `node-b@<SIDE_B_IP>:<PORT>@eu@25@85`
+- `node_a` peer: `node-a@<NODE_A_HOST>:<PORT>@eu@20@90`
+- `node_b` peer: `node-b@<NODE_B_HOST>:<PORT>@eu@25@85`
 
 Use real reachable IP/port values for your environment.
 
-### 2) Run preflight on Side A
+### 2) Run preflight on `node_a`
 
 ```bash
 cargo run -p chimera-cli -- mesh launch-preflight \
   --namespace cef-public \
   --node node-a \
   --traffic-profile high_speed_anonymous \
-  --peer "node-b@<SIDE_B_IP>:<PORT>@eu@25@85" \
+  --peer "node-b@<NODE_B_HOST>:<PORT>@eu@25@85" \
   --timeout-ms 1200 \
   --json \
   --out docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json
 ```
 
-### 3) Run preflight on Side B
+### 3) Run preflight on `node_b`
 
 ```bash
 cargo run -p chimera-cli -- mesh launch-preflight \
   --namespace cef-public \
   --node node-b \
   --traffic-profile high_speed_anonymous \
-  --peer "node-a@<SIDE_A_IP>:<PORT>@eu@20@90" \
+  --peer "node-a@<NODE_A_HOST>:<PORT>@eu@20@90" \
   --timeout-ms 1200 \
   --json \
   --out docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json
@@ -138,8 +139,8 @@ Expected:
 - `docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json` has:
   - `status="ready"`
   - `all_ready=true`
-  - `side_a_ready=true` (maps to Side A report path)
-  - `side_b_ready=true` (maps to Side B report path)
+  - `side_a_ready=true` (maps to first-node report path)
+  - `side_b_ready=true` (maps to second-node report path)
   - same non-empty `namespace` on both source reports (mismatch blocks readiness)
 
 ### 7) One-command wrapper (optional)
@@ -193,8 +194,8 @@ just mesh-launch-preflight-evidence-guard
 Fast endpoint update helper:
 
 ```bash
-just mesh-launch-preflight-set-remote-endpoint side_a <side_b_host:port>
-just mesh-launch-preflight-set-remote-endpoint side_b <side_a_host:port>
+just mesh-launch-preflight-set-remote-endpoint side_a <node_b_host:port>
+just mesh-launch-preflight-set-remote-endpoint side_b <node_a_host:port>
 ```
 
 Profile override examples (no env-file edits required):
@@ -281,12 +282,12 @@ just mesh-launch-preflight-autopilot
 Defaults:
 - mode: `staged`
 - profile set: `core` (`high_speed_anonymous`, `privacy_first`)
-- side_a endpoint: `<stand-host-b-ip>:443`
+- first-node remote endpoint: `<node_b_host:port>`
 
 Variants:
 ```bash
-just mesh-launch-preflight-autopilot full core <stand-host-b-ip>:443
-just mesh-launch-preflight-autopilot staged all <stand-host-b-ip>:443
+just mesh-launch-preflight-autopilot full core <node_b_host:port>
+just mesh-launch-preflight-autopilot staged all <node_b_host:port>
 ```
 Behavior:
 - auto-binds real endpoints via `mesh-launch-preflight-auto-bind`;
@@ -298,8 +299,8 @@ Behavior:
 `mesh-launch-preflight-evidence-guard` validates:
 - freshness of `MESH_LAUNCH_PREFLIGHT_SIDE_A.json`, `MESH_LAUNCH_PREFLIGHT_SIDE_B.json`, `MESH_LAUNCH_PREFLIGHT_VERIFY.json`
   with max age (`CHIMERA_MESH_PREFLIGHT_MAX_AGE_SEC`, default 1800 sec);
-- `docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json` against Side A role contract;
-- `docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json` against Side B role contract;
+- `docs/MESH_LAUNCH_PREFLIGHT_SIDE_A.json` against first-node role contract;
+- `docs/MESH_LAUNCH_PREFLIGHT_SIDE_B.json` against second-node role contract;
 - `docs/MESH_LAUNCH_PREFLIGHT_VERIFY.json` aggregate contract.
 - cross-artifact consistency: namespace and ready flags in `VERIFY` must match peer reports.
 
@@ -341,7 +342,7 @@ Full gate note:
 Profile smoke PASS semantics:
 - command must finish with exit code `0`;
 - for every profile (`high_speed_anonymous`, `privacy_first`, `speed_first`, `low_latency_private`)
-  staged run is executed in strict two-phase order: first `side_a`, then `side_b`;
+  staged run is executed in strict two-phase order: first node, then second node;
 - side run may return `0` (`ready`) or `1` (`blocked`) because real connectivity depends on environment;
 - any other side return code is failure;
 - required local preflight artifacts for each side/profile must be created;
@@ -361,12 +362,12 @@ Preflight env gate:
 One-shot unblock + run:
 
 ```bash
-just mesh-launch-preflight-unblock-and-run <side_b_host:port>
+just mesh-launch-preflight-unblock-and-run <node_b_host:port>
 ```
 
 Fast unblock path (step-by-step):
 ```bash
-just mesh-launch-preflight-set-remote-endpoint side_a <side_b_host:port>
+just mesh-launch-preflight-set-remote-endpoint side_a <node_b_host:port>
 just mesh-launch-preflight-ready-check
 just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard
 ```
@@ -378,10 +379,10 @@ just mesh-launch-preflight-status-summary
 
 Optional local endpoint update helper:
 ```bash
-just mesh-launch-preflight-set-local-endpoint side_b <side_b_host:port>
+just mesh-launch-preflight-set-local-endpoint side_b <node_b_host:port>
 ```
 
 Set both real endpoints in one step:
 ```bash
-just mesh-launch-preflight-set-real-endpoints <side_b_host:port> <side_a_host:port>
+just mesh-launch-preflight-set-real-endpoints <node_b_host:port> <node_a_host:port>
 ```

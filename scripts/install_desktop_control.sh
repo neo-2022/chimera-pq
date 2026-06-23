@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INSTALL_NODE_ROLE="${CHIMERA_INSTALL_NODE_ROLE:-node}"
 INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
@@ -12,6 +11,15 @@ PEER_EGRESS_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
 PEER_EGRESS_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state"
 TRANSPARENT_RUNTIME_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"
 CHIMERA_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
+
+normalize_install_node_role() {
+  case "${1:-node}" in
+    node|weave-node|client|server) printf '%s\n' "$1" ;;
+    *) printf '%s\n' "node" ;;
+  esac
+}
+
+INSTALL_NODE_ROLE="$(normalize_install_node_role "${CHIMERA_INSTALL_NODE_ROLE:-node}")"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -236,7 +244,7 @@ configure_client_target() {
     return 0
   fi
   local client_conf="$ROOT_DIR/configs/client.conf"
-  local candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-${CHIMERA_SIDE_A_ENDPOINT:-}}}}}"
+  local candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}}"
   local -a mesh_nodes_args=()
   if [[ -z "$candidate" ]]; then
     if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
@@ -263,19 +271,22 @@ configure_client_target() {
     fi
   fi
   if [[ -z "$candidate" ]]; then
+    if [[ ! -f "$client_conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
+      cp "$ROOT_DIR/configs/client.example.conf" "$client_conf"
+    fi
     CONFIGURED_CLIENT_ENDPOINT=""
     echo "peer_config_node_endpoint=none"
     echo "peer_config_carrier_addr=none mode=peer_only"
     return 0
   fi
   if [[ "$candidate" != *:* ]]; then
-    echo "error: invalid CHIMERA SIDE_A endpoint: $candidate" >&2
+    echo "error: invalid CHIMERA node endpoint: $candidate" >&2
     exit 2
   fi
   local host_part="${candidate%:*}"
   local port_part="${candidate##*:}"
   if [[ -z "$host_part" || ! "$port_part" =~ ^[0-9]+$ || "$port_part" -lt 1 || "$port_part" -gt 65535 ]]; then
-    echo "error: invalid CHIMERA SIDE_A endpoint: $candidate" >&2
+    echo "error: invalid CHIMERA node endpoint: $candidate" >&2
     exit 2
   fi
   if [[ ! -f "$client_conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
