@@ -1,6 +1,7 @@
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::peer_egress::aggregate_reassembly::{
     AggregateTransitObjectReassembler, AggregateTransitReassemblyLimits,
@@ -12,12 +13,16 @@ use crate::peer_egress::transit_binding::TransitRouteId;
 
 const DEFAULT_MAX_ACTIVE_AGGREGATE_INGRESS_OBJECTS: usize = 1024;
 const DEFAULT_MAX_COMPLETED_AGGREGATE_INGRESS_OBJECTS: usize = 1024;
+const DEFAULT_MAX_EXPIRED_AGGREGATE_INGRESS_OBJECTS: usize = 1024;
+const DEFAULT_AGGREGATE_INGRESS_PARTIAL_OBJECT_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AggregateTransitIngressLimits {
     pub reassembly: AggregateTransitReassemblyLimits,
     pub max_active_objects: usize,
     pub max_completed_objects: usize,
+    pub max_expired_objects: usize,
+    pub partial_object_ttl: Duration,
 }
 
 impl Default for AggregateTransitIngressLimits {
@@ -26,6 +31,8 @@ impl Default for AggregateTransitIngressLimits {
             reassembly: AggregateTransitReassemblyLimits::default(),
             max_active_objects: DEFAULT_MAX_ACTIVE_AGGREGATE_INGRESS_OBJECTS,
             max_completed_objects: DEFAULT_MAX_COMPLETED_AGGREGATE_INGRESS_OBJECTS,
+            max_expired_objects: DEFAULT_MAX_EXPIRED_AGGREGATE_INGRESS_OBJECTS,
+            partial_object_ttl: DEFAULT_AGGREGATE_INGRESS_PARTIAL_OBJECT_TTL,
         }
     }
 }
@@ -59,6 +66,7 @@ impl fmt::Debug for AggregateTransitIngressRegistry {
                 .debug_struct("AggregateTransitIngressRegistry")
                 .field("active_objects", &state.active.len())
                 .field("completed_objects", &state.completed.len())
+                .field("expired_objects", &state.expired.len())
                 .field("limits", &state.limits)
                 .field("keys", &"<opaque>")
                 .finish(),
@@ -92,13 +100,25 @@ impl AggregateTransitIngressRegistry {
         &self,
         shard: AggregateTransitShardFrame,
     ) -> Result<AggregateTransitIngressStatus, String> {
+        self.accept_shard_at(shard, Instant::now())
+    }
+
+    fn accept_shard_at(
+        &self,
+        shard: AggregateTransitShardFrame,
+        now: Instant,
+    ) -> Result<AggregateTransitIngressStatus, String> {
         let key = AggregateIngressKey::from_shard(&shard);
         let mut state = self
             .state
             .lock()
             .map_err(|_| "aggregate ingress registry lock poisoned".to_string())?;
+        evict_expired_active_objects(&mut state, now);
         if state.completed.contains(&key) {
             return Err("aggregate ingress object already complete".to_string());
+        }
+        if state.expired.contains(&key) {
+            return Err("aggregate ingress object expired".to_string());
         }
 
         if !state.active.contains_key(&key) {
@@ -107,14 +127,20 @@ impl AggregateTransitIngressRegistry {
             }
             let reassembler = AggregateTransitObjectReassembler::new(state.limits.reassembly)
                 .map_err(|error| format!("aggregate ingress reassembly limits invalid: {error}"))?;
-            state.active.insert(key, reassembler);
+            state.active.insert(
+                key,
+                ActiveAggregateIngressObject {
+                    reassembler,
+                    created_at: now,
+                },
+            );
         }
 
-        let reassembler = state
+        let active = state
             .active
             .get_mut(&key)
             .ok_or_else(|| "aggregate ingress reassembly state unavailable".to_string())?;
-        match reassembler.accept(shard) {
+        match active.reassembler.accept(shard) {
             Ok(AggregateTransitReassemblyStatus::Pending) => {
                 Ok(AggregateTransitIngressStatus::Pending)
             }
@@ -153,9 +179,11 @@ pub(crate) fn accept_peer_aggregate_ingress_shard(
 
 struct AggregateIngressState {
     limits: AggregateTransitIngressLimits,
-    active: BTreeMap<AggregateIngressKey, AggregateTransitObjectReassembler>,
+    active: BTreeMap<AggregateIngressKey, ActiveAggregateIngressObject>,
     completed: BTreeSet<AggregateIngressKey>,
     completed_order: VecDeque<AggregateIngressKey>,
+    expired: BTreeSet<AggregateIngressKey>,
+    expired_order: VecDeque<AggregateIngressKey>,
 }
 
 impl AggregateIngressState {
@@ -165,6 +193,22 @@ impl AggregateIngressState {
             active: BTreeMap::new(),
             completed: BTreeSet::new(),
             completed_order: VecDeque::new(),
+            expired: BTreeSet::new(),
+            expired_order: VecDeque::new(),
+        }
+    }
+}
+
+struct ActiveAggregateIngressObject {
+    reassembler: AggregateTransitObjectReassembler,
+    created_at: Instant,
+}
+
+impl ActiveAggregateIngressObject {
+    fn is_expired(&self, now: Instant, ttl: Duration) -> bool {
+        match now.checked_duration_since(self.created_at) {
+            Some(age) => age >= ttl,
+            None => false,
         }
     }
 }
@@ -197,9 +241,28 @@ fn validate_ingress_limits(limits: AggregateTransitIngressLimits) -> Result<(), 
     if limits.max_completed_objects == 0 {
         return Err("aggregate ingress completed object limit invalid".to_string());
     }
+    if limits.max_expired_objects == 0 {
+        return Err("aggregate ingress expired object limit invalid".to_string());
+    }
+    if limits.partial_object_ttl.is_zero() {
+        return Err("aggregate ingress partial object ttl invalid".to_string());
+    }
     let _ = AggregateTransitObjectReassembler::new(limits.reassembly)
         .map_err(|error| format!("aggregate ingress reassembly limits invalid: {error}"))?;
     Ok(())
+}
+
+fn evict_expired_active_objects(state: &mut AggregateIngressState, now: Instant) {
+    let ttl = state.limits.partial_object_ttl;
+    let expired_keys = state
+        .active
+        .iter()
+        .filter_map(|(key, active)| active.is_expired(now, ttl).then_some(*key))
+        .collect::<Vec<_>>();
+    for key in expired_keys {
+        state.active.remove(&key);
+        record_expired_key(state, key);
+    }
 }
 
 fn record_completed_key(state: &mut AggregateIngressState, key: AggregateIngressKey) {
@@ -216,6 +279,23 @@ fn trim_completed_keys(state: &mut AggregateIngressState) {
             return;
         };
         state.completed.remove(&oldest);
+    }
+}
+
+fn record_expired_key(state: &mut AggregateIngressState, key: AggregateIngressKey) {
+    if state.expired.insert(key) {
+        state.expired_order.push_back(key);
+    }
+    trim_expired_keys(state);
+}
+
+fn trim_expired_keys(state: &mut AggregateIngressState) {
+    while state.expired.len() > state.limits.max_expired_objects {
+        let Some(oldest) = state.expired_order.pop_front() else {
+            state.expired.clear();
+            return;
+        };
+        state.expired.remove(&oldest);
     }
 }
 

@@ -6,6 +6,7 @@ use crate::peer_egress::aggregate_reassembly::AggregateTransitReassemblyLimits;
 use crate::peer_egress::aggregate_wire::{AggregateObjectId, AggregateTransitShardFrame};
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 use chimera_session::{Frame, FrameKind};
+use std::time::{Duration, Instant};
 
 fn binding(route: u64, lane: u16) -> Result<TransitPathBinding, String> {
     Ok(TransitPathBinding::new(
@@ -22,10 +23,24 @@ fn ingress_limits(
     max_active_objects: usize,
     max_completed_objects: usize,
 ) -> AggregateTransitIngressLimits {
+    ingress_limits_with_ttl(
+        max_active_objects,
+        max_completed_objects,
+        AggregateTransitIngressLimits::default().partial_object_ttl,
+    )
+}
+
+fn ingress_limits_with_ttl(
+    max_active_objects: usize,
+    max_completed_objects: usize,
+    partial_object_ttl: Duration,
+) -> AggregateTransitIngressLimits {
     AggregateTransitIngressLimits {
         reassembly: AggregateTransitReassemblyLimits::default(),
         max_active_objects,
         max_completed_objects,
+        max_expired_objects: max_completed_objects,
+        partial_object_ttl,
     }
 }
 
@@ -190,6 +205,123 @@ fn aggregate_ingress_rejects_new_object_when_active_limit_is_full() -> Result<()
 }
 
 #[test]
+fn aggregate_ingress_expires_partial_objects_and_keeps_stale_key_closed() -> Result<(), String> {
+    let ttl = Duration::from_secs(1);
+    let registry = AggregateTransitIngressRegistry::new(ingress_limits_with_ttl(1, 8, ttl))?;
+    let start = Instant::now();
+    let after_ttl = start + ttl + Duration::from_millis(1);
+    let sealed_expired = encoded_frame(b"EXPIRED_PARTIAL_SECRET")?;
+    let expired_id = object_id(201)?;
+    let expired_first = shard(expired_id, binding(80, 1)?, &sealed_expired, 2, 0, 0, 8)?;
+    let expired_second = shard(
+        expired_id,
+        binding(80, 2)?,
+        &sealed_expired,
+        2,
+        1,
+        8,
+        sealed_expired.len(),
+    )?;
+    let sealed_valid = encoded_frame(b"VALID_AFTER_EXPIRY_SECRET")?;
+    let valid_id = object_id(202)?;
+    let valid_first = shard(valid_id, binding(81, 1)?, &sealed_valid, 2, 0, 0, 8)?;
+    let valid_second = shard(
+        valid_id,
+        binding(81, 2)?,
+        &sealed_valid,
+        2,
+        1,
+        8,
+        sealed_valid.len(),
+    )?;
+
+    assert!(matches!(
+        registry.accept_shard_at(expired_first, start)?,
+        AggregateTransitIngressStatus::Pending
+    ));
+    assert!(matches!(
+        registry.accept_shard_at(valid_first, after_ttl)?,
+        AggregateTransitIngressStatus::Pending
+    ));
+
+    let error = match registry.accept_shard_at(expired_second, after_ttl) {
+        Ok(_) => return Err("expired aggregate object must stay fail-closed".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("expired"));
+    assert!(!error.contains("EXPIRED_PARTIAL_SECRET"));
+
+    match registry.accept_shard_at(valid_second, after_ttl)? {
+        AggregateTransitIngressStatus::Complete(frame) => {
+            assert_eq!(frame.sealed_bytes(), sealed_valid.as_slice());
+        }
+        AggregateTransitIngressStatus::Pending => {
+            return Err("valid aggregate after TTL cleanup should complete".to_string());
+        }
+    }
+    let debug = format!("{registry:?}");
+    assert!(debug.contains("expired_objects"));
+    assert!(!debug.contains("EXPIRED_PARTIAL_SECRET"));
+    assert!(!debug.contains("VALID_AFTER_EXPIRY_SECRET"));
+    Ok(())
+}
+
+#[test]
+fn aggregate_ingress_bounds_expired_key_cache_by_its_own_limit() -> Result<(), String> {
+    let ttl = Duration::from_secs(1);
+    let mut limits = ingress_limits_with_ttl(1, 8, ttl);
+    limits.max_expired_objects = 1;
+    let registry = AggregateTransitIngressRegistry::new(limits)?;
+    let start = Instant::now();
+    let after_ttl = start + ttl + Duration::from_millis(1);
+    let after_second_ttl = after_ttl + ttl + Duration::from_millis(1);
+    let sealed_first = encoded_frame(b"FIRST_EXPIRED_CACHE_SECRET")?;
+    let sealed_second = encoded_frame(b"SECOND_EXPIRED_CACHE_SECRET")?;
+    let first_id = object_id(211)?;
+    let second_id = object_id(212)?;
+    let first_a = shard(first_id, binding(82, 1)?, &sealed_first, 2, 0, 0, 8)?;
+    let first_b = shard(
+        first_id,
+        binding(82, 2)?,
+        &sealed_first,
+        2,
+        1,
+        8,
+        sealed_first.len(),
+    )?;
+    let second_a = shard(second_id, binding(83, 1)?, &sealed_second, 2, 0, 0, 8)?;
+
+    assert!(matches!(
+        registry.accept_shard_at(first_a.clone(), start)?,
+        AggregateTransitIngressStatus::Pending
+    ));
+    assert!(matches!(
+        registry.accept_shard_at(second_a, after_ttl)?,
+        AggregateTransitIngressStatus::Pending
+    ));
+
+    assert!(matches!(
+        registry.accept_shard_at(first_a, after_second_ttl)?,
+        AggregateTransitIngressStatus::Pending
+    ));
+    match registry.accept_shard_at(first_b, after_second_ttl)? {
+        AggregateTransitIngressStatus::Complete(frame) => {
+            assert_eq!(frame.sealed_bytes(), sealed_first.as_slice());
+        }
+        AggregateTransitIngressStatus::Pending => {
+            return Err(
+                "trimmed expired key should be reusable after tombstone eviction".to_string(),
+            );
+        }
+    }
+    let debug = format!("{registry:?}");
+    assert!(debug.contains("expired_objects"));
+    assert!(!debug.contains("FIRST_EXPIRED_CACHE_SECRET"));
+    assert!(!debug.contains("SECOND_EXPIRED_CACHE_SECRET"));
+    Ok(())
+}
+
+#[test]
 fn aggregate_ingress_completed_cache_trims_by_completion_order() -> Result<(), String> {
     let registry = AggregateTransitIngressRegistry::new(ingress_limits(2, 1))?;
     let sealed_first = encoded_frame(b"sealed aggregate completed first")?;
@@ -294,12 +426,40 @@ fn aggregate_ingress_validates_explicit_limits_and_shared_constructor() -> Resul
         },
         max_active_objects: 1,
         max_completed_objects: 1,
+        max_expired_objects: 1,
+        partial_object_ttl: AggregateTransitIngressLimits::default().partial_object_ttl,
     };
     let error = match AggregateTransitIngressRegistry::new(invalid_reassembly) {
         Ok(_) => return Err("invalid reassembly limits must be rejected".to_string()),
         Err(error) => error,
     };
     assert!(error.contains("reassembly limits invalid"));
+
+    let invalid_ttl = AggregateTransitIngressLimits {
+        reassembly: AggregateTransitReassemblyLimits::default(),
+        max_active_objects: 1,
+        max_completed_objects: 1,
+        max_expired_objects: 1,
+        partial_object_ttl: Duration::ZERO,
+    };
+    let error = match AggregateTransitIngressRegistry::new(invalid_ttl) {
+        Ok(_) => return Err("zero partial object ttl must be rejected".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("partial object ttl invalid"));
+
+    let invalid_expired = AggregateTransitIngressLimits {
+        reassembly: AggregateTransitReassemblyLimits::default(),
+        max_active_objects: 1,
+        max_completed_objects: 1,
+        max_expired_objects: 0,
+        partial_object_ttl: AggregateTransitIngressLimits::default().partial_object_ttl,
+    };
+    let error = match AggregateTransitIngressRegistry::new(invalid_expired) {
+        Ok(_) => return Err("zero expired object limit must be rejected".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("expired object limit invalid"));
 
     let shared = new_shared_aggregate_transit_ingress_registry(ingress_limits(2, 2))?;
     let debug = format!("{shared:?}");
