@@ -17,20 +17,24 @@ impl MeshRuntime {
         let mut connected_peer = String::new();
         let mut connected_endpoint = String::new();
 
-        for peer in &plan.selected_peers {
+        let mut attempt_index = 0usize;
+        for (peer_index, peer) in plan.selected_peers.iter().enumerate() {
+            let peer_label = redacted_peer_label(peer_index);
             let fallback_endpoints =
                 fallback_endpoints_for_peer(peer, &policy.connect_fallback_ports)?;
             for endpoint in fallback_endpoints {
+                let endpoint_label = redacted_endpoint_label(attempt_index);
+                attempt_index = attempt_index.saturating_add(1);
                 match connect_endpoint(&endpoint, timeout) {
                     Ok(()) => {
                         attempts.push(MeshConnectAttempt {
-                            peer_id: peer.node_id.clone(),
-                            endpoint: endpoint.clone(),
+                            peer_id: peer_label.clone(),
+                            endpoint: endpoint_label.clone(),
                             success: true,
                             error: String::new(),
                         });
-                        connected_peer = peer.node_id.clone();
-                        connected_endpoint = endpoint;
+                        connected_peer = peer_label;
+                        connected_endpoint = endpoint_label;
                         explain.push("connect_probe_result=connected".to_string());
                         explain.push(format!("connect_probe_connected_peer={connected_peer}"));
                         explain.push(format!(
@@ -38,11 +42,7 @@ impl MeshRuntime {
                         ));
                         return Ok(MeshConnectProbeReport {
                             namespace: self.namespace.clone(),
-                            selected_peers: plan
-                                .selected_peers
-                                .iter()
-                                .map(|p| p.node_id.clone())
-                                .collect(),
+                            selected_peers: redacted_peer_labels(&plan.selected_peers),
                             connected_peer,
                             connected_endpoint,
                             success: true,
@@ -52,10 +52,10 @@ impl MeshRuntime {
                     }
                     Err(error) => {
                         attempts.push(MeshConnectAttempt {
-                            peer_id: peer.node_id.clone(),
-                            endpoint,
+                            peer_id: peer_label.clone(),
+                            endpoint: endpoint_label,
                             success: false,
-                            error,
+                            error: redacted_connect_error(&error),
                         });
                     }
                 }
@@ -65,11 +65,7 @@ impl MeshRuntime {
         explain.push("connect_probe_result=failed".to_string());
         Ok(MeshConnectProbeReport {
             namespace: self.namespace.clone(),
-            selected_peers: plan
-                .selected_peers
-                .iter()
-                .map(|p| p.node_id.clone())
-                .collect(),
+            selected_peers: redacted_peer_labels(&plan.selected_peers),
             connected_peer,
             connected_endpoint,
             success: false,
@@ -175,5 +171,33 @@ fn format_endpoint(host: &str, port: u16) -> String {
         format!("[{host}]:{port}")
     } else {
         format!("{host}:{port}")
+    }
+}
+
+fn redacted_peer_labels(selected_peers: &[MeshPeerState]) -> Vec<String> {
+    selected_peers
+        .iter()
+        .enumerate()
+        .map(|(index, _)| redacted_peer_label(index))
+        .collect()
+}
+
+fn redacted_peer_label(index: usize) -> String {
+    format!("peer#{}", index + 1)
+}
+
+fn redacted_endpoint_label(index: usize) -> String {
+    format!("endpoint#{}:<redacted>", index + 1)
+}
+
+fn redacted_connect_error(error: &str) -> String {
+    if error.starts_with("resolve_error:") {
+        "resolve_error".to_string()
+    } else if error.starts_with("connect_error:") {
+        "connect_error".to_string()
+    } else if error.starts_with("invalid_endpoint:") {
+        error.to_string()
+    } else {
+        "connect_error".to_string()
     }
 }

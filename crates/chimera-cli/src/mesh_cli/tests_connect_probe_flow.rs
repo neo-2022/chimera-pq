@@ -116,13 +116,22 @@ fn connect_probe_flow_succeeds_on_reachable_peer() {
 
     assert_eq!(timeout_ms, 500);
     assert!(report.success);
-    assert_eq!(report.connected_peer, "n1");
-    assert_eq!(
-        report.connected_endpoint,
-        format!("127.0.0.1:{}", addr.port())
+    assert_eq!(report.connected_peer, "peer#1");
+    assert_eq!(report.connected_endpoint, "endpoint#1:<redacted>");
+    assert_eq!(report.selected_peers, vec!["peer#1".to_string()]);
+    assert!(
+        report
+            .attempts
+            .iter()
+            .all(|attempt| attempt.peer_id == "peer#1"
+                && attempt.endpoint == "endpoint#1:<redacted>")
     );
-    assert_eq!(report.selected_peers, vec!["n1".to_string()]);
     assert!(report.attempts.iter().any(|attempt| attempt.success));
+
+    let report_debug = format!("{report:?}");
+    assert!(!report_debug.contains("n1"));
+    assert!(!report_debug.contains("127.0.0.1"));
+    assert!(!report_debug.contains(&addr.port().to_string()));
 }
 
 #[test]

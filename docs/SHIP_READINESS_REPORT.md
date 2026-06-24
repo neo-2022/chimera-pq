@@ -1,7 +1,7 @@
 # Ship Readiness Report
 
 Status: **PASS (LAB/SOURCE GATE ONLY)**
-Generated at (UTC): `2026-06-17T12:51:25Z`
+Generated at (UTC): `2026-06-24T22:03:54Z`
 
 Checks:
 - Baseline freeze: `true`
@@ -39,20 +39,20 @@ Checks:
 - Runtime policy precedence smoke (`exact>suffix + dns-binding`): `true`
 - Runtime forced-stop rollback smoke (`recover without graceful down`): `true`
 - Runtime probe-access smoke (`batch targets + totals/threshold report`): `true`
-- Runtime probe-access mode: `ci_snapshot`
-- Runtime probe-access live external probe: `false`
-- Runtime probe-access external remote proof required for live probe: `true`
-- Runtime probe-access ci-snapshot targets ok: `true`
+- Runtime probe-access mode: `live`
+- Runtime probe-access live external probe: `true`
+- Runtime probe-access external remote proof required for live probe: `false`
+- Runtime probe-access ci-snapshot targets ok: `false`
 - Runtime real-world probe smoke (`transparent datapath snapshot only`): `true`
-- Runtime real-world probe mode: `ci_snapshot`
-- Runtime real-world live external probe: `false`
-- Runtime real-world external remote proof required for live probe: `true`
-- Runtime real-world direct probe ok: `false`
-- Runtime real-world datapath probe attempted: `false`
-- Runtime real-world datapath probe ok: `false`
-- Runtime real-world datapath probe error: `ci_snapshot`
-- Runtime real-world datapath targets total: `0`
-- Runtime real-world datapath targets ok: `0`
+- Runtime real-world probe mode: `live`
+- Runtime real-world live external probe: `true`
+- Runtime real-world external remote proof required for live probe: `false`
+- Runtime real-world direct probe ok: `true`
+- Runtime real-world datapath probe attempted: `true`
+- Runtime real-world datapath probe ok: `true`
+- Runtime real-world datapath probe error: `none`
+- Runtime real-world datapath targets total: `3`
+- Runtime real-world datapath targets ok: `3`
 - Runtime real-world datapath targets failed: `0`
 - Runtime real-world skipped no curl: `false`
 - Fresh checked artifacts in this run: `true`

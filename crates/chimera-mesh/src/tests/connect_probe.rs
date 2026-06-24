@@ -44,21 +44,35 @@ fn connect_probe_uses_current_endpoint_then_fallback_ports() {
         .unwrap_or_else(|e| unreachable!("connect probe should succeed: {e}"));
 
     assert!(report.success);
-    assert_eq!(report.connected_peer, "node-a");
-    assert_eq!(
-        report.connected_endpoint,
-        format!("127.0.0.1:{fallback_port}")
-    );
+    assert_eq!(report.selected_peers, vec!["peer#1"]);
+    assert_eq!(report.connected_peer, "peer#1");
+    assert_eq!(report.connected_endpoint, "endpoint#2:<redacted>");
     assert_eq!(report.attempts.len(), 2);
-    assert_eq!(report.attempts[0].peer_id, "node-a");
-    assert_eq!(report.attempts[0].endpoint, "127.0.0.1:1");
+    assert_eq!(report.attempts[0].peer_id, "peer#1");
+    assert_eq!(report.attempts[0].endpoint, "endpoint#1:<redacted>");
     assert!(!report.attempts[0].success);
-    assert_eq!(report.attempts[1].peer_id, "node-a");
-    assert_eq!(
-        report.attempts[1].endpoint,
-        format!("127.0.0.1:{fallback_port}")
-    );
+    assert_eq!(report.attempts[0].error, "connect_error");
+    assert_eq!(report.attempts[1].peer_id, "peer#1");
+    assert_eq!(report.attempts[1].endpoint, "endpoint#2:<redacted>");
     assert!(report.attempts[1].success);
+    assert!(
+        report
+            .explain
+            .iter()
+            .any(|line| line == "connect_probe_connected_peer=peer#1")
+    );
+    assert!(
+        report
+            .explain
+            .iter()
+            .any(|line| line == "connect_probe_connected_endpoint=endpoint#2:<redacted>")
+    );
+    let rendered = format!("{report:?}");
+    assert!(!rendered.contains("node-a"));
+    assert!(!rendered.contains("127.0.0.1"));
+    assert!(!rendered.contains(&fallback_port.to_string()));
+    assert!(!report.explain.iter().any(|line| line.contains("127.0.0.1")));
+    assert!(!report.explain.iter().any(|line| line.contains("node-a")));
 }
 
 #[test]
@@ -94,13 +108,14 @@ fn connect_probe_reports_failed_attempts_with_errors() {
     assert!(!report.success);
     assert!(report.connected_peer.is_empty());
     assert!(report.connected_endpoint.is_empty());
+    assert_eq!(report.selected_peers, vec!["peer#1"]);
     assert_eq!(report.attempts.len(), 2);
     assert!(report.attempts.iter().all(|attempt| !attempt.success));
     assert!(
         report
             .attempts
             .iter()
-            .all(|attempt| !attempt.error.trim().is_empty())
+            .all(|attempt| attempt.error == "connect_error")
     );
     assert!(
         report
@@ -108,4 +123,8 @@ fn connect_probe_reports_failed_attempts_with_errors() {
             .iter()
             .any(|line| line == "connect_probe_result=failed")
     );
+    let rendered = format!("{report:?}");
+    assert!(!rendered.contains("node-a"));
+    assert!(!rendered.contains("127.0.0.1"));
+    assert!(!rendered.contains("127.0.0.1:1"));
 }

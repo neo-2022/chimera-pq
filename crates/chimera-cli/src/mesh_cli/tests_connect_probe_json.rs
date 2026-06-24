@@ -108,6 +108,11 @@ fn connect_probe_json_contract_success_shape() {
             .iter()
             .any(|attempt| attempt["success"].as_bool() == Some(true))
     );
+
+    let rendered = parsed.to_string();
+    assert!(!rendered.contains("n1"));
+    assert!(!rendered.contains("127.0.0.1"));
+    assert!(!rendered.contains(&addr.port().to_string()));
 }
 
 #[test]

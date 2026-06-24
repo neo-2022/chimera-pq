@@ -1,9 +1,9 @@
 # Second Environment Verification Report
 
-Date: 2026-06-17
+Date: 2026-06-25
 Verification mode: independent clean-room copy
 Workspace under test: /tmp/chimera-pq-cleanroom
-Run timestamp (UTC): 2026-06-17T12:50:44Z
+Run timestamp (UTC): 2026-06-24T22:02:58Z
 Host kernel: Linux 7.0.0-22-generic x86_64
 
 ## Commands Executed
