@@ -268,8 +268,9 @@ Serving a release from an already-installed CHIMERA:
 ```bash
 chimera-bootstrap serve-release \
   --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" \
-  --listen 0.0.0.0:18179 \
-  --base-url http://node.example:18179
+  --listen 0.0.0.0:0 \
+  --base-url http://node.example \
+  --state-file "${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json"
 ```
 
 The peer server exposes:
@@ -278,6 +279,17 @@ The peer server exposes:
 - `/chimera.sh`
 - `/chimera-pq-release.tar.gz`
 - `/chimera-pq-release.tar.gz.sha256`
+
+When `--listen` uses port `0`, CHIMERA asks the OS for a free port, records the
+selected `listen` and `update_bootstrap_url` in the private state file, and can
+publish that URL through `chimera mesh nodes advertise --update-state-file`.
+If `--base-url` has no port or uses `:0`, the selected port is inserted into
+peer metadata and the generated peer bootstrap script. A fixed `--listen` port
+is an explicit operator override only; it is not the normal workflow.
+
+The state file is private operator/runtime state. Public proof reports must use
+redacted markers such as `peer_update_state=present`, `version_ok=true`, and
+`checksum_ok=true`, not raw host names, ports, paths or stand addresses.
 
 The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `side_a`,
 and `side_b` remain compatibility labels only.

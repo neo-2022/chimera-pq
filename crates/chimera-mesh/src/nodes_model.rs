@@ -189,7 +189,7 @@ impl MeshNodeCountry {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct MeshNode {
     pub node_id: MeshNodeId,
     pub endpoint: String,
@@ -206,6 +206,34 @@ pub struct MeshNode {
     pub observation_count: u32,
     pub score: f64,
     pub explain_reason: String,
+}
+
+impl fmt::Debug for MeshNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MeshNode")
+            .field("node_id", &"<redacted>")
+            .field("endpoint", &"<redacted>")
+            .field(
+                "invite_token",
+                &self.invite_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "update_bootstrap_url",
+                &self.update_bootstrap_url.as_ref().map(|_| "<redacted>"),
+            )
+            .field("country", &self.country)
+            .field("status", &self.status)
+            .field("latency_ms", &self.latency_ms)
+            .field("jitter_ms", &self.jitter_ms)
+            .field("loss_pct", &self.loss_pct)
+            .field("success_rate_5m", &self.success_rate_5m)
+            .field("success_rate_1h", &self.success_rate_1h)
+            .field("consecutive_failures", &self.consecutive_failures)
+            .field("observation_count", &self.observation_count)
+            .field("score", &self.score)
+            .field("explain_reason", &self.explain_reason)
+            .finish()
+    }
 }
 
 impl MeshNode {
@@ -386,7 +414,7 @@ fn validate_endpoint_config_value(endpoint: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_update_bootstrap_url(url: &str) -> Result<(), String> {
+pub fn validate_update_bootstrap_url(url: &str) -> Result<(), String> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return Err("mesh node update_bootstrap_url is empty".to_string());

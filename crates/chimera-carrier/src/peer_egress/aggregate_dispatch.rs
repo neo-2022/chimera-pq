@@ -1,4 +1,5 @@
 use core::fmt;
+use std::thread;
 
 use chimera_mesh::{MeshMultipathAggregateAction, MeshPathPlan, plan_multipath_aggregate_object};
 
@@ -157,13 +158,54 @@ pub(crate) fn claim_aggregate_transit_shards(
 }
 
 pub(crate) fn forward_claimed_aggregate_transit_shards(
-    mut claimed: Vec<ClaimedAggregateTransitShard>,
+    claimed: Vec<ClaimedAggregateTransitShard>,
 ) -> Result<(), String> {
-    for claimed_shard in &mut claimed {
-        write_aggregate_sealed_transit_message(&mut claimed_shard.peer, &claimed_shard.frame)?;
+    if claimed.len() <= 1 {
+        for claimed_shard in claimed {
+            write_claimed_aggregate_transit_shard(claimed_shard)?;
+        }
+        return Ok(());
     }
-    Ok(())
+
+    let mut workers = Vec::with_capacity(claimed.len());
+    for claimed_shard in claimed {
+        workers.push(thread::spawn(move || {
+            write_claimed_aggregate_transit_shard(claimed_shard)
+        }));
+    }
+
+    let mut first_error: Option<String> = None;
+    for worker in workers {
+        match worker.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+            Err(_) => {
+                if first_error.is_none() {
+                    first_error = Some("aggregate transit shard worker panicked".to_string());
+                }
+            }
+        }
+    }
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
+
+fn write_claimed_aggregate_transit_shard(
+    claimed_shard: ClaimedAggregateTransitShard,
+) -> Result<(), String> {
+    let ClaimedAggregateTransitShard { frame, mut peer } = claimed_shard;
+    write_aggregate_sealed_transit_message(&mut peer, &frame)
+}
+
+#[cfg(test)]
+#[path = "aggregate_dispatch_parallel_tests.rs"]
+mod aggregate_dispatch_parallel_tests;
 
 #[cfg(test)]
 mod tests {

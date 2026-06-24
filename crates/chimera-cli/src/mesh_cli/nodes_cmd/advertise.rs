@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
-use chimera_mesh::MeshNodeId;
+use chimera_mesh::{MeshNodeId, validate_update_bootstrap_url};
 use ring::{
     rand::SystemRandom,
     signature::{Ed25519KeyPair, KeyPair},
@@ -35,6 +35,14 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
             return 2;
         }
     };
+    let update_bootstrap_url =
+        match resolve_advertise_update_bootstrap_url(args, inventory, &node_id) {
+            Ok(update_bootstrap_url) => update_bootstrap_url,
+            Err(error) => {
+                eprintln!("mesh nodes advertise error: {error}");
+                return 2;
+            }
+        };
     let country_code = extract_flag_value(args, "--country-code")
         .map(str::to_string)
         .or_else(|| {
@@ -106,6 +114,7 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
         "region": &region,
         "topic": &topic,
         "invite_token": selected_node_invite_token(inventory),
+        "update_bootstrap_url": update_bootstrap_url.as_deref(),
         "freshness_unix": now_unix,
         "ttl_sec": ttl_sec,
         "capabilities": ["node", "transit", "mesh"],
@@ -145,6 +154,9 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
     }
     println!("mesh_nodes_advertise=ok out={out_path} pubkey_out={discovery_pubkey_out}");
     println!("mesh_nodes_advertise_endpoint={endpoint}");
+    if update_bootstrap_url.is_some() {
+        println!("mesh_nodes_advertise_update_bootstrap_url=present");
+    }
     println!("mesh_nodes_advertise_node_id={node_id}");
     0
 }
@@ -224,6 +236,126 @@ fn resolve_advertise_endpoint(
         }
     }
     Err("mesh nodes advertise error: cannot resolve endpoint (use --endpoint or current selected endpoint)".to_string())
+}
+
+fn resolve_advertise_update_bootstrap_url(
+    args: &[String],
+    inventory: &MeshNodesInventory,
+    node_id: &str,
+) -> Result<Option<String>, String> {
+    if let Some(url) = extract_flag_value(args, "--update-bootstrap-url") {
+        return validate_advertise_update_bootstrap_url(url).map(Some);
+    }
+    if let Ok(url) = std::env::var("CHIMERA_MESH_UPDATE_BOOTSTRAP_URL")
+        && !url.trim().is_empty()
+    {
+        return validate_advertise_update_bootstrap_url(&url).map(Some);
+    }
+    for path in resolve_update_state_paths(args) {
+        if let Some(url) = read_update_bootstrap_url_from_state(&path)? {
+            return validate_advertise_update_bootstrap_url(&url).map(Some);
+        }
+    }
+    if let Some(node) = inventory
+        .nodes
+        .iter()
+        .find(|node| node.node_id.0 == node_id)
+        && let Some(url) = node.update_bootstrap_url.as_deref()
+    {
+        return validate_advertise_update_bootstrap_url(url).map(Some);
+    }
+    Ok(None)
+}
+
+fn resolve_update_state_paths(args: &[String]) -> Vec<String> {
+    let mut paths = Vec::new();
+    if let Some(path) = extract_flag_value(args, "--update-state-file")
+        && !path.trim().is_empty()
+    {
+        paths.push(path.to_string());
+    }
+    if let Ok(path) = std::env::var("CHIMERA_PEER_UPDATE_STATE_FILE")
+        && !path.trim().is_empty()
+    {
+        paths.push(path.trim().to_string());
+    }
+    if let Some(path) = extract_flag_value(args, "--state-file")
+        && !path.trim().is_empty()
+    {
+        paths.push(path.to_string());
+    }
+    paths
+}
+
+fn read_update_bootstrap_url_from_state(path: &str) -> Result<Option<String>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("read update state failed: {error}")),
+    };
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text)
+        && let Some(url) = value
+            .get("update_bootstrap_url")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+    {
+        return Ok(Some(url.to_string()));
+    }
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("update_bootstrap_url=") {
+            let url = rest.trim();
+            if !url.is_empty() {
+                return Ok(Some(url.to_string()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn validate_advertise_update_bootstrap_url(url: &str) -> Result<String, String> {
+    validate_update_bootstrap_url(url)?;
+    let host = update_url_host(url)?;
+    let host_lower = host.to_ascii_lowercase();
+    if host_lower == "localhost"
+        || host_lower == "0.0.0.0"
+        || host_lower == "::"
+        || host_lower == "::1"
+        || host_lower.starts_with("127.")
+    {
+        return Err(
+            "update_bootstrap_url must be externally reachable, not loopback or unspecified"
+                .to_string(),
+        );
+    }
+    Ok(url.to_string())
+}
+
+fn update_url_host(url: &str) -> Result<&str, String> {
+    let without_scheme = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .ok_or_else(|| "update_bootstrap_url must be http(s)".to_string())?;
+    let authority = without_scheme
+        .split('/')
+        .next()
+        .ok_or_else(|| "update_bootstrap_url missing host".to_string())?;
+    if authority.is_empty() {
+        return Err("update_bootstrap_url missing host".to_string());
+    }
+    if let Some(rest) = authority.strip_prefix('[') {
+        let (host, _) = rest
+            .split_once(']')
+            .ok_or_else(|| "update_bootstrap_url invalid IPv6 host".to_string())?;
+        if host.is_empty() {
+            return Err("update_bootstrap_url missing host".to_string());
+        }
+        return Ok(host);
+    }
+    let host = authority.split(':').next().unwrap_or(authority);
+    if host.is_empty() {
+        return Err("update_bootstrap_url missing host".to_string());
+    }
+    Ok(host)
 }
 
 fn resolve_discovery_keypair_path(args: &[String]) -> PathBuf {

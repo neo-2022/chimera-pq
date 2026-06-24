@@ -50,6 +50,7 @@ SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runt
 CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
 PEER_EGRESS_ENV_FILE="${PEER_EGRESS_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env}"
 PEER_EGRESS_STATE_FILE="${PEER_EGRESS_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state}"
+PEER_UPDATE_STATE_FILE="${PEER_UPDATE_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json}"
 MESH_CONTROL_PLANE_ENV_FILE="${MESH_CONTROL_PLANE_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh-control-plane.env}"
 MESH_DISCOVERY_OUT_FILE="${MESH_DISCOVERY_OUT_FILE:-$ROOT_DIR/mesh_nodes.discovery.json}"
 MESH_DISCOVERY_PUBKEY_OUT_FILE="${MESH_DISCOVERY_PUBKEY_OUT_FILE:-$ROOT_DIR/mesh_nodes.discovery.pubkey}"
@@ -208,12 +209,19 @@ publish_mesh_discovery_snapshot() {
   fi
   self_node_id="${self_node_id:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)}"
   if wait_for_file "$state_path" 5; then
+    local advertise_args=(
+      mesh nodes advertise
+      --state-file "$state_path"
+      --out "$discovery_out"
+      --pubkey-out "$pubkey_out"
+    )
+    if [[ -f "$PEER_UPDATE_STATE_FILE" ]]; then
+      advertise_args+=(--update-state-file "$PEER_UPDATE_STATE_FILE")
+    fi
     CHIMERA_MESH_PEER_EGRESS_STATE_PATH="$state_path" \
+    CHIMERA_PEER_UPDATE_STATE_FILE="$PEER_UPDATE_STATE_FILE" \
     CHIMERA_MESH_SELF_NODE_ID="$self_node_id" \
-    "$CHIMERA_RUNNER" cli mesh nodes advertise \
-      --state-file "$state_path" \
-      --out "$discovery_out" \
-      --pubkey-out "$pubkey_out" >/dev/null 2>&1 || return 1
+    "$CHIMERA_RUNNER" cli "${advertise_args[@]}" >/dev/null 2>&1 || return 1
     echo "discovery_snapshot_out=$discovery_out"
     echo "discovery_snapshot_pubkey=$pubkey_out"
   fi

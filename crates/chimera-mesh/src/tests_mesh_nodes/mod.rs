@@ -72,6 +72,28 @@ fn nodes_group_by_country_and_keep_unknown_last() {
 }
 
 #[test]
+fn mesh_node_debug_redacts_endpoint_tokens_and_update_url() {
+    let mut node = test_node(
+        "node-secret",
+        "DE",
+        "Germany",
+        MeshNodeStatus::Healthy,
+        99.0,
+    );
+    node.endpoint = "secret-node.example:443".to_string();
+    node.invite_token = Some("secret-invite-token".to_string());
+    node.update_bootstrap_url = Some("http://secret-node.example:45678/chimera.sh".to_string());
+
+    let debug = format!("{node:?}");
+
+    assert!(debug.contains("<redacted>"));
+    assert!(!debug.contains("node-secret"));
+    assert!(!debug.contains("secret-node.example"));
+    assert!(!debug.contains("secret-invite-token"));
+    assert!(!debug.contains("45678"));
+}
+
+#[test]
 fn nodes_sort_inside_country_by_status_then_score_then_latency_then_id() {
     let mut low_latency = test_node("node-a", "DE", "Germany", MeshNodeStatus::Healthy, 90.0);
     low_latency.latency_ms = Some(20.0);

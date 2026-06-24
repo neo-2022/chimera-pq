@@ -54,7 +54,7 @@ fn fixture_server_addr() -> TestResult<(std::path::PathBuf, String, thread::Join
     let server_root = root.clone();
     let server_addr = addr.clone();
     let handle = thread::spawn(move || {
-        let _ = super::server::serve_release(&server_root, &server_addr, None);
+        let _ = super::server::serve_release(&server_root, &server_addr, None, None);
     });
     wait_for_server(&addr)?;
     Ok((root, addr, handle))

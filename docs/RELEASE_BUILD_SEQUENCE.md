@@ -31,7 +31,7 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera-pq-release.tar.gz.sha256`
 9. After the GitHub release is live, install that exact release on the
    trusted peer mirror nodes and publish them with
-   `chimera-bootstrap serve-release --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" --listen 0.0.0.0:18179 --base-url http://node.example:18179`
+   `chimera-bootstrap serve-release --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" --listen 0.0.0.0:0 --base-url http://node.example --state-file "${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json"`
    or an equivalent trusted base URL for remote proof.
 10. Verify the peer-update fallback contract remains update-only:
    - `chimera-sh` checks GitHub Latest first;
@@ -50,6 +50,11 @@ Use this sequence for every bundle or bootstrap update.
    - if no trusted update source is reachable, CHIMERA keeps the installed
      version and emits `chimera_update=unavailable`;
    - peer update evidence is not used as first-install remote proof.
+   - peer mirror serving should let CHIMERA choose a free port with
+     `--listen ...:0` unless the operator has a specific reserved port.
+   - `chimera mesh nodes advertise` must publish `update_bootstrap_url` from
+     `--update-state-file`/`CHIMERA_PEER_UPDATE_STATE_FILE` so selected peers
+     learn the current update endpoint without manual port entry.
 11. Verify the start contract before release:
    - `chimera-sh -start` prepares user-cache log targets before the systemd
      user start path;

@@ -41,6 +41,46 @@ fn nodes_inventory_discovery_contract_accepts_valid_envelope() {
 }
 
 #[test]
+fn nodes_inventory_discovery_contract_preserves_update_bootstrap_url() {
+    let endpoint_listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind endpoint listener failed: {err}"));
+    let endpoint_addr = endpoint_listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read endpoint listener addr failed: {err}"));
+    let now = now_unix();
+    let signing_key = generate_signing_key();
+    let pubkey_b64 =
+        base64::engine::general_purpose::STANDARD.encode(signing_key.verifying_key().as_bytes());
+    let nodes = format!(
+        "[{{\"node_id\":\"de-update\",\"endpoint\":\"{}\",\"country_code\":\"DE\",\"country_name\":\"Germany\",\"status\":\"healthy\",\"update_bootstrap_url\":\"http://node.example:45678/chimera.sh\"}}]",
+        endpoint_addr
+    );
+    let payload = build_signed_payload(
+        &signing_key,
+        "default",
+        "n-update-url-1",
+        now.saturating_sub(1),
+        now.saturating_add(60),
+        &nodes,
+    );
+    let url = serve_json_once(payload);
+    let args = vec![
+        "--probe-timeout-ms".to_string(),
+        "200".to_string(),
+        "--discovery-url".to_string(),
+        url,
+        "--discovery-pubkey".to_string(),
+        pubkey_b64,
+    ];
+    let inventory = load_mesh_nodes_inventory(&args).unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(inventory.nodes.len(), 1);
+    assert_eq!(
+        inventory.nodes[0].update_bootstrap_url.as_deref(),
+        Some("http://node.example:45678/chimera.sh")
+    );
+}
+
+#[test]
 fn nodes_inventory_discovery_contract_rejects_expired_envelope() {
     let now = now_unix();
     let signing_key = generate_signing_key();

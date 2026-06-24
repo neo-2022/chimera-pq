@@ -9,6 +9,7 @@ LOCAL_BIN_DIR="${HOME}/.local/bin"
 UPSTREAM_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env"
 PEER_EGRESS_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
 PEER_EGRESS_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state"
+PEER_UPDATE_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json"
 TRANSPARENT_RUNTIME_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"
 CHIMERA_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
 
@@ -338,12 +339,14 @@ configure_peer_egress_env() {
   fi
   mkdir -p "$(dirname "$PEER_EGRESS_ENV_FILE")"
   mkdir -p "$(dirname "$PEER_EGRESS_STATE_FILE")"
+  mkdir -p "$(dirname "$PEER_UPDATE_STATE_FILE")"
   {
     write_env_kv 'CHIMERA_PEER_EGRESS_MODE' "$mode"
     write_env_kv 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN' "$local_listen"
     write_env_kv 'CHIMERA_PEER_EGRESS_PEER_LISTEN' "$peer_listen"
     write_env_kv 'CHIMERA_PEER_EGRESS_STATE_FILE' "$PEER_EGRESS_STATE_FILE"
     write_env_kv 'CHIMERA_MESH_PEER_EGRESS_STATE_PATH' "$PEER_EGRESS_STATE_FILE"
+    write_env_kv 'CHIMERA_PEER_UPDATE_STATE_FILE' "$PEER_UPDATE_STATE_FILE"
     if [[ -n "$server" ]]; then
       write_env_kv 'CHIMERA_PEER_EGRESS_SERVER' "$server"
     fi

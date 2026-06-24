@@ -52,10 +52,13 @@ fn run() -> Result<()> {
             install_bundle(&url, &checksum_url, Path::new(&dest), strip_components)
         }
         Some("serve-release") => {
-            let root = take_flag_value(&mut args, "--root")?;
-            let listen = take_flag_value(&mut args, "--listen")?;
-            let base_url = take_optional_string(&mut args, "--base-url")?;
-            peer_update::serve_release(Path::new(&root), &listen, base_url.as_deref())
+            let options = peer_update::ServeReleaseOptions::from_args(&mut args)?;
+            peer_update::serve_release(
+                Path::new(options.root()),
+                options.listen(),
+                options.base_url(),
+                options.state_file().map(Path::new),
+            )
         }
         Some("parse-peer-metadata") => {
             let file = take_flag_value(&mut args, "--file")?;
@@ -104,23 +107,6 @@ fn take_optional_usize(
         .parse::<usize>()
         .map_err(|e| format!("invalid {} value: {}", flag, e))?;
     Ok(Some(parsed))
-}
-
-fn take_optional_string(
-    args: &mut impl Iterator<Item = String>,
-    flag: &str,
-) -> Result<Option<String>> {
-    let mut collected = Vec::new();
-    for item in args.by_ref() {
-        collected.push(item);
-    }
-    if collected.is_empty() {
-        return Ok(None);
-    }
-    if collected.len() != 2 || collected[0] != flag {
-        return Err(format!("unexpected trailing arguments: {:?}", collected).into());
-    }
-    Ok(Some(collected[1].clone()))
 }
 
 fn download_to_file(url: &str, output: &Path) -> Result<()> {

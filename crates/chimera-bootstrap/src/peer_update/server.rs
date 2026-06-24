@@ -1,13 +1,15 @@
 use crate::Result;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
+use url::Url;
 
+use super::serve_state::write_peer_update_state_file;
 use super::{
     RELEASE_ARCHIVE_NAME, RELEASE_ARCHIVE_ROUTE, RELEASE_CHECKSUM_NAME, RELEASE_CHECKSUM_ROUTE,
     RELEASE_METADATA_ROUTE,
@@ -21,6 +23,7 @@ pub(crate) fn serve_release(
     root: &Path,
     listen: &str,
     public_base_url: Option<&str>,
+    state_file: Option<&Path>,
 ) -> Result<()> {
     let version = read_release_version(root)?;
     let checksum = read_release_checksum(root)?;
@@ -30,17 +33,32 @@ pub(crate) fn serve_release(
     require_file(&archive)?;
     require_file(&checksum_file)?;
     require_file(&script)?;
-    if let Some(base_url) = public_base_url {
-        validate_base_url(base_url)?;
-    }
     let listener = TcpListener::bind(listen)?;
+    let bound_addr = listener.local_addr()?;
+    let listen = bound_addr.to_string();
+    let public_base_url = advertised_base_url(public_base_url, bound_addr)?;
+    let update_bootstrap_url = public_base_url
+        .as_deref()
+        .map(|base_url| join_url(base_url, "/chimera.sh"))
+        .unwrap_or_else(|| "host_header/chimera.sh".to_string());
+    if let Some(state_file) = state_file {
+        let state_update_bootstrap_url = public_base_url
+            .as_deref()
+            .map(|base_url| join_url(base_url, "/chimera.sh"));
+        write_peer_update_state_file(
+            state_file,
+            &listen,
+            public_base_url.as_deref(),
+            state_update_bootstrap_url.as_deref(),
+            &version,
+            &checksum,
+        )?;
+    }
     eprintln!(
-        "chimera_peer_update_serve=ready listen={} version={} sha256={}",
-        listen, version, checksum
+        "chimera_peer_update_serve=ready listen={} version={} sha256={} update_bootstrap_url={}",
+        listen, version, checksum, update_bootstrap_url
     );
     let root = Arc::new(root.to_path_buf());
-    let listen = listen.to_string();
-    let public_base_url = public_base_url.map(str::to_string);
     let active_connections = Arc::new(AtomicUsize::new(0));
     for incoming in listener.incoming() {
         match incoming {
@@ -278,6 +296,26 @@ pub(super) fn validate_base_url(base_url: &str) -> Result<()> {
         return Err("peer update base URL contains invalid characters".into());
     }
     Ok(())
+}
+
+pub(super) fn advertised_base_url(
+    public_base_url: Option<&str>,
+    bound_addr: SocketAddr,
+) -> Result<Option<String>> {
+    let Some(base_url) = public_base_url else {
+        return Ok(None);
+    };
+    validate_base_url(base_url)?;
+    let mut parsed = Url::parse(base_url)?;
+    if parsed.host_str().is_none() {
+        return Err("peer update base URL missing host".into());
+    }
+    if parsed.port().is_none() || parsed.port() == Some(0) {
+        parsed
+            .set_port(Some(bound_addr.port()))
+            .map_err(|_| "peer update base URL port invalid")?;
+    }
+    Ok(Some(parsed.as_str().trim_end_matches('/').to_string()))
 }
 
 fn join_url(base_url: &str, path: &str) -> String {

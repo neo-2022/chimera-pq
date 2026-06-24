@@ -161,3 +161,132 @@ fn nodes_advertise_writes_signed_discovery_snapshot() {
     let _ = fs::remove_file(pubkey_path);
     let _ = fs::remove_file(keypair_path);
 }
+
+#[test]
+fn nodes_advertise_writes_update_bootstrap_url_from_flag() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_update_url_flag_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_update_url_flag_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_update_url_flag_{}.keypair",
+        random_u64()
+    ));
+    let update_url = "http://node.example:45678/chimera.sh";
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-flag".to_string(),
+        "--endpoint".to_string(),
+        "198.51.100.77:54321".to_string(),
+        "--update-bootstrap-url".to_string(),
+        update_url.to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains("\"update_bootstrap_url\":\"http://node.example:45678/chimera.sh\""));
+    assert!(!body.contains("host_header/chimera.sh"));
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+}
+
+#[test]
+fn nodes_advertise_writes_update_bootstrap_url_from_state_file() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_update_url_state_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_update_url_state_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_update_url_state_{}.keypair",
+        random_u64()
+    ));
+    let mut update_state_path = std::env::temp_dir();
+    update_state_path.push(format!("chimera_peer_update_state_{}.json", random_u64()));
+    fs::write(
+        &update_state_path,
+        "{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"update_bootstrap_url\":\"http://node.example:45679/chimera.sh\"}",
+    )
+    .unwrap_or_else(|err| unreachable!("{err}"));
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-state".to_string(),
+        "--endpoint".to_string(),
+        "198.51.100.78:54321".to_string(),
+        "--update-state-file".to_string(),
+        update_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains("\"update_bootstrap_url\":\"http://node.example:45679/chimera.sh\""));
+    assert!(!body.contains("host_header/chimera.sh"));
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(update_state_path);
+}
+
+#[test]
+fn nodes_advertise_rejects_loopback_update_bootstrap_url() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_bad_update_url_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_bad_update_url_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_bad_update_url_{}.keypair",
+        random_u64()
+    ));
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-bad".to_string(),
+        "--endpoint".to_string(),
+        "198.51.100.79:54321".to_string(),
+        "--update-bootstrap-url".to_string(),
+        "http://127.0.0.1:45678/chimera.sh".to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 2);
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+}

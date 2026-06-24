@@ -31,7 +31,7 @@ pub use nodes_grouping::{
 pub use nodes_model::{
     MeshNode, MeshNodeCountry, MeshNodeCountryConfidence, MeshNodeCountrySource, MeshNodeId,
     MeshNodeReasonCode, MeshNodeScoreBreakdown, MeshNodeStatus, MeshNodeSwitchAction,
-    MeshNodeSwitchDecision,
+    MeshNodeSwitchDecision, validate_update_bootstrap_url,
 };
 pub use nodes_policy::{
     MeshNodeAntiFlapPolicy, MeshNodeGeoPolicy, MeshNodeScorePolicy, MeshNodeScoreThresholds,
