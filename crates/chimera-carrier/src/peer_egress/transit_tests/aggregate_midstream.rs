@@ -5,8 +5,8 @@ use super::super::{
     forward_peer_sealed_transit_to_next_hop,
 };
 use super::helpers::{
-    assert_bound_payload, binding, bound_payload, encoded_frame, read_first_bound_frame,
-    test_peer_pair,
+    assert_bound_payload, assert_bytes_eq_redacted, binding, bound_payload, encoded_frame,
+    read_first_bound_frame, test_peer_pair,
 };
 use crate::peer_egress::aggregate_wire::{AggregateObjectId, AggregateTransitShardFrame};
 use crate::peer_egress::wire::{
@@ -52,7 +52,11 @@ fn peer_sealed_transit_rejects_midstream_aggregate_frame() -> Result<(), String>
 
     assert!(error.contains("aggregate transit frame"));
     assert!(!error.contains("AGGREGATE_STREAM_MARKER"));
-    assert_eq!(next_reader.read_secure_payload()?, first_encoded);
+    assert_bytes_eq_redacted(
+        &next_reader.read_secure_payload()?,
+        &first_encoded,
+        "aggregate midstream first frame",
+    )?;
     assert!(next_reader.read_secure_payload().is_err());
     Ok(())
 }

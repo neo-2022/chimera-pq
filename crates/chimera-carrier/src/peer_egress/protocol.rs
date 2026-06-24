@@ -142,7 +142,7 @@ impl SecurePeerStream {
         if packet != self.recv_packet {
             return Err("secure packet number mismatch".to_string());
         }
-        self.recv_packet = self
+        let next_recv_packet = self
             .recv_packet
             .checked_add(1)
             .ok_or_else(|| "secure receive packet counter exhausted".to_string())?;
@@ -166,6 +166,7 @@ impl SecurePeerStream {
             &mut ciphertext,
         )
         .map_err(|error| format!("secure decrypt failed: {error}"))?;
+        self.recv_packet = next_recv_packet;
         Ok(ciphertext)
     }
 }

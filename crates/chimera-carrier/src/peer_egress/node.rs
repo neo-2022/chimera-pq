@@ -17,13 +17,14 @@ use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_fil
 use crate::peer_egress::pool::new_shared_pool;
 use crate::peer_egress::protocol::redacted_log_reason;
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
-use crate::peer_egress::transit::{
-    BoundPeerTransitPolicy, PeerTransitPolicy, relay_local_bound_sealed_transit_to_next_hop,
-    relay_local_sealed_transit_to_next_hop,
-    relay_local_sealed_transit_with_lane_document_and_first_byte,
-};
+use crate::peer_egress::transit::{BoundPeerTransitPolicy, PeerTransitPolicy};
 use crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC;
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
+use crate::peer_egress::transit_local::{
+    relay_local_bound_sealed_transit_to_next_hop_with_limits,
+    relay_local_sealed_transit_to_next_hop_with_limits,
+    relay_local_sealed_transit_with_lane_document_and_first_byte_with_limits,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalIngressBranch {
@@ -78,6 +79,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
     let transit_dispatcher = new_shared_transit_dispatcher();
     let aggregate_ingress =
         new_shared_aggregate_transit_ingress_registry(AggregateTransitIngressLimits::default())?;
+    let transit_limits = options.transit_relay_limits();
     let live_transit_lane_registry =
         LiveTransitLaneRegistry::start(&options, transit_dispatcher.clone())?;
     let peer_ingress_pool = peer_pool.clone();
@@ -189,19 +191,21 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 thread::spawn(move || {
                     let result = match live_transit_lane_registry.snapshot() {
                         Ok(transit_lane_document) if transit_lane_document.is_empty() => {
-                            relay_local_sealed_transit_to_next_hop(
+                            relay_local_sealed_transit_to_next_hop_with_limits(
                                 local,
                                 pool_transit_policy,
                                 peer_pool,
                                 first[0],
+                                transit_limits,
                             )
                         }
                         Ok(transit_lane_document) => {
-                            relay_local_sealed_transit_with_lane_document_and_first_byte(
+                            relay_local_sealed_transit_with_lane_document_and_first_byte_with_limits(
                                 local,
                                 &transit_lane_document,
                                 Some(transit_dispatcher),
                                 first[0],
+                                transit_limits,
                             )
                         }
                         Err(error) => Err(error),
@@ -221,11 +225,12 @@ pub fn run_node(options: Options) -> Result<(), String> {
                 let bound_policy = BoundPeerTransitPolicy::from_bool(options.allow_bound_transit);
                 eprintln!("event=weave_local_ingress_bound_transit_branch");
                 thread::spawn(move || {
-                    if let Err(error) = relay_local_bound_sealed_transit_to_next_hop(
+                    if let Err(error) = relay_local_bound_sealed_transit_to_next_hop_with_limits(
                         local,
                         bound_policy,
                         Some(bound_dispatcher),
                         first[0],
+                        transit_limits,
                     ) {
                         eprintln!(
                             "event=weave_local_ingress_bound_transit_error reason_class={}",

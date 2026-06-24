@@ -1,5 +1,4 @@
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::io::Write;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -16,25 +15,24 @@ use crate::peer_egress::lane_binding::TransitLaneDocument;
 use crate::peer_egress::net::{
     bind_reuse_listener, connect_tcp, pipe_secure_peer_with_plain, tune_tcp,
 };
-use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
+use crate::peer_egress::options::{Options, write_resolved_state_file};
 use crate::peer_egress::pool::{PeerPool, SharedPeerPool, new_shared_pool};
 use crate::peer_egress::protocol::{
-    SecurePeerStream, read_native_connect_destination, redacted_destination_label,
-    redacted_log_reason,
+    SecurePeerStream, redacted_destination_label, redacted_log_reason,
 };
-use crate::peer_egress::transit::{
-    BoundPeerTransitPolicy, PeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop,
-    forward_peer_sealed_transit_to_next_hop,
-};
+use crate::peer_egress::transit::{BoundPeerTransitPolicy, PeerTransitPolicy};
 use crate::peer_egress::transit_dispatch::{
     SharedTransitNextHopDispatcher, new_shared_transit_dispatcher,
 };
-use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document;
+use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document_and_limits;
+use crate::peer_egress::transit_guard::TransitRelayLimits;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_ack_ok};
 
 pub mod lab;
 #[path = "modes_local_ingress.rs"]
 mod local_ingress;
+#[path = "modes_reverse.rs"]
+mod reverse;
 
 pub use lab::{
     run_bench, run_download_echo, run_download_probe, run_echo, run_probe, start_side_a_runtime,
@@ -44,6 +42,11 @@ pub use local_ingress::{
     handle_local_client_with_lane_document_and_first_byte, handle_local_client_with_peer_pool,
     handle_local_client_with_peer_pool_and_first_byte,
     handle_local_client_with_registrations_and_first_byte, read_local_connect_destination,
+};
+#[cfg(test)]
+pub(crate) use reverse::handle_reverse_peer_with_lane_document_and_aggregate_ingress;
+pub use reverse::{
+    handle_reverse_local_client, handle_reverse_peer, handle_reverse_peer_with_lane_document,
 };
 
 pub fn run_side_a(options: Options) -> Result<(), String> {
@@ -80,12 +83,14 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
     let transit_dispatcher = new_shared_transit_dispatcher();
     let aggregate_ingress =
         new_shared_aggregate_transit_ingress_registry(AggregateTransitIngressLimits::default())?;
+    let transit_limits = options.transit_relay_limits();
     if reverse_connect {
         let peer_pool = new_shared_pool();
         let r_pool = peer_pool.clone();
         let r_token = token.clone();
         let r_dispatcher = transit_dispatcher.clone();
         let r_aggregate_ingress = aggregate_ingress.clone();
+        let r_transit_limits = transit_limits;
         thread::spawn(move || {
             for incoming in peer_listener.incoming() {
                 let Ok(mut stream) = incoming else {
@@ -108,17 +113,18 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
                         let dispatcher = r_dispatcher.clone();
                         let aggregate_ingress = r_aggregate_ingress.clone();
                         thread::spawn(move || {
-                            if let Err(error) =
-                                handle_reverse_peer_with_lane_document_and_aggregate_ingress(
-                                    peer,
-                                    policy,
-                                    bound_policy,
+                            if let Err(error) = reverse::handle_reverse_peer_with_context(
+                                peer,
+                                policy,
+                                bound_policy,
+                                reverse::ReversePeerTransitContext::new(
                                     pool,
                                     Some(dispatcher),
                                     None,
                                     Some(aggregate_ingress),
-                                )
-                            {
+                                    r_transit_limits,
+                                ),
+                            ) {
                                 eprintln!(
                                     "event=reverse_peer_error reason_class={}",
                                     redacted_log_reason(&error)
@@ -204,132 +210,6 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-pub fn handle_reverse_peer(
-    peer: SecurePeerStream,
-    policy: PeerTransitPolicy,
-    bound_policy: BoundPeerTransitPolicy,
-    pool: SharedPeerPool,
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-) -> Result<(), String> {
-    handle_reverse_peer_with_lane_document(peer, policy, bound_policy, pool, dispatcher, None)
-}
-
-pub fn handle_reverse_peer_with_lane_document(
-    peer: SecurePeerStream,
-    policy: PeerTransitPolicy,
-    bound_policy: BoundPeerTransitPolicy,
-    pool: SharedPeerPool,
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-    lane_document: Option<&TransitLaneDocument>,
-) -> Result<(), String> {
-    handle_reverse_peer_with_lane_document_and_aggregate_ingress(
-        peer,
-        policy,
-        bound_policy,
-        pool,
-        dispatcher,
-        lane_document,
-        None,
-    )
-}
-
-pub(crate) fn handle_reverse_peer_with_lane_document_and_aggregate_ingress(
-    mut peer: SecurePeerStream,
-    policy: PeerTransitPolicy,
-    bound_policy: BoundPeerTransitPolicy,
-    pool: SharedPeerPool,
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-    lane_document: Option<&TransitLaneDocument>,
-    aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
-) -> Result<(), String> {
-    let destination = match read_peer_message(&mut peer, 512)? {
-        PeerMessage::Connect(destination) => destination,
-        PeerMessage::SealedTransit(frame) => {
-            return forward_peer_sealed_transit_with_document_or_pool(
-                peer,
-                policy,
-                Some(pool),
-                dispatcher,
-                lane_document,
-                frame,
-            );
-        }
-        PeerMessage::BoundSealedTransit(frame) => {
-            return forward_bound_peer_sealed_transit_to_next_hop(
-                peer,
-                bound_policy,
-                dispatcher,
-                frame,
-            );
-        }
-        PeerMessage::AggregateSealedTransit(shard) => {
-            handle_aggregate_peer_ingress_shard(
-                shard,
-                aggregate_ingress,
-                policy,
-                Some(pool),
-                dispatcher,
-                lane_document,
-            )?;
-            return Ok(());
-        }
-        PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
-    };
-    let target_addr = destination.connect_addr();
-    let destination_id = destination.redacted_label();
-    eprintln!(
-        "event=reverse_peer_request_received request=<redacted> destination_id={destination_id}"
-    );
-    eprintln!(
-        "event=reverse_peer_target_connecting target=<redacted> destination_id={destination_id}"
-    );
-    let target = connect_tcp(&target_addr, 10_000)
-        .map_err(|error| format!("reverse connect target failed: {error}"))?;
-    tune_tcp(&target)?;
-    eprintln!(
-        "event=reverse_peer_target_connected target=<redacted> destination_id={destination_id}"
-    );
-    write_ack_ok(&mut peer)?;
-    eprintln!(
-        "event=reverse_peer_connect_ack_sent target=<redacted> destination_id={destination_id}"
-    );
-    pipe_secure_peer_with_plain(peer, target)
-}
-
-pub fn handle_reverse_local_client(mut local: TcpStream) -> Result<(), String> {
-    tune_tcp(&local)?;
-    let mut first = [0_u8; 1];
-    local
-        .read_exact(&mut first)
-        .map_err(|error| format!("read reverse local protocol byte failed: {error}"))?;
-    let destination = if first[0] == LOCAL_MAGIC[0] {
-        read_native_connect_destination(&mut local, first[0])?
-    } else {
-        return Err(
-            "unsupported reverse local ingress protocol; expected CHIMERA-LOCAL/1".to_string(),
-        );
-    };
-    let destination_id = destination.redacted_label();
-    eprintln!(
-        "event=reverse_local_ingress_destination host=<redacted> port=<redacted> destination_id={destination_id}"
-    );
-    let target_addr = destination.connect_addr();
-    eprintln!(
-        "event=reverse_local_target_connecting target=<redacted> destination_id={destination_id}"
-    );
-    let target = connect_tcp(&target_addr, 10_000)
-        .map_err(|error| format!("reverse local connect target failed: {error}"))?;
-    tune_tcp(&target)?;
-    eprintln!(
-        "event=reverse_local_target_connected target=<redacted> destination_id={destination_id}"
-    );
-    local
-        .write_all(b"OK\n")
-        .map_err(|error| format!("write reverse local ack failed: {error}"))?;
-    eprintln!("event=reverse_local_ack_sent");
-    crate::peer_egress::net::relay_plain(local, target)
 }
 
 pub fn run_side_b(options: Options) -> Result<(), String> {
@@ -421,24 +301,41 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
         .and_then(|_| peer.write_all(b"\n"))
         .map_err(|error| format!("write token failed: {error}"))?;
     let mut peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
-    let destination = match read_peer_message(&mut peer, 512)? {
-        PeerMessage::Connect(destination) => destination,
+    let transit_limits = options.transit_relay_limits();
+    transit_limits.validate()?;
+    let previous_read_timeout = peer
+        .stream
+        .read_timeout()
+        .map_err(|error| format!("read first peer timeout failed: {error}"))?;
+    peer.stream
+        .set_read_timeout(Some(transit_limits.idle_timeout()))
+        .map_err(|error| format!("set first peer read timeout failed: {error}"))?;
+    let first_message = read_peer_message(&mut peer, 512)?;
+    let destination = match first_message {
+        PeerMessage::Connect(destination) => {
+            peer.stream
+                .set_read_timeout(previous_read_timeout)
+                .map_err(|error| format!("restore peer read timeout failed: {error}"))?;
+            destination
+        }
         PeerMessage::SealedTransit(frame) => {
-            return forward_peer_sealed_transit_with_document_or_pool(
+            return forward_peer_sealed_transit_with_document_or_pool_and_limits(
                 peer,
                 PeerTransitPolicy::from_bool(options.allow_pool_transit),
                 next_hops,
                 next_hop_dispatcher,
                 lane_document,
                 frame,
+                transit_limits,
             );
         }
         PeerMessage::BoundSealedTransit(frame) => {
-            return forward_bound_peer_sealed_transit_to_next_hop(
+            return crate::peer_egress::transit::forward_bound_peer_sealed_transit_to_next_hop_with_limits(
                 peer,
                 BoundPeerTransitPolicy::from_bool(options.allow_bound_transit),
                 next_hop_dispatcher,
                 frame,
+                transit_limits,
             );
         }
         PeerMessage::AggregateSealedTransit(shard) => {
@@ -449,6 +346,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
                 next_hops,
                 next_hop_dispatcher,
                 lane_document,
+                transit_limits,
             )?;
             return Ok(());
         }
@@ -475,20 +373,25 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
     pipe_secure_peer_with_plain(peer, target)
 }
 
-fn forward_peer_sealed_transit_with_document_or_pool(
+fn forward_peer_sealed_transit_with_document_or_pool_and_limits(
     peer: SecurePeerStream,
     policy: PeerTransitPolicy,
     next_hops: Option<SharedPeerPool>,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     lane_document: Option<&TransitLaneDocument>,
     first: crate::peer_egress::transit::TransitRelayFrame,
+    limits: TransitRelayLimits,
 ) -> Result<(), String> {
     if let Some(document) = lane_document
         && !document.is_empty()
     {
-        return forward_peer_sealed_transit_with_lane_document(peer, document, dispatcher, first);
+        return forward_peer_sealed_transit_with_lane_document_and_limits(
+            peer, document, dispatcher, first, limits,
+        );
     }
-    forward_peer_sealed_transit_to_next_hop(peer, policy, next_hops, first)
+    crate::peer_egress::transit::forward_peer_sealed_transit_to_next_hop_with_limits(
+        peer, policy, next_hops, first, limits,
+    )
 }
 
 #[cfg(test)]

@@ -3,6 +3,8 @@ use std::env;
 use crate::peer_egress::options_mode::parse_mode;
 pub use crate::peer_egress::options_mode::{Mode, mode_name};
 use crate::peer_egress::options_proof::TransitProofOptions;
+use crate::peer_egress::options_transit_guard::TransitRelayGuardOptionValues;
+use crate::peer_egress::transit_guard::TransitRelayLimits;
 
 pub const HANDSHAKE_MAGIC: &[u8] = b"CHIMERA-PEER-EGRESS/1\n";
 pub const LOCAL_MAGIC: &[u8] = b"CHIMERA-LOCAL/1\n";
@@ -64,13 +66,16 @@ pub struct Options {
     pub allow_pool_transit: bool,
     pub allow_bound_transit: bool,
     pub transit_lane_bindings_file: Option<String>,
+    pub transit_max_frames_per_direction: u64,
+    pub transit_max_bytes_per_direction: u64,
+    pub transit_idle_timeout_ms: u64,
     pub transit_payload_bytes: usize,
     pub transit_packet_number: u64,
     pub transit_route_id: Option<u64>,
     pub transit_lane_index: Option<usize>,
 }
 
-fn env_value(name: &str) -> Option<String> {
+pub(super) fn env_value(name: &str) -> Option<String> {
     env::var(name)
         .ok()
         .map(|value| value.trim().to_string())
@@ -110,7 +115,7 @@ fn parse_bool(value: &str) -> Result<bool, String> {
     }
 }
 
-fn parse_positive_u64(value: &str, name: &str) -> Result<u64, String> {
+pub(super) fn parse_positive_u64(value: &str, name: &str) -> Result<u64, String> {
     let parsed = value
         .parse::<u64>()
         .map_err(|_| format!("{name} must be a positive integer"))?;
@@ -167,6 +172,7 @@ impl Options {
             .unwrap_or(false);
         let mut transit_lane_bindings_file =
             env_value("CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE");
+        let mut transit_relay_guard = TransitRelayGuardOptionValues::from_env()?;
         let mut transit_proof_args: Vec<(String, String)> = Vec::new();
         let mut index = 0usize;
         while index < args.len() {
@@ -209,6 +215,7 @@ impl Options {
                 "--transit-lane-bindings-file" => {
                     transit_lane_bindings_file = Some(value.clone());
                 }
+                flag if transit_relay_guard.apply_flag(flag, value)? => {}
                 flag if TransitProofOptions::is_flag(flag) => {
                     transit_proof_args.push((flag.to_string(), value.clone()));
                 }
@@ -239,6 +246,7 @@ impl Options {
         if !token.is_empty() && (token.len() > MAX_TOKEN_LEN || token.contains('\n')) {
             return Err("token must be non-empty, <=256 bytes, and single-line".to_string());
         }
+        let transit_relay_limits = transit_relay_guard.limits()?;
         let (local_listen, peer_listen, server) = match mode {
             Mode::Node => (
                 required_value(
@@ -327,11 +335,22 @@ impl Options {
             allow_pool_transit,
             allow_bound_transit,
             transit_lane_bindings_file,
+            transit_max_frames_per_direction: transit_relay_limits.max_frames_per_direction,
+            transit_max_bytes_per_direction: transit_relay_limits.max_bytes_per_direction,
+            transit_idle_timeout_ms: transit_relay_limits.idle_timeout_ms,
             transit_payload_bytes: transit_proof.payload_bytes,
             transit_packet_number: transit_proof.packet_number,
             transit_route_id: transit_proof.route_id,
             transit_lane_index: transit_proof.lane_index,
         })
+    }
+
+    pub fn transit_relay_limits(&self) -> TransitRelayLimits {
+        TransitRelayLimits {
+            max_frames_per_direction: self.transit_max_frames_per_direction,
+            max_bytes_per_direction: self.transit_max_bytes_per_direction,
+            idle_timeout_ms: self.transit_idle_timeout_ms,
+        }
     }
 }
 

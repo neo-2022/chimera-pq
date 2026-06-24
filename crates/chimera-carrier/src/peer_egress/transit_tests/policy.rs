@@ -4,7 +4,7 @@ use super::super::{
     BoundPeerTransitPolicy, PeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop,
     forward_peer_sealed_transit_to_next_hop, validate_transit_relay_frame,
 };
-use super::helpers::{binding, encoded_frame, test_peer_pair};
+use super::helpers::{assert_bytes_eq_redacted, binding, encoded_frame, test_peer_pair};
 use crate::peer_egress::wire::{PeerMessage, read_peer_message};
 
 #[test]
@@ -221,18 +221,50 @@ fn peer_sealed_transit_uses_flow_key_to_select_pool_next_hop() -> Result<(), Str
 
     match expected_slot {
         0 => {
-            assert_eq!(first_next_reader.read_secure_payload()?, first_encoded);
-            assert_eq!(first_next_reader.read_secure_payload()?, fin_encoded);
-            assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
-            assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+            assert_bytes_eq_redacted(
+                &first_next_reader.read_secure_payload()?,
+                &first_encoded,
+                "policy first slot first frame",
+            )?;
+            assert_bytes_eq_redacted(
+                &first_next_reader.read_secure_payload()?,
+                &fin_encoded,
+                "policy first slot fin frame",
+            )?;
+            assert_bytes_eq_redacted(
+                &source_writer.read_secure_payload()?,
+                &reverse_encoded,
+                "policy first slot reverse frame",
+            )?;
+            assert_bytes_eq_redacted(
+                &source_writer.read_secure_payload()?,
+                &reverse_fin_encoded,
+                "policy first slot reverse fin",
+            )?;
             assert!(second_next_reader.read_secure_payload().is_err());
         }
         1 => {
             assert!(first_next_reader.read_secure_payload().is_err());
-            assert_eq!(second_next_reader.read_secure_payload()?, first_encoded);
-            assert_eq!(second_next_reader.read_secure_payload()?, fin_encoded);
-            assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
-            assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+            assert_bytes_eq_redacted(
+                &second_next_reader.read_secure_payload()?,
+                &first_encoded,
+                "policy second slot first frame",
+            )?;
+            assert_bytes_eq_redacted(
+                &second_next_reader.read_secure_payload()?,
+                &fin_encoded,
+                "policy second slot fin frame",
+            )?;
+            assert_bytes_eq_redacted(
+                &source_writer.read_secure_payload()?,
+                &reverse_encoded,
+                "policy second slot reverse frame",
+            )?;
+            assert_bytes_eq_redacted(
+                &source_writer.read_secure_payload()?,
+                &reverse_fin_encoded,
+                "policy second slot reverse fin",
+            )?;
         }
         _ => return Err("unexpected slot index".to_string()),
     }

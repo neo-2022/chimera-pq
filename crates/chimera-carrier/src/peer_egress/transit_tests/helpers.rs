@@ -58,6 +58,21 @@ pub(super) fn assert_bound_payload(
     Ok(())
 }
 
+pub(super) fn assert_bytes_eq_redacted(
+    actual: &[u8],
+    expected: &[u8],
+    context: &str,
+) -> Result<(), String> {
+    if actual != expected {
+        return Err(format!(
+            "{context}: byte mismatch actual_len={} expected_len={}",
+            actual.len(),
+            expected.len()
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn read_first_bound_frame(
     source_reader: &mut crate::peer_egress::protocol::SecurePeerStream,
 ) -> Result<crate::peer_egress::transit_binding::BoundTransitRelayFrame, String> {

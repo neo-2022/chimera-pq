@@ -3,8 +3,8 @@ use std::thread;
 
 use super::super::{BoundPeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop};
 use super::helpers::{
-    assert_bound_payload, binding, bound_payload, encoded_frame, read_first_bound_frame,
-    test_peer_pair,
+    assert_bound_payload, assert_bytes_eq_redacted, binding, bound_payload, encoded_frame,
+    read_first_bound_frame, test_peer_pair,
 };
 use crate::peer_egress::live_lane_selection::select_carrier_lane_from_mesh_plan;
 use crate::peer_egress::modes::{handle_reverse_peer, handle_reverse_peer_with_lane_document};
@@ -239,10 +239,26 @@ fn reverse_peer_sealed_transit_uses_planned_lane_document_binding() -> Result<()
         .join()
         .map_err(|_| "planned reverse peer transit worker panicked".to_string())??;
 
-    assert_eq!(selected_peer_reader.read_secure_payload()?, first_encoded);
-    assert_eq!(selected_peer_reader.read_secure_payload()?, fin_encoded);
-    assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
-    assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &first_encoded,
+        "reverse planned selected first frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &fin_encoded,
+        "reverse planned selected fin frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &source_writer.read_secure_payload()?,
+        &reverse_encoded,
+        "reverse planned source frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &source_writer.read_secure_payload()?,
+        &reverse_fin_encoded,
+        "reverse planned source fin",
+    )?;
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 use chimera_mesh::MeshMultipathFlowKey;
 use chimera_session::FrameKind;
 
-use super::helpers::{binding, encoded_frame, test_peer_pair};
+use super::helpers::{assert_bytes_eq_redacted, binding, encoded_frame, test_peer_pair};
 use crate::peer_egress::lane_binding::{TransitLaneDocument, transit_lane_document_from_mesh_plan};
 use crate::peer_egress::live_lane_selection::select_carrier_lane_from_mesh_plan;
 use crate::peer_egress::transit::forward_peer_sealed_transit_to_planned_next_hop;
@@ -102,10 +102,26 @@ fn planned_peer_ingress_selection_dispatches_selected_lane_from_mesh_path_plan()
         first_frame,
     )?;
 
-    assert_eq!(selected_peer_reader.read_secure_payload()?, first_encoded);
-    assert_eq!(selected_peer_reader.read_secure_payload()?, fin_encoded);
-    assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
-    assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &first_encoded,
+        "planned peer selected first frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &fin_encoded,
+        "planned peer selected fin frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &source_writer.read_secure_payload()?,
+        &reverse_encoded,
+        "planned peer reverse first frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &source_writer.read_secure_payload()?,
+        &reverse_fin_encoded,
+        "planned peer reverse fin frame",
+    )?;
     assert!(wrong_peer_reader.read_secure_payload().is_err());
     Ok(())
 }

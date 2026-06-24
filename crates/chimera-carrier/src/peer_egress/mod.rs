@@ -20,16 +20,20 @@ pub mod options;
 pub(crate) mod options_debug;
 pub(crate) mod options_mode;
 pub(crate) mod options_proof;
+pub(crate) mod options_transit_guard;
 pub mod pool;
 pub mod proof;
 pub mod protocol;
+pub(crate) mod relay_activity;
 pub(crate) mod secure_halves;
 pub mod startup_contract;
 pub mod transit;
 pub mod transit_binding;
 pub mod transit_dispatch;
 pub(crate) mod transit_document;
+pub(crate) mod transit_guard;
 pub(crate) mod transit_lane_selection;
+pub(crate) mod transit_local;
 pub mod wire;
 
 pub use handshake::{
@@ -61,7 +65,7 @@ pub use protocol::{Destination, SecurePeerStream};
 pub use transit::{
     TransitRelayFrame, forward_bound_peer_sealed_transit_to_next_hop, forward_transit_relay_frame,
     read_weave_bound_sealed_transit_frame, read_weave_sealed_transit_frame,
-    relay_local_bound_sealed_transit, relay_local_sealed_transit, validate_transit_relay_frame,
+    validate_transit_relay_frame,
 };
 pub use transit_binding::{
     BoundTransitRelayFrame, TransitLaneId, TransitPathBinding, TransitRouteId,
@@ -69,4 +73,13 @@ pub use transit_binding::{
 };
 pub use transit_dispatch::{
     SharedTransitNextHopDispatcher, TransitNextHopDispatcher, new_shared_transit_dispatcher,
+};
+pub use transit_guard::TransitRelayLimits;
+pub use transit_local::{
+    relay_local_bound_sealed_transit, relay_local_bound_sealed_transit_to_next_hop,
+    relay_local_sealed_transit, relay_local_sealed_transit_to_next_hop,
+    relay_local_sealed_transit_to_planned_next_hop,
+    relay_local_sealed_transit_with_lane_document_and_first_byte,
+    relay_local_sealed_transit_with_registrations,
+    relay_local_sealed_transit_with_registrations_with_limits,
 };

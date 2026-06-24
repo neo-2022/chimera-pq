@@ -1,6 +1,9 @@
 mod aggregate_midstream;
 mod aggregate_peer_ingress;
+mod bound_forwarding;
+mod bound_guard;
 mod forwarding;
+mod guard;
 mod helpers;
 mod midstream;
 mod planned;

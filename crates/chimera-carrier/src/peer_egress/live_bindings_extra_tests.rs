@@ -33,6 +33,11 @@ fn options_with_lane_file(path: &str, allow_bound_transit: bool) -> Options {
         allow_pool_transit: false,
         allow_bound_transit,
         transit_lane_bindings_file: Some(path.to_string()),
+        transit_max_frames_per_direction:
+            crate::peer_egress::transit_guard::DEFAULT_TRANSIT_MAX_FRAMES_PER_DIRECTION,
+        transit_max_bytes_per_direction:
+            crate::peer_egress::transit_guard::DEFAULT_TRANSIT_MAX_BYTES_PER_DIRECTION,
+        transit_idle_timeout_ms: crate::peer_egress::transit_guard::DEFAULT_TRANSIT_IDLE_TIMEOUT_MS,
         transit_payload_bytes: 64,
         transit_packet_number: 1,
         transit_route_id: None,

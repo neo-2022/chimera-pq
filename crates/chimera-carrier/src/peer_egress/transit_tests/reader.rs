@@ -7,7 +7,7 @@ use super::super::{
     forward_transit_relay_frame, read_weave_bound_sealed_transit_frame,
     read_weave_sealed_transit_frame, validate_transit_relay_frame,
 };
-use super::helpers::{binding, encoded_frame};
+use super::helpers::{assert_bytes_eq_redacted, binding, encoded_frame};
 
 #[test]
 fn transit_relay_frame_forwards_unchanged() -> Result<(), String> {
@@ -16,9 +16,13 @@ fn transit_relay_frame_forwards_unchanged() -> Result<(), String> {
     assert_eq!(frame.kind(), FrameKind::Data);
     assert_eq!(frame.packet_number(), 42);
     assert_eq!(frame.payload_len(), "third-party payload".len());
-    assert_eq!(frame.sealed_bytes(), encoded.as_slice());
+    assert_bytes_eq_redacted(
+        frame.sealed_bytes(),
+        encoded.as_slice(),
+        "relay sealed bytes",
+    )?;
     let forwarded = forward_transit_relay_frame(&encoded)?;
-    assert_eq!(forwarded, encoded);
+    assert_bytes_eq_redacted(&forwarded, &encoded, "forwarded relay bytes")?;
     Ok(())
 }
 
@@ -54,7 +58,11 @@ fn transit_relay_reader_preserves_metadata_without_payload_leak() -> Result<(), 
     };
     let frame = read_weave_sealed_transit_frame(&mut cursor, first)?;
     let debug = format!("{frame:?}");
-    assert_eq!(frame.sealed_bytes(), encoded.as_slice());
+    assert_bytes_eq_redacted(
+        frame.sealed_bytes(),
+        encoded.as_slice(),
+        "reader sealed bytes",
+    )?;
     assert!(debug.contains("<sealed>"));
     assert!(!debug.contains("opaque bytes"));
     Ok(())
@@ -81,7 +89,11 @@ fn bound_transit_relay_reader_preserves_binding_and_sealed_bytes_without_payload
     let parsed = read_weave_bound_sealed_transit_frame(&mut cursor, first)?;
     let debug = format!("{parsed:?}");
     assert_eq!(parsed.binding(), binding(700, 2));
-    assert_eq!(parsed.frame().sealed_bytes(), encoded.as_slice());
+    assert_bytes_eq_redacted(
+        parsed.frame().sealed_bytes(),
+        encoded.as_slice(),
+        "bound reader sealed bytes",
+    )?;
     assert!(debug.contains("<opaque>"));
     assert!(debug.contains("<sealed>"));
     assert!(!debug.contains("bound opaque bytes"));

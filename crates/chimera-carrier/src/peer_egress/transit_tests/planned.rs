@@ -2,19 +2,19 @@ use chimera_mesh::MeshMultipathFlowKey;
 use chimera_session::FrameKind;
 use std::io::Write;
 
-use super::helpers::{binding, encoded_frame, tcp_pair, test_peer_pair};
+use super::helpers::{assert_bytes_eq_redacted, binding, encoded_frame, tcp_pair, test_peer_pair};
 use crate::peer_egress::lane_binding::{
     TransitLaneDocument, TransitLaneRegistration, transit_lane_document_from_mesh_plan,
 };
 use crate::peer_egress::live_lane_selection::{
     select_carrier_lane_from_mesh_plan, select_carrier_lane_from_registrations,
 };
-use crate::peer_egress::transit::{
-    forward_peer_sealed_transit_with_registrations,
+use crate::peer_egress::transit::forward_peer_sealed_transit_with_registrations;
+use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document;
+use crate::peer_egress::transit_local::{
     relay_local_sealed_transit_with_lane_document_and_first_byte,
     relay_local_sealed_transit_with_registrations,
 };
-use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message};
 
 fn registrations() -> Result<Vec<TransitLaneRegistration>, String> {
@@ -121,10 +121,22 @@ fn planned_runtime_selection_dispatches_only_the_selected_lane() -> Result<(), S
     assert!(forward_result.is_ok());
     let selected_first = selected_peer_reader.read_secure_payload()?;
     let selected_fin = selected_peer_reader.read_secure_payload()?;
-    assert_eq!(selected_first, first_encoded);
-    assert_eq!(selected_fin, fin_encoded);
-    assert_eq!(source_writer.read_secure_payload()?, reverse_encoded);
-    assert_eq!(source_writer.read_secure_payload()?, reverse_fin_encoded);
+    assert_bytes_eq_redacted(
+        &selected_first,
+        &first_encoded,
+        "planned selected first frame",
+    )?;
+    assert_bytes_eq_redacted(&selected_fin, &fin_encoded, "planned selected fin frame")?;
+    assert_bytes_eq_redacted(
+        &source_writer.read_secure_payload()?,
+        &reverse_encoded,
+        "planned reverse first frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &source_writer.read_secure_payload()?,
+        &reverse_fin_encoded,
+        "planned reverse fin frame",
+    )?;
     assert!(wrong_peer_reader.read_secure_payload().is_err());
     Ok(())
 }
@@ -201,8 +213,16 @@ fn planned_local_ingress_selection_dispatches_selected_lane() -> Result<(), Stri
         first_byte,
     )?;
 
-    assert_eq!(selected_peer_reader.read_secure_payload()?, first_encoded);
-    assert_eq!(selected_peer_reader.read_secure_payload()?, fin_encoded);
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &first_encoded,
+        "planned local registration first frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &fin_encoded,
+        "planned local registration fin frame",
+    )?;
     Ok(())
 }
 
@@ -245,8 +265,16 @@ fn planned_local_ingress_selection_dispatches_selected_lane_from_document() -> R
         first_byte,
     )?;
 
-    assert_eq!(selected_peer_reader.read_secure_payload()?, first_encoded);
-    assert_eq!(selected_peer_reader.read_secure_payload()?, fin_encoded);
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &first_encoded,
+        "planned local document first frame",
+    )?;
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &fin_encoded,
+        "planned local document fin frame",
+    )?;
     Ok(())
 }
 

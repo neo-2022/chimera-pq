@@ -20,6 +20,15 @@ impl std::fmt::Debug for Options {
             .field("allow_pool_transit", &self.allow_pool_transit)
             .field("allow_bound_transit", &self.allow_bound_transit)
             .field("transit_lane_bindings_file", &"<redacted>")
+            .field(
+                "transit_max_frames_per_direction",
+                &self.transit_max_frames_per_direction,
+            )
+            .field(
+                "transit_max_bytes_per_direction",
+                &self.transit_max_bytes_per_direction,
+            )
+            .field("transit_idle_timeout_ms", &self.transit_idle_timeout_ms)
             .field("transit_payload_bytes", &self.transit_payload_bytes)
             .field("transit_packet_number", &self.transit_packet_number)
             .field(

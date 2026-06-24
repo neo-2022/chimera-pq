@@ -130,6 +130,12 @@ mod tests {
             allow_pool_transit: false,
             allow_bound_transit: false,
             transit_lane_bindings_file: None,
+            transit_max_frames_per_direction:
+                crate::peer_egress::transit_guard::DEFAULT_TRANSIT_MAX_FRAMES_PER_DIRECTION,
+            transit_max_bytes_per_direction:
+                crate::peer_egress::transit_guard::DEFAULT_TRANSIT_MAX_BYTES_PER_DIRECTION,
+            transit_idle_timeout_ms:
+                crate::peer_egress::transit_guard::DEFAULT_TRANSIT_IDLE_TIMEOUT_MS,
             transit_payload_bytes: 32,
             transit_packet_number: 9,
             transit_route_id: Some(77),

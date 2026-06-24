@@ -6,9 +6,10 @@ use crate::peer_egress::modes::{
 use crate::peer_egress::options::AeadSuite;
 use crate::peer_egress::pool::new_shared_pool;
 use crate::peer_egress::protocol::read_line_limited;
-use crate::peer_egress::transit::{PeerTransitPolicy, relay_local_sealed_transit_to_next_hop};
+use crate::peer_egress::transit::PeerTransitPolicy;
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
+use crate::peer_egress::transit_local::relay_local_sealed_transit_to_next_hop;
 use chimera_session::{Frame, FrameKind};
 use std::io::Write;
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -23,6 +24,17 @@ fn binding(route: u64, lane: u16) -> TransitPathBinding {
         TransitRouteId::new(route).unwrap_or_else(|e| unreachable!("{e}")),
         TransitLaneId::new(lane).unwrap_or_else(|e| unreachable!("{e}")),
     )
+}
+
+fn assert_bytes_eq_redacted(actual: &[u8], expected: &[u8], context: &str) -> Result<(), String> {
+    if actual != expected {
+        return Err(format!(
+            "{context}: byte mismatch actual_len={} expected_len={}",
+            actual.len(),
+            expected.len()
+        ));
+    }
+    Ok(())
 }
 
 fn tcp_pair() -> Result<(TcpStream, TcpStream), String> {
@@ -392,12 +404,20 @@ fn local_sealed_transit_uses_flow_key_to_select_pool_next_hop() -> Result<(), St
 
     match expected_slot {
         0 => {
-            assert_eq!(first_peer_reader.read_secure_payload()?, frame);
+            assert_bytes_eq_redacted(
+                &first_peer_reader.read_secure_payload()?,
+                &frame,
+                "local egress first slot transit frame",
+            )?;
             assert!(second_peer_reader.read_secure_payload().is_err());
         }
         1 => {
             assert!(first_peer_reader.read_secure_payload().is_err());
-            assert_eq!(second_peer_reader.read_secure_payload()?, frame);
+            assert_bytes_eq_redacted(
+                &second_peer_reader.read_secure_payload()?,
+                &frame,
+                "local egress second slot transit frame",
+            )?;
         }
         _ => return Err("unexpected slot index".to_string()),
     }

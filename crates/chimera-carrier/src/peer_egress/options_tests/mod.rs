@@ -2,6 +2,7 @@ use super::*;
 
 mod debug_redaction;
 mod proof;
+mod transit_guard;
 
 #[test]
 fn parse_rejects_empty_token() {

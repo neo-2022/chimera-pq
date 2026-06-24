@@ -4,13 +4,13 @@ use chimera_session::FrameKind;
 
 use super::super::{
     BoundPeerTransitPolicy, PeerTransitPolicy, forward_bound_peer_sealed_transit_to_next_hop,
-    forward_peer_sealed_transit_to_next_hop, relay_local_bound_sealed_transit,
-    validate_transit_relay_frame,
+    forward_peer_sealed_transit_to_next_hop, validate_transit_relay_frame,
 };
 use super::helpers::{
-    assert_bound_payload, binding, bound_payload, encoded_frame, read_first_bound_frame, tcp_pair,
-    test_peer_pair,
+    assert_bound_payload, assert_bytes_eq_redacted, binding, bound_payload, encoded_frame,
+    read_first_bound_frame, tcp_pair, test_peer_pair,
 };
+use crate::peer_egress::transit_local::relay_local_bound_sealed_transit;
 use crate::peer_egress::wire::{
     PeerMessage, read_peer_message, write_ack_ok, write_connect_message,
 };
@@ -48,7 +48,7 @@ fn local_bound_sealed_transit_rejects_midstream_binding_change() -> Result<(), S
     };
     assert!(error.contains("binding changed"));
     let forwarded = peer_writer.read_secure_payload()?;
-    assert_eq!(forwarded, first_payload);
+    assert_bytes_eq_redacted(&forwarded, &first_payload, "local bound first payload")?;
     assert!(peer_writer.read_secure_payload().is_err());
     Ok(())
 }
@@ -85,7 +85,11 @@ fn peer_sealed_transit_rejects_midstream_connect_and_unblocks_reverse() -> Resul
         Err(error) => error,
     };
     assert!(error.contains("connect message"));
-    assert_eq!(next_reader.read_secure_payload()?, first_encoded);
+    assert_bytes_eq_redacted(
+        &next_reader.read_secure_payload()?,
+        &first_encoded,
+        "midstream connect first frame",
+    )?;
     assert!(source_writer.read_secure_payload().is_err());
     Ok(())
 }
@@ -125,7 +129,11 @@ fn peer_sealed_transit_rejects_midstream_bound_frame() -> Result<(), String> {
         Err(error) => error,
     };
     assert!(error.contains("nested bound transit frame"));
-    assert_eq!(next_reader.read_secure_payload()?, first_encoded);
+    assert_bytes_eq_redacted(
+        &next_reader.read_secure_payload()?,
+        &first_encoded,
+        "midstream nested bound first frame",
+    )?;
     assert!(source_writer.read_secure_payload().is_err());
     Ok(())
 }

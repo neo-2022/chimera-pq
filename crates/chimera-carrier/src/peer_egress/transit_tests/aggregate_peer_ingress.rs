@@ -1,7 +1,7 @@
 use chimera_mesh::MeshMultipathFlowKey;
 use chimera_session::FrameKind;
 
-use super::helpers::{binding, encoded_frame, test_peer_pair};
+use super::helpers::{assert_bytes_eq_redacted, binding, encoded_frame, test_peer_pair};
 use crate::peer_egress::aggregate_ingress::{
     AggregateTransitIngressLimits, new_shared_aggregate_transit_ingress_registry,
 };
@@ -153,7 +153,11 @@ fn planned_aggregate_peer_ingress_reassembles_and_forwards_selected_lane() -> Re
         Some(registry.clone()),
     )?;
 
-    assert_eq!(selected_peer_reader.read_secure_payload()?, sealed);
+    assert_bytes_eq_redacted(
+        &selected_peer_reader.read_secure_payload()?,
+        &sealed,
+        "aggregate peer ingress selected payload",
+    )?;
     assert!(wrong_peer_reader.read_secure_payload().is_err());
     let debug = format!("{registry:?}");
     assert!(!debug.contains("AGGREGATE_PEER_INGRESS_SECRET_PAYLOAD"));

@@ -4,8 +4,8 @@ use std::thread;
 
 use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
 use crate::peer_egress::modes::handle_local_client_with_lane_document_and_first_byte;
-use crate::peer_egress::transit::relay_local_sealed_transit_with_lane_document_and_first_byte;
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
+use crate::peer_egress::transit_local::relay_local_sealed_transit_with_lane_document_and_first_byte;
 
 use super::{binding, tcp_pair};
 

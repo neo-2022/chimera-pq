@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::net::{Shutdown, TcpStream};
+use std::net::Shutdown;
 use std::thread;
 
 use chimera_mesh::{
@@ -8,21 +8,22 @@ use chimera_mesh::{
 };
 
 use crate::peer_egress::bound_transit::forward_bound_peer_transit_pair;
-use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
-use crate::peer_egress::net::tune_tcp;
+use crate::peer_egress::lane_binding::TransitLaneRegistration;
 use crate::peer_egress::pool::SharedPeerPool;
 use crate::peer_egress::protocol::SecurePeerStream;
+use crate::peer_egress::relay_activity::RelayActivity;
 use crate::peer_egress::secure_halves::{
-    SecurePeerReader, SecurePeerWriter, split_secure_peer_stream,
+    SecurePayloadRead, SecurePeerReader, SecurePeerWriter, split_secure_peer_stream,
 };
 use crate::peer_egress::transit_binding::BoundTransitRelayFrame;
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
+use crate::peer_egress::transit_guard::{
+    TransitRelayGuard, TransitRelayLimits, apply_transit_stream_limits,
+};
 use crate::peer_egress::transit_lane_selection::{
     pop_planned_transit_dispatch_next_hop, pop_registered_transit_next_hop,
 };
-use crate::peer_egress::wire::{
-    PeerMessage, write_bound_sealed_transit_message, write_sealed_transit_message,
-};
+use crate::peer_egress::wire::PeerMessage;
 
 const TRANSIT_FRAME_HEADER_REST_LEN: usize = 13;
 const TRANSIT_FRAME_HEADER_LEN: usize = 1 + TRANSIT_FRAME_HEADER_REST_LEN;
@@ -93,189 +94,7 @@ pub fn forward_transit_relay_frame(input: &[u8]) -> Result<Vec<u8>, String> {
         .map_err(|error| format!("forward transit frame failed: {error}"))
 }
 
-pub fn relay_local_sealed_transit(
-    mut local: TcpStream,
-    mut peer: SecurePeerStream,
-    first_byte: u8,
-) -> Result<(), String> {
-    tune_tcp(&local)?;
-    tune_tcp(&peer.stream)?;
-    let mut next_first = Some(first_byte);
-    loop {
-        let byte = match next_first.take() {
-            Some(byte) => byte,
-            None => unreachable!("missing transit frame prefix"),
-        };
-        let transit = read_weave_sealed_transit_frame(&mut local, byte)?;
-        eprintln!("event=weave_transit_frame_forwarded");
-        write_sealed_transit_message(&mut peer, &transit)
-            .map_err(|error| format!("write transit frame to peer failed: {error}"))?;
-        let mut first = [0_u8; 1];
-        match local.read(&mut first) {
-            Ok(0) => {
-                let _ = peer.stream.shutdown(Shutdown::Write);
-                return Ok(());
-            }
-            Ok(1) => next_first = Some(first[0]),
-            Ok(_) => unreachable!("single-byte read returned more than one byte"),
-            Err(error) => return Err(format!("read transit frame prefix failed: {error}")),
-        }
-    }
-}
-
-pub fn relay_local_sealed_transit_to_next_hop(
-    mut local: TcpStream,
-    policy: PeerTransitPolicy,
-    peer_pool: SharedPeerPool,
-    first_byte: u8,
-) -> Result<(), String> {
-    tune_tcp(&local)?;
-    let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
-    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
-    let peer = pop_unbound_pool_transit_next_hop(policy, Some(peer_pool), flow_key)?;
-    relay_local_sealed_transit_after_first(local, peer, first)
-}
-
-pub fn relay_local_sealed_transit_to_planned_next_hop(
-    mut local: TcpStream,
-    plan: &MeshPathPlan,
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-    first_byte: u8,
-) -> Result<(), String> {
-    tune_tcp(&local)?;
-    let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
-    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
-    let peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
-    relay_local_sealed_transit_after_first(local, peer, first)
-}
-
-pub fn relay_local_sealed_transit_with_registrations(
-    mut local: TcpStream,
-    registrations: &[TransitLaneRegistration],
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-    first_byte: u8,
-) -> Result<(), String> {
-    tune_tcp(&local)?;
-    let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
-    let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
-    let peer = pop_registered_transit_next_hop(registrations, dispatcher, flow_key)?;
-    relay_local_sealed_transit_after_first(local, peer, first)
-}
-
-pub fn relay_local_sealed_transit_with_lane_document_and_first_byte(
-    local: TcpStream,
-    document: &TransitLaneDocument,
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-    first_byte: u8,
-) -> Result<(), String> {
-    let plan = document.require_mesh_path_plan()?;
-    relay_local_sealed_transit_to_planned_next_hop(local, &plan, dispatcher, first_byte)
-}
-
-fn relay_local_sealed_transit_after_first(
-    mut local: TcpStream,
-    mut peer: SecurePeerStream,
-    first: TransitRelayFrame,
-) -> Result<(), String> {
-    tune_tcp(&peer.stream)?;
-    let mut pending = Some(first);
-    loop {
-        let transit = match pending.take() {
-            Some(frame) => frame,
-            None => {
-                let mut first = [0_u8; 1];
-                match local.read(&mut first) {
-                    Ok(0) => {
-                        let _ = peer.stream.shutdown(Shutdown::Write);
-                        return Ok(());
-                    }
-                    Ok(1) => read_weave_sealed_transit_frame(&mut local, first[0])?,
-                    Ok(_) => unreachable!("single-byte read returned more than one byte"),
-                    Err(error) => {
-                        return Err(format!("read transit frame prefix failed: {error}"));
-                    }
-                }
-            }
-        };
-        eprintln!("event=weave_transit_frame_forwarded");
-        write_sealed_transit_message(&mut peer, &transit)
-            .map_err(|error| format!("write transit frame to peer failed: {error}"))?;
-        let mut first = [0_u8; 1];
-        match local.read(&mut first) {
-            Ok(0) => {
-                let _ = peer.stream.shutdown(Shutdown::Write);
-                return Ok(());
-            }
-            Ok(1) => pending = Some(read_weave_sealed_transit_frame(&mut local, first[0])?),
-            Ok(_) => unreachable!("single-byte read returned more than one byte"),
-            Err(error) => return Err(format!("read transit frame prefix failed: {error}")),
-        }
-    }
-}
-
-pub fn relay_local_bound_sealed_transit(
-    mut local: TcpStream,
-    peer: SecurePeerStream,
-    first_byte: u8,
-) -> Result<(), String> {
-    tune_tcp(&local)?;
-    tune_tcp(&peer.stream)?;
-    let first = read_weave_bound_sealed_transit_frame(&mut local, first_byte)?;
-    relay_local_bound_sealed_transit_after_first(local, peer, first)
-}
-
-pub fn relay_local_bound_sealed_transit_to_next_hop(
-    mut local: TcpStream,
-    policy: BoundPeerTransitPolicy,
-    dispatcher: Option<SharedTransitNextHopDispatcher>,
-    first_byte: u8,
-) -> Result<(), String> {
-    if policy != BoundPeerTransitPolicy::AllowBoundNextHop {
-        return Err("sealed transit next hop denied by policy".to_string());
-    }
-    tune_tcp(&local)?;
-    let first = read_weave_bound_sealed_transit_frame(&mut local, first_byte)?;
-    let peer = pop_bound_transit_dispatch_next_hop(dispatcher, first.binding())?;
-    relay_local_bound_sealed_transit_after_first(local, peer, first)
-}
-
-fn relay_local_bound_sealed_transit_after_first(
-    mut local: TcpStream,
-    mut peer: SecurePeerStream,
-    first: BoundTransitRelayFrame,
-) -> Result<(), String> {
-    tune_tcp(&peer.stream)?;
-    let binding = first.binding();
-    let mut pending = Some(first);
-    loop {
-        let transit = match pending.take() {
-            Some(frame) => frame,
-            None => {
-                let mut first = [0_u8; 1];
-                match local.read(&mut first) {
-                    Ok(0) => {
-                        let _ = peer.stream.shutdown(Shutdown::Write);
-                        return Ok(());
-                    }
-                    Ok(1) => read_weave_bound_sealed_transit_frame(&mut local, first[0])?,
-                    Ok(_) => unreachable!("single-byte read returned more than one byte"),
-                    Err(error) => {
-                        return Err(format!("read bound transit frame prefix failed: {error}"));
-                    }
-                }
-            }
-        };
-        if transit.binding() != binding {
-            let _ = peer.stream.shutdown(Shutdown::Write);
-            return Err("bound transit stream binding changed midstream".to_string());
-        }
-        eprintln!("event=weave_bound_transit_frame_forwarded");
-        write_bound_sealed_transit_message(&mut peer, &transit)
-            .map_err(|error| format!("write bound transit frame to peer failed: {error}"))?;
-    }
-}
-
-fn pop_bound_transit_dispatch_next_hop(
+pub(crate) fn pop_bound_transit_dispatch_next_hop(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     binding: crate::peer_egress::transit_binding::TransitPathBinding,
 ) -> Result<SecurePeerStream, String> {
@@ -290,9 +109,26 @@ pub fn forward_peer_sealed_transit_to_next_hop(
     next_hops: Option<SharedPeerPool>,
     first: TransitRelayFrame,
 ) -> Result<(), String> {
+    forward_peer_sealed_transit_to_next_hop_with_limits(
+        source,
+        policy,
+        next_hops,
+        first,
+        TransitRelayLimits::default(),
+    )
+}
+
+pub(crate) fn forward_peer_sealed_transit_to_next_hop_with_limits(
+    source: SecurePeerStream,
+    policy: PeerTransitPolicy,
+    next_hops: Option<SharedPeerPool>,
+    first: TransitRelayFrame,
+    limits: TransitRelayLimits,
+) -> Result<(), String> {
+    limits.validate()?;
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
     let next_peer = pop_unbound_pool_transit_next_hop(policy, next_hops, flow_key)?;
-    forward_peer_sealed_transit_pair(source, next_peer, first)
+    forward_peer_sealed_transit_pair_with_limits(source, next_peer, first, limits)
 }
 
 pub fn forward_peer_sealed_transit_to_planned_next_hop(
@@ -301,9 +137,26 @@ pub fn forward_peer_sealed_transit_to_planned_next_hop(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first: TransitRelayFrame,
 ) -> Result<(), String> {
+    forward_peer_sealed_transit_to_planned_next_hop_with_limits(
+        source,
+        plan,
+        dispatcher,
+        first,
+        TransitRelayLimits::default(),
+    )
+}
+
+pub(crate) fn forward_peer_sealed_transit_to_planned_next_hop_with_limits(
+    source: SecurePeerStream,
+    plan: &MeshPathPlan,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first: TransitRelayFrame,
+    limits: TransitRelayLimits,
+) -> Result<(), String> {
+    limits.validate()?;
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
     let next_peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
-    forward_peer_sealed_transit_pair(source, next_peer, first)
+    forward_peer_sealed_transit_pair_with_limits(source, next_peer, first, limits)
 }
 
 pub fn forward_peer_sealed_transit_with_registrations(
@@ -312,9 +165,26 @@ pub fn forward_peer_sealed_transit_with_registrations(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first: TransitRelayFrame,
 ) -> Result<(), String> {
+    forward_peer_sealed_transit_with_registrations_with_limits(
+        source,
+        registrations,
+        dispatcher,
+        first,
+        TransitRelayLimits::default(),
+    )
+}
+
+pub(crate) fn forward_peer_sealed_transit_with_registrations_with_limits(
+    source: SecurePeerStream,
+    registrations: &[TransitLaneRegistration],
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first: TransitRelayFrame,
+    limits: TransitRelayLimits,
+) -> Result<(), String> {
+    limits.validate()?;
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
     let next_peer = pop_registered_transit_next_hop(registrations, dispatcher, flow_key)?;
-    forward_peer_sealed_transit_pair(source, next_peer, first)
+    forward_peer_sealed_transit_pair_with_limits(source, next_peer, first, limits)
 }
 
 pub(crate) fn pop_unbound_pool_transit_next_hop(
@@ -338,25 +208,62 @@ pub fn forward_bound_peer_sealed_transit_to_next_hop(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first: BoundTransitRelayFrame,
 ) -> Result<(), String> {
+    forward_bound_peer_sealed_transit_to_next_hop_with_limits(
+        source,
+        policy,
+        dispatcher,
+        first,
+        TransitRelayLimits::default(),
+    )
+}
+
+pub(crate) fn forward_bound_peer_sealed_transit_to_next_hop_with_limits(
+    source: SecurePeerStream,
+    policy: BoundPeerTransitPolicy,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first: BoundTransitRelayFrame,
+    limits: TransitRelayLimits,
+) -> Result<(), String> {
+    limits.validate()?;
     if policy != BoundPeerTransitPolicy::AllowBoundNextHop {
         return Err("sealed transit next hop denied by policy".to_string());
     }
     let next_peer = pop_bound_transit_dispatch_next_hop(dispatcher, first.binding())?;
-    forward_bound_peer_transit_pair(source, next_peer, first)
+    forward_bound_peer_transit_pair(source, next_peer, first, limits)
 }
 
-fn forward_peer_sealed_transit_pair(
+fn forward_peer_sealed_transit_pair_with_limits(
     source: SecurePeerStream,
     next_peer: SecurePeerStream,
     first: TransitRelayFrame,
+    limits: TransitRelayLimits,
 ) -> Result<(), String> {
+    limits.validate()?;
+    apply_transit_stream_limits(&source.stream, limits)?;
+    apply_transit_stream_limits(&next_peer.stream, limits)?;
     let (source_reader, source_writer) = split_secure_peer_stream(source)?;
     let (next_reader, next_writer) = split_secure_peer_stream(next_peer)?;
+    let relay_activity = RelayActivity::new();
+    let forward_activity = relay_activity.clone();
     let forward = thread::spawn(move || {
-        pipe_sealed_transit_direction(source_reader, next_writer, Some(first), "source_to_next")
+        pipe_sealed_transit_direction(
+            source_reader,
+            next_writer,
+            Some(first),
+            "source_to_next",
+            limits,
+            forward_activity,
+        )
     });
     let reverse = thread::spawn(move || {
-        pipe_sealed_transit_direction(next_reader, source_writer, None, "next_to_source")
+        pipe_sealed_transit_direction(
+            next_reader,
+            source_writer,
+            None,
+            "next_to_source",
+            limits,
+            relay_activity,
+        )
     });
     let forward_result = forward
         .join()
@@ -364,6 +271,16 @@ fn forward_peer_sealed_transit_pair(
     let reverse_result = reverse
         .join()
         .map_err(|_| "sealed transit reverse worker panicked".to_string())?;
+    if let Err(error) = &forward_result
+        && error.contains("session idle timeout")
+    {
+        return Err(error.clone());
+    }
+    if let Err(error) = &reverse_result
+        && error.contains("session idle timeout")
+    {
+        return Err(error.clone());
+    }
     forward_result?;
     reverse_result?;
     Ok(())
@@ -374,41 +291,61 @@ fn pipe_sealed_transit_direction(
     mut writer: SecurePeerWriter,
     first: Option<TransitRelayFrame>,
     direction: &'static str,
+    limits: TransitRelayLimits,
+    relay_activity: RelayActivity,
 ) -> Result<(), String> {
+    limits.validate()?;
     let result = (|| {
+        let mut guard = TransitRelayGuard::new(limits);
         let mut pending = first;
         loop {
             let frame = match pending.take() {
                 Some(frame) => frame,
-                None => match read_peer_message_from_reader(
-                    &mut reader,
-                    crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
-                )? {
-                    PeerMessage::SealedTransit(frame) => frame,
-                    PeerMessage::AggregateSealedTransit(_) => {
-                        return Err(
-                            "sealed transit stream received aggregate transit frame".to_string()
-                        );
-                    }
-                    PeerMessage::Connect(_) => {
-                        return Err("sealed transit stream received connect message".to_string());
-                    }
-                    PeerMessage::AckOk => {
-                        return Err("sealed transit stream received ack".to_string());
-                    }
-                    PeerMessage::BoundSealedTransit(_) => {
-                        return Err(
-                            "sealed transit stream received nested bound transit frame".to_string()
-                        );
+                None => loop {
+                    let observed_activity = relay_activity.snapshot();
+                    match read_peer_message_from_reader(
+                        &mut reader,
+                        crate::peer_egress::options::SECURE_PLAINTEXT_CHUNK_LEN,
+                    )? {
+                        PeerReadOutcome::Message(PeerMessage::SealedTransit(frame)) => break frame,
+                        PeerReadOutcome::Message(PeerMessage::AggregateSealedTransit(_)) => {
+                            return Err("sealed transit stream received aggregate transit frame"
+                                .to_string());
+                        }
+                        PeerReadOutcome::Message(PeerMessage::Connect(_)) => {
+                            return Err(
+                                "sealed transit stream received connect message".to_string()
+                            );
+                        }
+                        PeerReadOutcome::Message(PeerMessage::AckOk) => {
+                            return Err("sealed transit stream received ack".to_string());
+                        }
+                        PeerReadOutcome::Message(PeerMessage::BoundSealedTransit(_)) => {
+                            return Err(
+                                "sealed transit stream received nested bound transit frame"
+                                    .to_string(),
+                            );
+                        }
+                        PeerReadOutcome::Idle => {
+                            if relay_activity.has_finished_direction() {
+                                return Ok(());
+                            }
+                            if relay_activity.unchanged_since(observed_activity) {
+                                return Err("sealed transit session idle timeout".to_string());
+                            }
+                        }
                     }
                 },
             };
+            guard.record_frame(frame.sealed_bytes().len())?;
+            relay_activity.record();
             eprintln!("event=weave_peer_transit_frame_forwarded direction={direction}");
             let is_fin = frame.kind() == chimera_session::FrameKind::Fin;
             writer
                 .write_secure_payload(frame.sealed_bytes())
                 .map_err(|error| format!("write peer transit frame to next hop failed: {error}"))?;
             if is_fin {
+                relay_activity.record_finished_direction();
                 let _ = writer.stream.shutdown(Shutdown::Write);
                 return Ok(());
             }
@@ -424,9 +361,19 @@ fn pipe_sealed_transit_direction(
 fn read_peer_message_from_reader(
     reader: &mut SecurePeerReader,
     max_line_len: usize,
-) -> Result<PeerMessage, String> {
-    let payload = reader.read_secure_payload()?;
-    crate::peer_egress::wire::parse_peer_payload(payload, max_line_len)
+) -> Result<PeerReadOutcome, String> {
+    match reader.read_secure_payload_or_idle()? {
+        SecurePayloadRead::Payload(payload) => {
+            crate::peer_egress::wire::parse_peer_payload(payload, max_line_len)
+                .map(PeerReadOutcome::Message)
+        }
+        SecurePayloadRead::Idle => Ok(PeerReadOutcome::Idle),
+    }
+}
+
+enum PeerReadOutcome {
+    Message(PeerMessage),
+    Idle,
 }
 
 pub fn read_weave_sealed_transit_frame<R: Read>(
