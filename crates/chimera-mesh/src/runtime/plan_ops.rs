@@ -61,6 +61,15 @@ impl MeshRuntime {
         failover::failover_plan(self, request, policy, event)
     }
 
+    pub fn failover_plan_core(
+        &self,
+        request: &MeshJoinRequest,
+        policy: &MeshPathPolicy,
+        event: &MeshFailoverEvent,
+    ) -> Result<MeshPathPlanCore, String> {
+        failover::failover_plan_core(self, request, policy, event)
+    }
+
     pub fn failover_plan_from_dps_payload(
         &self,
         request: &MeshJoinRequest,
@@ -85,6 +94,20 @@ impl MeshRuntime {
         Ok(plan)
     }
 
+    pub fn failover_plan_core_from_dps_payload(
+        &self,
+        request: &MeshJoinRequest,
+        payload: &str,
+        event: &MeshFailoverEvent,
+    ) -> Result<MeshPathPlanCore, String> {
+        ensure_mesh_payload_nonempty(payload)?;
+        let context = dps_eval::policy_and_snapshot_from_dps_payload(payload)?;
+        let policy = context.policy;
+        let mut plan = self.failover_plan_core(request, &policy, event)?;
+        dps_eval::apply_dps_multipath_schedule_core(&context.snapshot, &mut plan)?;
+        Ok(plan)
+    }
+
     pub fn reselection_plan_with_health(
         &self,
         request: &MeshJoinRequest,
@@ -92,6 +115,15 @@ impl MeshRuntime {
         health: &[MeshPeerHealth],
     ) -> Result<MeshPathPlan, String> {
         health::reselection_plan_with_health(self, request, policy, health)
+    }
+
+    pub fn reselection_plan_core_with_health(
+        &self,
+        request: &MeshJoinRequest,
+        policy: &MeshPathPolicy,
+        health: &[MeshPeerHealth],
+    ) -> Result<MeshPathPlanCore, String> {
+        health::reselection_plan_core_with_health(self, request, policy, health)
     }
 
     pub fn reselection_plan_with_health_from_dps_payload(
@@ -115,6 +147,20 @@ impl MeshRuntime {
                 .map(|mode| mode.as_str()),
         );
         dps_eval::apply_dps_multipath_schedule(&context.snapshot, &mut plan)?;
+        Ok(plan)
+    }
+
+    pub fn reselection_plan_core_with_health_from_dps_payload(
+        &self,
+        request: &MeshJoinRequest,
+        payload: &str,
+        health: &[MeshPeerHealth],
+    ) -> Result<MeshPathPlanCore, String> {
+        ensure_mesh_payload_nonempty(payload)?;
+        let context = dps_eval::policy_and_snapshot_from_dps_payload(payload)?;
+        let policy = context.policy;
+        let mut plan = self.reselection_plan_core_with_health(request, &policy, health)?;
+        dps_eval::apply_dps_multipath_schedule_core(&context.snapshot, &mut plan)?;
         Ok(plan)
     }
 }

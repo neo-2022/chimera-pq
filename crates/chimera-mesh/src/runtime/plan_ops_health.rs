@@ -6,6 +6,32 @@ pub(super) fn reselection_plan_with_health(
     policy: &MeshPathPolicy,
     health: &[MeshPeerHealth],
 ) -> Result<MeshPathPlan, String> {
+    let adjusted_policy = health_adjusted_policy(runtime, policy, health)?;
+    let mut plan = runtime.plan_path(request, &adjusted_policy)?;
+    let affected = health
+        .iter()
+        .filter(|h| !h.healthy || h.cooldown_active)
+        .count();
+    plan.explain
+        .push(format!("health_reselection_applied={affected}"));
+    Ok(plan)
+}
+
+pub(super) fn reselection_plan_core_with_health(
+    runtime: &MeshRuntime,
+    request: &MeshJoinRequest,
+    policy: &MeshPathPolicy,
+    health: &[MeshPeerHealth],
+) -> Result<MeshPathPlanCore, String> {
+    let adjusted_policy = health_adjusted_policy(runtime, policy, health)?;
+    runtime.plan_path_core(request, &adjusted_policy)
+}
+
+fn health_adjusted_policy(
+    runtime: &MeshRuntime,
+    policy: &MeshPathPolicy,
+    health: &[MeshPeerHealth],
+) -> Result<MeshPathPolicy, String> {
     let mut adjusted_policy = policy.clone();
     for persisted in runtime.health_state.values() {
         if (!persisted.health.healthy || persisted.health.cooldown_active)
@@ -30,13 +56,5 @@ pub(super) fn reselection_plan_with_health(
             adjusted_policy.blocked_node_ids.push(item.node_id.clone());
         }
     }
-
-    let mut plan = runtime.plan_path(request, &adjusted_policy)?;
-    let affected = health
-        .iter()
-        .filter(|h| !h.healthy || h.cooldown_active)
-        .count();
-    plan.explain
-        .push(format!("health_reselection_applied={affected}"));
-    Ok(plan)
+    Ok(adjusted_policy)
 }
