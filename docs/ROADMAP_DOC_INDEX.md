@@ -68,6 +68,7 @@ Scope: all *.md/*.txt under docs/
 - `MVP_SPEC_DEEP_AUDIT_2026-05-18.md` — CHIMERA-PQ MVP Deep Audit (2026-05-18)
 - `MVP_VERIFY.txt` — Результат проверки MVP: ok
 - `OPERATIONS.md` — Operations
+- `PERFORMANCE.md` — Performance Engineering Guidelines
 - `POST_MVP_PRODUCT_ROADMAP.md` — CHIMERA-PQ Post-MVP Product Roadmap
 - `PRIVACY.md` — Privacy
 - `PROBE_ACCESS.md` — Probe Access (Runtime)

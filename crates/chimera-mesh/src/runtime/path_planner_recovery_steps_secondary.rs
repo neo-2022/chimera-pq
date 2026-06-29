@@ -1,8 +1,8 @@
 use super::*;
 
-pub(super) fn run_secondary_relax_step(
-    peers: &BTreeMap<String, MeshPeerState>,
-    candidates: &mut Vec<MeshPeerState>,
+pub(super) fn run_secondary_relax_step<'p>(
+    peers: &'p BTreeMap<String, MeshPeerState>,
+    candidates: &mut Vec<CandidateSlot<'p>>,
     stats: &mut CandidateStats,
     input: &AutoRecoveryInput<'_>,
     state: &mut AutoRecoveryState,
@@ -11,9 +11,7 @@ pub(super) fn run_secondary_relax_step(
     state.ensure_defaults();
     if candidates.is_empty() && input.auto_mode {
         state.auto_recovery_attempts = state.auto_recovery_attempts.saturating_add(1);
-        state
-            .auto_recovery_trace
-            .push("secondary:region_reliability_load");
+        append_auto_recovery_trace_step(state, "secondary:region_reliability_load");
         explain.push("auto_recovery=activated".to_string());
         explain.push("auto_recovery_relaxed_filters=region,reliability,load".to_string());
         let empty_allowed_regions = BTreeSet::new();
@@ -34,18 +32,14 @@ pub(super) fn run_secondary_relax_step(
             *stats = fallback_stats;
             explain.push("auto_recovery_result=selected_from_relaxed_filters".to_string());
             state.auto_recovery_final_result = "selected_from_relaxed_filters";
-            state
-                .auto_recovery_trace
-                .push("secondary:selected_from_relaxed_filters");
+            append_auto_recovery_trace_step(state, "secondary:selected_from_relaxed_filters");
             if !state.health_relax_applied {
                 state.health_relax_reason = "relaxed_filters_without_health";
             }
         } else {
             explain.push("auto_recovery_result=no_candidate_after_relax".to_string());
             state.auto_recovery_final_result = "no_candidate_after_relax";
-            state
-                .auto_recovery_trace
-                .push("secondary:no_candidate_after_relax");
+            append_auto_recovery_trace_step(state, "secondary:no_candidate_after_relax");
             if !state.health_relax_applied {
                 state.health_relax_reason = "relaxed_filters_no_candidate";
             }

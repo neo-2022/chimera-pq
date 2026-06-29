@@ -2,11 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::model::{
     MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, peer_priority,
+    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, MeshPublishedEndpointUpdate, peer_priority,
 };
 use crate::multipath_model::{MeshMultipathMode, MeshMultipathSchedule};
 use crate::policy::{MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode};
-use crate::policy_hints::{traffic_class_from_dps_payload, traffic_hints_from_dps_payload};
 use crate::preemptive::{
     evaluate_shadow_runtime_decision, format_confirmation_tuning, format_profile_tuning_thresholds,
     format_profile_tuning_weights, format_shadow_action, format_shadow_action_state,
@@ -42,6 +41,7 @@ mod path_planner_selection_metrics;
 mod path_planner_setup;
 mod payload_utils;
 mod peer_discovery;
+mod peer_endpoint_update;
 mod peer_health_lifecycle;
 mod peer_maintenance;
 mod peer_performance;
@@ -75,8 +75,9 @@ pub use multipath_flow::{
 };
 use multipath_rebuild_control::MeshMultipathRebuildState;
 pub use multipath_rebuild_model::{
-    MeshMultipathRebuildAction, MeshMultipathRebuildDecision, MeshMultipathRebuildPolicy,
-    MeshMultipathRebuildSignal, MeshMultipathRebuildUrgency,
+    MeshMultipathRebuildAction, MeshMultipathRebuildDecision, MeshMultipathRebuildDirtyMetadata,
+    MeshMultipathRebuildDirtyScope, MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal,
+    MeshMultipathRebuildSignalInput, MeshMultipathRebuildUrgency,
 };
 use multipath_rebuild_trigger::MeshMultipathRebuildTriggerCause;
 use multipath_schedule::{
@@ -89,7 +90,7 @@ use selection_profile::{
 };
 use status_runtime::{build_status_explain, build_status_report};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct MeshPeerMeta {
     identity_marker: u64,
     last_seen_tick: u64,
@@ -100,6 +101,32 @@ struct MeshPeerMeta {
     churn_block_events: u64,
     threshold_block_events: u64,
     last_effective_replacement_threshold: i32,
+    endpoint_generation: u64,
+    update_bootstrap_url: Option<String>,
+}
+
+impl std::fmt::Debug for MeshPeerMeta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MeshPeerMeta")
+            .field("identity_marker", &"<redacted>")
+            .field("last_seen_tick", &self.last_seen_tick)
+            .field("update_events", &self.update_events)
+            .field("replacement_events", &self.replacement_events)
+            .field("hold_events", &self.hold_events)
+            .field("degraded_events", &self.degraded_events)
+            .field("churn_block_events", &self.churn_block_events)
+            .field("threshold_block_events", &self.threshold_block_events)
+            .field(
+                "last_effective_replacement_threshold",
+                &self.last_effective_replacement_threshold,
+            )
+            .field("endpoint_generation", &self.endpoint_generation)
+            .field(
+                "update_bootstrap_url",
+                &self.update_bootstrap_url.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,7 +151,7 @@ struct CandidateStats {
     accepted_count: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct CandidateFilter<'a> {
     blocked: &'a BTreeSet<&'a str>,
     health_blocked: &'a BTreeSet<&'a str>,
@@ -134,6 +161,36 @@ struct CandidateFilter<'a> {
     profile: MeshPathProfile,
 }
 
+#[derive(Clone)]
+struct CandidateSlot<'a> {
+    peer: &'a MeshPeerState,
+    normalized_region: String,
+    selection_score: i32,
+}
+
+impl std::fmt::Debug for CandidateFilter<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CandidateFilter")
+            .field("blocked_count", &self.blocked.len())
+            .field("health_blocked_count", &self.health_blocked.len())
+            .field("allowed_region_count", &self.allowed_regions.len())
+            .field("min_reliability", &self.min_reliability)
+            .field("max_load", &self.max_load)
+            .field("profile", &self.profile)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for CandidateSlot<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CandidateSlot")
+            .field("peer", &"<redacted>")
+            .field("normalized_region", &self.normalized_region)
+            .field("selection_score", &self.selection_score)
+            .finish()
+    }
+}
+
 impl CandidateStats {
     fn rejected_total(self) -> usize {
         self.rejected_blocked
@@ -141,6 +198,14 @@ impl CandidateStats {
             .saturating_add(self.rejected_region)
             .saturating_add(self.rejected_reliability)
             .saturating_add(self.rejected_load)
+    }
+}
+
+impl CandidateSlot<'_> {
+    fn materialize_peer(&self) -> MeshPeerState {
+        let mut peer = self.peer.clone();
+        peer.selection_score = self.selection_score;
+        peer
     }
 }
 
@@ -372,14 +437,18 @@ impl MeshRuntime {
         self.last_table_enforcement_report.clone()
     }
 
-    pub fn region_distribution(&self) -> Vec<(String, usize)> {
+    fn region_distribution_counts(&self) -> BTreeMap<String, usize> {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
         for peer in self.peers.values() {
             *counts
                 .entry(normalize_region_key(&peer.region))
                 .or_insert(0) += 1;
         }
-        counts.into_iter().collect()
+        counts
+    }
+
+    pub fn region_distribution(&self) -> Vec<(String, usize)> {
+        self.region_distribution_counts().into_iter().collect()
     }
 
     pub fn set_peer_table_policy(&mut self, policy: MeshPeerTablePolicy) -> Result<(), String> {

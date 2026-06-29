@@ -4,7 +4,7 @@ use std::thread;
 use crate::{MeshDiscoveryRecord, MeshJoinRequest, MeshPathPolicy, MeshRuntime};
 
 #[test]
-fn connect_probe_uses_current_endpoint_then_fallback_ports() {
+fn connect_probe_uses_current_endpoint_then_fallback_ports() -> Result<(), String> {
     let listener = TcpListener::bind("127.0.0.1:0")
         .unwrap_or_else(|e| unreachable!("listener bind should succeed: {e}"));
     let fallback_port = listener
@@ -27,6 +27,7 @@ fn connect_probe_uses_current_endpoint_then_fallback_ports() {
     runtime
         .merge_discovery("seed-b", &records)
         .unwrap_or_else(|e| unreachable!("merge discovery should succeed: {e}"));
+    let _ = runtime.take_pending_multipath_rebuild_signal();
 
     let req = MeshJoinRequest {
         namespace: "cef-public".to_string(),
@@ -55,6 +56,15 @@ fn connect_probe_uses_current_endpoint_then_fallback_ports() {
     assert_eq!(report.attempts[1].peer_id, "peer#1");
     assert_eq!(report.attempts[1].endpoint, "endpoint#2:<redacted>");
     assert!(report.attempts[1].success);
+
+    let peer = runtime
+        .peer_snapshot()
+        .into_iter()
+        .find(|peer| peer.node_id == "node-a")
+        .ok_or_else(|| "peer missing".to_string())?;
+    assert!(matches!(peer.latency_ms, Some(latency) if latency >= 1));
+    assert_eq!(peer.throughput_mbps, None);
+
     assert!(
         report
             .explain
@@ -73,10 +83,12 @@ fn connect_probe_uses_current_endpoint_then_fallback_ports() {
     assert!(!rendered.contains(&fallback_port.to_string()));
     assert!(!report.explain.iter().any(|line| line.contains("127.0.0.1")));
     assert!(!report.explain.iter().any(|line| line.contains("node-a")));
+    assert!(runtime.pending_multipath_rebuild_signal().is_some());
+    Ok(())
 }
 
 #[test]
-fn connect_probe_reports_failed_attempts_with_errors() {
+fn connect_probe_reports_failed_attempts_with_errors() -> Result<(), String> {
     let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
         .unwrap_or_else(|e| unreachable!("runtime bootstrap should succeed: {e}"));
     runtime
@@ -91,6 +103,7 @@ fn connect_probe_reports_failed_attempts_with_errors() {
             }],
         )
         .unwrap_or_else(|e| unreachable!("merge discovery should succeed: {e}"));
+    let _ = runtime.take_pending_multipath_rebuild_signal();
     let req = MeshJoinRequest {
         namespace: "cef-public".to_string(),
         node_name: "node-client".to_string(),
@@ -123,8 +136,19 @@ fn connect_probe_reports_failed_attempts_with_errors() {
             .iter()
             .any(|line| line == "connect_probe_result=failed")
     );
+
+    let peer = runtime
+        .peer_snapshot()
+        .into_iter()
+        .find(|peer| peer.node_id == "node-a")
+        .ok_or_else(|| "peer missing".to_string())?;
+    assert_eq!(peer.latency_ms, None);
+    assert_eq!(peer.throughput_mbps, None);
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+
     let rendered = format!("{report:?}");
     assert!(!rendered.contains("node-a"));
     assert!(!rendered.contains("127.0.0.1"));
     assert!(!rendered.contains("127.0.0.1:1"));
+    Ok(())
 }

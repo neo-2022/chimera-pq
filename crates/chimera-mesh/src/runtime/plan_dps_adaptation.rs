@@ -1,15 +1,15 @@
-use super::payload_utils::has_mesh_policy_key;
 use super::*;
+use crate::dps_payload_snapshot::MeshDpsPayloadSnapshot;
 use crate::policy::{MultipathMode, TrafficClass};
-use crate::policy_hints::traffic_hints_from_dps_payload;
 
-pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut MeshPathPolicy) {
-    let Ok(hints) = traffic_hints_from_dps_payload(payload) else {
-        return;
-    };
+pub(super) fn apply_dps_traffic_hints_adaptation(
+    snapshot: &MeshDpsPayloadSnapshot,
+    policy: &mut MeshPathPolicy,
+) {
+    let hints = snapshot.traffic_hints();
 
     if let Some(class) = hints.traffic_class {
-        if !has_mesh_policy_key(payload, "mesh_require_min_reliability") {
+        if !snapshot.has_mesh_policy_key("mesh_require_min_reliability") {
             policy.require_min_reliability = match class {
                 TrafficClass::ControlDns => 95,
                 TrafficClass::WebInteractive => 85,
@@ -27,7 +27,7 @@ pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut Mes
                 TrafficClass::ControlHealth => 95,
             };
         }
-        if !has_mesh_policy_key(payload, "mesh_max_load_score") {
+        if !snapshot.has_mesh_policy_key("mesh_max_load_score") {
             policy.max_load_score = match class {
                 TrafficClass::ControlDns => 45,
                 TrafficClass::WebInteractive => 60,
@@ -45,7 +45,7 @@ pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut Mes
                 TrafficClass::ControlHealth => 50,
             };
         }
-        if !has_mesh_policy_key(payload, "mesh_max_peers") {
+        if !snapshot.has_mesh_policy_key("mesh_max_peers") {
             policy.max_peers = match class {
                 TrafficClass::ControlDns => 1,
                 TrafficClass::WebInteractive => 1,
@@ -66,7 +66,7 @@ pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut Mes
     }
 
     if let Some(mode) = hints.multipath_mode {
-        if !has_mesh_policy_key(payload, "mesh_max_peers") {
+        if !snapshot.has_mesh_policy_key("mesh_max_peers") {
             let min_peers = match mode {
                 MultipathMode::Off | MultipathMode::StandbyOnly => 1,
                 MultipathMode::FlowShard => 2,
@@ -74,7 +74,7 @@ pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut Mes
             };
             policy.max_peers = policy.max_peers.max(min_peers);
         }
-        if !has_mesh_policy_key(payload, "mesh_max_selected_per_region") {
+        if !snapshot.has_mesh_policy_key("mesh_max_selected_per_region") {
             policy.max_selected_per_region = match mode {
                 MultipathMode::Off | MultipathMode::StandbyOnly => 1,
                 MultipathMode::FlowShard => policy.max_selected_per_region.max(2),
@@ -83,7 +83,7 @@ pub(super) fn apply_dps_traffic_hints_adaptation(payload: &str, policy: &mut Mes
         }
     }
 
-    if !has_mesh_policy_key(payload, "mesh_max_selected_per_region")
+    if !snapshot.has_mesh_policy_key("mesh_max_selected_per_region")
         && policy.max_selected_per_region > policy.max_peers
     {
         policy.max_selected_per_region = policy.max_peers;

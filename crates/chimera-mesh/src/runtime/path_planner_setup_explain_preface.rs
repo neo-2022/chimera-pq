@@ -8,6 +8,7 @@ pub(super) fn append_plan_setup_preface_explain(
     explain: &mut Vec<String>,
     ctx: &PlanSetupPrefaceExplainContext<'_>,
 ) {
+    explain.reserve(16);
     let decision_control_mode = if ctx.manual_overrides.is_empty() {
         "auto"
     } else {

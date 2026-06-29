@@ -60,11 +60,20 @@ impl MeshRuntime {
         event: &MeshFailoverEvent,
     ) -> Result<MeshPathPlan, String> {
         ensure_mesh_payload_nonempty(payload)?;
-        let policy = dps_eval::policy_from_dps_payload_with_traffic_hints(payload)?;
+        let context = dps_eval::policy_and_snapshot_from_dps_payload(payload)?;
+        let policy = context.policy;
         let mut plan = self.failover_plan(request, &policy, event)?;
-        annotate_dps_payload_explain(&mut plan.explain, payload, "failover");
-        adapt_standby_shadow_from_dps(&plan.selected_peers, &mut plan.explain);
-        dps_eval::apply_dps_multipath_schedule(payload, &mut plan)?;
+        annotate_dps_payload_explain(&mut plan.explain, &context.snapshot, "failover");
+        adapt_standby_shadow_from_dps(
+            &plan.selected_peers,
+            &mut plan.explain,
+            context
+                .snapshot
+                .traffic_hints()
+                .multipath_mode
+                .map(|mode| mode.as_str()),
+        );
+        dps_eval::apply_dps_multipath_schedule(&context.snapshot, &mut plan)?;
         Ok(plan)
     }
 
@@ -84,11 +93,20 @@ impl MeshRuntime {
         health: &[MeshPeerHealth],
     ) -> Result<MeshPathPlan, String> {
         ensure_mesh_payload_nonempty(payload)?;
-        let policy = dps_eval::policy_from_dps_payload_with_traffic_hints(payload)?;
+        let context = dps_eval::policy_and_snapshot_from_dps_payload(payload)?;
+        let policy = context.policy;
         let mut plan = self.reselection_plan_with_health(request, &policy, health)?;
-        annotate_dps_payload_explain(&mut plan.explain, payload, "reselection");
-        adapt_standby_shadow_from_dps(&plan.selected_peers, &mut plan.explain);
-        dps_eval::apply_dps_multipath_schedule(payload, &mut plan)?;
+        annotate_dps_payload_explain(&mut plan.explain, &context.snapshot, "reselection");
+        adapt_standby_shadow_from_dps(
+            &plan.selected_peers,
+            &mut plan.explain,
+            context
+                .snapshot
+                .traffic_hints()
+                .multipath_mode
+                .map(|mode| mode.as_str()),
+        );
+        dps_eval::apply_dps_multipath_schedule(&context.snapshot, &mut plan)?;
         Ok(plan)
     }
 }

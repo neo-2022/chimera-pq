@@ -195,6 +195,7 @@ pub struct MeshNode {
     pub endpoint: String,
     pub invite_token: Option<String>,
     pub update_bootstrap_url: Option<String>,
+    pub endpoint_generation: Option<u64>,
     pub country: MeshNodeCountry,
     pub status: MeshNodeStatus,
     pub latency_ms: Option<f64>,
@@ -221,6 +222,7 @@ impl fmt::Debug for MeshNode {
                 "update_bootstrap_url",
                 &self.update_bootstrap_url.as_ref().map(|_| "<redacted>"),
             )
+            .field("endpoint_generation", &self.endpoint_generation)
             .field("country", &self.country)
             .field("status", &self.status)
             .field("latency_ms", &self.latency_ms)
@@ -245,6 +247,9 @@ impl MeshNode {
         }
         if let Some(update_bootstrap_url) = self.update_bootstrap_url.as_deref() {
             validate_update_bootstrap_url(update_bootstrap_url)?;
+        }
+        if matches!(self.endpoint_generation, Some(0)) {
+            return Err("mesh node endpoint_generation must be > 0".to_string());
         }
         self.country.validate()?;
         validate_optional_non_negative("latency_ms", self.latency_ms)?;

@@ -1,4 +1,4 @@
-use crate::multipath_model::MeshMultipathSchedule;
+use crate::{multipath_model::MeshMultipathSchedule, nodes_model::validate_update_bootstrap_url};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeshJoinRequest {
@@ -19,6 +19,15 @@ impl MeshJoinRequest {
 pub enum MeshJoinMode {
     InvitationOnly,
     PublicDiscovery,
+}
+
+impl MeshJoinMode {
+    pub const fn label(&self) -> &'static str {
+        match self {
+            Self::InvitationOnly => "InvitationOnly",
+            Self::PublicDiscovery => "PublicDiscovery",
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -44,6 +53,32 @@ impl MeshDiscoveryRecord {
         }
         if self.reliability_score > 100 {
             return Err("mesh discovery reliability_score must be <= 100".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct MeshPublishedEndpointUpdate {
+    pub node_id: String,
+    pub endpoint: String,
+    pub update_bootstrap_url: Option<String>,
+    pub endpoint_generation: u64,
+}
+
+impl MeshPublishedEndpointUpdate {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_label_field(&self.node_id, "mesh published endpoint node_id")?;
+        let endpoint = self.endpoint.trim();
+        if endpoint.is_empty() {
+            return Err("mesh published endpoint is empty".to_string());
+        }
+        validate_endpoint_host_port_for(endpoint, "mesh published endpoint")?;
+        if let Some(update_bootstrap_url) = self.update_bootstrap_url.as_deref() {
+            validate_update_bootstrap_url(update_bootstrap_url)?;
+        }
+        if self.endpoint_generation == 0 {
+            return Err("mesh published endpoint_generation must be > 0".to_string());
         }
         Ok(())
     }
@@ -158,54 +193,58 @@ fn validate_unit_interval_f64(value: f64, label: &str) -> Result<(), String> {
 }
 
 fn validate_endpoint_host_port(endpoint: &str) -> Result<(), String> {
+    validate_endpoint_host_port_for(endpoint, "mesh discovery endpoint")
+}
+
+fn validate_endpoint_host_port_for(endpoint: &str, label: &str) -> Result<(), String> {
     if endpoint.starts_with('[') {
-        return validate_bracketed_ipv6_endpoint(endpoint);
+        return validate_bracketed_ipv6_endpoint(endpoint, label);
     }
     let (host, port_raw) = endpoint
         .rsplit_once(':')
-        .ok_or_else(|| "mesh discovery endpoint must be in host:port format".to_string())?;
+        .ok_or_else(|| format!("{label} must be in host:port format"))?;
     if host.contains(':') {
-        return Err("mesh discovery IPv6 endpoint must use [addr]:port format".to_string());
+        return Err(format!("{label} IPv6 endpoint must use [addr]:port format"));
     }
-    validate_host_and_port(host, port_raw)
+    validate_host_and_port(host, port_raw, label)
 }
 
-fn validate_bracketed_ipv6_endpoint(endpoint: &str) -> Result<(), String> {
+fn validate_bracketed_ipv6_endpoint(endpoint: &str, label: &str) -> Result<(), String> {
     let close = endpoint
         .find(']')
-        .ok_or_else(|| "mesh discovery IPv6 endpoint is missing closing bracket".to_string())?;
+        .ok_or_else(|| format!("{label} IPv6 endpoint is missing closing bracket"))?;
     let host = &endpoint[1..close];
     let tail = &endpoint[(close + 1)..];
     let port_raw = tail
         .strip_prefix(':')
-        .ok_or_else(|| "mesh discovery endpoint must be in [addr]:port format".to_string())?;
-    validate_host_and_port(host, port_raw)
+        .ok_or_else(|| format!("{label} must be in [addr]:port format"))?;
+    validate_host_and_port(host, port_raw, label)
 }
 
-fn validate_host_and_port(host: &str, port_raw: &str) -> Result<(), String> {
+fn validate_host_and_port(host: &str, port_raw: &str, label: &str) -> Result<(), String> {
     if host.trim().is_empty() {
-        return Err("mesh discovery endpoint host is empty".to_string());
+        return Err(format!("{label} host is empty"));
     }
     if host != host.trim() {
-        return Err("mesh discovery endpoint host contains surrounding spaces".to_string());
+        return Err(format!("{label} host contains surrounding spaces"));
     }
     if host.contains(',') {
-        return Err("mesh discovery endpoint host contains comma".to_string());
+        return Err(format!("{label} host contains comma"));
     }
     if host.chars().any(char::is_whitespace) {
-        return Err("mesh discovery endpoint host contains whitespace".to_string());
+        return Err(format!("{label} host contains whitespace"));
     }
     if port_raw != port_raw.trim() {
-        return Err("mesh discovery endpoint port contains surrounding spaces".to_string());
+        return Err(format!("{label} port contains surrounding spaces"));
     }
     if port_raw.chars().any(char::is_whitespace) {
-        return Err("mesh discovery endpoint port contains whitespace".to_string());
+        return Err(format!("{label} port contains whitespace"));
     }
     let port = port_raw
         .parse::<u16>()
-        .map_err(|_| "mesh discovery endpoint port is invalid".to_string())?;
+        .map_err(|_| format!("{label} port is invalid"))?;
     if port == 0 {
-        return Err("mesh discovery endpoint port must be > 0".to_string());
+        return Err(format!("{label} port must be > 0"));
     }
     Ok(())
 }

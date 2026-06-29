@@ -1,11 +1,9 @@
 use super::*;
 #[path = "path_planner_selection_metrics_peer.rs"]
 mod peer;
-#[path = "path_planner_selection_metrics_stability.rs"]
-mod stability;
 
 use peer::build_peer_selection_summary;
-use stability::build_stability_metrics;
+use std::fmt::Write;
 
 pub(super) fn build_selection_metrics_impl(
     runtime: &MeshRuntime,
@@ -15,7 +13,8 @@ pub(super) fn build_selection_metrics_impl(
     region_cap_rejections: usize,
     effective_max_peers: usize,
 ) -> SelectionMetrics {
-    let peer = build_peer_selection_summary(selected_peers, &policy.connect_fallback_ports);
+    let peer =
+        build_peer_selection_summary(runtime, selected_peers, &policy.connect_fallback_ports);
 
     let candidates_selected = selected_peers.len();
     let candidates_rejected_total = stats.rejected_total();
@@ -61,8 +60,6 @@ pub(super) fn build_selection_metrics_impl(
         selection_headroom,
     );
 
-    let stability = build_stability_metrics(runtime, selected_peers);
-
     SelectionMetrics {
         selected_peer_ids: peer.selected_peer_ids,
         selected_peer_regions: peer.selected_peer_regions,
@@ -75,20 +72,20 @@ pub(super) fn build_selection_metrics_impl(
         selected_reliability_avg: peer.selected_reliability_avg,
         selected_load_avg: peer.selected_load_avg,
         selected_region_counts: peer.selected_region_counts,
-        selected_stability: stability.selected_stability,
-        selected_effective_thresholds: stability.selected_effective_thresholds,
-        selected_replacement_decisions: stability.selected_replacement_decisions,
-        selected_replacement_budget: stability.selected_replacement_budget,
-        effective_threshold_min: stability.effective_threshold_min,
-        effective_threshold_max: stability.effective_threshold_max,
-        stability_updates_total: stability.stability_updates_total,
-        stability_replacements_total: stability.stability_replacements_total,
-        stability_holds_total: stability.stability_holds_total,
-        stability_degraded_total: stability.stability_degraded_total,
-        stability_churn_blocks_total: stability.stability_churn_blocks_total,
-        stability_threshold_blocks_total: stability.stability_threshold_blocks_total,
-        replacement_hold_ratio_pct: stability.replacement_hold_ratio_pct,
-        replacement_budget_remaining_total: stability.replacement_budget_remaining_total,
+        selected_stability: peer.selected_stability,
+        selected_effective_thresholds: peer.selected_effective_thresholds,
+        selected_replacement_decisions: peer.selected_replacement_decisions,
+        selected_replacement_budget: peer.selected_replacement_budget,
+        effective_threshold_min: peer.effective_threshold_min,
+        effective_threshold_max: peer.effective_threshold_max,
+        stability_updates_total: peer.stability_updates_total,
+        stability_replacements_total: peer.stability_replacements_total,
+        stability_holds_total: peer.stability_holds_total,
+        stability_degraded_total: peer.stability_degraded_total,
+        stability_churn_blocks_total: peer.stability_churn_blocks_total,
+        stability_threshold_blocks_total: peer.stability_threshold_blocks_total,
+        replacement_hold_ratio_pct: peer.replacement_hold_ratio_pct,
+        replacement_budget_remaining_total: peer.replacement_budget_remaining_total,
         candidates_considered,
         candidates_selected,
         candidates_rejected_total,
@@ -141,14 +138,17 @@ fn selection_pressure_reason(
     limit_skipped: usize,
     headroom: usize,
 ) -> String {
-    format!(
+    let mut out = String::with_capacity(128);
+    let _ = write!(
+        out,
         "level={level};dominant={dominant};blocked={};health={};region={};reliability={};load={};limit_skipped={limit_skipped};headroom={headroom}",
         stats.rejected_blocked,
         stats.rejected_health,
         stats.rejected_region,
         stats.rejected_reliability,
         stats.rejected_load
-    )
+    );
+    out
 }
 
 fn selection_pressure_compact(
@@ -157,7 +157,12 @@ fn selection_pressure_compact(
     dominant: &str,
     action_hint: &str,
 ) -> String {
-    format!("level:{level};score:{score};dominant:{dominant};action:{action_hint}")
+    let mut out = String::with_capacity(64);
+    let _ = write!(
+        out,
+        "level:{level};score:{score};dominant:{dominant};action:{action_hint}"
+    );
+    out
 }
 
 fn selection_pressure_dominant(
@@ -175,17 +180,21 @@ fn selection_pressure_dominant(
 }
 
 fn dominant_rejection_reason(stats: CandidateStats) -> &'static str {
-    [
+    let mut dominant = "none";
+    let mut max_count = 0usize;
+    for (reason, count) in [
         ("blocked", stats.rejected_blocked),
         ("health", stats.rejected_health),
         ("region", stats.rejected_region),
         ("reliability", stats.rejected_reliability),
         ("load", stats.rejected_load),
-    ]
-    .into_iter()
-    .max_by_key(|(_, count)| *count)
-    .and_then(|(reason, count)| (count > 0).then_some(reason))
-    .unwrap_or("none")
+    ] {
+        if count >= max_count && count > 0 {
+            dominant = reason;
+            max_count = count;
+        }
+    }
+    dominant
 }
 
 fn selection_pressure_action_hint(dominant: &str) -> &'static str {

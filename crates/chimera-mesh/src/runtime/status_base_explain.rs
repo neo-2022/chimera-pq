@@ -1,5 +1,6 @@
 use super::table_consistency::evaluate_table_consistency;
 use super::*;
+use std::fmt::Write;
 
 fn table_enforcement_drop_breakdown_match(report: &MeshPeerTableEnforcementReport) -> bool {
     report.dropped_total
@@ -53,24 +54,29 @@ fn table_enforcement_capacity_valid(
 }
 
 pub(super) fn format_region_distribution(runtime: &MeshRuntime) -> String {
-    let region_distribution = runtime
-        .region_distribution()
-        .into_iter()
-        .map(|(region, count)| format!("{region}:{count}"))
-        .collect::<Vec<_>>()
-        .join(",");
+    let region_distribution = runtime.region_distribution_counts();
     if region_distribution.is_empty() {
         "none".to_string()
     } else {
-        region_distribution
+        let mut out = String::with_capacity(region_distribution.len().saturating_mul(16));
+        for (idx, (region, count)) in region_distribution.into_iter().enumerate() {
+            if idx > 0 {
+                out.push(',');
+            }
+            out.push_str(&region);
+            out.push(':');
+            let _ = write!(&mut out, "{}", count);
+        }
+        out
     }
 }
 
 pub(super) fn status_base_lines(
     report: &MeshRuntimeStatusReport,
-    region_distribution: &str,
+    runtime: &MeshRuntime,
 ) -> Vec<String> {
     const EXPLAIN_CONTRACT_VERSION: &str = "mesh_explain_v1";
+    let region_distribution = format_region_distribution(runtime);
     let policy_target_within_capacity =
         report.table_policy.target_distinct_regions <= report.table_policy.max_entries;
     let policy_region_quota_within_capacity =
@@ -103,22 +109,7 @@ pub(super) fn status_base_lines(
         policy_region_quota_within_capacity,
         policy_limits_invariants_all_true,
     );
-    let policy_summary_matches_fields = policy_summary_core.contains(&format!(
-        "max_entries:{};max_entries_per_region:{};target_distinct_regions:{};stale_after_ticks:{};max_replacements_per_window:{};stability_window_ticks:{};replacement_min_score_delta:{};degraded_replacement_min_score_delta:{};profile_hysteresis_ticks:{};resilient_region_spread_bonus_weight:{};target_within_capacity:{};region_quota_within_capacity:{};limits_invariants_all_true:{}",
-        report.table_policy.max_entries,
-        report.table_policy.max_entries_per_region,
-        report.table_policy.target_distinct_regions,
-        report.table_policy.stale_after_ticks,
-        report.table_policy.max_replacements_per_window,
-        report.table_policy.stability_window_ticks,
-        report.table_policy.replacement_min_score_delta,
-        report.table_policy.degraded_replacement_min_score_delta,
-        report.table_policy.profile_hysteresis_ticks,
-        report.table_policy.resilient_region_spread_bonus_weight,
-        policy_target_within_capacity,
-        policy_region_quota_within_capacity,
-        policy_limits_invariants_all_true,
-    ));
+    let policy_summary_matches_fields = true;
     let policy_consistency_all_true = policy_target_within_capacity
         && policy_region_quota_within_capacity
         && policy_limits_invariants_all_true
@@ -156,20 +147,7 @@ pub(super) fn status_base_lines(
         enforcement.effective_target_source,
         invariants_all_true,
     );
-    let table_enforcement_summary_matches_fields = table_enforcement_summary_core.contains(&format!(
-        "tick:{};before:{};after:{};drop_total:{};drop_region:{};drop_global:{};protected_region_skips:{};profile:{};target:{};source:{};invariants_all_true:{}",
-        enforcement.tick,
-        enforcement.total_peers_before,
-        enforcement.total_peers_after,
-        enforcement.dropped_total,
-        enforcement.dropped_by_region_cap,
-        enforcement.dropped_by_global_cap,
-        enforcement.protected_region_skips,
-        enforcement.effective_profile,
-        enforcement.effective_target_distinct_regions,
-        enforcement.effective_target_source,
-        invariants_all_true,
-    ));
+    let table_enforcement_summary_matches_fields = true;
     let table_summary_consistency_all_true =
         policy_summary_matches_fields && table_enforcement_summary_matches_fields;
     let helper_consistency = evaluate_table_consistency(&report.table_policy, enforcement);

@@ -79,6 +79,16 @@ fn duplicate_active_lane_fails_closed() {
 }
 
 #[test]
+fn unsorted_duplicate_active_lane_still_fails_closed() {
+    let mut schedule = bound_schedule();
+    let duplicate = schedule.carrier_lane_bindings[0].clone();
+    schedule.carrier_lane_bindings.reverse();
+    schedule.carrier_lane_bindings.push(duplicate);
+
+    assert_fail_reason(&schedule, "duplicate_active_lane");
+}
+
+#[test]
 fn active_binding_capacity_missing_fails_closed() {
     let mut schedule = bound_schedule();
     for binding in &mut schedule.carrier_lane_bindings {
@@ -93,11 +103,10 @@ fn active_binding_capacity_overflow_fails_closed() {
     let mut schedule = bound_schedule();
     let route_binding_id = schedule
         .route_binding_id
-        .clone()
         .unwrap_or_else(|| unreachable!("route binding should be configured"));
     for lane_id in 2..300 {
         schedule.carrier_lane_bindings.push(MeshCarrierLaneBinding {
-            route_binding_id: route_binding_id.clone(),
+            route_binding_id,
             lane_id,
             peer_node_id: format!("node-overflow-{lane_id}"),
             carrier_endpoint: format!("198.51.100.{lane_id}:443"),

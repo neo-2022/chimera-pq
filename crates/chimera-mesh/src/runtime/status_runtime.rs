@@ -1,5 +1,5 @@
 use super::preemptive_status_lines::status_preemptive_shadow_lines;
-use super::status_base_explain::{format_region_distribution, status_base_lines};
+use super::status_base_explain::status_base_lines;
 use super::status_report_builder::build_status_report_from_snapshot;
 use super::status_shadow_snapshot::build_shadow_status_snapshot;
 use super::*;
@@ -16,8 +16,12 @@ pub(super) fn build_status_explain(
     runtime: &MeshRuntime,
     report: &MeshRuntimeStatusReport,
 ) -> Vec<String> {
-    let region_distribution = format_region_distribution(runtime);
-    let mut lines = status_base_lines(report, &region_distribution);
+    let mut lines = status_base_lines(report, runtime);
+    lines.reserve(74);
+    lines.push(format!(
+        "status_plan_setup_discovery_table_compact={}",
+        report.plan_setup_discovery_table_compact
+    ));
     let switch_confidence_summary = format!(
         "conf={:.4};min={:.4};passed={};sample_age_ticks={}",
         report.preemptive_shadow_switch_candidate_confidence,
@@ -31,10 +35,6 @@ pub(super) fn build_status_explain(
         report.preemptive_shadow_switch_guard,
         report.preemptive_shadow_switch_guard_source
     );
-    lines.push(format!(
-        "status_plan_setup_discovery_table_compact={}",
-        report.plan_setup_discovery_table_compact
-    ));
     lines.push(format!(
         "status_preemptive_shadow_compact=stage:{};trigger:{};pri={:.2};degraded={};consistency_gate={};confidence={};reason_chain={};setup_compact={};setup_consistency={};setup_match={};setup_match_source={};plan_setup_match_source={}",
         report.preemptive_shadow_stage,

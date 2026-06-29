@@ -1,6 +1,6 @@
 use super::common::{
-    StandbyShadowDeriveInput, derive_standby_shadow_fields, explain_value,
-    redact_preemptive_switch_target, redacted_standby_target, selected_peer_ids,
+    StandbyShadowDeriveInput, StandbyShadowExplainSnapshot, derive_standby_shadow_fields,
+    redact_preemptive_switch_target, redacted_standby_target,
 };
 use super::standby_shadow::{
     resolve_mode_from_action, standby_ready_flags, standby_stage_source,
@@ -11,26 +11,19 @@ use super::*;
 pub(super) fn append_standby_shadow_explain(
     selected_peers: &[MeshPeerState],
     explain: &mut Vec<String>,
+    snapshot: &StandbyShadowExplainSnapshot,
 ) {
-    let action = explain_value(explain, "preemptive_shadow_action=").unwrap_or("hold");
-    let switch_target =
-        explain_value(explain, "preemptive_shadow_switch_target=").unwrap_or("none");
-    let should_prepare =
-        explain_value(explain, "preemptive_shadow_switch_prepare=") == Some("true");
-    let should_switch =
-        explain_value(explain, "preemptive_shadow_switch_recommend=") == Some("true");
+    let action = snapshot.action.as_deref().unwrap_or("hold");
+    let switch_target = snapshot.switch_target.as_deref().unwrap_or("none");
+    let should_prepare = snapshot.should_prepare;
+    let should_switch = snapshot.should_switch;
 
-    let selected_peer_ids = selected_peer_ids(selected_peers);
     let (standby_target, standby_target_source) =
-        standby_target_for_multipath_mode(None, switch_target, &selected_peer_ids);
-    let public_standby_target = redacted_standby_target(&standby_target, &selected_peer_ids);
+        standby_target_for_multipath_mode(None, switch_target, selected_peers);
+    let public_standby_target = redacted_standby_target(&standby_target, selected_peers);
     let standby_mode = resolve_mode_from_action(action);
-    let stage = explain_value(explain, "preemptive_shadow_stage=")
-        .unwrap_or("clear")
-        .to_string();
-    let trigger = explain_value(explain, "preemptive_shadow_trigger=")
-        .unwrap_or("none")
-        .to_string();
+    let stage = snapshot.stage.as_deref().unwrap_or("clear").to_string();
+    let trigger = snapshot.trigger.as_deref().unwrap_or("none").to_string();
 
     let standby_reason = if standby_target == "none" {
         "no_candidate"
@@ -55,7 +48,7 @@ pub(super) fn append_standby_shadow_explain(
         hot_ready,
         stage_source: &stage_source,
     });
-    redact_preemptive_switch_target(explain, &selected_peer_ids);
+    redact_preemptive_switch_target(explain, selected_peers);
     explain.push(format!("standby_shadow_mode={}", derived.mode));
     explain.push(format!("standby_shadow_target={}", derived.target));
     explain.push(format!(

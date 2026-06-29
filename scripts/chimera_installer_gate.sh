@@ -361,7 +361,7 @@ rg -n 'restart_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_co
 rg -n 'uninstall_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_uninstall_failure_guard"
 rg -n 'CHIMERA_NFT_PRIVILEGE_MODE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_nft_privilege_mode"
 rg -n 'local peer_listen="\$\{CHIMERA_PEER_EGRESS_PEER_LISTEN:-\$\{4:-0\.0\.0\.0:0\}\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_peer_listen_env_not_respected"
-rg -n 'local local_listen="\$\{CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-\$\{5:-127\.0\.0\.1:18135\}\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_local_listen_env_not_respected"
+rg -n 'local local_listen="\$\{CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-\$\{5:-127\.0\.0\.1:0\}\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_local_listen_env_not_respected"
 rg -n '^  transparent_uid="\$\(id -u\)"$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_uid_not_current_user"
 rg -n '^  transparent_gid="\$\(id -g\)"$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_gid_not_current_user"
 rg -n 'CHIMERA_TRANSPARENT_RUNTIME_UID:-\$transparent_uid' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_transparent_uid_default_not_current_user"

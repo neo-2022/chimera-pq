@@ -8,16 +8,16 @@ use super::{RELEASE_ARCHIVE_ROUTE, RELEASE_CHECKSUM_ROUTE, RELEASE_METADATA_ROUT
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct PeerUpdateMetadata {
+pub struct PeerUpdateMetadata {
     status: String,
     kind: String,
-    pub(crate) version: String,
-    pub(crate) archive: String,
-    pub(crate) checksum: String,
-    pub(crate) sha256: String,
+    pub version: String,
+    pub archive: String,
+    pub checksum: String,
+    pub sha256: String,
 }
 
-pub(crate) fn parse_peer_metadata_file(
+pub fn parse_peer_metadata_file(
     metadata_file: &Path,
     metadata_url: &str,
 ) -> Result<PeerUpdateMetadata> {

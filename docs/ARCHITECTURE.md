@@ -42,6 +42,25 @@ when the first byte is a sealed frame version, the runtime validates the outer
 envelope and forwards the sealed bytes unchanged to the next peer. The transit
 branch does not decrypt or interpret the forwarded payload.
 
+## Performance Engineering Guidelines
+
+Hot-path optimization applies only to routing and control metadata, never to
+sealed transit payload.
+
+- SoA and dense active-first storage are acceptable for bounded hot metadata
+  such as lane scores, peer health, queue state and route-plan snapshots.
+- Candidate-lane sets may be rebuilt like a neighbor list when policy,
+  topology, or performance telemetry changes.
+- SIMD is acceptable only after profiler evidence and only on contiguous
+  fixed-width metadata.
+- Compiler flags stay opt-in and measured; they are not a default release
+  substitute for evidence.
+- Any optimization that changes lane selection, admission, or rebuild policy is
+  a control-plane contract change and must preserve sealed-transit opacity,
+  fail-closed behavior, route determinism, and redacted diagnostics.
+
+See [Performance Engineering Guidelines](PERFORMANCE.md) for the canonical guide.
+
 Current implementation status (fact-based):
 
 - M0-M6 lab/verification contour is implemented and validated by project gates

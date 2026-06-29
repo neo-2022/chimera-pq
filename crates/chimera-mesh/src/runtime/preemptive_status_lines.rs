@@ -1,4 +1,4 @@
-use super::standby_status_lines::status_standby_shadow_lines;
+use super::standby_status_lines::append_status_standby_shadow_lines;
 use super::*;
 
 #[path = "preemptive_status_lines_sections.rs"]
@@ -11,6 +11,6 @@ pub(super) fn status_preemptive_shadow_lines(report: &MeshRuntimeStatusReport) -
     sections::append_status_preemptive_confirm_lines(&mut lines, report);
     sections::append_status_preemptive_validation_lines(&mut lines, report);
     sections::append_status_preemptive_tuning_lines(&mut lines, report);
-    lines.extend(status_standby_shadow_lines(report));
+    append_status_standby_shadow_lines(&mut lines, report);
     lines
 }

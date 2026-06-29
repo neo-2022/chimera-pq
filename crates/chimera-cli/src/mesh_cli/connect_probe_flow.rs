@@ -3,7 +3,9 @@ use crate::mesh_cli::options::MeshRouteExplainOptions;
 use crate::mesh_cli::route_explain_error_consts::{
     STAGE_DISCOVERY_MERGE, STAGE_PEER_SPEC, STAGE_PEER_TABLE_POLICY, STAGE_PLAN_PATH,
     STAGE_POLICY_PARSE, STAGE_RUNTIME_BOOTSTRAP, STAGE_SIMULATION_INPUT,
+    STAGE_TRANSIT_LANE_BINDINGS_EXPORT,
 };
+use chimera_carrier::peer_egress::write_transit_lane_document_from_mesh_plan;
 use chimera_mesh::{
     MeshConnectProbeReport, MeshJoinRequest, MeshPathPolicy, MeshPeerTablePolicy, MeshRuntime,
 };
@@ -86,6 +88,36 @@ pub(super) fn run_mesh_connect_probe_flow(
             stage: STAGE_PLAN_PATH,
             message: error,
         })?;
+
+    if report.success
+        && let Some(path) = options.transit_lane_bindings_out_path.as_deref()
+    {
+        let mut refreshed_plan =
+            runtime
+                .plan_path(&request, &policy)
+                .map_err(|error| MeshConnectProbeFlowError {
+                    stage: STAGE_PLAN_PATH,
+                    message: error,
+                })?;
+        if refreshed_plan
+            .multipath_schedule
+            .carrier_lane_bindings
+            .is_empty()
+        {
+            refreshed_plan = runtime
+                .plan_path_from_dps_payload(&request, &options.policy_payload)
+                .map_err(|error| MeshConnectProbeFlowError {
+                    stage: STAGE_PLAN_PATH,
+                    message: error,
+                })?;
+        }
+        write_transit_lane_document_from_mesh_plan(&refreshed_plan, path).map_err(|error| {
+            MeshConnectProbeFlowError {
+                stage: STAGE_TRANSIT_LANE_BINDINGS_EXPORT,
+                message: error,
+            }
+        })?;
+    }
 
     Ok((report, timeout_ms))
 }

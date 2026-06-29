@@ -303,6 +303,7 @@ For MVP handoff and wider lab readiness, use:
 - `docs/V1_MVP_BASELINE.sha256`
 - `docs/benchmark_baseline.json`
 - `docs/benchmark_latest.json`
+- `docs/PERFORMANCE.md`
 - `docs/RELEASE_READINESS_REPORT_RU.md`
 - `docs/SHIP_READINESS_REPORT.json`
 - `docs/SHIP_READINESS_REPORT.md`

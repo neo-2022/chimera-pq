@@ -233,3 +233,138 @@ fn score_only_strategy_still_respects_region_cap() {
             .any(|line| line.contains("selection_headroom=1"))
     );
 }
+
+#[test]
+fn path_planner_candidate_snapshot_uses_normalized_region_cap_and_keeps_raw_explain_regions() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-eu-upper".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "EU".to_string(),
+            load_score: 5,
+            reliability_score: 95,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-eu-lower".to_string(),
+            endpoint: "198.51.100.11:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 10,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-us".to_string(),
+            endpoint: "198.51.100.12:443".to_string(),
+            region: "us".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let policy = MeshPathPolicy {
+        allowed_regions: Vec::new(),
+        blocked_node_ids: Vec::new(),
+        require_min_reliability: 70,
+        max_load_score: 60,
+        max_peers: 3,
+        prefer_region_diversity: false,
+        max_selected_per_region: 1,
+        min_distinct_regions: 1,
+        path_profile_override: None,
+        multipath_mode: None,
+        multipath_demand: None,
+        connect_fallback_ports: vec![443, 8443],
+    };
+
+    let plan = runtime
+        .plan_path(&req, &policy)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(plan.selected_peers.len(), 2);
+    assert_eq!(plan.selected_peers[0].node_id, "node-eu-upper");
+    assert_eq!(plan.selected_peers[1].node_id, "node-us");
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("region_cap_rejections=1"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("candidate_distinct_regions=2"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("selected_peer_regions=EU,us"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("selected_region_counts=eu:1,us:1"))
+    );
+}
+
+#[test]
+fn path_planner_candidate_snapshot_preserves_deterministic_tie_order_by_node_id() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-z".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 10,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.11:443".to_string(),
+            region: "us".to_string(),
+            load_score: 10,
+            reliability_score: 90,
+        },
+    ];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let policy = MeshPathPolicy {
+        allowed_regions: Vec::new(),
+        blocked_node_ids: Vec::new(),
+        require_min_reliability: 70,
+        max_load_score: 60,
+        max_peers: 2,
+        prefer_region_diversity: false,
+        max_selected_per_region: 2,
+        min_distinct_regions: 1,
+        path_profile_override: None,
+        multipath_mode: None,
+        multipath_demand: None,
+        connect_fallback_ports: vec![443, 8443],
+    };
+
+    let plan = runtime
+        .plan_path(&req, &policy)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    let selected_ids: Vec<&str> = plan
+        .selected_peers
+        .iter()
+        .map(|peer| peer.node_id.as_str())
+        .collect();
+    assert_eq!(selected_ids, vec!["node-a", "node-z"]);
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("selected_peer_scores=peer#1:170,peer#2:170"))
+    );
+}

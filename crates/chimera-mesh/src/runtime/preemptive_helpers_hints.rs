@@ -65,9 +65,25 @@ pub(crate) fn format_hints_summary(
     multipath_mode: &str,
     continuity_policy: &str,
 ) -> String {
-    format!(
-        "status={status};present={present};reason={reason};multipath_mode={multipath_mode};continuity_policy={continuity_policy}"
-    )
+    let mut out = String::with_capacity(
+        status
+            .len()
+            .saturating_add(reason.len())
+            .saturating_add(multipath_mode.len())
+            .saturating_add(continuity_policy.len())
+            .saturating_add(64),
+    );
+    out.push_str("status=");
+    out.push_str(status);
+    out.push_str(";present=");
+    out.push_str(if present { "true" } else { "false" });
+    out.push_str(";reason=");
+    out.push_str(reason);
+    out.push_str(";multipath_mode=");
+    out.push_str(multipath_mode);
+    out.push_str(";continuity_policy=");
+    out.push_str(continuity_policy);
+    out
 }
 
 pub(crate) fn format_hints_summary_with_source(
@@ -77,7 +93,10 @@ pub(crate) fn format_hints_summary_with_source(
     multipath_mode: &str,
     continuity_policy: &str,
 ) -> String {
-    let summary = format_hints_summary(status, present, reason, multipath_mode, continuity_policy);
+    let mut out = format_hints_summary(status, present, reason, multipath_mode, continuity_policy);
     let source = hints_source_from_status(status);
-    format!("{summary};source={source}")
+    out.reserve(source.len().saturating_add(8));
+    out.push_str(";source=");
+    out.push_str(source);
+    out
 }

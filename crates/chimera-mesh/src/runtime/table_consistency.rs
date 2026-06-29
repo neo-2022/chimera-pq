@@ -1,6 +1,7 @@
 use crate::policy::MeshPeerTablePolicy;
 
 use super::MeshPeerTableEnforcementReport;
+use std::fmt::Write as _;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct TableConsistencyStatus {
@@ -14,19 +15,31 @@ pub(super) struct TableConsistencyStatus {
 
 impl TableConsistencyStatus {
     pub(super) fn consistency_summary(&self) -> String {
-        format!(
+        let mut out = String::with_capacity(self.runtime_consistency_gate.len().saturating_add(16));
+        let _ = write!(
+            &mut out,
             "gate={};all_true={}",
             self.runtime_consistency_gate, self.runtime_consistency_all_true
-        )
+        );
+        out
     }
 
     pub(super) fn degraded_summary(&self) -> String {
-        format!(
-            "path={};reason={};{}",
+        let mut out = String::with_capacity(
+            self.preemptive_degraded_reason
+                .len()
+                .saturating_add(self.runtime_consistency_gate.len())
+                .saturating_add(32),
+        );
+        let _ = write!(
+            &mut out,
+            "path={};reason={};gate={};all_true={}",
             self.preemptive_degraded_path,
             self.preemptive_degraded_reason,
-            self.consistency_summary()
-        )
+            self.runtime_consistency_gate,
+            self.runtime_consistency_all_true
+        );
+        out
     }
 }
 
@@ -86,23 +99,14 @@ pub(super) fn evaluate_table_consistency(
 
     let runtime_consistency_all_true =
         policy_consistency_all_true && enforcement_invariants_all_true;
-    let runtime_consistency_gate = if runtime_consistency_all_true {
-        "ok".to_string()
-    } else {
-        let mut reasons = Vec::new();
-        if !policy_consistency_all_true {
-            reasons.push("policy_consistency");
-        }
-        if !enforcement_invariants_all_true {
-            reasons.push("enforcement_invariants");
-        }
-        if reasons.is_empty() {
-            "unknown".to_string()
-        } else {
-            format!("warn:{}", reasons.join(","))
-        }
-    };
-    let preemptive_degraded_path = runtime_consistency_gate.starts_with("warn:");
+    let runtime_consistency_gate =
+        match (policy_consistency_all_true, enforcement_invariants_all_true) {
+            (true, true) => "ok".to_string(),
+            (false, false) => "warn:policy_consistency,enforcement_invariants".to_string(),
+            (false, true) => "warn:policy_consistency".to_string(),
+            (true, false) => "warn:enforcement_invariants".to_string(),
+        };
+    let preemptive_degraded_path = !runtime_consistency_all_true;
     let preemptive_degraded_reason = if preemptive_degraded_path {
         runtime_consistency_gate.clone()
     } else {
@@ -119,16 +123,40 @@ pub(super) fn evaluate_table_consistency(
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn setup_compact_consistency_summary(
     setup_compact: &str,
     consistency_gate: &str,
     degraded_path: bool,
 ) -> String {
+    let (gate_match, degraded_match) =
+        setup_compact_field_matches(setup_compact, consistency_gate, degraded_path);
     format!(
         "gate_match:{};degraded_match:{}",
-        setup_compact.contains(&format!("consistency_gate:{consistency_gate}")),
-        setup_compact.contains(&format!("degraded:{degraded_path}"))
+        gate_match, degraded_match
     )
+}
+
+fn setup_compact_field_matches(
+    setup_compact: &str,
+    consistency_gate: &str,
+    degraded_path: bool,
+) -> (bool, bool) {
+    let degraded_value = if degraded_path { "true" } else { "false" };
+    let mut gate_match = false;
+    let mut degraded_match = false;
+    for part in setup_compact.split(';') {
+        if let Some(value) = part.strip_prefix("consistency_gate:") {
+            if consistency_gate.is_empty() {
+                gate_match = true;
+            } else {
+                gate_match |= value == consistency_gate;
+            }
+        } else if let Some(value) = part.strip_prefix("degraded:") {
+            degraded_match |= value == degraded_value;
+        }
+    }
+    (gate_match, degraded_match)
 }
 
 pub(super) fn format_setup_compact_with_join_mode(
@@ -154,26 +182,18 @@ pub(super) fn format_setup_compact(
     )
 }
 
-pub(super) fn setup_compact_consistency_match(consistency_summary: &str) -> bool {
-    let mut gate_match = None;
-    let mut degraded_match = None;
-    for part in consistency_summary.split(';') {
-        if let Some(value) = part.strip_prefix("gate_match:") {
-            gate_match = Some(value == "true");
-        } else if let Some(value) = part.strip_prefix("degraded_match:") {
-            degraded_match = Some(value == "true");
-        }
-    }
-    gate_match.unwrap_or(false) && degraded_match.unwrap_or(false)
-}
-
 pub(super) fn setup_compact_consistency(
     setup_compact: &str,
     consistency_gate: &str,
     degraded_path: bool,
 ) -> (String, bool) {
-    let summary = setup_compact_consistency_summary(setup_compact, consistency_gate, degraded_path);
-    let matched = setup_compact_consistency_match(&summary);
+    let (gate_match, degraded_match) =
+        setup_compact_field_matches(setup_compact, consistency_gate, degraded_path);
+    let summary = format!(
+        "gate_match:{};degraded_match:{}",
+        gate_match, degraded_match
+    );
+    let matched = gate_match && degraded_match;
     (summary, matched)
 }
 
@@ -273,5 +293,54 @@ mod tests {
                 .starts_with("path=true;reason=warn:")
         );
         assert!(warn.degraded_summary().contains(";all_true=false"));
+    }
+
+    #[test]
+    fn setup_compact_consistency_summary_matches_fields_without_temp_strings() {
+        let setup_compact =
+            "join_mode:InvitationOnly;sources:2;entries_after:2;consistency_gate:ok;degraded:false";
+        assert_eq!(
+            setup_compact_consistency_summary(setup_compact, "ok", false),
+            "gate_match:true;degraded_match:true"
+        );
+        assert_eq!(
+            setup_compact_consistency_summary(setup_compact, "warn:policy_consistency", true),
+            "gate_match:false;degraded_match:false"
+        );
+    }
+
+    #[test]
+    fn setup_compact_consistency_returns_summary_and_match_together() {
+        let setup_compact =
+            "join_mode:InvitationOnly;sources:2;entries_after:2;consistency_gate:ok;degraded:false";
+        let (summary, matched) = setup_compact_consistency(setup_compact, "ok", false);
+        assert_eq!(summary, "gate_match:true;degraded_match:true");
+        assert!(matched);
+        let (summary, matched) =
+            setup_compact_consistency(setup_compact, "warn:policy_consistency", true);
+        assert_eq!(summary, "gate_match:false;degraded_match:false");
+        assert!(!matched);
+    }
+
+    #[test]
+    fn evaluate_table_consistency_combines_warning_reasons_in_order() {
+        let mut policy = sample_policy();
+        policy.max_entries_per_region = policy.max_entries.saturating_add(1);
+        let mut report = sample_report();
+        report.dropped_total = 3;
+        let status = evaluate_table_consistency(&policy, &report);
+        assert_eq!(
+            status.runtime_consistency_gate,
+            "warn:policy_consistency,enforcement_invariants"
+        );
+        assert!(status.preemptive_degraded_path);
+        assert_eq!(
+            status.preemptive_degraded_reason,
+            "warn:policy_consistency,enforcement_invariants"
+        );
+        assert_eq!(
+            status.degraded_summary(),
+            "path=true;reason=warn:policy_consistency,enforcement_invariants;gate=warn:policy_consistency,enforcement_invariants;all_true=false"
+        );
     }
 }

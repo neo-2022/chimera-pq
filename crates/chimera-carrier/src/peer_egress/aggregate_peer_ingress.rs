@@ -65,9 +65,9 @@ fn forward_completed_aggregate_transit_frame(
     if let Some(document) = lane_document
         && !document.is_empty()
     {
-        let plan = document.require_mesh_path_plan()?;
+        let plan = document.require_mesh_path_plan_ref()?;
         let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(frame.sealed_bytes())?;
-        let peer = pop_planned_transit_dispatch_next_hop(&plan, dispatcher, flow_key)?;
+        let peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
         return forward_peer_sealed_transit_frame_once(peer, frame, limits);
     }
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(frame.sealed_bytes())?;

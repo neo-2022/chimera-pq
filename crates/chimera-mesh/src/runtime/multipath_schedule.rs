@@ -290,9 +290,7 @@ pub(super) fn schedule_from_lanes(
         .sum();
 
     let carrier_lane_bindings = match route_binding_id.as_ref() {
-        Some(route_binding_id) => {
-            carrier_lane_bindings(selected_peers, &lanes, route_binding_id.clone())?
-        }
+        Some(route_binding_id) => carrier_lane_bindings(selected_peers, &lanes, *route_binding_id)?,
         None => Vec::new(),
     };
     let execution_status = if route_binding_id.is_some() && !carrier_lane_bindings.is_empty() {
@@ -344,7 +342,7 @@ fn carrier_lane_bindings(
                 .find(|peer| peer.node_id == lane.peer_node_id)
                 .ok_or_else(|| "mesh carrier lane binding missing selected peer".to_string())?;
             Ok(MeshCarrierLaneBinding {
-                route_binding_id: route_binding_id.clone(),
+                route_binding_id,
                 lane_id: lane.lane_id,
                 peer_node_id: lane.peer_node_id.clone(),
                 carrier_endpoint: peer.endpoint.clone(),

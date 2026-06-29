@@ -8,6 +8,10 @@ use ring::{
     signature::{Ed25519KeyPair, KeyPair},
 };
 
+use super::advertise_state::{
+    PeerUpdateAdvertiseState, read_peer_update_advertise_state,
+    read_resolved_peer_listen_from_state,
+};
 use crate::mesh_cli::nodes_inventory::{self, MeshNodesInventory, extract_flag_value};
 
 use super::basic::{selected_node_endpoint, selected_node_invite_token};
@@ -35,14 +39,13 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
             return 2;
         }
     };
-    let update_bootstrap_url =
-        match resolve_advertise_update_bootstrap_url(args, inventory, &node_id) {
-            Ok(update_bootstrap_url) => update_bootstrap_url,
-            Err(error) => {
-                eprintln!("mesh nodes advertise error: {error}");
-                return 2;
-            }
-        };
+    let update_state = match resolve_advertise_update_bootstrap_url(args, inventory, &node_id) {
+        Ok(update_state) => update_state,
+        Err(error) => {
+            eprintln!("mesh nodes advertise error: {error}");
+            return 2;
+        }
+    };
     let country_code = extract_flag_value(args, "--country-code")
         .map(str::to_string)
         .or_else(|| {
@@ -114,7 +117,8 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
         "region": &region,
         "topic": &topic,
         "invite_token": selected_node_invite_token(inventory),
-        "update_bootstrap_url": update_bootstrap_url.as_deref(),
+        "update_bootstrap_url": update_state.as_ref().map(|state| state.update_bootstrap_url.as_str()),
+        "endpoint_generation": update_state.as_ref().and_then(|state| state.endpoint_generation),
         "freshness_unix": now_unix,
         "ttl_sec": ttl_sec,
         "capabilities": ["node", "transit", "mesh"],
@@ -153,9 +157,16 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
         return 2;
     }
     println!("mesh_nodes_advertise=ok out={out_path} pubkey_out={discovery_pubkey_out}");
-    println!("mesh_nodes_advertise_endpoint={endpoint}");
-    if update_bootstrap_url.is_some() {
+    println!("mesh_nodes_advertise_endpoint=present");
+    if update_state.is_some() {
         println!("mesh_nodes_advertise_update_bootstrap_url=present");
+    }
+    if update_state
+        .as_ref()
+        .and_then(|state| state.endpoint_generation)
+        .is_some()
+    {
+        println!("mesh_nodes_advertise_endpoint_generation=present");
     }
     println!("mesh_nodes_advertise_node_id={node_id}");
     0
@@ -214,46 +225,59 @@ fn resolve_advertise_endpoint(
         }
         return Ok(endpoint.to_string());
     }
+    let state_path = extract_flag_value(args, "--state-file")
+        .map(str::to_string)
+        .or_else(|| std::env::var("CHIMERA_MESH_PEER_EGRESS_STATE_PATH").ok());
+    if let Some(state_path) = state_path
+        && let Some(endpoint) = read_resolved_peer_listen_from_state(&state_path)?
+    {
+        return Ok(endpoint);
+    }
     if let Some(endpoint) = selected_node_endpoint(inventory) {
         let endpoint = endpoint.trim();
         if !endpoint.is_empty() {
             return Ok(endpoint.to_string());
         }
     }
-    let state_path = extract_flag_value(args, "--state-file")
-        .map(str::to_string)
-        .or_else(|| std::env::var("CHIMERA_MESH_PEER_EGRESS_STATE_PATH").ok());
-    if let Some(state_path) = state_path
-        && let Ok(text) = std::fs::read_to_string(state_path)
-    {
-        for line in text.lines() {
-            if let Some(rest) = line.strip_prefix("resolved_peer_listen=") {
-                let endpoint = rest.trim();
-                if !endpoint.is_empty() {
-                    return Ok(endpoint.to_string());
-                }
-            }
-        }
-    }
-    Err("mesh nodes advertise error: cannot resolve endpoint (use --endpoint or current selected endpoint)".to_string())
+    Err(
+        "mesh nodes advertise error: cannot resolve endpoint (use --endpoint, peer egress state, or current selected endpoint)"
+            .to_string(),
+    )
 }
 
 fn resolve_advertise_update_bootstrap_url(
     args: &[String],
     inventory: &MeshNodesInventory,
     node_id: &str,
-) -> Result<Option<String>, String> {
+) -> Result<Option<PeerUpdateAdvertiseState>, String> {
     if let Some(url) = extract_flag_value(args, "--update-bootstrap-url") {
-        return validate_advertise_update_bootstrap_url(url).map(Some);
+        return validate_advertise_update_bootstrap_url(url).map(|url| {
+            Some(PeerUpdateAdvertiseState {
+                update_bootstrap_url: url,
+                endpoint_generation: None,
+            })
+        });
     }
     if let Ok(url) = std::env::var("CHIMERA_MESH_UPDATE_BOOTSTRAP_URL")
         && !url.trim().is_empty()
     {
-        return validate_advertise_update_bootstrap_url(&url).map(Some);
+        return validate_advertise_update_bootstrap_url(&url).map(|url| {
+            Some(PeerUpdateAdvertiseState {
+                update_bootstrap_url: url,
+                endpoint_generation: None,
+            })
+        });
     }
     for path in resolve_update_state_paths(args) {
-        if let Some(url) = read_update_bootstrap_url_from_state(&path)? {
-            return validate_advertise_update_bootstrap_url(&url).map(Some);
+        if let Some(state) = read_peer_update_advertise_state(&path)? {
+            return validate_advertise_update_bootstrap_url(&state.update_bootstrap_url).map(
+                |update_bootstrap_url| {
+                    Some(PeerUpdateAdvertiseState {
+                        update_bootstrap_url,
+                        endpoint_generation: state.endpoint_generation,
+                    })
+                },
+            );
         }
     }
     if let Some(node) = inventory
@@ -262,7 +286,12 @@ fn resolve_advertise_update_bootstrap_url(
         .find(|node| node.node_id.0 == node_id)
         && let Some(url) = node.update_bootstrap_url.as_deref()
     {
-        return validate_advertise_update_bootstrap_url(url).map(Some);
+        return validate_advertise_update_bootstrap_url(url).map(|update_bootstrap_url| {
+            Some(PeerUpdateAdvertiseState {
+                update_bootstrap_url,
+                endpoint_generation: node.endpoint_generation,
+            })
+        });
     }
     Ok(None)
 }
@@ -279,37 +308,7 @@ fn resolve_update_state_paths(args: &[String]) -> Vec<String> {
     {
         paths.push(path.trim().to_string());
     }
-    if let Some(path) = extract_flag_value(args, "--state-file")
-        && !path.trim().is_empty()
-    {
-        paths.push(path.to_string());
-    }
     paths
-}
-
-fn read_update_bootstrap_url_from_state(path: &str) -> Result<Option<String>, String> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("read update state failed: {error}")),
-    };
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text)
-        && let Some(url) = value
-            .get("update_bootstrap_url")
-            .and_then(serde_json::Value::as_str)
-            .filter(|value| !value.trim().is_empty())
-    {
-        return Ok(Some(url.to_string()));
-    }
-    for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("update_bootstrap_url=") {
-            let url = rest.trim();
-            if !url.is_empty() {
-                return Ok(Some(url.to_string()));
-            }
-        }
-    }
-    Ok(None)
 }
 
 fn validate_advertise_update_bootstrap_url(url: &str) -> Result<String, String> {

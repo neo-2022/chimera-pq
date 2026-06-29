@@ -34,7 +34,7 @@ impl MeshRuntime {
 
         if decision.rebuild_allowed {
             let mode = plan.multipath_schedule.mode.clone();
-            let route_binding_id = plan.multipath_schedule.route_binding_id.clone();
+            let route_binding_id = plan.multipath_schedule.route_binding_id;
             let demand = current_schedule_demand(plan)?;
             replace_multipath_schedule(plan, mode, route_binding_id, demand)?;
         }
@@ -55,7 +55,7 @@ impl MeshRuntime {
         remove_multipath_rebuild_explain(&mut plan.explain);
 
         if decision.rebuild_allowed {
-            let route_binding_id = plan.multipath_schedule.route_binding_id.clone();
+            let route_binding_id = plan.multipath_schedule.route_binding_id;
             let mut rebuilt = self.plan_path(request, planning_policy)?;
             let mode = rebuilt.multipath_schedule.mode.clone();
             let demand = current_schedule_demand(&rebuilt)?;

@@ -112,8 +112,8 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
     );
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
-    let plan = document.require_mesh_path_plan()?;
-    let selection = select_carrier_lane_from_mesh_plan(&plan, flow_key);
+    let plan = document.require_mesh_path_plan_ref()?;
+    let selection = select_carrier_lane_from_mesh_plan(plan, flow_key);
     if selection.action == chimera_mesh::MeshMultipathFlowAction::Assigned {
         let binding = selection
             .selected_binding

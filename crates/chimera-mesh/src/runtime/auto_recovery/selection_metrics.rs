@@ -10,10 +10,7 @@ mod counters;
 mod stability;
 
 pub(crate) use counters::build_candidate_selection_counters;
-pub(crate) use peer::{
-    average_selected_metric, build_selected_peer_metrics, build_selected_peer_strings,
-    build_selected_region_counts,
-};
+pub(crate) use peer::{build_selected_peer_metrics, build_selected_peer_strings, build_selected_region_counts};
 pub(crate) use region::build_region_selection_diagnostics;
 pub(crate) use stability::{
     accumulate_selected_peer_stability, build_selected_stability_metrics,

@@ -2,6 +2,8 @@ use super::*;
 
 #[path = "path_planner_selection_metrics_build.rs"]
 mod build;
+#[path = "path_planner_selection_metrics_format.rs"]
+mod format;
 
 pub(super) struct SelectionMetrics {
     pub(super) selected_peer_ids: String,

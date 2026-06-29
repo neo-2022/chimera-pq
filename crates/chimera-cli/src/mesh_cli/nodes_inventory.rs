@@ -6,7 +6,7 @@ mod state;
 use std::{collections::BTreeSet, env, fs};
 
 use chimera_config::RawConfig;
-use chimera_mesh::MeshNode;
+use chimera_mesh::{MeshNode, MeshPublishedEndpointUpdate};
 
 use bootstrap::{
     load_upstream_bootstrap_nodes, merge_cli_nodes, retain_reachable_nodes,
@@ -146,6 +146,28 @@ pub(crate) fn load_mesh_nodes_inventory(args: &[String]) -> Result<MeshNodesInve
     }
     Ok(inventory)
 }
+
+pub(crate) fn published_endpoint_updates_from_nodes(
+    nodes: &[MeshNode],
+) -> Result<Vec<MeshPublishedEndpointUpdate>, String> {
+    nodes
+        .iter()
+        .filter_map(|node| {
+            node.endpoint_generation
+                .map(|endpoint_generation| MeshPublishedEndpointUpdate {
+                    node_id: node.node_id.0.clone(),
+                    endpoint: node.endpoint.clone(),
+                    update_bootstrap_url: node.update_bootstrap_url.clone(),
+                    endpoint_generation,
+                })
+        })
+        .map(|update| {
+            update.validate()?;
+            Ok(update)
+        })
+        .collect()
+}
+
 pub(crate) fn extract_flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     args.windows(2)
         .find(|pair| pair[0] == flag)

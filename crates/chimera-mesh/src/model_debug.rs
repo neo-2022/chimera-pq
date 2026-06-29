@@ -1,4 +1,4 @@
-use crate::model::{MeshDiscoveryRecord, MeshPathPlan, MeshPeerState};
+use crate::model::{MeshDiscoveryRecord, MeshPathPlan, MeshPeerState, MeshPublishedEndpointUpdate};
 
 impl std::fmt::Debug for MeshDiscoveryRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -23,6 +23,20 @@ impl std::fmt::Debug for MeshPeerState {
             .field("latency_ms", &self.latency_ms)
             .field("throughput_mbps", &self.throughput_mbps)
             .field("selection_score", &self.selection_score)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for MeshPublishedEndpointUpdate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MeshPublishedEndpointUpdate")
+            .field("node_id", &"<redacted>")
+            .field("endpoint", &"<redacted>")
+            .field(
+                "update_bootstrap_url",
+                &self.update_bootstrap_url.as_ref().map(|_| "<redacted>"),
+            )
+            .field("endpoint_generation", &self.endpoint_generation)
             .finish()
     }
 }

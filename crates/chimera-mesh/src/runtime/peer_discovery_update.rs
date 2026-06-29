@@ -1,6 +1,7 @@
 use super::*;
 
 pub(super) struct ExistingPeerUpdateContext {
+    pub(super) unchanged_record: bool,
     pub(super) existing_score: i32,
     pub(super) incoming_score: i32,
     pub(super) degraded: bool,
@@ -12,6 +13,9 @@ pub(super) struct ExistingPeerUpdateContext {
     pub(super) previous_churn_blocks: u64,
     pub(super) previous_threshold_blocks: u64,
     pub(super) previous_identity_marker: u64,
+    pub(super) previous_endpoint_generation: u64,
+    pub(super) previous_update_bootstrap_url: Option<String>,
+    pub(super) preserve_existing_endpoint: bool,
 }
 
 pub(super) fn existing_peer_update_context(
@@ -35,7 +39,13 @@ pub(super) fn existing_peer_update_context(
     let age_since_seen =
         previous_meta.map_or(0, |meta| runtime.tick.saturating_sub(meta.last_seen_tick));
     let within_window = age_since_seen <= runtime.table_policy.stability_window_ticks;
+    let preserve_existing_endpoint = previous_meta
+        .is_some_and(|meta| meta.endpoint_generation > 0 && existing.endpoint != record.endpoint);
+    let unchanged_record = previous_meta.is_some()
+        && within_window
+        && usable_peer_metadata_matches(existing, record, preserve_existing_endpoint);
     Some(ExistingPeerUpdateContext {
+        unchanged_record,
         existing_score,
         incoming_score,
         degraded,
@@ -71,21 +81,45 @@ pub(super) fn existing_peer_update_context(
             0
         },
         previous_identity_marker: previous_meta.map_or(0, |meta| meta.identity_marker),
+        previous_endpoint_generation: previous_meta.map_or(0, |meta| meta.endpoint_generation),
+        previous_update_bootstrap_url: previous_meta
+            .and_then(|meta| meta.update_bootstrap_url.clone()),
+        preserve_existing_endpoint,
     })
+}
+
+fn usable_peer_metadata_matches(
+    existing: &MeshPeerState,
+    record: &MeshDiscoveryRecord,
+    preserve_existing_endpoint: bool,
+) -> bool {
+    (preserve_existing_endpoint || existing.endpoint == record.endpoint)
+        && existing.region == record.region
+        && existing.reliability_score == record.reliability_score
+        && existing.load_score == record.load_score
 }
 
 pub(super) fn apply_existing_peer_update(
     runtime: &mut MeshRuntime,
     record: &MeshDiscoveryRecord,
     ctx: ExistingPeerUpdateContext,
-) {
+) -> bool {
+    if ctx.unchanged_record {
+        if let Some(meta) = runtime.peer_meta.get_mut(&record.node_id) {
+            meta.last_seen_tick = runtime.tick;
+        }
+        return false;
+    }
+
     let score_gain = ctx.incoming_score.saturating_sub(ctx.existing_score);
     let churn_replacement_allowed =
         ctx.previous_replacements < runtime.table_policy.max_replacements_per_window;
 
     if score_gain >= ctx.effective_replacement_min_score_delta && churn_replacement_allowed {
         if let Some(existing) = runtime.peers.get_mut(&record.node_id) {
-            existing.endpoint = record.endpoint.clone();
+            if !ctx.preserve_existing_endpoint {
+                existing.endpoint = record.endpoint.clone();
+            }
             existing.region = record.region.clone();
             existing.reliability_score = record.reliability_score;
             existing.load_score = record.load_score;
@@ -104,9 +138,11 @@ pub(super) fn apply_existing_peer_update(
                 churn_block_events: ctx.previous_churn_blocks,
                 threshold_block_events: ctx.previous_threshold_blocks,
                 last_effective_replacement_threshold: ctx.effective_replacement_min_score_delta,
+                endpoint_generation: ctx.previous_endpoint_generation,
+                update_bootstrap_url: ctx.previous_update_bootstrap_url.clone(),
             },
         );
-        return;
+        return true;
     }
 
     let blocked_by_churn =
@@ -130,6 +166,9 @@ pub(super) fn apply_existing_peer_update(
                 .previous_threshold_blocks
                 .saturating_add(u64::from(blocked_by_threshold)),
             last_effective_replacement_threshold: ctx.effective_replacement_min_score_delta,
+            endpoint_generation: ctx.previous_endpoint_generation,
+            update_bootstrap_url: ctx.previous_update_bootstrap_url,
         },
     );
+    true
 }

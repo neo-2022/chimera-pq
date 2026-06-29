@@ -1,7 +1,15 @@
 use super::helpers::random_u64;
 use crate::mesh_cli::nodes_cmd::mesh_nodes_command;
-use crate::mesh_cli::nodes_inventory::load_mesh_nodes_inventory;
-use std::{fs, net::TcpListener};
+use crate::mesh_cli::nodes_inventory::{
+    load_mesh_nodes_inventory, published_endpoint_updates_from_nodes,
+};
+use chimera_mesh::{MeshDiscoveryRecord, MeshJoinRequest, MeshPathPolicy, MeshRuntime};
+use std::{
+    fs,
+    io::{Read, Write},
+    net::TcpListener,
+    thread,
+};
 
 #[test]
 fn nodes_autoconnect_persists_runtime_state_file() {
@@ -223,11 +231,23 @@ fn nodes_advertise_writes_update_bootstrap_url_from_state_file() {
     ));
     let mut update_state_path = std::env::temp_dir();
     update_state_path.push(format!("chimera_peer_update_state_{}.json", random_u64()));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|err| unreachable!("system clock failed: {err}"))
+        .as_secs();
     fs::write(
         &update_state_path,
-        "{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"update_bootstrap_url\":\"http://node.example:45679/chimera.sh\"}",
+        format!(
+            "{{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"listen\":\"127.0.0.1:45679\",\"base_url\":\"http://node.example:45679\",\"update_bootstrap_url\":\"http://node.example:45679/chimera.sh\",\"version\":\"1.2.3\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"endpoint_epoch\":{now}}}"
+        ),
     )
     .unwrap_or_else(|err| unreachable!("{err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&update_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod state failed: {err}"));
+    }
     let args = vec![
         "advertise".to_string(),
         "--node-id".to_string(),
@@ -250,6 +270,360 @@ fn nodes_advertise_writes_update_bootstrap_url_from_state_file() {
     let _ = fs::remove_file(out_path);
     let _ = fs::remove_file(pubkey_path);
     let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(update_state_path);
+}
+
+#[test]
+fn nodes_advertise_prefers_peer_egress_state_endpoint_over_inventory() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_peer_egress_state_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_peer_egress_state_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_peer_egress_state_{}.keypair",
+        random_u64()
+    ));
+    let mut config_path = std::env::temp_dir();
+    config_path.push(format!(
+        "chimera_mesh_discovery_peer_egress_state_{}.conf",
+        random_u64()
+    ));
+    let mut peer_egress_state_path = std::env::temp_dir();
+    peer_egress_state_path.push(format!("chimera_peer_egress_state_{}.state", random_u64()));
+    fs::write(
+        &peer_egress_state_path,
+        "mode=peer\nresolved_local_listen=127.0.0.1:11111\nresolved_peer_listen=198.51.100.44:45678\n",
+    )
+    .unwrap_or_else(|err| unreachable!("write peer egress state failed: {err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&peer_egress_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod peer egress state failed: {err}"));
+    }
+    fs::write(
+        &config_path,
+        "mesh.nodes.ids = de\nmesh.nodes.current = de\nmesh.node.de.endpoint = 198.51.100.99:54321\nmesh.node.de.country_code = DE\nmesh.node.de.country_name = Germany\nmesh.node.de.status = healthy\nmesh.node.de.observation_count = 10\n",
+    )
+    .unwrap_or_else(|err| unreachable!("write config failed: {err}"));
+    let args = vec![
+        "advertise".to_string(),
+        "--config".to_string(),
+        config_path.display().to_string(),
+        "--node-id".to_string(),
+        "node-eu-state-priority".to_string(),
+        "--state-file".to_string(),
+        peer_egress_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains("\"endpoint\":\"198.51.100.44:45678\""));
+    assert!(!body.contains("198.51.100.99:54321"));
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(config_path);
+    let _ = fs::remove_file(peer_egress_state_path);
+}
+
+#[test]
+fn nodes_advertise_publishes_runtime_endpoint_and_update_state_together() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_runtime_publish_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_runtime_publish_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_runtime_publish_{}.keypair",
+        random_u64()
+    ));
+    let mut peer_egress_state_path = std::env::temp_dir();
+    peer_egress_state_path.push(format!(
+        "chimera_peer_egress_publish_{}.state",
+        random_u64()
+    ));
+    let mut update_state_path = std::env::temp_dir();
+    update_state_path.push(format!("chimera_peer_update_publish_{}.json", random_u64()));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind listener failed: {err}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read listener addr failed: {err}"));
+    let port = addr.port();
+    assert_ne!(port, 0);
+    fs::write(
+        &peer_egress_state_path,
+        format!("mode=peer\nresolved_local_listen=127.0.0.1:{port}\nresolved_peer_listen=198.51.100.44:{port}\n"),
+    )
+    .unwrap_or_else(|err| unreachable!("write peer egress state failed: {err}"));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|err| unreachable!("system clock failed: {err}"))
+        .as_secs();
+    fs::write(
+        &update_state_path,
+        format!(
+            "{{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"listen\":\"127.0.0.1:{port}\",\"base_url\":\"http://node.example:{port}\",\"update_bootstrap_url\":\"http://node.example:{port}/chimera.sh\",\"version\":\"1.2.3\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"endpoint_epoch\":{now},\"endpoint_generation\":4}}"
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write peer update state failed: {err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&peer_egress_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod peer egress state failed: {err}"));
+        fs::set_permissions(&update_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod update state failed: {err}"));
+    }
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-runtime-publish".to_string(),
+        "--state-file".to_string(),
+        peer_egress_state_path.display().to_string(),
+        "--update-state-file".to_string(),
+        update_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains(&format!("\"endpoint\":\"198.51.100.44:{port}\"")));
+    assert!(body.contains(&format!(
+        "\"update_bootstrap_url\":\"http://node.example:{port}/chimera.sh\""
+    )));
+    assert!(body.contains("\"endpoint_generation\":4"));
+    assert!(!body.contains(":0"));
+    assert!(!body.contains("host_header/chimera.sh"));
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(peer_egress_state_path);
+    let _ = fs::remove_file(update_state_path);
+}
+
+fn serve_json_once(body: String) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind http listener failed: {err}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read http listener addr failed: {err}"));
+    thread::spawn(move || {
+        let (mut stream, _) = listener
+            .accept()
+            .unwrap_or_else(|err| unreachable!("accept failed: {err}"));
+        let mut buffer = [0u8; 1024];
+        let _ = stream.read(&mut buffer);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream
+            .write_all(response.as_bytes())
+            .unwrap_or_else(|err| unreachable!("write response failed: {err}"));
+    });
+    format!("http://{addr}/nodes")
+}
+
+#[test]
+fn nodes_private_state_advertise_discovery_update_reaches_runtime_planner() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_causality_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_causality_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_causality_{}.keypair",
+        random_u64()
+    ));
+    let mut peer_egress_state_path = std::env::temp_dir();
+    peer_egress_state_path.push(format!(
+        "chimera_peer_egress_causality_{}.state",
+        random_u64()
+    ));
+    let mut update_state_path = std::env::temp_dir();
+    update_state_path.push(format!(
+        "chimera_peer_update_causality_{}.json",
+        random_u64()
+    ));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind listener failed: {err}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read listener addr failed: {err}"));
+    let port = addr.port();
+    assert_ne!(port, 0);
+    let old_endpoint = "198.51.100.40:443";
+    let new_endpoint = format!("198.51.100.44:{port}");
+    let update_url = format!("http://node.example:{port}/chimera.sh");
+    fs::write(
+        &peer_egress_state_path,
+        format!(
+            "mode=peer\nresolved_local_listen=127.0.0.1:{port}\nresolved_peer_listen={new_endpoint}\n"
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write peer egress state failed: {err}"));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|err| unreachable!("system clock failed: {err}"))
+        .as_secs();
+    fs::write(
+        &update_state_path,
+        format!(
+            "{{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"listen\":\"127.0.0.1:{port}\",\"base_url\":\"http://node.example:{port}\",\"update_bootstrap_url\":\"{update_url}\",\"version\":\"1.2.3\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"endpoint_epoch\":{now},\"endpoint_generation\":12}}"
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write peer update state failed: {err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&peer_egress_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod peer egress state failed: {err}"));
+        fs::set_permissions(&update_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod update state failed: {err}"));
+    }
+    let advertise_args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-causality".to_string(),
+        "--state-file".to_string(),
+        peer_egress_state_path.display().to_string(),
+        "--update-state-file".to_string(),
+        update_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&advertise_args), 0);
+    let artifact = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(artifact.contains(&format!("\"endpoint\":\"{new_endpoint}\"")));
+    assert!(artifact.contains(&format!("\"update_bootstrap_url\":\"{update_url}\"")));
+    assert!(artifact.contains("\"endpoint_generation\":12"));
+
+    let pubkey = fs::read_to_string(&pubkey_path).unwrap_or_else(|err| unreachable!("{err}"));
+    let discovery_url = serve_json_once(artifact);
+    let discovery_args = vec![
+        "--probe-timeout-ms".to_string(),
+        "200".to_string(),
+        "--discovery-url".to_string(),
+        discovery_url,
+        "--discovery-pubkey".to_string(),
+        pubkey,
+    ];
+    let inventory =
+        load_mesh_nodes_inventory(&discovery_args).unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(inventory.nodes.len(), 1);
+    assert_eq!(inventory.nodes[0].endpoint, new_endpoint);
+    assert_eq!(
+        inventory.nodes[0].update_bootstrap_url.as_deref(),
+        Some(update_url.as_str())
+    );
+    assert_eq!(inventory.nodes[0].endpoint_generation, Some(12));
+    let endpoint_updates =
+        published_endpoint_updates_from_nodes(&inventory.nodes).unwrap_or_else(|err| {
+            unreachable!("published endpoint updates should build from discovery inventory: {err}")
+        });
+    assert_eq!(endpoint_updates.len(), 1);
+    assert_eq!(endpoint_updates[0].endpoint, new_endpoint);
+    assert_eq!(endpoint_updates[0].endpoint_generation, 12);
+
+    let mut runtime =
+        MeshRuntime::bootstrap("mesh-nodes", "seed-a").unwrap_or_else(|err| unreachable!("{err}"));
+    runtime
+        .merge_discovery(
+            "seed-b",
+            &[MeshDiscoveryRecord {
+                node_id: "node-eu-causality".to_string(),
+                endpoint: old_endpoint.to_string(),
+                region: "DE".to_string(),
+                load_score: 1,
+                reliability_score: 99,
+            }],
+        )
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    let request = MeshJoinRequest {
+        namespace: "mesh-nodes".to_string(),
+        node_name: "probe".to_string(),
+        invite_token: None,
+    };
+    let policy = MeshPathPolicy::default_auto();
+    let before_plan = runtime
+        .plan_path(&request, &policy)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(before_plan.selected_peers[0].endpoint, old_endpoint);
+
+    runtime
+        .merge_published_endpoint_updates("discovery-causality", &endpoint_updates)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    let signal = runtime
+        .pending_multipath_rebuild_signal()
+        .unwrap_or_else(|| unreachable!("endpoint update must mark planner rebuild"));
+    assert_eq!(signal.reason(), "published_endpoint_changed");
+    assert_eq!(signal.affected_peer_count(), 1);
+    let after_plan = runtime
+        .plan_path(&request, &policy)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(after_plan.selected_peers[0].endpoint, new_endpoint);
+
+    runtime
+        .merge_published_endpoint_updates("discovery-causality", &endpoint_updates)
+        .unwrap_or_else(|err| unreachable!("identical update must be no-op: {err}"));
+    let identical_plan = runtime
+        .plan_path(&request, &policy)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(identical_plan.selected_peers[0].endpoint, new_endpoint);
+
+    let stale_update = chimera_mesh::MeshPublishedEndpointUpdate {
+        node_id: "node-eu-causality".to_string(),
+        endpoint: old_endpoint.to_string(),
+        update_bootstrap_url: None,
+        endpoint_generation: 11,
+    };
+    runtime
+        .merge_published_endpoint_updates("discovery-causality", &[stale_update])
+        .unwrap_or_else(|err| unreachable!("stale update should be ignored: {err}"));
+    let stale_plan = runtime
+        .plan_path(&request, &policy)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(stale_plan.selected_peers[0].endpoint, new_endpoint);
+
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(peer_egress_state_path);
     let _ = fs::remove_file(update_state_path);
 }
 

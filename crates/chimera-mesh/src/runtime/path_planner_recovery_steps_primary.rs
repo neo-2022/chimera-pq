@@ -1,8 +1,8 @@
 use super::*;
 
-pub(super) fn run_primary_health_step(
-    peers: &BTreeMap<String, MeshPeerState>,
-    candidates: &mut Vec<MeshPeerState>,
+pub(super) fn run_primary_health_step<'p>(
+    peers: &'p BTreeMap<String, MeshPeerState>,
+    candidates: &mut Vec<CandidateSlot<'p>>,
     stats: &mut CandidateStats,
     input: &AutoRecoveryInput<'_>,
     state: &mut AutoRecoveryState,
@@ -15,7 +15,7 @@ pub(super) fn run_primary_health_step(
         && !input.health_blocked_all.is_empty()
     {
         state.auto_recovery_attempts = state.auto_recovery_attempts.saturating_add(1);
-        state.auto_recovery_trace.push("primary:health");
+        append_auto_recovery_trace_step(state, "primary:health");
         explain.push("auto_recovery=activated".to_string());
         explain.push("auto_recovery_relaxed_filters=health".to_string());
         let empty_health_blocked = BTreeSet::new();
@@ -39,16 +39,12 @@ pub(super) fn run_primary_health_step(
             state.health_relax_reason = "resilient_health_relax";
             state.health_relax_stage = "primary";
             state.auto_recovery_final_result = "selected_from_relaxed_health";
-            state
-                .auto_recovery_trace
-                .push("primary:selected_from_relaxed_health");
+            append_auto_recovery_trace_step(state, "primary:selected_from_relaxed_health");
         } else {
             explain.push("auto_recovery_result=no_candidate_after_relax_health".to_string());
             state.health_relax_reason = "relax_attempt_no_gain";
             state.auto_recovery_final_result = "no_candidate_after_relax_health";
-            state
-                .auto_recovery_trace
-                .push("primary:no_candidate_after_relax_health");
+            append_auto_recovery_trace_step(state, "primary:no_candidate_after_relax_health");
         }
     } else if !input.auto_mode {
         state.health_relax_reason = "manual_override_disabled";

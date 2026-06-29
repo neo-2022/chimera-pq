@@ -154,6 +154,18 @@ fn plan_auto_resilient_can_fill_capacity_with_health_relax() {
         .plan_path(&req, &MeshPathPolicy::default_auto())
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(plan.selected_peers.len(), 2);
+    let degraded = plan
+        .selected_peers
+        .iter()
+        .find(|peer| peer.node_id == "node-degraded")
+        .unwrap_or_else(|| unreachable!("degraded peer should be selected after health relax"));
+    let healthy = plan
+        .selected_peers
+        .iter()
+        .find(|peer| peer.node_id == "node-healthy")
+        .unwrap_or_else(|| unreachable!("healthy peer should remain selected"));
+    assert_eq!(degraded.selection_score, 265);
+    assert_eq!(healthy.selection_score, 245);
     assert!(
         plan.explain
             .iter()

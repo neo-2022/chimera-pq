@@ -15,21 +15,28 @@ impl MeshRuntime {
             validated.push((item.node_id.clone(), item.latency_ms, item.throughput_mbps));
         }
         let before_fingerprint = self.rebuild_trigger_fingerprint();
+        let mut affected_peer_count = 0_usize;
         for (node_id, latency_ms, throughput_mbps) in validated {
             let peer = self
                 .peers
                 .get_mut(&node_id)
                 .ok_or_else(|| "mesh peer performance references unknown node".to_string())?;
+            let mut changed = false;
             if let Some(latency_ms) = latency_ms {
+                changed |= peer.latency_ms != Some(latency_ms);
                 peer.latency_ms = Some(latency_ms);
             }
             if let Some(throughput_mbps) = throughput_mbps {
+                changed |= peer.throughput_mbps != Some(throughput_mbps);
                 peer.throughput_mbps = Some(throughput_mbps);
             }
+            affected_peer_count = affected_peer_count.saturating_add(usize::from(changed));
         }
-        self.mark_pending_multipath_rebuild(
+        self.mark_pending_multipath_rebuild_with_dirty_scope(
             MeshMultipathRebuildTriggerCause::PeerPerformanceChanged,
             before_fingerprint,
+            MeshMultipathRebuildDirtyScope::PeerSet,
+            affected_peer_count,
         )?;
         Ok(())
     }
@@ -76,6 +83,39 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("unknown node"));
+        Ok(())
+    }
+
+    #[test]
+    fn repeated_peer_performance_values_do_not_mark_extra_pending_rebuild() -> Result<(), String> {
+        let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
+        runtime.merge_discovery(
+            "seed-b",
+            &[MeshDiscoveryRecord {
+                node_id: "node-a".to_string(),
+                endpoint: "198.51.100.31:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 20,
+                reliability_score: 90,
+            }],
+        )?;
+
+        let _ = runtime.take_pending_multipath_rebuild_signal();
+        runtime.update_peer_performance(&[MeshPeerPerformance {
+            node_id: "node-a".to_string(),
+            latency_ms: Some(30),
+            throughput_mbps: Some(400),
+        }])?;
+        assert!(runtime.pending_multipath_rebuild_signal().is_some());
+        let _ = runtime.take_pending_multipath_rebuild_signal();
+
+        runtime.update_peer_performance(&[MeshPeerPerformance {
+            node_id: "node-a".to_string(),
+            latency_ms: Some(30),
+            throughput_mbps: Some(400),
+        }])?;
+
+        assert!(runtime.pending_multipath_rebuild_signal().is_none());
         Ok(())
     }
 

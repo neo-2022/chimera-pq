@@ -34,31 +34,14 @@ run_check endpoint_probe_side_b bash scripts/mesh_launch_preflight_endpoint_prob
 
 if (( status == 0 )); then
   echo "mesh launch preflight ready hint: READY"
-  echo "next: just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard"
+  echo "next: just mesh-launch-preflight-autopilot"
   exit 0
 fi
 
-# Context hint for the most common blocker.
-set -a
-# shellcheck disable=SC1090
-source "$side_a_env"
-set +a
-side_a_endpoint="${CHIMERA_MESH_REMOTE_ENDPOINT:-}"
-
-set -a
-# shellcheck disable=SC1090
-source "$side_b_env"
-set +a
-side_b_endpoint="${CHIMERA_MESH_REMOTE_ENDPOINT:-}"
-
-if [[ "$side_a_endpoint" =~ ^198\.51\.100\. || "$side_a_endpoint" =~ ^203\.0\.113\. || "$side_a_endpoint" =~ ^192\.0\.2\. ]]; then
-  echo "hint: side_a uses a documentation placeholder endpoint: $side_a_endpoint"
-  echo "hint: replace CHIMERA_MESH_REMOTE_ENDPOINT in $side_a_env with real side_b host:port"
-fi
-if [[ "$side_b_endpoint" =~ ^198\.51\.100\. || "$side_b_endpoint" =~ ^203\.0\.113\. || "$side_b_endpoint" =~ ^192\.0\.2\. ]]; then
-  echo "hint: side_b uses a documentation placeholder endpoint: $side_b_endpoint"
-  echo "hint: replace CHIMERA_MESH_REMOTE_ENDPOINT in $side_b_env with real side_a host:port"
-fi
+echo "hint: run just mesh-launch-preflight-autopilot"
+echo "hint: auto-bind resolves current endpoints from local signed discovery snapshot, published runtime state, then inventory/runtime state"
+echo "hint: manual <host:port> helpers are fallback only after automatic sources are unavailable"
+echo "hint: if that still fails, check CHIMERA_MESH_DISCOVERY_SNAPSHOT, CHIMERA_MESH_NODES_CONFIG and the side_a/side_b env files"
 
 echo "mesh launch preflight ready hint: NOT READY"
 exit 1

@@ -29,8 +29,8 @@ pub(crate) fn forward_peer_sealed_transit_with_lane_document_and_limits(
     first: TransitRelayFrame,
     limits: TransitRelayLimits,
 ) -> Result<(), String> {
-    let plan = document.require_mesh_path_plan()?;
+    let plan = document.require_mesh_path_plan_ref()?;
     forward_peer_sealed_transit_to_planned_next_hop_with_limits(
-        source, &plan, dispatcher, first, limits,
+        source, plan, dispatcher, first, limits,
     )
 }

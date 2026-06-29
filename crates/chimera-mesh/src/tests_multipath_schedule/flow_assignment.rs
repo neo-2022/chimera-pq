@@ -78,6 +78,37 @@ fn different_flows_spread_across_active_lanes() {
 }
 
 #[test]
+fn unsorted_active_bindings_preserve_lane_selection_via_sorted_fallback() {
+    let runtime = runtime_with_peers(vec![
+        record("node-a", "198.51.100.31:443", "eu", 10, 95),
+        record("node-b", "198.51.100.32:443", "eu", 12, 93),
+    ]);
+    let mut plan = runtime
+        .plan_path_from_dps_payload(
+            &request(),
+            concat!(
+                "mesh_allowed_regions=eu;",
+                "mesh_max_peers=2;",
+                "mesh_max_selected_per_region=2;",
+                "mesh_multipath_mode=flow_shard;",
+                "mesh_route_binding_id=7109"
+            ),
+        )
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+    let key = MeshMultipathFlowKey::from_stable_hash(0);
+    let baseline = plan_multipath_flow(&plan.multipath_schedule, key);
+
+    plan.multipath_schedule.carrier_lane_bindings.reverse();
+    let fallback = plan_multipath_flow(&plan.multipath_schedule, key);
+
+    assert_eq!(baseline.action, MeshMultipathFlowAction::Assigned);
+    assert_eq!(baseline.selected_lane_id, Some(0));
+    assert_eq!(fallback.action, MeshMultipathFlowAction::Assigned);
+    assert_eq!(fallback.selected_lane_id, baseline.selected_lane_id);
+    assert_eq!(fallback.reason, "active_carrier_binding_selected");
+}
+
+#[test]
 fn standby_lane_is_not_selected_for_flow_assignment() {
     let payload = concat!(
         "mesh_allowed_regions=eu;",
@@ -252,7 +283,6 @@ fn active_capacity_over_transit_budget_fails_closed() {
     let route_binding_id = plan
         .multipath_schedule
         .route_binding_id
-        .clone()
         .unwrap_or_else(|| unreachable!("route binding should be configured"));
     plan.multipath_schedule
         .carrier_lane_bindings

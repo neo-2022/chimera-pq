@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
 
-use super::format::{parse_role, parse_u8_field};
-use super::registration::{parse_transit_lane_registrations, render_transit_lane_registrations};
+use super::format::{parse_role, parse_u8_field, split_comma_fields};
+use super::registration::render_transit_lane_registrations;
 use super::snapshot_draft::TransitLanePlanSnapshotDraft;
 use super::snapshot_parse::parse_transit_lane_plan_snapshot_line;
 use super::snapshot_render::render_transit_lane_plan_snapshot;
@@ -9,16 +10,65 @@ use super::{TransitLaneDocument, TransitLanePlanSnapshot};
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 
-fn render_transit_lane_document_rows(
+pub fn render_transit_lane_document(document: &TransitLaneDocument) -> Result<String, String> {
+    if document.is_empty() {
+        return Err("transit lane document is empty".to_string());
+    }
+
+    let mut output = String::from("# chimera_transit_lane_document=v1\n");
+    if let Some(snapshot) = document.plan_snapshot.as_ref() {
+        render_transit_lane_plan_snapshot(snapshot.plan(), &mut output)?;
+        if snapshot_needs_separator(document) {
+            output.push('\n');
+        }
+        if !document.registrations.is_empty() {
+            render_transit_lane_document_rows_into(&mut output, &document.registrations)?;
+        }
+    } else if !document.registrations.is_empty() {
+        output.push_str(&render_transit_lane_registrations(&document.registrations)?);
+    }
+    Ok(output)
+}
+
+pub fn parse_transit_lane_document(input: &str) -> Result<TransitLaneDocument, String> {
+    let mut draft = TransitLanePlanSnapshotDraft::default();
+    let mut row_lines = Vec::new();
+
+    for (index, raw_line) in input.lines().enumerate() {
+        let line = raw_line.trim_end_matches('\r');
+        if line.trim().is_empty() {
+            continue;
+        }
+        if parse_transit_lane_plan_snapshot_line(line, &mut draft)? {
+            continue;
+        }
+        row_lines.push((index, line));
+    }
+
+    let plan_snapshot = draft.finish()?;
+    let registrations = if plan_snapshot.is_some() {
+        parse_transit_lane_document_row_lines(&row_lines)?
+    } else {
+        parse_transit_lane_registration_row_lines(&row_lines)?
+    };
+    if let Some(plan) = plan_snapshot.as_ref() {
+        validate_transit_lane_document_rows_match_plan(&registrations, plan)?;
+    }
+    Ok(TransitLaneDocument::new(
+        registrations,
+        plan_snapshot.map(TransitLanePlanSnapshot::new),
+    ))
+}
+
+fn render_transit_lane_document_rows_into(
+    output: &mut String,
     registrations: &[TransitLaneRegistration],
-) -> Result<String, String> {
+) -> Result<(), String> {
     if registrations.is_empty() {
         return Err("sealed transit lane document rows are empty".to_string());
     }
-    let mut output =
-        String::from("# route_id,lane_index,endpoint,role,weight_pct,capacity_weight_pct\n");
+    output.push_str("# route_id,lane_index,endpoint,role,weight_pct,capacity_weight_pct\n");
     for registration in registrations {
-        let route_id = registration.binding().route_id().get();
         let lane_index = registration
             .binding()
             .lane_id()
@@ -34,131 +84,142 @@ fn render_transit_lane_document_rows(
         let capacity_weight_pct = registration.capacity_weight_pct().ok_or_else(|| {
             "sealed transit lane document row missing capacity weight pct".to_string()
         })?;
-        output.push_str(&format!(
-            "{route_id},{lane_index},{},{},{},{}\n",
+        append_document_row_fields(
+            output,
+            registration.binding().route_id().get(),
+            lane_index,
             registration.endpoint(),
             role.as_str(),
             weight_pct,
-            capacity_weight_pct
-        ));
+            capacity_weight_pct,
+        )?;
     }
-    Ok(output)
+    Ok(())
 }
 
-fn parse_transit_lane_document_rows(input: &str) -> Result<Vec<TransitLaneRegistration>, String> {
-    let mut registrations = Vec::new();
+fn append_document_row_fields(
+    output: &mut String,
+    route_id: u64,
+    lane_index: u16,
+    endpoint: &str,
+    role: &str,
+    weight_pct: u8,
+    capacity_weight_pct: u8,
+) -> Result<(), String> {
+    if endpoint.contains(',') || endpoint.contains('\n') || endpoint.contains('\r') {
+        return Err("sealed transit lane endpoint contains invalid separator".to_string());
+    }
+    let _ = writeln!(
+        output,
+        "{route_id},{lane_index},{endpoint},{role},{weight_pct},{capacity_weight_pct}"
+    );
+    Ok(())
+}
+
+fn parse_transit_lane_document_row_lines(
+    rows: &[(usize, &str)],
+) -> Result<Vec<TransitLaneRegistration>, String> {
+    let mut registrations = Vec::with_capacity(rows.len());
     let mut seen = BTreeSet::new();
-    for (index, line) in input.lines().enumerate() {
+    for (index, line) in rows {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let parts: Vec<&str> = line.split(',').map(str::trim).collect();
-        let registration = match parts.len() {
-            3 => {
-                let route_id = parts[0].parse::<u64>().map_err(|_| {
-                    format!("sealed transit route id invalid on line {}", index + 1)
-                })?;
-                let lane_index = parts[1].parse::<usize>().map_err(|_| {
-                    format!("sealed transit lane index invalid on line {}", index + 1)
-                })?;
-                let binding = TransitPathBinding::new(
-                    TransitRouteId::new(route_id)?,
-                    TransitLaneId::from_zero_based_lane_index(lane_index)?,
-                );
-                if !seen.insert(binding) {
-                    return Err("sealed transit path binding ambiguous".to_string());
-                }
-                TransitLaneRegistration::new(binding, parts[2].to_string())?
-            }
-            6 => {
-                let route_id = parts[0].parse::<u64>().map_err(|_| {
-                    format!("sealed transit route id invalid on line {}", index + 1)
-                })?;
-                let lane_index = parts[1].parse::<usize>().map_err(|_| {
-                    format!("sealed transit lane index invalid on line {}", index + 1)
-                })?;
-                let binding = TransitPathBinding::new(
-                    TransitRouteId::new(route_id)?,
-                    TransitLaneId::from_zero_based_lane_index(lane_index)?,
-                );
-                if !seen.insert(binding) {
-                    return Err("sealed transit path binding ambiguous".to_string());
-                }
-                TransitLaneRegistration::new_with_lane_plan(
-                    binding,
-                    parts[2].to_string(),
-                    Some(parse_role(parts[3])?),
-                    Some(parse_u8_field(
-                        parts[4],
-                        "sealed transit lane document row",
-                    )?),
-                    Some(parse_u8_field(
-                        parts[5],
-                        "sealed transit lane document row",
-                    )?),
-                )?
-            }
-            _ => {
-                return Err(format!(
-                    "sealed transit lane document row {} must be route_id,lane_index,endpoint[,role,weight_pct,capacity_weight_pct]",
-                    index + 1
-                ));
-            }
-        };
+        let registration = parse_transit_lane_document_row(line, *index, &mut seen)?;
         registrations.push(registration);
     }
     Ok(registrations)
 }
 
-pub fn render_transit_lane_document(document: &TransitLaneDocument) -> Result<String, String> {
-    if document.is_empty() {
-        return Err("transit lane document is empty".to_string());
-    }
-
-    let mut output = String::from("# chimera_transit_lane_document=v1\n");
-    if let Some(snapshot) = document.plan_snapshot.as_ref() {
-        render_transit_lane_plan_snapshot(snapshot.plan(), &mut output)?;
-        if snapshot_needs_separator(document) {
-            output.push('\n');
+fn parse_transit_lane_registration_row_lines(
+    rows: &[(usize, &str)],
+) -> Result<Vec<TransitLaneRegistration>, String> {
+    let mut registrations = Vec::with_capacity(rows.len());
+    let mut seen = BTreeSet::new();
+    for (index, row) in rows {
+        let row = row.trim();
+        if row.is_empty() || row.starts_with('#') {
+            continue;
         }
-        if !document.registrations.is_empty() {
-            output.push_str(&render_transit_lane_document_rows(&document.registrations)?);
-        }
-    } else if !document.registrations.is_empty() {
-        output.push_str(&render_transit_lane_registrations(&document.registrations)?);
+        let registration = parse_transit_lane_registration_row(row, *index, &mut seen)?;
+        registrations.push(registration);
     }
-    Ok(output)
+    Ok(registrations)
 }
 
-pub fn parse_transit_lane_document(input: &str) -> Result<TransitLaneDocument, String> {
-    let mut draft = TransitLanePlanSnapshotDraft::default();
-    let mut row_lines = Vec::new();
-
-    for raw_line in input.lines() {
-        let line = raw_line.trim_end_matches('\r');
-        if line.trim().is_empty() {
-            continue;
-        }
-        if parse_transit_lane_plan_snapshot_line(line, &mut draft)? {
-            continue;
-        }
-        row_lines.push(line.to_string());
+fn parse_transit_lane_document_row(
+    line: &str,
+    zero_based_line_index: usize,
+    seen: &mut BTreeSet<TransitPathBinding>,
+) -> Result<TransitLaneRegistration, String> {
+    if let Some(parts) = split_comma_fields::<3>(line) {
+        let binding = parse_row_binding(parts[0], parts[1], zero_based_line_index, seen)?;
+        return TransitLaneRegistration::new(binding, parts[2].to_string());
     }
-
-    let plan_snapshot = draft.finish()?;
-    let registrations = if plan_snapshot.is_some() {
-        parse_transit_lane_document_rows(&row_lines.join("\n"))?
-    } else {
-        parse_transit_lane_registrations(&row_lines.join("\n"))?
-    };
-    if let Some(plan) = plan_snapshot.as_ref() {
-        validate_transit_lane_document_rows_match_plan(&registrations, plan)?;
+    if let Some(parts) = split_comma_fields::<6>(line) {
+        let binding = parse_row_binding(parts[0], parts[1], zero_based_line_index, seen)?;
+        return TransitLaneRegistration::new_with_lane_plan(
+            binding,
+            parts[2].to_string(),
+            Some(parse_role(parts[3])?),
+            Some(parse_u8_field(
+                parts[4],
+                "sealed transit lane document row",
+            )?),
+            Some(parse_u8_field(
+                parts[5],
+                "sealed transit lane document row",
+            )?),
+        );
     }
-    Ok(TransitLaneDocument::new(
-        registrations,
-        plan_snapshot.map(TransitLanePlanSnapshot::new),
+    Err(format!(
+        "sealed transit lane document row {} must be route_id,lane_index,endpoint[,role,weight_pct,capacity_weight_pct]",
+        zero_based_line_index + 1
     ))
+}
+
+fn parse_row_binding(
+    route_id: &str,
+    lane_index: &str,
+    zero_based_line_index: usize,
+    seen: &mut BTreeSet<TransitPathBinding>,
+) -> Result<TransitPathBinding, String> {
+    let route_id = route_id.parse::<u64>().map_err(|_| {
+        format!(
+            "sealed transit route id invalid on line {}",
+            zero_based_line_index + 1
+        )
+    })?;
+    let lane_index = lane_index.parse::<usize>().map_err(|_| {
+        format!(
+            "sealed transit lane index invalid on line {}",
+            zero_based_line_index + 1
+        )
+    })?;
+    let binding = TransitPathBinding::new(
+        TransitRouteId::new(route_id)?,
+        TransitLaneId::from_zero_based_lane_index(lane_index)?,
+    );
+    if !seen.insert(binding) {
+        return Err("sealed transit path binding ambiguous".to_string());
+    }
+    Ok(binding)
+}
+
+fn parse_transit_lane_registration_row(
+    line: &str,
+    zero_based_line_index: usize,
+    seen: &mut BTreeSet<TransitPathBinding>,
+) -> Result<TransitLaneRegistration, String> {
+    let Some(parts) = split_comma_fields::<3>(line) else {
+        return Err(format!(
+            "sealed transit lane binding line {} must be route_id,lane_index,endpoint",
+            zero_based_line_index + 1
+        ));
+    };
+    let binding = parse_row_binding(parts[0], parts[1], zero_based_line_index, seen)?;
+    TransitLaneRegistration::new(binding, parts[2].to_string())
 }
 
 pub fn load_transit_lane_document(path: &str) -> Result<TransitLaneDocument, String> {

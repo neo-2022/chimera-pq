@@ -139,7 +139,7 @@ pub(super) fn build_weighted_shards(
         }
         shards.push(MeshMultipathAggregateShard {
             lane_id: binding.lane_id,
-            route_binding_id: route_binding_id.clone(),
+            route_binding_id: *route_binding_id,
             byte_offset,
             byte_len,
             capacity_weight_pct: binding.capacity_weight_pct,

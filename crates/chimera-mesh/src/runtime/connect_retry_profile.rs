@@ -1,61 +1,81 @@
+#[cfg(test)]
 use crate::model::MeshPeerState;
+#[cfg(test)]
+use std::fmt::Write;
 
-const BACKOFF_INITIAL_MS: u64 = 0;
-const BACKOFF_RETRY1_MS: u64 = 250;
-const BACKOFF_RETRY2_MS: u64 = 1000;
-const RETRY_JITTER_STEP_MS: u64 = 50;
+const BACKOFF_PROFILE_PREFIX: &str =
+    "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=";
 
+#[cfg(test)]
 pub(crate) fn build_connect_priority(selected_peers: &[MeshPeerState]) -> String {
-    selected_peers
-        .iter()
-        .enumerate()
-        .map(|(idx, _)| format!("{}:peer#{}@<redacted>", idx + 1, idx + 1))
-        .collect::<Vec<_>>()
-        .join(",")
+    let mut out = String::with_capacity(selected_peers.len().saturating_mul(24));
+    for (idx, _) in selected_peers.iter().enumerate() {
+        if idx > 0 {
+            out.push(',');
+        }
+        let _ = write!(out, "{}:peer#{}@<redacted>", idx + 1, idx + 1);
+    }
+    out
 }
 
+#[cfg(test)]
 pub(crate) fn build_connect_retry_plan(
     selected_peers: &[MeshPeerState],
     fallback_ports: &[u16],
 ) -> String {
-    selected_peers
-        .iter()
-        .enumerate()
-        .map(|(idx, _)| {
-            let fallback_port_state = if fallback_ports.is_empty() {
-                "none"
-            } else {
-                "configured"
-            };
-            let fallback = selected_peers
-                .get(idx.saturating_add(1))
-                .map(|_| format!(";fallback:peer#{}@<redacted>", idx + 2))
-                .unwrap_or_default();
-            format!(
-                "peer#{}@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports={}{}",
-                idx + 1,
-                fallback_port_state,
-                fallback
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",")
+    let mut out = String::with_capacity(selected_peers.len().saturating_mul(96));
+    let fallback_port_state = if fallback_ports.is_empty() {
+        "none"
+    } else {
+        "configured"
+    };
+    for (idx, _) in selected_peers.iter().enumerate() {
+        if idx > 0 {
+            out.push(',');
+        }
+        let _ = write!(
+            out,
+            "peer#{}@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports={}",
+            idx + 1,
+            fallback_port_state
+        );
+        if idx + 1 < selected_peers.len() {
+            out.push_str(";fallback:peer#");
+            let _ = write!(out, "{}", idx + 2);
+            out.push_str("@<redacted>");
+        }
+    }
+    out
 }
 
 pub(crate) fn build_connect_backoff_profile(selected_peer_count: usize) -> String {
-    format!(
-        "initial={}ms;retry1={}ms;retry2={}ms;jitter_step={}ms;fanout={}",
-        BACKOFF_INITIAL_MS,
-        BACKOFF_RETRY1_MS,
-        BACKOFF_RETRY2_MS,
-        RETRY_JITTER_STEP_MS,
-        selected_peer_count
-    )
+    let mut out = String::with_capacity(64);
+    out.push_str(BACKOFF_PROFILE_PREFIX);
+    push_usize_decimal(&mut out, selected_peer_count);
+    out
+}
+
+fn push_usize_decimal(out: &mut String, mut value: usize) {
+    if value == 0 {
+        out.push('0');
+        return;
+    }
+
+    let mut digits = [0u8; 20];
+    let mut len = 0usize;
+    while value > 0 {
+        digits[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    for digit in digits[..len].iter().rev() {
+        out.push(*digit as char);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::build_connect_retry_plan;
+    use super::{build_connect_backoff_profile, build_connect_priority, build_connect_retry_plan};
     use crate::model::MeshPeerState;
 
     fn peer(node: &str, endpoint: &str) -> MeshPeerState {
@@ -91,5 +111,43 @@ mod tests {
         assert!(!plan.contains("node-b"));
         assert!(!plan.contains("198.51.100.10"));
         assert!(!plan.contains("198.51.100.11"));
+    }
+
+    #[test]
+    fn connect_priority_redacts_and_preserves_order() {
+        let peers = vec![
+            peer("node-a", "198.51.100.10:9443"),
+            peer("node-b", "198.51.100.11:443"),
+        ];
+        let priority = build_connect_priority(&peers);
+        assert_eq!(priority, "1:peer#1@<redacted>,2:peer#2@<redacted>");
+        assert!(!priority.contains("node-a"));
+        assert!(!priority.contains("node-b"));
+        assert!(!priority.contains("198.51.100.10"));
+        assert!(!priority.contains("198.51.100.11"));
+    }
+
+    #[test]
+    fn backoff_profile_preserves_exact_format_for_fanout_values() {
+        assert_eq!(
+            build_connect_backoff_profile(0),
+            "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=0"
+        );
+        assert_eq!(
+            build_connect_backoff_profile(1),
+            "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=1"
+        );
+        assert_eq!(
+            build_connect_backoff_profile(9),
+            "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=9"
+        );
+        assert_eq!(
+            build_connect_backoff_profile(10),
+            "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=10"
+        );
+        assert_eq!(
+            build_connect_backoff_profile(100000),
+            "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=100000"
+        );
     }
 }

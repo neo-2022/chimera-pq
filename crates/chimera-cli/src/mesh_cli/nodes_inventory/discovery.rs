@@ -253,6 +253,7 @@ fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, S
     let endpoint = json_string(record, &["endpoint"])?;
     let invite_token = json_optional_string(record, &["invite_token"]);
     let update_bootstrap_url = json_optional_string(record, &["update_bootstrap_url"]);
+    let endpoint_generation = json_optional_u64_string(record, &["endpoint_generation"])?;
     let country_code =
         json_string_default(record, &["country_code"], MeshNodeCountry::UNKNOWN_CODE);
     let country_name =
@@ -293,6 +294,7 @@ fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, S
         &observation_count,
         invite_token.as_deref(),
         update_bootstrap_url.as_deref(),
+        endpoint_generation.as_deref(),
         &explain_reason,
     )
 }
@@ -331,6 +333,24 @@ fn json_u64_default(record: &serde_json::Value, keys: &[&str], default: u64) -> 
         }
     }
     default
+}
+
+fn json_optional_u64_string(
+    record: &serde_json::Value,
+    keys: &[&str],
+) -> Result<Option<String>, String> {
+    for key in keys {
+        if let Some(value) = record.get(*key) {
+            let generation = value
+                .as_u64()
+                .ok_or_else(|| format!("mesh discovery record field {key} must be u64"))?;
+            if generation == 0 {
+                return Err(format!("mesh discovery record field {key} must be > 0"));
+            }
+            return Ok(Some(generation.to_string()));
+        }
+    }
+    Ok(None)
 }
 
 fn json_bool_default(record: &serde_json::Value, keys: &[&str], default: bool) -> bool {

@@ -1,7 +1,11 @@
 use super::*;
 use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
+use crate::peer_egress::lane_document::{
+    TransitLanePlanSnapshot, transit_lane_registrations_from_mesh_plan,
+};
 use crate::peer_egress::options::{AeadSuite, Mode, Options};
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
+use chimera_mesh::{MeshDiscoveryRecord, MeshJoinRequest, MeshPathPlan, MeshRuntime};
 
 fn binding(route: u64, lane: u16) -> TransitPathBinding {
     TransitPathBinding::new(
@@ -45,6 +49,43 @@ fn options_with_lane_file(path: &str, allow_bound_transit: bool) -> Options {
     }
 }
 
+fn ready_live_plan() -> Result<MeshPathPlan, String> {
+    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
+    runtime.merge_discovery(
+        "seed-b",
+        &[
+            MeshDiscoveryRecord {
+                node_id: "node-a".to_string(),
+                endpoint: "198.51.100.31:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 20,
+                reliability_score: 90,
+            },
+            MeshDiscoveryRecord {
+                node_id: "node-b".to_string(),
+                endpoint: "198.51.100.32:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 22,
+                reliability_score: 91,
+            },
+        ],
+    )?;
+    runtime.plan_path_from_dps_payload(
+        &MeshJoinRequest {
+            namespace: "cef-public".to_string(),
+            node_name: "node-client".to_string(),
+            invite_token: None,
+        },
+        concat!(
+            "mesh_allowed_regions=eu;",
+            "mesh_max_peers=2;",
+            "mesh_max_selected_per_region=2;",
+            "mesh_multipath_mode=flow_shard;",
+            "mesh_route_binding_id=7004"
+        ),
+    )
+}
+
 #[test]
 fn live_registry_rejects_any_registration_only_document() -> Result<(), String> {
     let document = TransitLaneDocument::new(vec![registration(77, 1, "198.51.100.77:443")?], None);
@@ -65,5 +106,24 @@ fn live_registry_rejects_any_registration_only_document() -> Result<(), String> 
         Err(error) => error,
     };
     assert!(error.contains("mesh plan snapshot"));
+    Ok(())
+}
+
+#[test]
+fn live_registry_rejects_planner_only_snapshot_with_registrations() -> Result<(), String> {
+    let mut plan = ready_live_plan()?;
+    plan.multipath_schedule.execution_status = "planner_only_not_carrier_bound".to_string();
+    let registrations = transit_lane_registrations_from_mesh_plan(&plan)?;
+    let document =
+        TransitLaneDocument::new(registrations, Some(TransitLanePlanSnapshot::new(plan)));
+
+    let error = match validate_live_transit_lane_document_contract(
+        &options_with_lane_file("/tmp/chimera-planner-only.csv", true),
+        &document,
+    ) {
+        Ok(_) => return Err("planner-only snapshot must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("carrier binding contract ready"));
     Ok(())
 }

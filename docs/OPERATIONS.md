@@ -60,6 +60,10 @@ If `benchmark-regression-check` fails:
    performance-sensitive changes;
 4. only update baseline after confirming the regression is acceptable.
 
+Performance work that changes hot metadata, lane selection, or rebuild policy
+must follow `docs/PERFORMANCE.md`. Keep the optimization scope on control
+metadata only; sealed payload stays opaque.
+
 ## Quick Ops (RU/EN)
 
 English (simple):
@@ -290,6 +294,9 @@ is an explicit operator override only; it is not the normal workflow.
 The state file is private operator/runtime state. Public proof reports must use
 redacted markers such as `peer_update_state=present`, `version_ok=true`, and
 `checksum_ok=true`, not raw host names, ports, paths or stand addresses.
+When a peer update is fronted by a relay, the private `listen` bind and the
+public `update_bootstrap_url` may differ; advertising must use the published
+public origin, not assume both ports are the same.
 
 The shipped peer-egress role is `node`. `client`, `gateway`, `server`, `side_a`,
 and `side_b` remain compatibility labels only.

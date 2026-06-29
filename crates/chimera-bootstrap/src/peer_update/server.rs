@@ -19,7 +19,7 @@ const PEER_UPDATE_IO_TIMEOUT: Duration = Duration::from_secs(5);
 const PEER_UPDATE_HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 const PEER_UPDATE_MAX_ACTIVE_CONNECTIONS: usize = 32;
 
-pub(crate) fn serve_release(
+pub fn serve_release(
     root: &Path,
     listen: &str,
     public_base_url: Option<&str>,

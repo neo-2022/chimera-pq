@@ -35,6 +35,8 @@ pub(crate) fn apply_discovery_update(
             churn_block_events: previous.churn_blocks,
             threshold_block_events: previous.threshold_blocks,
             last_effective_replacement_threshold: effective_replacement_min_score_delta,
+            endpoint_generation: previous_meta.map_or(0, |meta| meta.endpoint_generation),
+            update_bootstrap_url: previous_meta.and_then(|meta| meta.update_bootstrap_url.clone()),
         }
     } else {
         let blocked_by_churn =
@@ -54,6 +56,8 @@ pub(crate) fn apply_discovery_update(
                 .threshold_blocks
                 .saturating_add(u64::from(blocked_by_threshold)),
             last_effective_replacement_threshold: effective_replacement_min_score_delta,
+            endpoint_generation: previous_meta.map_or(0, |meta| meta.endpoint_generation),
+            update_bootstrap_url: previous_meta.and_then(|meta| meta.update_bootstrap_url.clone()),
         }
     }
 }
@@ -119,6 +123,8 @@ pub(crate) fn insert_new_discovery_peer(
             churn_block_events: 0,
             threshold_block_events: 0,
             last_effective_replacement_threshold: replacement_min_score_delta,
+            endpoint_generation: 0,
+            update_bootstrap_url: None,
         },
     );
 }

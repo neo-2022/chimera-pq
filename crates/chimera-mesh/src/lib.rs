@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod dps_payload_snapshot;
 mod model;
 mod model_debug;
 mod multipath_model;
@@ -18,7 +19,8 @@ mod weave_contract;
 
 pub use model::{
     MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, PreemptiveRisk, SwitchDecision,
+    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, MeshPublishedEndpointUpdate,
+    PreemptiveRisk, SwitchDecision,
 };
 pub use multipath_model::{
     MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode,
@@ -52,9 +54,10 @@ pub use runtime::{
     MeshConnectAttempt, MeshConnectProbeReport, MeshMultipathAggregateAction,
     MeshMultipathAggregatePlan, MeshMultipathAggregateShard, MeshMultipathFlowAction,
     MeshMultipathFlowKey, MeshMultipathFlowPlan, MeshMultipathRebuildAction,
-    MeshMultipathRebuildDecision, MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal,
-    MeshMultipathRebuildUrgency, MeshPeerTableEnforcementReport, MeshRuntime,
-    MeshRuntimeStatusReport, evaluate_join_mode, plan_multipath_aggregate_object,
+    MeshMultipathRebuildDecision, MeshMultipathRebuildDirtyMetadata,
+    MeshMultipathRebuildDirtyScope, MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal,
+    MeshMultipathRebuildSignalInput, MeshMultipathRebuildUrgency, MeshPeerTableEnforcementReport,
+    MeshRuntime, MeshRuntimeStatusReport, evaluate_join_mode, plan_multipath_aggregate_object,
     plan_multipath_flow,
 };
 pub use weave_contract::{

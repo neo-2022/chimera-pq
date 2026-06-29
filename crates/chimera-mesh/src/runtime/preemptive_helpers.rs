@@ -5,7 +5,7 @@ mod guards;
 #[path = "preemptive_helpers_hints.rs"]
 mod hints;
 
-pub(super) use common::{explain_value, tuning_source_label};
+pub(super) use common::tuning_source_label;
 pub(super) use guards::{shadow_antiflap_meta, shadow_switch_guard_meta};
 #[cfg(test)]
 pub(super) use hints::format_hints_summary;

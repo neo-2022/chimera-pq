@@ -11,12 +11,15 @@ pub(super) fn append_standby_shadow_explain(
     selected_peers: &[MeshPeerState],
     explain: &mut Vec<String>,
 ) {
-    render::append_standby_shadow_explain(selected_peers, explain);
+    let snapshot = common::StandbyShadowExplainSnapshot::capture(explain);
+    render::append_standby_shadow_explain(selected_peers, explain, &snapshot);
 }
 
 pub(super) fn adapt_standby_shadow_from_dps(
     selected_peers: &[MeshPeerState],
     explain: &mut Vec<String>,
+    dps_multipath_mode: Option<&str>,
 ) {
-    adapt::adapt_standby_shadow_from_dps(selected_peers, explain);
+    let snapshot = common::StandbyShadowExplainSnapshot::capture(explain);
+    adapt::adapt_standby_shadow_from_dps(selected_peers, explain, &snapshot, dps_multipath_mode);
 }

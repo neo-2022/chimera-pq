@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::multipath_model::{
-    MeshCarrierLaneBinding, MeshMultipathLaneRole, MeshMultipathSchedule,
+    MeshCarrierLaneBinding, MeshMultipathLaneRole, MeshMultipathSchedule, MeshRouteBindingId,
 };
 
 const FLOW_FAIRNESS_POLICY: &str = "weighted_round_robin_v1";
@@ -148,6 +148,202 @@ pub fn plan_multipath_flow(
         );
     };
 
+    let active = match scan_sorted_active_bindings(schedule, route_binding_id) {
+        ActiveBindingScan::Ready(summary) => summary,
+        ActiveBindingScan::Unsorted => {
+            return plan_multipath_flow_slow_sorted(schedule, flow_key, route_binding_id);
+        }
+        ActiveBindingScan::FailClosed {
+            reason,
+            active_binding_count,
+        } => {
+            return flow_plan(
+                MeshMultipathFlowAction::FailClosed,
+                reason,
+                None,
+                active_binding_count,
+                0,
+                schedule,
+            );
+        }
+    };
+    if active.total_capacity_weight_pct > u16::from(schedule.transit_capacity_budget_pct) {
+        return flow_plan(
+            MeshMultipathFlowAction::FailClosed,
+            "active_binding_capacity_over_budget",
+            None,
+            active.active_binding_count,
+            active.total_capacity_weight_pct,
+            schedule,
+        );
+    }
+
+    let selected_lane_id = select_weighted_lane_id_from_sorted_bindings(
+        schedule,
+        flow_key.stable_hash,
+        active.total_capacity_weight_pct,
+    );
+    let Some(selected_lane_id) = selected_lane_id else {
+        return flow_plan(
+            MeshMultipathFlowAction::FailClosed,
+            "weighted_selection_no_match",
+            None,
+            active.active_binding_count,
+            active.total_capacity_weight_pct,
+            schedule,
+        );
+    };
+    flow_plan(
+        MeshMultipathFlowAction::Assigned,
+        "active_carrier_binding_selected",
+        Some(selected_lane_id),
+        active.active_binding_count,
+        active.total_capacity_weight_pct,
+        schedule,
+    )
+}
+
+fn flow_plan(
+    action: MeshMultipathFlowAction,
+    reason: &str,
+    selected_lane_id: Option<usize>,
+    active_binding_count: usize,
+    total_capacity_weight_pct: u16,
+    schedule: &MeshMultipathSchedule,
+) -> MeshMultipathFlowPlan {
+    let rebuild_reason = rebuild_reason(schedule, active_binding_count).to_string();
+    let rebuild_recommended = rebuild_reason != REBUILD_REASON_NONE;
+    let selected_lane_status = if selected_lane_id.is_some() {
+        "active"
+    } else {
+        "none"
+    };
+    let explain = vec![
+        format!("multipath_flow_action={}", action.as_str()),
+        format!("multipath_flow_reason={reason}"),
+        format!("multipath_flow_selected_lane={selected_lane_status}"),
+        format!("multipath_flow_active_bindings={active_binding_count}"),
+        format!("multipath_flow_total_capacity_weight_pct={total_capacity_weight_pct}"),
+        format!(
+            "multipath_flow_route_binding_configured={}",
+            schedule.route_binding_id.is_some()
+        ),
+        format!("multipath_flow_rebuild_recommended={rebuild_recommended}"),
+        format!("multipath_flow_rebuild_reason={rebuild_reason}"),
+        format!("multipath_flow_fairness_policy={FLOW_FAIRNESS_POLICY}"),
+        format!("multipath_flow_privacy={FLOW_TRANSIT_PAYLOAD_POLICY}"),
+    ];
+
+    MeshMultipathFlowPlan {
+        action,
+        reason: reason.to_string(),
+        selected_lane_id,
+        active_binding_count,
+        total_capacity_weight_pct,
+        route_binding_configured: schedule.route_binding_id.is_some(),
+        rebuild_recommended,
+        rebuild_reason,
+        fairness_policy: FLOW_FAIRNESS_POLICY.to_string(),
+        transit_payload_policy: FLOW_TRANSIT_PAYLOAD_POLICY.to_string(),
+        explain,
+    }
+}
+
+struct ActiveBindingSummary {
+    active_binding_count: usize,
+    total_capacity_weight_pct: u16,
+}
+
+enum ActiveBindingScan {
+    Ready(ActiveBindingSummary),
+    Unsorted,
+    FailClosed {
+        reason: &'static str,
+        active_binding_count: usize,
+    },
+}
+
+fn scan_sorted_active_bindings(
+    schedule: &MeshMultipathSchedule,
+    route_binding_id: &MeshRouteBindingId,
+) -> ActiveBindingScan {
+    let mut active_binding_count = 0usize;
+    let mut last_lane_id = None;
+    let mut active_bindings_sorted = true;
+    let mut duplicate_lane_id = false;
+    let mut route_binding_mismatch = false;
+    let mut total_capacity_weight_pct = 0u32;
+    let mut saw_positive_capacity = false;
+    let mut capacity_overflow = false;
+
+    for binding in schedule
+        .carrier_lane_bindings
+        .iter()
+        .filter(|binding| binding.role == MeshMultipathLaneRole::Active)
+    {
+        active_binding_count = active_binding_count.saturating_add(1);
+        route_binding_mismatch |= &binding.route_binding_id != route_binding_id;
+        if let Some(last_lane_id) = last_lane_id {
+            if binding.lane_id < last_lane_id {
+                active_bindings_sorted = false;
+            } else if binding.lane_id == last_lane_id {
+                duplicate_lane_id = true;
+            }
+        }
+        last_lane_id = Some(binding.lane_id);
+
+        let weight = u32::from(binding.capacity_weight_pct);
+        saw_positive_capacity |= weight > 0;
+        match total_capacity_weight_pct.checked_add(weight) {
+            Some(total) => total_capacity_weight_pct = total,
+            None => capacity_overflow = true,
+        }
+    }
+
+    if active_binding_count == 0 {
+        return ActiveBindingScan::FailClosed {
+            reason: "active_binding_missing",
+            active_binding_count,
+        };
+    }
+    if route_binding_mismatch {
+        return ActiveBindingScan::FailClosed {
+            reason: "route_binding_mismatch",
+            active_binding_count,
+        };
+    }
+    if !active_bindings_sorted {
+        return ActiveBindingScan::Unsorted;
+    }
+    if duplicate_lane_id {
+        return ActiveBindingScan::FailClosed {
+            reason: "duplicate_active_lane",
+            active_binding_count,
+        };
+    }
+    if capacity_overflow || total_capacity_weight_pct > u32::from(u16::MAX) {
+        return ActiveBindingScan::FailClosed {
+            reason: REBUILD_REASON_CAPACITY_OVERFLOW,
+            active_binding_count,
+        };
+    }
+    if !saw_positive_capacity || total_capacity_weight_pct == 0 {
+        return ActiveBindingScan::FailClosed {
+            reason: "active_binding_capacity_missing",
+            active_binding_count,
+        };
+    }
+    ActiveBindingScan::Ready(ActiveBindingSummary {
+        active_binding_count,
+        total_capacity_weight_pct: total_capacity_weight_pct as u16,
+    })
+}
+
+fn plan_multipath_flow_slow_sorted(
+    schedule: &MeshMultipathSchedule,
+    flow_key: MeshMultipathFlowKey,
+    route_binding_id: &MeshRouteBindingId,
+) -> MeshMultipathFlowPlan {
     let active_bindings = active_carrier_bindings(schedule);
     let active_binding_count = active_bindings.len();
     if active_bindings.is_empty() {
@@ -234,52 +430,6 @@ pub fn plan_multipath_flow(
     )
 }
 
-fn flow_plan(
-    action: MeshMultipathFlowAction,
-    reason: &str,
-    selected_lane_id: Option<usize>,
-    active_binding_count: usize,
-    total_capacity_weight_pct: u16,
-    schedule: &MeshMultipathSchedule,
-) -> MeshMultipathFlowPlan {
-    let rebuild_reason = rebuild_reason(schedule, active_binding_count).to_string();
-    let rebuild_recommended = rebuild_reason != REBUILD_REASON_NONE;
-    let selected_lane_status = if selected_lane_id.is_some() {
-        "active"
-    } else {
-        "none"
-    };
-    let explain = vec![
-        format!("multipath_flow_action={}", action.as_str()),
-        format!("multipath_flow_reason={reason}"),
-        format!("multipath_flow_selected_lane={selected_lane_status}"),
-        format!("multipath_flow_active_bindings={active_binding_count}"),
-        format!("multipath_flow_total_capacity_weight_pct={total_capacity_weight_pct}"),
-        format!(
-            "multipath_flow_route_binding_configured={}",
-            schedule.route_binding_id.is_some()
-        ),
-        format!("multipath_flow_rebuild_recommended={rebuild_recommended}"),
-        format!("multipath_flow_rebuild_reason={rebuild_reason}"),
-        format!("multipath_flow_fairness_policy={FLOW_FAIRNESS_POLICY}"),
-        format!("multipath_flow_privacy={FLOW_TRANSIT_PAYLOAD_POLICY}"),
-    ];
-
-    MeshMultipathFlowPlan {
-        action,
-        reason: reason.to_string(),
-        selected_lane_id,
-        active_binding_count,
-        total_capacity_weight_pct,
-        route_binding_configured: schedule.route_binding_id.is_some(),
-        rebuild_recommended,
-        rebuild_reason,
-        fairness_policy: FLOW_FAIRNESS_POLICY.to_string(),
-        transit_payload_policy: FLOW_TRANSIT_PAYLOAD_POLICY.to_string(),
-        explain,
-    }
-}
-
 fn active_carrier_bindings(schedule: &MeshMultipathSchedule) -> Vec<&MeshCarrierLaneBinding> {
     let mut bindings: Vec<&MeshCarrierLaneBinding> = schedule
         .carrier_lane_bindings
@@ -308,6 +458,29 @@ fn select_weighted_binding<'a>(
         }
         if bucket < weight {
             return Some(*binding);
+        }
+        bucket = bucket.saturating_sub(weight);
+    }
+    None
+}
+
+fn select_weighted_lane_id_from_sorted_bindings(
+    schedule: &MeshMultipathSchedule,
+    stable_hash: u64,
+    total_capacity_weight_pct: u16,
+) -> Option<usize> {
+    let mut bucket = (stable_hash % u64::from(total_capacity_weight_pct)) as u16;
+    for binding in schedule
+        .carrier_lane_bindings
+        .iter()
+        .filter(|binding| binding.role == MeshMultipathLaneRole::Active)
+    {
+        let weight = u16::from(binding.capacity_weight_pct);
+        if weight == 0 {
+            continue;
+        }
+        if bucket < weight {
+            return Some(binding.lane_id);
         }
         bucket = bucket.saturating_sub(weight);
     }

@@ -20,19 +20,20 @@ pub(super) struct AutoRecoveryInput<'a> {
     pub(super) spread_bonus_weight: u8,
 }
 
-pub(super) struct AutoRecoveryOutcome {
-    pub(super) candidates: Vec<MeshPeerState>,
+pub(super) struct AutoRecoveryOutcomeRef<'a> {
+    pub(super) candidates: Vec<CandidateSlot<'a>>,
     pub(super) stats: CandidateStats,
 }
 
-pub(super) fn run_auto_recovery(
-    peers: &BTreeMap<String, MeshPeerState>,
-    mut candidates: Vec<MeshPeerState>,
+pub(super) fn run_auto_recovery<'p>(
+    peers: &'p BTreeMap<String, MeshPeerState>,
+    mut candidates: Vec<CandidateSlot<'p>>,
     mut stats: CandidateStats,
     input: AutoRecoveryInput<'_>,
     explain: &mut Vec<String>,
-) -> AutoRecoveryOutcome {
+) -> AutoRecoveryOutcomeRef<'p> {
     let mut state = steps::AutoRecoveryState::default();
+    explain.reserve(20);
 
     steps::run_primary_health_step(
         peers,
@@ -68,6 +69,7 @@ pub(super) fn run_auto_recovery(
             auto_recovery_attempts: state.auto_recovery_attempts,
             auto_recovery_final_result: state.auto_recovery_final_result,
             auto_recovery_trace: &state.auto_recovery_trace,
+            auto_recovery_trace_steps: state.auto_recovery_trace_steps,
         },
     );
 
@@ -83,5 +85,5 @@ pub(super) fn run_auto_recovery(
         "resilient_region_spread_bonus_total={spread_bonus_total}"
     ));
 
-    AutoRecoveryOutcome { candidates, stats }
+    AutoRecoveryOutcomeRef { candidates, stats }
 }

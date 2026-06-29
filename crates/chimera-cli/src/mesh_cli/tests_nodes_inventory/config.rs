@@ -1,7 +1,12 @@
 use super::helpers::random_u64;
-use crate::mesh_cli::nodes_inventory::{load_mesh_nodes_inventory, parse_inventory_config_text};
+use crate::mesh_cli::nodes_inventory::{
+    load_mesh_nodes_inventory, parse_inventory_config_text, published_endpoint_updates_from_nodes,
+};
 use crate::mesh_cli::nodes_render::render_nodes_list;
-use chimera_mesh::{MeshNodeCountry, MeshNodeListFilter};
+use chimera_mesh::{
+    MeshDiscoveryRecord, MeshJoinRequest, MeshNodeCountry, MeshNodeListFilter, MeshPathPolicy,
+    MeshRuntime,
+};
 use std::{fs, net::TcpListener};
 
 #[test]
@@ -53,12 +58,124 @@ mesh.node.x.status = checking
             .and_then(|node| node.update_bootstrap_url.as_deref()),
         Some("http://node-nl.example:18179/chimera.sh")
     );
+    assert_eq!(
+        inventory
+            .nodes
+            .iter()
+            .find(|node| node.node_id.0 == "nl")
+            .and_then(|node| node.endpoint_generation),
+        None
+    );
     assert!(
         inventory
             .nodes
             .iter()
             .any(|node| node.country.country_name == MeshNodeCountry::UNKNOWN_NAME)
     );
+}
+
+#[test]
+fn nodes_inventory_config_accepts_endpoint_generation() {
+    let text = r#"
+mesh.nodes.ids = de
+mesh.node.de.endpoint = 198.51.100.10:443
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.update_bootstrap_url = http://node-de.example:18179/chimera.sh
+mesh.node.de.endpoint_generation = 7
+"#;
+
+    let inventory = parse_inventory_config_text(text).unwrap_or_else(|err| unreachable!("{err}"));
+
+    assert_eq!(inventory.nodes.len(), 1);
+    assert_eq!(inventory.nodes[0].endpoint_generation, Some(7));
+}
+
+#[test]
+fn nodes_inventory_config_rejects_zero_endpoint_generation() {
+    let text = r#"
+mesh.nodes.ids = de
+mesh.node.de.endpoint = 198.51.100.10:443
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.endpoint_generation = 0
+"#;
+
+    let error = parse_inventory_config_text(text)
+        .err()
+        .unwrap_or_else(|| unreachable!("zero endpoint_generation must fail"));
+
+    assert!(error.contains("endpoint_generation"));
+}
+
+#[test]
+fn nodes_inventory_config_rejects_invalid_endpoint_generation() {
+    let text = r#"
+mesh.nodes.ids = de
+mesh.node.de.endpoint = 198.51.100.10:443
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.endpoint_generation = newer
+"#;
+
+    let error = parse_inventory_config_text(text)
+        .err()
+        .unwrap_or_else(|| unreachable!("invalid endpoint_generation must fail"));
+
+    assert!(error.contains("endpoint_generation"));
+}
+
+#[test]
+fn nodes_inventory_endpoint_generation_builds_published_update_consumed_by_runtime_plan() {
+    let text = r#"
+mesh.nodes.ids = de
+mesh.node.de.endpoint = 198.51.100.20:9443
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.success_rate_1h = 99
+mesh.node.de.update_bootstrap_url = http://node-de.example:18179/chimera.sh
+mesh.node.de.endpoint_generation = 9
+"#;
+    let inventory = parse_inventory_config_text(text).unwrap_or_else(|err| unreachable!("{err}"));
+    let updates = published_endpoint_updates_from_nodes(&inventory.nodes)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].endpoint_generation, 9);
+
+    let mut runtime =
+        MeshRuntime::bootstrap("mesh-nodes", "seed-a").unwrap_or_else(|err| unreachable!("{err}"));
+    runtime
+        .merge_discovery(
+            "seed-b",
+            &[MeshDiscoveryRecord {
+                node_id: "de".to_string(),
+                endpoint: "198.51.100.10:443".to_string(),
+                region: "DE".to_string(),
+                load_score: 1,
+                reliability_score: 99,
+            }],
+        )
+        .unwrap_or_else(|err| unreachable!("{err}"));
+
+    runtime
+        .merge_published_endpoint_updates("inventory-adapter", &updates)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+
+    assert_eq!(runtime.peer_snapshot()[0].endpoint, "198.51.100.20:9443");
+    let request = MeshJoinRequest {
+        namespace: "mesh-nodes".to_string(),
+        node_name: "probe".to_string(),
+        invite_token: None,
+    };
+    let policy = MeshPathPolicy::default_auto();
+    let plan = runtime
+        .plan_path(&request, &policy)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(plan.selected_peers[0].endpoint, "198.51.100.20:9443");
 }
 
 #[test]

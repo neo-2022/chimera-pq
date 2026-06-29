@@ -94,6 +94,7 @@ fn parse_cli_node(raw: &str) -> Result<MeshNode, String> {
         parts[11],
         None,
         parts.get(12).copied(),
+        None,
         "cli_node_record",
     )
 }
@@ -131,6 +132,7 @@ fn parse_config_node(raw: &RawConfig, id: &str) -> Result<MeshNode, String> {
             .unwrap_or("0"),
         invite_token,
         raw.get(&format!("{prefix}update_bootstrap_url")),
+        raw.get(&format!("{prefix}endpoint_generation")),
         raw.get(&format!("{prefix}explain_reason"))
             .unwrap_or("config_node_record"),
     )
@@ -158,6 +160,7 @@ pub(super) fn build_node(
     observation_count: &str,
     invite_token: Option<&str>,
     update_bootstrap_url: Option<&str>,
+    endpoint_generation: Option<&str>,
     explain_reason: &str,
 ) -> Result<MeshNode, String> {
     let country_code = country_code_raw.to_ascii_uppercase();
@@ -190,6 +193,7 @@ pub(super) fn build_node(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string),
+        endpoint_generation: parse_optional_endpoint_generation(endpoint_generation)?,
         country,
         status: MeshNodeStatus::parse(status)?,
         latency_ms: parse_optional_f64(latency_ms)?,
@@ -282,8 +286,22 @@ fn is_allowed_node_field(field: &str) -> bool {
             | "observation_count"
             | "invite_token"
             | "update_bootstrap_url"
+            | "endpoint_generation"
             | "explain_reason"
     )
+}
+
+fn parse_optional_endpoint_generation(value: Option<&str>) -> Result<Option<u64>, String> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let generation = value
+        .parse::<u64>()
+        .map_err(|_| "invalid endpoint_generation".to_string())?;
+    if generation == 0 {
+        return Err("endpoint_generation must be > 0".to_string());
+    }
+    Ok(Some(generation))
 }
 
 fn validate_config_id(id: &str) -> Result<(), String> {

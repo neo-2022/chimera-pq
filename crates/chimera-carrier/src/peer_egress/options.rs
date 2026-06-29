@@ -1,4 +1,10 @@
 use std::env;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::Path;
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::peer_egress::options_mode::parse_mode;
 pub use crate::peer_egress::options_mode::{Mode, mode_name};
@@ -16,6 +22,8 @@ pub const SECURE_AES256GCM_SUITE_ID: u16 = 0xEE03;
 pub const SECURE_PLAINTEXT_CHUNK_LEN: usize = 1024 * 1024;
 pub const SECURE_MAX_CIPHERTEXT_LEN: usize = SECURE_PLAINTEXT_CHUNK_LEN + 32;
 pub const TCP_BUFFER_BYTES: usize = 4 * 1024 * 1024;
+pub const NODE_DEFAULT_LOCAL_LISTEN: &str = "127.0.0.1:0";
+pub const NODE_DEFAULT_PEER_LISTEN: &str = "0.0.0.0:0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AeadSuite {
@@ -249,14 +257,8 @@ impl Options {
         let transit_relay_limits = transit_relay_guard.limits()?;
         let (local_listen, peer_listen, server) = match mode {
             Mode::Node => (
-                required_value(
-                    local_listen,
-                    "node mode requires --local-listen or CHIMERA_PEER_EGRESS_LOCAL_LISTEN",
-                )?,
-                required_value(
-                    peer_listen,
-                    "node mode requires --peer-listen or CHIMERA_PEER_EGRESS_PEER_LISTEN",
-                )?,
+                local_listen.unwrap_or_else(|| NODE_DEFAULT_LOCAL_LISTEN.to_string()),
+                peer_listen.unwrap_or_else(|| NODE_DEFAULT_PEER_LISTEN.to_string()),
                 server.unwrap_or_default(),
             ),
             Mode::SideA => (
@@ -391,8 +393,36 @@ pub fn write_resolved_state_file(
         resolved_local_listen,
         resolved_peer_listen
     );
-    std::fs::write(state_file, contents)
+    let path = Path::new(state_file);
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent).map_err(|error| format!("write state file failed: {error}"))?;
+    }
+    let tmp_path = path.with_extension("tmp");
+    let _ = fs::remove_file(&tmp_path);
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options
+        .open(&tmp_path)
         .map_err(|error| format!("write state file failed: {error}"))?;
+    file.write_all(contents.as_bytes())
+        .map_err(|error| format!("write state file failed: {error}"))?;
+    file.sync_all()
+        .map_err(|error| format!("write state file failed: {error}"))?;
+    #[cfg(unix)]
+    {
+        fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("write state file failed: {error}"))?;
+    }
+    fs::rename(&tmp_path, path).map_err(|error| format!("write state file failed: {error}"))?;
+    #[cfg(unix)]
+    {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("write state file failed: {error}"))?;
+    }
     Ok(())
 }
 

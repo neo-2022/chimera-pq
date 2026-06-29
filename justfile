@@ -386,6 +386,24 @@ peer-egress-perf-smoke-selfcheck:
     cargo test -q -p chimera-carrier --bin chimera-peer-egress
     cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode bench --token bench --pool 8 --bench-bytes 16777216 | rg -q 'chimera_peer_egress_bench=pass'
 
+live-binding-reload-perf-smoke iterations="10000":
+    CHIMERA_LIVE_BINDING_RELOAD_ITERATIONS="{{iterations}}" cargo test -q -p chimera-carrier peer_egress::live_bindings::tests::reload_noop_fast_path_perf_smoke -- --ignored --exact --nocapture --test-threads=1
+
+live-binding-reload-perf-smoke-selfcheck:
+    out=$(CHIMERA_LIVE_BINDING_RELOAD_ITERATIONS=1000 cargo test -q -p chimera-carrier peer_egress::live_bindings::tests::reload_noop_fast_path_perf_smoke -- --ignored --exact --nocapture --test-threads=1); \
+      printf '%s\n' "$out" | rg -q '"kind":"live_binding_reload_perf_smoke"'; \
+      printf '%s\n' "$out" | rg -q '"spawn_count":0'; \
+      printf '%s\n' "$out" | rg -q '"network_state":"not_modified"'
+
+live-binding-reload-index-perf-smoke iterations="10000":
+    CHIMERA_LIVE_BINDING_RELOAD_ITERATIONS="{{iterations}}" cargo test -q -p chimera-carrier peer_egress::live_bindings::tests::reload_changed_document_reconcile_perf_smoke -- --ignored --exact --nocapture --test-threads=1
+
+live-binding-reload-index-perf-smoke-selfcheck:
+    out=$(CHIMERA_LIVE_BINDING_RELOAD_ITERATIONS=1000 cargo test -q -p chimera-carrier peer_egress::live_bindings::tests::reload_changed_document_reconcile_perf_smoke -- --ignored --exact --nocapture --test-threads=1); \
+      printf '%s\n' "$out" | rg -q '"kind":"live_binding_reload_index_perf_smoke"'; \
+      printf '%s\n' "$out" | rg -q '"spawn_count":'; \
+      printf '%s\n' "$out" | rg -q '"network_state":"not_modified"'
+
 peer-egress-transit-proof-selfcheck:
     cargo test -q -p chimera-carrier peer_egress::proof
     cargo test -q -p chimera-carrier options_tests::proof
@@ -881,6 +899,29 @@ fuzz-targets-check:
 perf-smoke:
     cargo run -p chimera-lab --bin chimera-lab -- perf-smoke
 
+metadata-perf-smoke:
+    cargo run -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --json
+
+metadata-perf-smoke-selfcheck:
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"kind":"metadata_perf_smoke"'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"path_planner_candidate_snapshot_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"discovery_rebuild_fingerprint_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"discovery_update_noop_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"lane_document_plan_snapshot_borrowed_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"lane_document_plan_snapshot_owned_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"lane_document_render_parse_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"peer_update_state_publish_noop_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"peer_update_state_publish_changed_generation_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"status_explain_ops_per_sec":'
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"live_binding_reload_index_ops_per_sec":'
+
+path-planner-candidate-snapshot-perf-smoke:
+    cargo run -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 10000 --json | rg -q '"path_planner_candidate_snapshot_ops_per_sec":'
+
+path-planner-candidate-snapshot-perf-smoke-selfcheck:
+    cargo test -q -p chimera-lab metadata_perf_json_is_redacted_and_metadata_only
+    cargo run -q -p chimera-lab --bin chimera-lab -- metadata-perf-smoke --iterations 100 --json | rg -q '"path_planner_peer_count":64'
+
 net-sim:
     cargo run -p chimera-lab --bin chimera-lab -- net-sim
 
@@ -1114,6 +1155,9 @@ mesh-launch-preflight-ready-hint-selfcheck:
     rg -q 'mesh launch preflight ready hint: READY' scripts/mesh_launch_preflight_ready_hint.sh
     rg -q 'mesh launch preflight ready hint: NOT READY' scripts/mesh_launch_preflight_ready_hint.sh
     rg -q 'endpoint_probe_side_a' scripts/mesh_launch_preflight_ready_hint.sh
+    rg -q 'mesh-launch-preflight-autopilot' scripts/mesh_launch_preflight_ready_hint.sh
+    rg -q 'local signed discovery snapshot, published runtime state, then inventory/runtime state' scripts/mesh_launch_preflight_ready_hint.sh
+    rg -q 'manual <host:port> helpers are fallback only' scripts/mesh_launch_preflight_ready_hint.sh
 
 mesh-launch-preflight-status-summary:
     test -x scripts/mesh_launch_preflight_status_summary.sh
@@ -1134,9 +1178,12 @@ mesh-launch-preflight-print-unblock-cmd:
 mesh-launch-preflight-print-unblock-cmd-selfcheck:
     test -x scripts/mesh_launch_preflight_print_unblock_cmd.sh
     bash -n scripts/mesh_launch_preflight_print_unblock_cmd.sh
-    rg -q 'mesh-launch-preflight-unblock-and-run' scripts/mesh_launch_preflight_print_unblock_cmd.sh
+    rg -q 'mesh-launch-preflight-autopilot' scripts/mesh_launch_preflight_print_unblock_cmd.sh
+    rg -q 'run auto-bind first' scripts/mesh_launch_preflight_print_unblock_cmd.sh
     rg -q 'CHIMERA_MESH_LOCAL_ENDPOINT' scripts/mesh_launch_preflight_print_unblock_cmd.sh
     rg -q 'documentation placeholder' scripts/mesh_launch_preflight_print_unblock_cmd.sh
+    rg -q '__AUTO__' scripts/mesh_launch_preflight_print_unblock_cmd.sh
+    rg -q 'manual <host:port> helper is fallback only' scripts/mesh_launch_preflight_print_unblock_cmd.sh
 
 mesh-launch-preflight-set-remote-endpoint side endpoint:
     test -x scripts/mesh_launch_preflight_set_remote_endpoint.sh
@@ -1177,7 +1224,7 @@ mesh-launch-preflight-set-real-endpoints-selfcheck:
     rg -q '^    just mesh-launch-preflight-set-local-endpoint side_a ' justfile
     rg -q '^    just mesh-launch-preflight-ready-check$' justfile
 
-mesh-launch-preflight-auto-bind side_a_endpoint:
+mesh-launch-preflight-auto-bind side_a_endpoint="":
     test -x scripts/mesh_launch_preflight_auto_bind.sh
     bash scripts/mesh_launch_preflight_auto_bind.sh "{{side_a_endpoint}}"
 
@@ -1185,6 +1232,10 @@ mesh-launch-preflight-auto-bind-selfcheck:
     test -x scripts/mesh_launch_preflight_auto_bind.sh
     bash -n scripts/mesh_launch_preflight_auto_bind.sh
     rg -q 'selected side_b endpoint' scripts/mesh_launch_preflight_auto_bind.sh
+    rg -q 'resolve_endpoint_from_discovery_snapshot' scripts/mesh_launch_preflight_auto_bind.sh
+    rg -q 'resolve_endpoint_from_published_runtime_state' scripts/mesh_launch_preflight_auto_bind.sh
+    rg -q 'resolve_endpoint_from_inventory' scripts/mesh_launch_preflight_auto_bind.sh
+    ! rg -q 'CHIMERA_PEER_UPDATE_STATE_FILE|update_bootstrap_url|base_url|from_url' scripts/mesh_launch_preflight_auto_bind.sh
     rg -q 'mesh-launch-preflight-set-real-endpoints' scripts/mesh_launch_preflight_auto_bind.sh
 
 mesh-launch-preflight-autopilot mode="staged" profile_set="core" side_a_endpoint="":
@@ -1197,6 +1248,8 @@ mesh-launch-preflight-autopilot-selfcheck:
     rg -q 'mode must be staged or full' scripts/mesh_launch_preflight_autopilot.sh
     rg -q 'profile set must be core or all' scripts/mesh_launch_preflight_autopilot.sh
     rg -q 'mesh-launch-preflight-auto-bind' scripts/mesh_launch_preflight_autopilot.sh
+    rg -q 'auto_bind=discovery_runtime_inventory' scripts/mesh_launch_preflight_autopilot.sh
+    rg -q 'manual_side_a_endpoint=fallback' scripts/mesh_launch_preflight_autopilot.sh
     rg -q 'mesh-launch-preflight-ready-check' scripts/mesh_launch_preflight_autopilot.sh
     rg -q 'mesh-launch-preflight-side-a-profile-staged' scripts/mesh_launch_preflight_autopilot.sh
     rg -q 'mesh-launch-preflight-side-b-profile-staged' scripts/mesh_launch_preflight_autopilot.sh
@@ -1270,35 +1323,41 @@ mesh-launch-preflight-endpoint-probe-selfcheck:
     rg -q 'mesh launch preflight endpoint probe: FAIL' scripts/mesh_launch_preflight_endpoint_probe.sh
 
 mesh-launch-preflight-side-a:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-endpoint-probe-side-a
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_a.env; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-endpoint-probe-side-b
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_b.env; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-a-profile profile:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-endpoint-probe-side-a
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b-profile profile:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-endpoint-probe-side-b
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-a-profile-staged profile:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b-profile-staged profile:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="{{profile}}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set +a; bash scripts/mesh_launch_preflight_pair.sh
@@ -1313,12 +1372,14 @@ mesh-launch-preflight-profile-staged-selfcheck:
     rg -q '^    set -a; source configs/mesh_launch_preflight.side_b.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; CHIMERA_MESH_TRAFFIC_PROFILE="\{\{profile\}\}"; unset CHIMERA_MESH_POLICY_PAYLOAD; set \+a; bash scripts/mesh_launch_preflight_pair.sh$' justfile
 
 mesh-launch-preflight-side-a-staged:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-a
     just mesh-launch-preflight-endpoint-probe-side-a
     just mesh-launch-preflight-env-pair-guard
     set -a; source configs/mesh_launch_preflight.side_a.env; CHIMERA_MESH_ALLOW_REMOTE_MISSING=1; set +a; bash scripts/mesh_launch_preflight_pair.sh
 
 mesh-launch-preflight-side-b-staged:
+    just mesh-launch-preflight-auto-bind
     just mesh-launch-preflight-env-guard-side-b
     just mesh-launch-preflight-endpoint-probe-side-b
     just mesh-launch-preflight-env-pair-guard
@@ -1386,9 +1447,13 @@ mesh-launch-preflight-doc-quickcheck-selfcheck:
     rg -q '^just mesh-launch-preflight-ready-check$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-ready-hint$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-status-summary$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-autopilot$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-autopilot full core$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-autopilot staged all$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-unblock-and-run <node_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-set-real-endpoints <node_b_host:port> <node_a_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-set-remote-endpoint side_a <node_b_host:port>$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
+    rg -q '^just mesh-launch-preflight-auto-bind$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^Full gate note:$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md
     rg -q '^- `just mesh-launch-gate-selfcheck` now includes this fast fail-fast block before heavier smoke runs\.$' docs/MESH_FIRST_LAUNCH_EXECUTION_GATE.md

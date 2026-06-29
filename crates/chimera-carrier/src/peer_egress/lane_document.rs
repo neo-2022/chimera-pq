@@ -86,8 +86,20 @@ impl TransitLaneDocument {
             .map(|snapshot| snapshot.plan.clone()))
     }
 
+    pub fn mesh_path_plan_ref(&self) -> Option<&MeshPathPlan> {
+        self.plan_snapshot
+            .as_ref()
+            .map(TransitLanePlanSnapshot::plan)
+    }
+
     pub fn require_mesh_path_plan(&self) -> Result<MeshPathPlan, String> {
         self.mesh_path_plan()?.ok_or_else(|| {
+            "live sealed transit lane document requires a mesh plan snapshot".to_string()
+        })
+    }
+
+    pub fn require_mesh_path_plan_ref(&self) -> Result<&MeshPathPlan, String> {
+        self.mesh_path_plan_ref().ok_or_else(|| {
             "live sealed transit lane document requires a mesh plan snapshot".to_string()
         })
     }

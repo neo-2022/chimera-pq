@@ -1,6 +1,7 @@
 use crate::{
-    MeshMultipathRebuildAction, MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal,
-    MeshRuntime, MultipathDemand, MultipathMode,
+    MeshMultipathRebuildAction, MeshMultipathRebuildDirtyMetadata, MeshMultipathRebuildDirtyScope,
+    MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal, MeshRuntime, MultipathDemand,
+    MultipathMode,
 };
 
 use super::{explain_has, record, request, runtime_with_peers, seeded_runtime};
@@ -19,6 +20,26 @@ fn soft_signal(
 ) -> MeshMultipathRebuildSignal {
     MeshMultipathRebuildSignal::soft(reason, generation, fingerprint, epoch, observed_tick)
         .unwrap_or_else(|e| unreachable!("signal should be accepted: {e}"))
+}
+
+fn soft_peer_set_signal(
+    reason: &str,
+    generation: u64,
+    fingerprint: u64,
+    epoch: u64,
+    observed_tick: u64,
+    affected_peer_count: usize,
+) -> MeshMultipathRebuildSignal {
+    MeshMultipathRebuildSignal::soft_with_dirty_scope(
+        reason,
+        generation,
+        fingerprint,
+        epoch,
+        observed_tick,
+        MeshMultipathRebuildDirtyMetadata::peer_set(affected_peer_count)
+            .unwrap_or_else(|e| unreachable!("dirty metadata should be accepted: {e}")),
+    )
+    .unwrap_or_else(|e| unreachable!("signal should be accepted: {e}"))
 }
 
 fn urgent_signal(observed_tick: u64) -> MeshMultipathRebuildSignal {
@@ -73,12 +94,78 @@ fn first_rebuild_signal_is_allowed() {
     assert!(!decision.debounced);
     assert!(!decision.stale);
     assert_eq!(decision.pending_count, 0);
+    assert_eq!(
+        decision.dirty_scope,
+        MeshMultipathRebuildDirtyScope::Unknown
+    );
+    assert_eq!(decision.affected_peer_count, 0);
     assert!(
         decision
             .explain
             .iter()
             .any(|line| line == "multipath_rebuild_action=allow_rebuild")
     );
+    assert!(explain_has(
+        &decision.explain,
+        "multipath_rebuild_dirty_scope=unknown"
+    ));
+    assert!(explain_has(
+        &decision.explain,
+        "multipath_rebuild_affected_peer_count=0"
+    ));
+}
+
+#[test]
+fn peer_set_dirty_scope_is_redacted_and_explained() {
+    let mut runtime = seeded_runtime();
+    let signal = soft_peer_set_signal("peer_table_changed", 1, 0x1001, 1, 1, 2);
+
+    let decision = runtime
+        .evaluate_multipath_rebuild(&signal, &policy())
+        .unwrap_or_else(|e| unreachable!("rebuild gate should evaluate: {e}"));
+
+    assert_eq!(decision.action, MeshMultipathRebuildAction::AllowRebuild);
+    assert_eq!(
+        decision.dirty_scope,
+        MeshMultipathRebuildDirtyScope::PeerSet
+    );
+    assert_eq!(decision.affected_peer_count, 2);
+    assert!(explain_has(
+        &decision.explain,
+        "multipath_rebuild_dirty_scope=peer_set"
+    ));
+    assert!(explain_has(
+        &decision.explain,
+        "multipath_rebuild_affected_peer_count=2"
+    ));
+    let debug = format!("{decision:?}");
+    assert!(debug.contains("affected_peer_count"));
+    assert!(!debug.contains("node-a"));
+    assert!(!debug.contains("198.51."));
+    assert!(!decision.explain.iter().any(|line| line.contains("0x1001")));
+}
+
+#[test]
+fn peer_set_dirty_scope_rejects_zero_affected_peers() {
+    assert!(MeshMultipathRebuildDirtyMetadata::peer_set(0).is_err());
+}
+
+#[test]
+fn unknown_dirty_scope_rejects_nonzero_affected_peers() {
+    let signal = MeshMultipathRebuildSignal::soft_with_dirty_scope(
+        "peer_table_changed",
+        1,
+        0x1001,
+        1,
+        1,
+        MeshMultipathRebuildDirtyMetadata::unknown(),
+    )
+    .unwrap_or_else(|e| unreachable!("unknown dirty metadata should be accepted: {e}"));
+    assert_eq!(
+        signal.dirty_scope(),
+        MeshMultipathRebuildDirtyScope::Unknown
+    );
+    assert_eq!(signal.affected_peer_count(), 0);
 }
 
 #[test]

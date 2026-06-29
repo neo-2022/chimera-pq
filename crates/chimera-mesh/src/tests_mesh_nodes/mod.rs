@@ -31,6 +31,7 @@ fn test_node(
         endpoint: format!("{id}.test:443"),
         invite_token: None,
         update_bootstrap_url: None,
+        endpoint_generation: None,
         country,
         status,
         latency_ms: Some(50.0),

@@ -1,7 +1,6 @@
 use super::status_shadow_snapshot::ShadowStatusSnapshot;
 use super::table_consistency::{
-    evaluate_table_consistency, format_setup_compact, setup_compact_consistency_match,
-    setup_compact_consistency_summary,
+    evaluate_table_consistency, format_setup_compact, setup_compact_consistency,
 };
 use super::*;
 #[path = "status_report_builder_hints.rs"]
@@ -26,13 +25,12 @@ pub(super) fn build_status_report_from_snapshot(
         &table_consistency.runtime_consistency_gate,
         table_consistency.preemptive_degraded_path,
     );
-    let plan_setup_discovery_table_compact_consistency = setup_compact_consistency_summary(
-        &plan_setup_discovery_table_compact,
-        &table_consistency.runtime_consistency_gate,
-        table_consistency.preemptive_degraded_path,
-    );
-    let setup_compact_consistency_match =
-        setup_compact_consistency_match(&plan_setup_discovery_table_compact_consistency);
+    let (plan_setup_discovery_table_compact_consistency, setup_compact_consistency_match) =
+        setup_compact_consistency(
+            &plan_setup_discovery_table_compact,
+            &table_consistency.runtime_consistency_gate,
+            table_consistency.preemptive_degraded_path,
+        );
     let risk_summary = shadow::preemptive_shadow_risk_summary(&snapshot);
     let switch_guard_summary = shadow::preemptive_shadow_switch_guard_summary(&snapshot);
     let confirm_state = shadow::preemptive_shadow_confirm_state(&snapshot);

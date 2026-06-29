@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write;
 
 pub(crate) fn append_selection_counters_explain(
     explain: &mut Vec<String>,
@@ -7,6 +8,7 @@ pub(crate) fn append_selection_counters_explain(
     candidates_rejected_total: usize,
     stats: &CandidateStats,
 ) {
+    explain.reserve(8);
     explain.push(format!(
         "candidates_considered={}",
         selected_metrics.candidates_considered
@@ -35,7 +37,9 @@ pub(crate) fn append_selection_counters_explain(
 }
 
 pub(crate) fn format_candidate_summary(stats: &CandidateStats) -> String {
-    format!(
+    let mut out = String::with_capacity(160);
+    let _ = write!(
+        out,
         "candidate_summary=accepted:{},rejected_blocked:{},rejected_health:{},rejected_region:{},rejected_reliability:{},rejected_load:{}",
         stats.accepted_count,
         stats.rejected_blocked,
@@ -43,5 +47,6 @@ pub(crate) fn format_candidate_summary(stats: &CandidateStats) -> String {
         stats.rejected_region,
         stats.rejected_reliability,
         stats.rejected_load
-    )
+    );
+    out
 }

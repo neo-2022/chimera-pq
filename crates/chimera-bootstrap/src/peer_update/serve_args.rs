@@ -1,7 +1,7 @@
 use crate::Result;
 use std::env;
 
-pub(crate) struct ServeReleaseOptions {
+pub struct ServeReleaseOptions {
     root: String,
     listen: String,
     base_url: Option<String>,
@@ -9,7 +9,7 @@ pub(crate) struct ServeReleaseOptions {
 }
 
 impl ServeReleaseOptions {
-    pub(crate) fn from_args(args: &mut impl Iterator<Item = String>) -> Result<Self> {
+    pub fn from_args(args: &mut impl Iterator<Item = String>) -> Result<Self> {
         let mut root = None;
         let mut listen = None;
         let mut base_url = None;
@@ -46,19 +46,19 @@ impl ServeReleaseOptions {
         })
     }
 
-    pub(crate) fn root(&self) -> &str {
+    pub fn root(&self) -> &str {
         &self.root
     }
 
-    pub(crate) fn listen(&self) -> &str {
+    pub fn listen(&self) -> &str {
         &self.listen
     }
 
-    pub(crate) fn base_url(&self) -> Option<&str> {
+    pub fn base_url(&self) -> Option<&str> {
         self.base_url.as_deref()
     }
 
-    pub(crate) fn state_file(&self) -> Option<&str> {
+    pub fn state_file(&self) -> Option<&str> {
         self.state_file.as_deref()
     }
 }

@@ -133,6 +133,22 @@ fn document_round_trips_snapshot_and_rows() -> Result<(), String> {
 }
 
 #[test]
+fn document_borrowed_snapshot_plan_matches_owned_access() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let borrowed = document.require_mesh_path_plan_ref()?;
+    let owned = document.require_mesh_path_plan()?;
+
+    assert_eq!(borrowed.namespace, owned.namespace);
+    assert_eq!(
+        borrowed.multipath_schedule.carrier_lane_bindings.len(),
+        owned.multipath_schedule.carrier_lane_bindings.len()
+    );
+    assert_eq!(borrowed.join_mode, owned.join_mode);
+    Ok(())
+}
+
+#[test]
 fn document_rejects_rows_that_diverge_from_snapshot() -> Result<(), String> {
     let plan = multipath_plan()?;
     let document = transit_lane_document_from_mesh_plan(&plan)?;

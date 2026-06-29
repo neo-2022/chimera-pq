@@ -114,6 +114,12 @@ fn peer_release_state_file_records_os_selected_update_url() -> TestResult {
         state.get("status").and_then(serde_json::Value::as_str),
         Some("ready")
     );
+    assert_eq!(
+        state
+            .get("endpoint_generation")
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
     fs::remove_dir_all(root)?;
     Ok(())
 }

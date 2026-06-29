@@ -20,6 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod artifact_checks;
 mod cef_phase1_mesh;
+mod metadata_perf;
 mod mvp_reports;
 mod release_reports;
 
@@ -61,6 +62,7 @@ fn main() {
         "config-smoke" => run_config_smoke(lang, command_args),
         "fuzz-smoke" => run_fuzz_smoke(lang),
         "perf-smoke" => run_perf_smoke(lang, command_args),
+        "metadata-perf-smoke" => metadata_perf::run_metadata_perf_smoke(lang, command_args),
         "net-sim" => run_net_sim(lang, command_args),
         "hardening-smoke" => run_hardening_smoke(lang, command_args),
         "benchmark-report" => run_benchmark_report(lang, command_args),
@@ -120,6 +122,9 @@ fn render_help(lang: Language) -> String {
                 "  [--lang en|ru] perf-smoke [--min-encode-ops <n>] [--min-decode-ops <n>] [--json]\n",
             );
             out.push_str(
+                "  [--lang en|ru] metadata-perf-smoke [--iterations <n>] [--min-fast-ops <n>] [--json]\n",
+            );
+            out.push_str(
                 "  [--lang en|ru] net-sim [--loss-pct <n>] [--delay-ms <n>] [--disconnect-at <n>] [--reconnect-after <n>] [--mtu <bytes>] [--json]\n",
             );
             out.push_str(
@@ -158,6 +163,9 @@ fn render_help(lang: Language) -> String {
             out.push_str("  [--lang en|ru] fuzz-smoke\n");
             out.push_str(
                 "  [--lang en|ru] perf-smoke [--min-encode-ops <n>] [--min-decode-ops <n>] [--json]\n",
+            );
+            out.push_str(
+                "  [--lang en|ru] metadata-perf-smoke [--iterations <n>] [--min-fast-ops <n>] [--json]\n",
             );
             out.push_str(
                 "  [--lang en|ru] net-sim [--loss-pct <n>] [--delay-ms <n>] [--disconnect-at <n>] [--reconnect-after <n>] [--mtu <bytes>] [--json]\n",

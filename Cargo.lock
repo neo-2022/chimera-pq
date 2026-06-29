@@ -218,6 +218,7 @@ dependencies = [
  "ring",
  "serde_json",
  "ureq",
+ "url",
 ]
 
 [[package]]
@@ -297,6 +298,7 @@ dependencies = [
 name = "chimera-lab"
 version = "0.1.0"
 dependencies = [
+ "chimera-bootstrap",
  "chimera-carrier",
  "chimera-carrier-quic",
  "chimera-carrier-tls",

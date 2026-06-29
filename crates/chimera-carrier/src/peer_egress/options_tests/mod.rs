@@ -115,6 +115,22 @@ fn parse_node_options_requires_ingress_listeners_and_keeps_peer_optional() -> Re
 }
 
 #[test]
+fn parse_node_options_defaults_ingress_listeners_to_auto_bind() -> Result<(), String> {
+    let args = vec![
+        "--mode".to_string(),
+        "node".to_string(),
+        "--token".to_string(),
+        "abc".to_string(),
+    ];
+    let parsed = Options::parse(&args)?;
+    assert_eq!(parsed.mode, Mode::Node);
+    assert_eq!(parsed.local_listen, NODE_DEFAULT_LOCAL_LISTEN);
+    assert_eq!(parsed.peer_listen, NODE_DEFAULT_PEER_LISTEN);
+    assert_eq!(parsed.server, "");
+    Ok(())
+}
+
+#[test]
 fn parse_node_options_accepts_outbound_peer_endpoint() -> Result<(), String> {
     let args = vec![
         "--mode".to_string(),
@@ -185,23 +201,6 @@ fn parse_node_options_accepts_bound_transit_policy_separately() -> Result<(), St
 }
 
 #[test]
-fn parse_node_rejects_missing_peer_ingress_listener() {
-    let args = vec![
-        "--mode".to_string(),
-        "node".to_string(),
-        "--local-listen".to_string(),
-        "127.0.0.1:18135".to_string(),
-        "--token".to_string(),
-        "abc".to_string(),
-    ];
-    let error = match Options::parse(&args) {
-        Ok(_) => "node options without peer ingress listener should fail".to_string(),
-        Err(error) => error,
-    };
-    assert!(error.contains("peer-listen"));
-}
-
-#[test]
 fn parse_bench_options() {
     let args = vec![
         "--mode".to_string(),
@@ -256,6 +255,36 @@ fn parse_download_probe_options() {
     });
     assert_eq!(parsed.mode, Mode::DownloadProbe);
     assert_eq!(parsed.connections, 2);
+}
+
+#[test]
+fn write_resolved_state_file_creates_private_file() -> Result<(), String> {
+    let mut path = std::env::temp_dir();
+    path.push(format!(
+        "chimera_peer_egress_state_write_{}.state",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    write_resolved_state_file(
+        path.to_str().ok_or_else(|| "state path utf8".to_string())?,
+        &Mode::Node,
+        "127.0.0.1:11111",
+        "198.51.100.44:45678",
+    )?;
+    let body = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    assert!(body.contains("resolved_peer_listen=198.51.100.44:45678"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path)
+            .map_err(|error| error.to_string())?
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+    let _ = std::fs::remove_file(path);
+    Ok(())
 }
 
 #[test]

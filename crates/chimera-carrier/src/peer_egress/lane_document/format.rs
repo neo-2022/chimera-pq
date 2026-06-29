@@ -1,3 +1,5 @@
+use std::fmt::{Display, Write};
+
 use chimera_mesh::{MeshJoinMode, MeshMultipathLaneRole, MeshMultipathMode, MeshRouteBindingId};
 
 pub(super) const PLAN_SNAPSHOT_VERSION: &str = "v1";
@@ -47,22 +49,33 @@ pub(super) fn push_plan_comment(output: &mut String, key: &str, value: &str) -> 
     Ok(())
 }
 
-pub(super) fn push_plan_tab_comment(
-    output: &mut String,
-    key: &str,
-    fields: &[String],
-) -> Result<(), String> {
-    for field in fields {
-        cleaned_comment_field(field, key)?;
-    }
+pub(super) fn push_plan_comment_display<T: Display>(output: &mut String, key: &str, value: T) {
     output.push_str("# ");
     output.push_str(key);
-    for field in fields {
-        output.push('\t');
-        output.push_str(field);
-    }
+    output.push('=');
+    let _ = write!(output, "{value}");
     output.push('\n');
+}
+
+pub(super) fn begin_plan_tab_comment(output: &mut String, key: &str) {
+    output.push_str("# ");
+    output.push_str(key);
+}
+
+pub(super) fn push_plan_tab_str(output: &mut String, key: &str, value: &str) -> Result<(), String> {
+    cleaned_comment_field(value, key)?;
+    output.push('\t');
+    output.push_str(value);
     Ok(())
+}
+
+pub(super) fn push_plan_tab_display<T: Display>(output: &mut String, value: T) {
+    output.push('\t');
+    let _ = write!(output, "{value}");
+}
+
+pub(super) fn finish_plan_tab_comment(output: &mut String) {
+    output.push('\n');
 }
 
 pub(super) fn cleaned_comment_field<'a>(value: &'a str, label: &str) -> Result<&'a str, String> {
@@ -76,18 +89,35 @@ pub(super) fn parse_u64_field(value: &str, label: &str) -> Result<u64, String> {
     value.parse::<u64>().map_err(|_| format!("{label} invalid"))
 }
 
-pub(super) fn split_tab_fields<'a>(
+pub(super) fn split_comma_fields<const N: usize>(value: &str) -> Option<[&str; N]> {
+    let mut fields = [""; N];
+    let mut parts = value.split(',');
+    for field in &mut fields {
+        *field = parts.next()?.trim();
+    }
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(fields)
+}
+
+pub(super) fn split_tab_fields<'a, const N: usize>(
     value: &'a str,
-    expected_fields: usize,
     label: &str,
-) -> Result<Vec<&'a str>, String> {
-    let parts: Vec<&str> = value.split('\t').collect();
-    if parts.len() != expected_fields {
+) -> Result<[&'a str; N], String> {
+    let mut fields = [""; N];
+    let mut parts = value.split('\t');
+    for field in &mut fields {
+        *field = parts
+            .next()
+            .ok_or_else(|| format!("{label} line must contain exactly {N} tab-separated fields"))?;
+    }
+    if parts.next().is_some() {
         return Err(format!(
-            "{label} line must contain exactly {expected_fields} tab-separated fields"
+            "{label} line must contain exactly {N} tab-separated fields"
         ));
     }
-    Ok(parts)
+    Ok(fields)
 }
 
 pub(super) fn parse_u8_field(value: &str, label: &str) -> Result<u8, String> {

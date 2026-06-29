@@ -14,7 +14,14 @@ impl MeshRuntime {
         let urgent = validated
             .iter()
             .any(|item| !item.healthy || item.cooldown_active);
+        let mut affected_peer_count = 0_usize;
         for item in validated {
+            let changed = self
+                .health_state
+                .get(&item.node_id)
+                .map(|meta| meta.health != item)
+                .unwrap_or(true);
+            affected_peer_count = affected_peer_count.saturating_add(usize::from(changed));
             self.health_state.insert(
                 item.node_id.clone(),
                 MeshHealthMeta {
@@ -25,20 +32,24 @@ impl MeshRuntime {
         }
         self.refresh_profile_state_after_health_update();
         if urgent {
-            self.mark_pending_multipath_rebuild(
+            self.mark_pending_multipath_rebuild_with_dirty_scope(
                 MeshMultipathRebuildTriggerCause::UrgentFailover,
                 before_fingerprint,
+                MeshMultipathRebuildDirtyScope::PeerSet,
+                affected_peer_count,
             )?;
         } else {
-            self.mark_pending_multipath_rebuild(
+            self.mark_pending_multipath_rebuild_with_dirty_scope(
                 MeshMultipathRebuildTriggerCause::PeerHealthChanged,
                 before_fingerprint,
+                MeshMultipathRebuildDirtyScope::PeerSet,
+                affected_peer_count,
             )?;
         }
         Ok(())
     }
 
-    pub(super) fn evict_stale_health(&mut self) {
+    pub(super) fn evict_stale_health(&mut self) -> usize {
         let stale_after = self.table_policy.stale_after_ticks;
         let now = self.tick;
         let stale: Vec<String> = self
@@ -53,10 +64,12 @@ impl MeshRuntime {
                 }
             })
             .collect();
+        let removed_count = stale.len();
         for node in stale {
             self.health_state.remove(&node);
         }
         self.refresh_profile_state_after_health_update();
+        removed_count
     }
 
     pub(super) fn refresh_profile_state_after_health_update(&mut self) {
@@ -76,7 +89,7 @@ impl MeshRuntime {
         }
     }
 
-    pub(super) fn evict_stale_peers(&mut self) {
+    pub(super) fn evict_stale_peers(&mut self) -> usize {
         let stale_after = self.table_policy.stale_after_ticks;
         let now = self.tick;
         let stale: Vec<String> = self
@@ -91,10 +104,12 @@ impl MeshRuntime {
                 }
             })
             .collect();
+        let removed_count = stale.len();
         for node in stale {
             self.peers.remove(&node);
             self.peer_meta.remove(&node);
             self.health_state.remove(&node);
         }
+        removed_count
     }
 }

@@ -1,8 +1,7 @@
 use super::MeshPeerState;
 use super::common::{
-    STANDBY_EXPLAIN_KEYS, StandbyShadowDeriveInput, derive_standby_shadow_fields, explain_value,
-    redact_preemptive_switch_target, redacted_standby_target, remove_explain_keys,
-    selected_peer_ids,
+    STANDBY_EXPLAIN_KEYS, StandbyShadowDeriveInput, StandbyShadowExplainSnapshot,
+    derive_standby_shadow_fields, redacted_standby_target, remove_and_redact_explain_keys,
 };
 use super::standby_shadow::{
     resolve_mode_from_action, standby_ready_flags, standby_stage_source,
@@ -11,29 +10,20 @@ use super::standby_shadow::{
 pub(super) fn adapt_standby_shadow_from_dps(
     selected_peers: &[MeshPeerState],
     explain: &mut Vec<String>,
+    snapshot: &StandbyShadowExplainSnapshot,
+    dps_multipath_mode: Option<&str>,
 ) {
-    let action = explain_value(explain, "preemptive_shadow_action=")
-        .unwrap_or("hold")
-        .to_string();
-    let should_prepare =
-        explain_value(explain, "preemptive_shadow_switch_prepare=") == Some("true");
-    let should_switch =
-        explain_value(explain, "preemptive_shadow_switch_recommend=") == Some("true");
-    let switch_target = explain_value(explain, "preemptive_shadow_switch_target=")
-        .unwrap_or("none")
-        .to_string();
-    let multipath_mode = explain_value(explain, "dps_payload_multipath_mode=");
-    let selected_peer_ids = selected_peer_ids(selected_peers);
+    let action = snapshot.action.as_deref().unwrap_or("hold");
+    let should_prepare = snapshot.should_prepare;
+    let should_switch = snapshot.should_switch;
+    let switch_target = snapshot.switch_target.as_deref().unwrap_or("none");
+    let multipath_mode = dps_multipath_mode;
     let (standby_target, standby_target_source) =
-        standby_target_for_multipath_mode(multipath_mode, &switch_target, &selected_peer_ids);
-    let public_standby_target = redacted_standby_target(&standby_target, &selected_peer_ids);
-    let standby_mode = resolve_mode_from_action(&action);
-    let stage = explain_value(explain, "preemptive_shadow_stage=")
-        .unwrap_or("clear")
-        .to_string();
-    let trigger = explain_value(explain, "preemptive_shadow_trigger=")
-        .unwrap_or("none")
-        .to_string();
+        standby_target_for_multipath_mode(multipath_mode, switch_target, selected_peers);
+    let public_standby_target = redacted_standby_target(&standby_target, selected_peers);
+    let standby_mode = resolve_mode_from_action(action);
+    let stage = snapshot.stage.as_deref().unwrap_or("clear");
+    let trigger = snapshot.trigger.as_deref().unwrap_or("none");
     let standby_reason = if standby_target == "none" {
         "no_candidate"
     } else if should_switch {
@@ -48,9 +38,8 @@ pub(super) fn adapt_standby_shadow_from_dps(
     } else {
         "preemptive_shadow"
     };
-    let (warm_ready, hot_ready) =
-        standby_ready_flags(Some(stage.as_str()), standby_mode, &standby_target);
-    let stage_source = standby_stage_source(stage.as_str(), trigger.as_str());
+    let (warm_ready, hot_ready) = standby_ready_flags(Some(stage), standby_mode, &standby_target);
+    let stage_source = standby_stage_source(stage, trigger);
     let derived = derive_standby_shadow_fields(StandbyShadowDeriveInput {
         mode: standby_mode,
         target: &public_standby_target,
@@ -61,8 +50,7 @@ pub(super) fn adapt_standby_shadow_from_dps(
         hot_ready,
         stage_source: &stage_source,
     });
-    remove_explain_keys(explain, STANDBY_EXPLAIN_KEYS);
-    redact_preemptive_switch_target(explain, &selected_peer_ids);
+    remove_and_redact_explain_keys(explain, STANDBY_EXPLAIN_KEYS, selected_peers);
     explain.push(format!("standby_shadow_mode={}", derived.mode));
     explain.push(format!("standby_shadow_target={}", derived.target));
     explain.push(format!(

@@ -1,9 +1,6 @@
 use std::collections::BTreeSet;
 
-use super::policy_parse::{
-    parse_bool_field, parse_csv_unique, parse_csv_unique_normalized, parse_i32_field,
-    parse_u8_field, parse_u16_csv_field, parse_u64_field, parse_usize_field,
-};
+use super::policy_parse::{parse_i32_field, parse_u8_field, parse_u64_field, parse_usize_field};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshPathProfile {
@@ -311,7 +308,7 @@ impl ShadowSwitchMode {
 }
 
 impl MeshPathProfile {
-    fn parse(value: &str) -> Result<Self, String> {
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
         match value.to_ascii_lowercase().as_str() {
             "fast" => Ok(Self::Fast),
             "balanced" => Ok(Self::Balanced),
@@ -420,122 +417,7 @@ impl MeshPathPolicy {
     }
 
     pub fn from_dps_payload(payload: &str) -> Result<Self, String> {
-        if payload.trim().is_empty() {
-            return Err("mesh policy payload is empty".to_string());
-        }
-
-        let mut allowed_regions: Vec<String> = Vec::new();
-        let mut blocked_node_ids: Vec<String> = Vec::new();
-        let mut require_min_reliability: Option<u8> = None;
-        let mut max_load_score: Option<u8> = None;
-        let mut max_peers: Option<usize> = None;
-        let mut prefer_region_diversity: Option<bool> = None;
-        let mut max_selected_per_region: Option<usize> = None;
-        let mut min_distinct_regions: Option<usize> = None;
-        let mut path_profile_override: Option<MeshPathProfile> = None;
-        let mut multipath_mode: Option<MultipathMode> = None;
-        let mut multipath_demand: Option<MultipathDemand> = None;
-        let mut connect_fallback_ports: Option<Vec<u16>> = None;
-        let mut seen_mesh_keys = BTreeSet::new();
-
-        for segment in payload.split(';') {
-            let part = segment.trim();
-            if part.is_empty() {
-                continue;
-            }
-            let (key_raw, value_raw) = match part.split_once('=') {
-                Some(v) => v,
-                None => return Err("mesh policy payload field is malformed".to_string()),
-            };
-            let key = key_raw.trim();
-            let key_norm = key.to_ascii_lowercase();
-            let value = value_raw.trim();
-            if value.is_empty() {
-                return Err(format!("mesh policy payload field '{key}' is empty"));
-            }
-            if key_norm.starts_with("mesh_") && !seen_mesh_keys.insert(key_norm.clone()) {
-                return Err(format!(
-                    "mesh policy payload contains duplicate field '{key}'"
-                ));
-            }
-
-            match key_norm.as_str() {
-                "mesh_allowed_regions" => {
-                    allowed_regions = parse_csv_unique_normalized(value)?;
-                }
-                "mesh_blocked_nodes" => {
-                    blocked_node_ids = parse_csv_unique(value)?;
-                }
-                "mesh_min_reliability" => {
-                    require_min_reliability = Some(parse_u8_field(value, key)?);
-                }
-                "mesh_max_load" => {
-                    max_load_score = Some(parse_u8_field(value, key)?);
-                }
-                "mesh_max_peers" => {
-                    max_peers = Some(parse_usize_field(value, key)?);
-                }
-                "mesh_prefer_region_diversity" => {
-                    prefer_region_diversity = Some(parse_bool_field(value, key)?);
-                }
-                "mesh_max_selected_per_region" => {
-                    max_selected_per_region = Some(parse_usize_field(value, key)?);
-                }
-                "mesh_min_distinct_regions" => {
-                    min_distinct_regions = Some(parse_usize_field(value, key)?);
-                }
-                "mesh_path_profile" => {
-                    path_profile_override = Some(MeshPathProfile::parse(value)?);
-                }
-                "mesh_connect_fallback_ports" => {
-                    connect_fallback_ports = Some(parse_u16_csv_field(value, key)?);
-                }
-                "mesh_traffic_class" => {
-                    let _ = TrafficClass::from_dps_value(value)?;
-                }
-                "mesh_multipath_mode" => {
-                    multipath_mode = Some(MultipathMode::from_dps_value(value)?);
-                }
-                "mesh_multipath_demand" => {
-                    multipath_demand = Some(MultipathDemand::from_dps_value(value)?);
-                }
-                "mesh_continuity_policy" => {
-                    let _ = ContinuityPolicy::from_dps_value(value)?;
-                }
-                "mesh_route_binding_id" => {
-                    if parse_u64_field(value, key)? == 0 {
-                        return Err("mesh policy route_binding_id must be nonzero".to_string());
-                    }
-                }
-                _ => {
-                    if key_norm.starts_with("mesh_") {
-                        return Err(format!(
-                            "mesh policy payload contains unknown field '{key}'"
-                        ));
-                    }
-                }
-            }
-        }
-
-        let mut policy = Self::default_auto();
-        policy.allowed_regions = allowed_regions;
-        policy.blocked_node_ids = blocked_node_ids;
-        policy.require_min_reliability =
-            require_min_reliability.unwrap_or(policy.require_min_reliability);
-        policy.max_load_score = max_load_score.unwrap_or(policy.max_load_score);
-        policy.max_peers = max_peers.unwrap_or(policy.max_peers);
-        policy.prefer_region_diversity =
-            prefer_region_diversity.unwrap_or(policy.prefer_region_diversity);
-        policy.max_selected_per_region =
-            max_selected_per_region.unwrap_or(policy.max_selected_per_region);
-        policy.min_distinct_regions = min_distinct_regions.unwrap_or(policy.min_distinct_regions);
-        policy.path_profile_override = path_profile_override;
-        policy.multipath_mode = multipath_mode;
-        policy.multipath_demand = multipath_demand;
-        policy.connect_fallback_ports =
-            connect_fallback_ports.unwrap_or(policy.connect_fallback_ports);
-        policy.validate()?;
-        Ok(policy)
+        Ok(crate::dps_payload_snapshot::parse_mesh_dps_payload(payload)?.policy)
     }
 }
 

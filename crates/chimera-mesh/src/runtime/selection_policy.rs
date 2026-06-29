@@ -5,22 +5,23 @@ mod spread;
 #[path = "selection_policy_validate.rs"]
 mod validate;
 
-use crate::model::MeshPeerState;
 use crate::policy::MeshPathProfile;
 
-pub(super) fn select_with_region_diversity(
-    candidates: Vec<MeshPeerState>,
+use super::CandidateSlot;
+
+pub(super) fn select_with_region_diversity<'a>(
+    candidates: Vec<CandidateSlot<'a>>,
     max_peers: usize,
     max_selected_per_region: usize,
-) -> (Vec<MeshPeerState>, usize) {
+) -> (Vec<CandidateSlot<'a>>, usize) {
     select::select_with_region_diversity(candidates, max_peers, max_selected_per_region)
 }
 
-pub(super) fn select_by_score_with_region_cap(
-    candidates: Vec<MeshPeerState>,
+pub(super) fn select_by_score_with_region_cap<'a>(
+    candidates: Vec<CandidateSlot<'a>>,
     max_peers: usize,
     max_selected_per_region: usize,
-) -> (Vec<MeshPeerState>, usize) {
+) -> (Vec<CandidateSlot<'a>>, usize) {
     select::select_by_score_with_region_cap(candidates, max_peers, max_selected_per_region)
 }
 
@@ -37,7 +38,7 @@ pub(super) fn validate_runtime_node_id(node_id: &str, label: &str) -> Result<(),
 }
 
 pub(super) fn apply_resilient_region_spread_bonus(
-    candidates: &mut [MeshPeerState],
+    candidates: &mut [CandidateSlot<'_>],
     profile: MeshPathProfile,
     weight: u8,
 ) -> (bool, i32) {

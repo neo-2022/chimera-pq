@@ -55,7 +55,7 @@ impl std::fmt::Debug for MeshMultipathLane {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MeshRouteBindingId(NonZeroU64);
 
 impl MeshRouteBindingId {

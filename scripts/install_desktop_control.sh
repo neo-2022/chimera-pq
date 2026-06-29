@@ -311,7 +311,7 @@ configure_peer_egress_env() {
   local server="${2:-}"
   local invite_token="${3:-}"
   local peer_listen="${CHIMERA_PEER_EGRESS_PEER_LISTEN:-${4:-0.0.0.0:0}}"
-  local local_listen="${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-${5:-127.0.0.1:18135}}"
+  local local_listen="${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-${5:-127.0.0.1:0}}"
   local pool="${CHIMERA_PEER_EGRESS_POOL:-8}"
   local connections="${CHIMERA_PEER_EGRESS_CONNECTIONS:-8}"
   local aead="${CHIMERA_PEER_EGRESS_AEAD:-aes256gcm}"
@@ -336,6 +336,9 @@ configure_peer_egress_env() {
   fi
   if [[ "$mode" == "node" && -z "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]]; then
     peer_listen="0.0.0.0:0"
+  fi
+  if [[ "$mode" == "node" && -z "${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-}" ]]; then
+    local_listen="127.0.0.1:0"
   fi
   mkdir -p "$(dirname "$PEER_EGRESS_ENV_FILE")"
   mkdir -p "$(dirname "$PEER_EGRESS_STATE_FILE")"
@@ -418,13 +421,13 @@ run_install_permissions_preflight
 configure_client_target
 if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
 elif [[ -n "${CONFIGURED_CLIENT_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+  configure_peer_egress_env "node" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
 else
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:18135"
+  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
 fi
 configure_transparent_runtime_env
 if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then

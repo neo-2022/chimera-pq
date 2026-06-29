@@ -25,7 +25,7 @@ pub(super) fn build_plan_from_runtime_state(
     join_mode: MeshJoinMode,
     policy: &MeshPathPolicy,
 ) -> Result<MeshPathPlan, String> {
-    let mut explain = Vec::new();
+    let mut explain = Vec::with_capacity(128 + runtime.peers.len().saturating_mul(4));
     let setup = build_plan_setup(runtime, join_mode.clone(), policy, &mut explain);
     let blocked: BTreeSet<&str> = setup
         .blocked_node_ids

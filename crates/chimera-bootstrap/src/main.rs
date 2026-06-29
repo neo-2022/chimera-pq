@@ -1,16 +1,12 @@
+use chimera_bootstrap::{Result, peer_update};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::env;
-use std::error::Error;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tar::Archive;
-
-type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
-
-mod peer_update;
 
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const DOWNLOAD_CONNECT_TIMEOUT_ENV: &str = "CHIMERA_BOOTSTRAP_CONNECT_TIMEOUT_SEC";

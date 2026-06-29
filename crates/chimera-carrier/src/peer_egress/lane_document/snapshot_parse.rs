@@ -9,9 +9,9 @@ use super::format::{
     PLAN_KEY_LANE_REQUESTED, PLAN_KEY_LOCAL_RESERVE_PCT, PLAN_KEY_MODE, PLAN_KEY_NAMESPACE,
     PLAN_KEY_PLANNER_REBUILD_REASON, PLAN_KEY_PREFIX, PLAN_KEY_ROUTE_BINDING_ID,
     PLAN_KEY_SELECTED_PEER, PLAN_KEY_TRANSIT_BUDGET_PCT, PLAN_KEY_TRANSIT_PAYLOAD_POLICY,
-    PLAN_KEY_VERSION, PLAN_SNAPSHOT_VERSION, parse_bool_field, parse_i32_field, parse_join_mode,
-    parse_multipath_mode, parse_optional_route_binding_id, parse_u8_field, parse_u16_field,
-    parse_u64_field, parse_usize_field, split_tab_fields,
+    parse_bool_field, parse_i32_field, parse_join_mode, parse_multipath_mode,
+    parse_optional_route_binding_id, parse_u8_field, parse_u16_field, parse_u64_field,
+    parse_usize_field, split_tab_fields,
 };
 
 use super::snapshot_draft::TransitLanePlanSnapshotDraft;
@@ -23,83 +23,82 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
     let Some(comment) = line.strip_prefix("# ") else {
         return Ok(false);
     };
-    if comment == format!("{PLAN_KEY_VERSION}={PLAN_SNAPSHOT_VERSION}") {
+    if comment == "chimera_plan_snapshot=v1" {
         draft.version_seen = true;
         draft.snapshot_seen = true;
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_NAMESPACE}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_NAMESPACE) {
         draft.snapshot_seen = true;
         draft.namespace = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_JOIN_MODE}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_JOIN_MODE) {
         draft.snapshot_seen = true;
         draft.join_mode = Some(parse_join_mode(value)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_MODE}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_MODE) {
         draft.snapshot_seen = true;
         draft.mode = Some(parse_multipath_mode(value)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_ROUTE_BINDING_ID}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_ROUTE_BINDING_ID) {
         draft.snapshot_seen = true;
         draft.route_binding_id = parse_optional_route_binding_id(value)?;
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_LANE_REQUESTED}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_REQUESTED) {
         draft.snapshot_seen = true;
         draft.lane_requested = Some(parse_usize_field(value, PLAN_KEY_LANE_REQUESTED)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_LANE_ADMITTED}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_ADMITTED) {
         draft.snapshot_seen = true;
         draft.lane_admitted = Some(parse_usize_field(value, PLAN_KEY_LANE_ADMITTED)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_LANE_REJECTED}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_REJECTED) {
         draft.snapshot_seen = true;
         draft.lane_rejected = Some(parse_usize_field(value, PLAN_KEY_LANE_REJECTED)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_LANE_CAPACITY_STATUS}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_CAPACITY_STATUS) {
         draft.snapshot_seen = true;
         draft.lane_capacity_status = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_LOCAL_RESERVE_PCT}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LOCAL_RESERVE_PCT) {
         draft.snapshot_seen = true;
         draft.local_reserve_pct = Some(parse_u8_field(value, PLAN_KEY_LOCAL_RESERVE_PCT)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_TRANSIT_BUDGET_PCT}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_TRANSIT_BUDGET_PCT) {
         draft.snapshot_seen = true;
         draft.transit_budget_pct = Some(parse_u8_field(value, PLAN_KEY_TRANSIT_BUDGET_PCT)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_POLICY}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_POLICY) {
         draft.snapshot_seen = true;
         draft.demand_policy = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_POLICY_SOURCE}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_POLICY_SOURCE) {
         draft.snapshot_seen = true;
         draft.demand_policy_source = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_REQUESTED}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_REQUESTED) {
         draft.snapshot_seen = true;
         draft.demand_requested = Some(parse_usize_field(value, PLAN_KEY_DEMAND_REQUESTED)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_PLANNED}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_PLANNED) {
         draft.snapshot_seen = true;
         draft.demand_planned = Some(parse_usize_field(value, PLAN_KEY_DEMAND_PLANNED)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_ADMITTED_CAPACITY_PCT}="))
-    {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_ADMITTED_CAPACITY_PCT) {
         draft.snapshot_seen = true;
         draft.demand_admitted_capacity_pct = Some(parse_u8_field(
             value,
@@ -107,17 +106,17 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         )?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_UNMET}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_UNMET) {
         draft.snapshot_seen = true;
         draft.demand_unmet = Some(parse_usize_field(value, PLAN_KEY_DEMAND_UNMET)?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_STATUS}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_STATUS) {
         draft.snapshot_seen = true;
         draft.demand_status = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_DEMAND_REBUILD_RECOMMENDED}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_REBUILD_RECOMMENDED) {
         draft.snapshot_seen = true;
         draft.demand_rebuild_recommended = Some(parse_bool_field(
             value,
@@ -125,22 +124,22 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         )?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_FAIRNESS_POLICY}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_FAIRNESS_POLICY) {
         draft.snapshot_seen = true;
         draft.fairness_policy = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_EXECUTION_STATUS}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_EXECUTION_STATUS) {
         draft.snapshot_seen = true;
         draft.execution_status = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_TRANSIT_PAYLOAD_POLICY}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_TRANSIT_PAYLOAD_POLICY) {
         draft.snapshot_seen = true;
         draft.transit_payload_policy = Some(value.to_string());
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_PLANNER_REBUILD_REASON}=")) {
+    if let Some(value) = strip_plan_value(comment, PLAN_KEY_PLANNER_REBUILD_REASON) {
         draft.snapshot_seen = true;
         draft.planner_rebuild_reason = Some(value.to_string());
         return Ok(true);
@@ -172,9 +171,9 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         )?);
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_SELECTED_PEER}\t")) {
+    if let Some(value) = strip_plan_tab(comment, PLAN_KEY_SELECTED_PEER) {
         draft.snapshot_seen = true;
-        let parts = split_tab_fields(value, 7, PLAN_KEY_SELECTED_PEER)?;
+        let parts = split_tab_fields::<7>(value, PLAN_KEY_SELECTED_PEER)?;
         let index = parse_usize_field(parts[0], PLAN_KEY_SELECTED_PEER)?;
         let peer = MeshPeerState {
             node_id: parts[1].to_string(),
@@ -191,9 +190,9 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         }
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_CARRIER_BINDING}\t")) {
+    if let Some(value) = strip_plan_tab(comment, PLAN_KEY_CARRIER_BINDING) {
         draft.snapshot_seen = true;
-        let parts = split_tab_fields(value, 7, PLAN_KEY_CARRIER_BINDING)?;
+        let parts = split_tab_fields::<7>(value, PLAN_KEY_CARRIER_BINDING)?;
         let route_id = parse_u64_field(parts[0], PLAN_KEY_CARRIER_BINDING)?;
         let lane_id = parse_usize_field(parts[1], PLAN_KEY_CARRIER_BINDING)?;
         let role = super::format::parse_role(parts[4])?;
@@ -211,9 +210,9 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         }
         return Ok(true);
     }
-    if let Some(value) = comment.strip_prefix(&format!("{PLAN_KEY_EXPLAIN}\t")) {
+    if let Some(value) = strip_plan_tab(comment, PLAN_KEY_EXPLAIN) {
         draft.snapshot_seen = true;
-        let parts = split_tab_fields(value, 2, PLAN_KEY_EXPLAIN)?;
+        let parts = split_tab_fields::<2>(value, PLAN_KEY_EXPLAIN)?;
         let index = parse_usize_field(parts[0], PLAN_KEY_EXPLAIN)?;
         if draft.explain.insert(index, parts[1].to_string()).is_some() {
             return Err("transit plan snapshot explain duplicate index".to_string());
@@ -226,4 +225,14 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
     }
 
     Ok(false)
+}
+
+fn strip_plan_value<'a>(comment: &'a str, key: &str) -> Option<&'a str> {
+    let value = comment.strip_prefix(key)?;
+    value.strip_prefix('=')
+}
+
+fn strip_plan_tab<'a>(comment: &'a str, key: &str) -> Option<&'a str> {
+    let value = comment.strip_prefix(key)?;
+    value.strip_prefix('\t')
 }

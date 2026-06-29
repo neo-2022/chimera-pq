@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 chimera-carrier = { path = "../chimera-carrier" }
+chimera-bootstrap = { path = "../chimera-bootstrap" }
 chimera-carrier-quic = { path = "../chimera-carrier-quic" }
 chimera-carrier-tls = { path = "../chimera-carrier-tls" }
 chimera-session = { path = "../chimera-session" }

@@ -53,6 +53,7 @@ pub(super) fn load_upstream_bootstrap_nodes() -> Result<Vec<MeshNode>, String> {
             "1",
             None,
             None,
+            None,
             "upstream_bootstrap",
         )?;
         out.push(node);

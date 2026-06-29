@@ -1,11 +1,16 @@
 mod metadata;
 mod serve_args;
 mod serve_state;
+pub mod serve_state_publish;
 mod server;
 
-pub(crate) use metadata::parse_peer_metadata_file;
-pub(crate) use serve_args::ServeReleaseOptions;
-pub(crate) use server::serve_release;
+pub use metadata::parse_peer_metadata_file;
+pub use serve_args::ServeReleaseOptions;
+pub use serve_state_publish::{
+    PeerUpdateStateAdvertisement, PeerUpdateStatePublishAction, decide_peer_update_state_publish,
+    parse_existing_peer_update_state,
+};
+pub use server::serve_release;
 
 #[cfg(test)]
 mod metadata_tests;

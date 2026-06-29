@@ -3,7 +3,9 @@ use chimera_mesh::{
     group_mesh_nodes_by_country,
 };
 
-use crate::mesh_cli::nodes_inventory::{MeshNodesInventory, extract_flag_value};
+use crate::mesh_cli::nodes_inventory::{
+    MeshNodesInventory, extract_flag_value, published_endpoint_updates_from_nodes,
+};
 use crate::mesh_cli::probe_redaction::{endpoint_label, peer_label, public_node_label};
 
 use super::filter::parse_filter;
@@ -144,6 +146,44 @@ pub(super) fn probe_all(args: &[String], inventory: &MeshNodesInventory) -> i32 
             return 2;
         }
         eprintln!("mesh nodes probe error: discovery merge failed: {error}");
+        return 2;
+    }
+    let endpoint_updates = match published_endpoint_updates_from_nodes(&filtered_nodes) {
+        Ok(updates) => updates,
+        Err(error) => {
+            if json {
+                println!(
+                    "{}",
+                    render_nodes_json_error(
+                        "mesh_nodes_probe_all",
+                        "endpoint_state",
+                        "build_published_endpoint_updates",
+                        &error
+                    )
+                );
+                return 2;
+            }
+            eprintln!("mesh nodes probe error: endpoint state update invalid: {error}");
+            return 2;
+        }
+    };
+    if !endpoint_updates.is_empty()
+        && let Err(error) =
+            runtime.merge_published_endpoint_updates("mesh-nodes-inventory", &endpoint_updates)
+    {
+        if json {
+            println!(
+                "{}",
+                render_nodes_json_error(
+                    "mesh_nodes_probe_all",
+                    "endpoint_state",
+                    "merge_published_endpoint_updates",
+                    &error
+                )
+            );
+            return 2;
+        }
+        eprintln!("mesh nodes probe error: endpoint state merge failed: {error}");
         return 2;
     }
     let request = MeshJoinRequest {

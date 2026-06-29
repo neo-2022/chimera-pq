@@ -26,19 +26,22 @@ case "$PROFILE_SET" in
     ;;
 esac
 
-if ! [[ "$SIDE_A_ENDPOINT" =~ ^[^:]+:[0-9]+$ ]]; then
-  echo "mesh launch preflight autopilot: side_a endpoint must be host:port via arg or CHIMERA_MESH_SIDE_A_ENDPOINT"
-  exit 2
-fi
-
 profiles=("high_speed_anonymous" "privacy_first")
 if [[ "$PROFILE_SET" == "all" ]]; then
   profiles+=("speed_first" "low_latency_private")
 fi
 
-echo "mesh launch preflight autopilot: mode=$MODE profile_set=$PROFILE_SET side_a_endpoint=$SIDE_A_ENDPOINT"
+if [[ -n "$SIDE_A_ENDPOINT" ]]; then
+  echo "mesh launch preflight autopilot: mode=$MODE profile_set=$PROFILE_SET manual_side_a_endpoint=fallback"
+else
+  echo "mesh launch preflight autopilot: mode=$MODE profile_set=$PROFILE_SET auto_bind=discovery_runtime_inventory"
+fi
 
-just mesh-launch-preflight-auto-bind "$SIDE_A_ENDPOINT"
+if [[ -n "$SIDE_A_ENDPOINT" ]]; then
+  just mesh-launch-preflight-auto-bind "$SIDE_A_ENDPOINT"
+else
+  just mesh-launch-preflight-auto-bind
+fi
 just mesh-launch-preflight-ready-check
 
 if [[ "$MODE" == "staged" ]]; then

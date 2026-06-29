@@ -156,12 +156,13 @@ Required env vars:
 - `CHIMERA_MESH_NAMESPACE`
 - `CHIMERA_MESH_LOCAL_NODE`
 - `CHIMERA_MESH_REMOTE_NODE`
-- `CHIMERA_MESH_REMOTE_ENDPOINT`
+- `CHIMERA_MESH_REMOTE_ENDPOINT` (`__AUTO__` for the normal path; auto-resolved by `mesh-launch-preflight-auto-bind`)
 - `CHIMERA_MESH_LOCAL_OUT`
 - `CHIMERA_MESH_REMOTE_OUT`
 
 Safety note:
-- for real two-host runs, `CHIMERA_MESH_REMOTE_ENDPOINT` must be a real reachable host.
+- for real two-host runs, auto-bind resolves real reachable endpoints from local signed discovery snapshot first, then published peer-egress/runtime state, then inventory/runtime state;
+- manual endpoint override is fallback only, and it must be a real reachable host.
 - documentation placeholder ranges (`198.51.100.0/24`, `203.0.113.0/24`, `192.0.2.0/24`) are blocked by env guard unless `CHIMERA_MESH_ALLOW_REMOTE_MISSING=1` is explicitly set for local-only staged checks.
 
 Optional env vars:
@@ -185,13 +186,14 @@ Convenience commands after copying templates to `.env` files:
 cp configs/mesh_launch_preflight.side_a.env.example configs/mesh_launch_preflight.side_a.env
 cp configs/mesh_launch_preflight.side_b.env.example configs/mesh_launch_preflight.side_b.env
 
+just mesh-launch-preflight-autopilot
 just mesh-launch-preflight-ready-check
 just mesh-launch-preflight-side-a
 just mesh-launch-preflight-side-b
 just mesh-launch-preflight-evidence-guard
 ```
 
-Fast endpoint update helper:
+Fallback manual endpoint update helper (only when automatic sources are unavailable):
 
 ```bash
 just mesh-launch-preflight-set-remote-endpoint side_a <node_b_host:port>
@@ -263,7 +265,7 @@ Profile cheat-sheet (operator quick choice):
 N-node preflight example (extra candidate peers):
 
 ```bash
-CHIMERA_MESH_EXTRA_PEERS='node-c@203.0.113.30:443@eu@30@88,node-d@203.0.113.31:443@eu@35@86' \
+CHIMERA_MESH_EXTRA_PEERS='node-c@<node_c_host:port>@eu@30@88,node-d@<node_d_host:port>@eu@35@86' \
   just mesh-launch-preflight-side-a-profile high_speed_anonymous
 ```
 
@@ -282,15 +284,14 @@ just mesh-launch-preflight-autopilot
 Defaults:
 - mode: `staged`
 - profile set: `core` (`high_speed_anonymous`, `privacy_first`)
-- first-node remote endpoint: `<node_b_host:port>`
 
 Variants:
 ```bash
-just mesh-launch-preflight-autopilot full core <node_b_host:port>
-just mesh-launch-preflight-autopilot staged all <node_b_host:port>
+just mesh-launch-preflight-autopilot full core
+just mesh-launch-preflight-autopilot staged all
 ```
 Behavior:
-- auto-binds real endpoints via `mesh-launch-preflight-auto-bind`;
+- auto-binds real endpoints via `mesh-launch-preflight-auto-bind` from local signed discovery snapshot first, then published peer-egress/runtime state, then inventory/runtime state;
 - enforces `mesh-launch-preflight-ready-check`;
 - runs side A then side B for selected profile set;
 - in `full` mode also runs `mesh-launch-preflight-evidence-guard`;
@@ -362,12 +363,17 @@ Preflight env gate:
 One-shot unblock + run:
 
 ```bash
+just mesh-launch-preflight-autopilot
+```
+
+Fallback manual unblock + run (only when automatic sources are unavailable):
+```bash
 just mesh-launch-preflight-unblock-and-run <node_b_host:port>
 ```
 
-Fast unblock path (step-by-step):
+Auto-bind unblock path (step-by-step):
 ```bash
-just mesh-launch-preflight-set-remote-endpoint side_a <node_b_host:port>
+just mesh-launch-preflight-auto-bind
 just mesh-launch-preflight-ready-check
 just mesh-launch-preflight-side-a && just mesh-launch-preflight-side-b && just mesh-launch-preflight-evidence-guard
 ```

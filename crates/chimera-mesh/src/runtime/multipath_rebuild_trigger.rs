@@ -9,6 +9,7 @@ pub(super) struct MeshMultipathRebuildFingerprint(u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MeshMultipathRebuildTriggerCause {
     PeerTableChanged,
+    PublishedEndpointChanged,
     PeerHealthChanged,
     PeerPerformanceChanged,
     UrgentFailover,
@@ -18,6 +19,7 @@ impl MeshMultipathRebuildTriggerCause {
     fn reason(self) -> &'static str {
         match self {
             Self::PeerTableChanged => "peer_table_changed",
+            Self::PublishedEndpointChanged => "published_endpoint_changed",
             Self::PeerHealthChanged => "peer_health_changed",
             Self::PeerPerformanceChanged => "peer_performance_changed",
             Self::UrgentFailover => "urgent_failover",
@@ -53,7 +55,6 @@ impl MeshRuntime {
         let mut state = FINGERPRINT_OFFSET;
         fold_u64(&mut state, self.peers.len() as u64);
         fold_u64(&mut state, self.health_state.len() as u64);
-        fold_u64(&mut state, self.region_distribution().len() as u64);
         fold_u64(
             &mut state,
             self.last_table_enforcement_report.total_peers_after as u64,
@@ -72,20 +73,14 @@ impl MeshRuntime {
         );
 
         let mut degraded_count = 0_u64;
-        for meta in self.health_state.values() {
-            if !meta.health.healthy || meta.health.cooldown_active {
-                degraded_count = degraded_count.saturating_add(1);
-            }
-        }
-        fold_u64(&mut state, degraded_count);
-
-        for (region, count) in self.region_distribution() {
-            fold_str(&mut state, &region);
-            fold_u64(&mut state, count as u64);
-        }
+        let mut region_counts = std::collections::BTreeMap::<String, usize>::new();
 
         for (idx, peer) in self.peers.values().enumerate() {
+            *region_counts
+                .entry(normalize_region_key(&peer.region))
+                .or_insert(0) += 1;
             fold_u64(&mut state, idx as u64);
+            fold_str(&mut state, &peer.endpoint);
             fold_str(&mut state, &peer.region);
             fold_u64(&mut state, u64::from(peer.reliability_score));
             fold_u64(&mut state, u64::from(peer.load_score));
@@ -105,6 +100,9 @@ impl MeshRuntime {
                     u64::from(!meta.health.healthy) | (u64::from(meta.health.cooldown_active) << 1)
                 })
                 .unwrap_or(0);
+            if health_flags != 0 {
+                degraded_count = degraded_count.saturating_add(1);
+            }
             fold_u64(&mut state, health_flags);
             if let Some(meta) = self.peer_meta.get(&peer.node_id) {
                 fold_u64(&mut state, meta.identity_marker);
@@ -122,28 +120,62 @@ impl MeshRuntime {
                     &mut state,
                     u64::from(meta.last_effective_replacement_threshold.is_negative()),
                 );
+                fold_u64(&mut state, meta.endpoint_generation);
+                fold_u64(
+                    &mut state,
+                    meta.update_bootstrap_url
+                        .as_ref()
+                        .map_or(0, |url| url.len() as u64),
+                );
             }
+        }
+
+        fold_u64(&mut state, degraded_count);
+        fold_u64(&mut state, region_counts.len() as u64);
+        for (region, count) in region_counts {
+            fold_str(&mut state, &region);
+            fold_u64(&mut state, count as u64);
         }
 
         MeshMultipathRebuildFingerprint(state)
     }
 
-    pub(super) fn mark_pending_multipath_rebuild(
+    pub(super) fn mark_pending_multipath_rebuild_with_dirty_scope(
         &mut self,
         cause: MeshMultipathRebuildTriggerCause,
         before: MeshMultipathRebuildFingerprint,
+        dirty_scope: MeshMultipathRebuildDirtyScope,
+        affected_peer_count: usize,
     ) -> Result<(), String> {
         let after = self.rebuild_trigger_fingerprint();
         if before == after {
             return Ok(());
         }
         let reason = cause.reason();
+        let dirty_metadata = match dirty_scope {
+            MeshMultipathRebuildDirtyScope::Unknown => MeshMultipathRebuildDirtyMetadata::unknown(),
+            MeshMultipathRebuildDirtyScope::PeerSet => {
+                MeshMultipathRebuildDirtyMetadata::peer_set(affected_peer_count)?
+            }
+        };
         let signal = if cause == MeshMultipathRebuildTriggerCause::UrgentFailover {
-            MeshMultipathRebuildSignal::urgent_failover(
-                reason, self.tick, after.0, self.tick, self.tick,
+            MeshMultipathRebuildSignal::urgent_failover_with_dirty_scope(
+                reason,
+                self.tick,
+                after.0,
+                self.tick,
+                self.tick,
+                dirty_metadata,
             )?
         } else {
-            MeshMultipathRebuildSignal::soft(reason, self.tick, after.0, self.tick, self.tick)?
+            MeshMultipathRebuildSignal::soft_with_dirty_scope(
+                reason,
+                self.tick,
+                after.0,
+                self.tick,
+                self.tick,
+                dirty_metadata,
+            )?
         };
         self.merge_pending_multipath_rebuild_signal(signal);
         Ok(())
