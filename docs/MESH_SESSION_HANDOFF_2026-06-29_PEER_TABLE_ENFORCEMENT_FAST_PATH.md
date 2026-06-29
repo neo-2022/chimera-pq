@@ -45,16 +45,16 @@ Key fields:
 
 - `peer_table_enforcement_noop_iterations=10000`
 - `peer_table_enforcement_peer_count=64`
-- `peer_table_enforcement_noop_ops_per_sec=222876`
-- `peer_table_enforcement_noop_p95_ns=4875`
-- `traffic_hints_one_pass_ops_per_sec=304505`
-- `traffic_hints_one_pass_p95_ns=3681`
-- `traffic_hints_four_pass_baseline_ops_per_sec=107374`
-- `traffic_hints_four_pass_baseline_p95_ns=9754`
-- `live_binding_reload_index_ops_per_sec=204954`
-- `live_binding_reload_index_p95_ns=5286`
-- `live_dps_plan_core_from_payload_ops_per_sec=30206`
-- `live_dps_plan_path_from_payload_ops_per_sec=4806`
+- `peer_table_enforcement_noop_ops_per_sec=226179`
+- `peer_table_enforcement_noop_p95_ns=4608`
+- `traffic_hints_one_pass_ops_per_sec=309671`
+- `traffic_hints_one_pass_p95_ns=3408`
+- `traffic_hints_four_pass_baseline_ops_per_sec=107940`
+- `traffic_hints_four_pass_baseline_p95_ns=9515`
+- `live_binding_reload_index_ops_per_sec=209520`
+- `live_binding_reload_index_p95_ns=4847`
+- `live_dps_plan_core_from_payload_ops_per_sec=29063`
+- `live_dps_plan_path_from_payload_ops_per_sec=4844`
 - `network_state=not_modified`
 - `transit_payload_policy=opaque_sealed_payload_untouched`
 
