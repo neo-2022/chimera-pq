@@ -1,10 +1,4 @@
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::Path;
-
-#[cfg(unix)]
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::peer_egress::options_mode::parse_mode;
 pub use crate::peer_egress::options_mode::{Mode, mode_name};
@@ -24,6 +18,9 @@ pub const SECURE_MAX_CIPHERTEXT_LEN: usize = SECURE_PLAINTEXT_CHUNK_LEN + 32;
 pub const TCP_BUFFER_BYTES: usize = 4 * 1024 * 1024;
 pub const NODE_DEFAULT_LOCAL_LISTEN: &str = "127.0.0.1:0";
 pub const NODE_DEFAULT_PEER_LISTEN: &str = "0.0.0.0:0";
+
+mod state_file;
+pub use state_file::write_resolved_state_file;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AeadSuite {
@@ -379,51 +376,6 @@ pub fn enforce_min_throughput(actual_mib_s: f64, min_mib_s: u64) -> Result<(), S
     Err(format!(
         "throughput below gate: actual_mib_s={actual_mib_s:.2} min_mib_s={min_mib_s}"
     ))
-}
-
-pub fn write_resolved_state_file(
-    state_file: &str,
-    mode: &Mode,
-    resolved_local_listen: &str,
-    resolved_peer_listen: &str,
-) -> Result<(), String> {
-    let contents = format!(
-        "mode={}\nresolved_local_listen={}\nresolved_peer_listen={}\n",
-        mode_name(mode),
-        resolved_local_listen,
-        resolved_peer_listen
-    );
-    let path = Path::new(state_file);
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent).map_err(|error| format!("write state file failed: {error}"))?;
-    }
-    let tmp_path = path.with_extension("tmp");
-    let _ = fs::remove_file(&tmp_path);
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    options.mode(0o600);
-    let mut file = options
-        .open(&tmp_path)
-        .map_err(|error| format!("write state file failed: {error}"))?;
-    file.write_all(contents.as_bytes())
-        .map_err(|error| format!("write state file failed: {error}"))?;
-    file.sync_all()
-        .map_err(|error| format!("write state file failed: {error}"))?;
-    #[cfg(unix)]
-    {
-        fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600))
-            .map_err(|error| format!("write state file failed: {error}"))?;
-    }
-    fs::rename(&tmp_path, path).map_err(|error| format!("write state file failed: {error}"))?;
-    #[cfg(unix)]
-    {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|error| format!("write state file failed: {error}"))?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

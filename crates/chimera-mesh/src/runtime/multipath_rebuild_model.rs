@@ -4,6 +4,15 @@ const ACTION_ALLOW_REBUILD: &str = "allow_rebuild";
 const ACTION_SUPPRESS_REBUILD: &str = "suppress_rebuild";
 const ACTION_FAIL_CLOSED: &str = "fail_closed";
 
+#[path = "multipath_rebuild_model/decision.rs"]
+mod decision;
+#[path = "multipath_rebuild_model/validation.rs"]
+mod validation;
+pub use decision::MeshMultipathRebuildDecision;
+pub(super) use decision::{MeshMultipathRebuildChanges, build_decision};
+use validation::validate_dirty_scope;
+pub(super) use validation::validate_rebuild_reason;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshMultipathRebuildUrgency {
     Soft,
@@ -335,176 +344,4 @@ impl std::fmt::Debug for MeshMultipathRebuildSignal {
             .field("affected_peer_count", &self.affected_peer_count)
             .finish()
     }
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct MeshMultipathRebuildDecision {
-    pub action: MeshMultipathRebuildAction,
-    pub reason: String,
-    pub signal_reason: String,
-    pub rebuild_allowed: bool,
-    pub debounced: bool,
-    pub stale: bool,
-    pub generation_changed: bool,
-    pub fingerprint_changed: bool,
-    pub pending_count: u64,
-    pub dirty_scope: MeshMultipathRebuildDirtyScope,
-    pub affected_peer_count: usize,
-    pub policy: String,
-    pub privacy: String,
-    pub explain: Vec<String>,
-}
-
-impl std::fmt::Debug for MeshMultipathRebuildDecision {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MeshMultipathRebuildDecision")
-            .field("action", &self.action)
-            .field("reason", &self.reason)
-            .field("signal_reason", &self.signal_reason)
-            .field("rebuild_allowed", &self.rebuild_allowed)
-            .field("debounced", &self.debounced)
-            .field("stale", &self.stale)
-            .field("generation_changed", &self.generation_changed)
-            .field("fingerprint_changed", &self.fingerprint_changed)
-            .field("pending_count", &self.pending_count)
-            .field("dirty_scope", &self.dirty_scope)
-            .field("affected_peer_count", &self.affected_peer_count)
-            .field("policy", &self.policy)
-            .field("privacy", &self.privacy)
-            .finish()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct MeshMultipathRebuildChanges {
-    pub generation_changed: bool,
-    pub fingerprint_changed: bool,
-}
-
-pub(super) fn build_decision(
-    action: MeshMultipathRebuildAction,
-    reason: &str,
-    signal: &MeshMultipathRebuildSignal,
-    changes: MeshMultipathRebuildChanges,
-    stale: bool,
-    debounced: bool,
-    pending_count: u64,
-) -> MeshMultipathRebuildDecision {
-    let rebuild_allowed = action == MeshMultipathRebuildAction::AllowRebuild;
-    let explain = vec![
-        format!("multipath_rebuild_action={}", action.as_str()),
-        format!("multipath_rebuild_reason={reason}"),
-        format!("multipath_rebuild_signal_reason={}", signal.reason()),
-        format!("multipath_rebuild_allowed={rebuild_allowed}"),
-        format!("multipath_rebuild_debounced={debounced}"),
-        format!("multipath_rebuild_stale={stale}"),
-        format!(
-            "multipath_rebuild_generation_changed={}",
-            changes.generation_changed
-        ),
-        format!(
-            "multipath_rebuild_fingerprint_changed={}",
-            changes.fingerprint_changed
-        ),
-        format!(
-            "multipath_rebuild_dirty_scope={}",
-            signal.dirty_scope().as_str()
-        ),
-        format!(
-            "multipath_rebuild_affected_peer_count={}",
-            signal.affected_peer_count()
-        ),
-        format!("multipath_rebuild_pending_count={pending_count}"),
-        format!("multipath_rebuild_policy={REBUILD_CONTROL_POLICY}"),
-        format!("multipath_rebuild_privacy={REBUILD_CONTROL_PRIVACY}"),
-    ];
-    MeshMultipathRebuildDecision {
-        action,
-        reason: reason.to_string(),
-        signal_reason: signal.reason().to_string(),
-        rebuild_allowed,
-        debounced,
-        stale,
-        generation_changed: changes.generation_changed,
-        fingerprint_changed: changes.fingerprint_changed,
-        pending_count,
-        dirty_scope: signal.dirty_scope(),
-        affected_peer_count: signal.affected_peer_count(),
-        policy: REBUILD_CONTROL_POLICY.to_string(),
-        privacy: REBUILD_CONTROL_PRIVACY.to_string(),
-        explain,
-    }
-}
-
-pub(super) fn validate_rebuild_reason(reason: &str) -> Result<(), String> {
-    if reason.is_empty() {
-        return Err("multipath rebuild reason is empty".to_string());
-    }
-    if reason.trim() != reason {
-        return Err("multipath rebuild reason must not contain surrounding whitespace".to_string());
-    }
-    if reason.len() > 64 {
-        return Err("multipath rebuild reason is too long".to_string());
-    }
-    if !reason
-        .bytes()
-        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
-    {
-        return Err("multipath rebuild reason must be a lowercase enum label".to_string());
-    }
-    if !allowed_rebuild_reason(reason) {
-        return Err("multipath rebuild reason is not allowlisted".to_string());
-    }
-    Ok(())
-}
-
-fn validate_dirty_scope(
-    dirty_scope: MeshMultipathRebuildDirtyScope,
-    affected_peer_count: usize,
-) -> Result<(), String> {
-    match dirty_scope {
-        MeshMultipathRebuildDirtyScope::Unknown => {
-            if affected_peer_count == 0 {
-                Ok(())
-            } else {
-                Err(
-                    "multipath rebuild dirty scope unknown must use affected_peer_count=0"
-                        .to_string(),
-                )
-            }
-        }
-        MeshMultipathRebuildDirtyScope::PeerSet => {
-            if affected_peer_count == 0 {
-                Err(
-                    "multipath rebuild peer-set dirty scope requires affected_peer_count > 0"
-                        .to_string(),
-                )
-            } else {
-                Ok(())
-            }
-        }
-    }
-}
-
-fn allowed_rebuild_reason(reason: &str) -> bool {
-    matches!(
-        reason,
-        "active_lanes_below_plan"
-            | "active_binding_capacity_missing"
-            | "active_binding_capacity_over_budget"
-            | "active_binding_missing"
-            | "capacity_pressure"
-            | "capacity_overflow"
-            | "demand_rebuild_recommended"
-            | "duplicate_active_lane"
-            | "published_endpoint_changed"
-            | "peer_health_changed"
-            | "peer_performance_changed"
-            | "peer_table_changed"
-            | "local_reserve_invalid"
-            | "route_binding_mismatch"
-            | "transit_payload_policy_not_opaque"
-            | "urgent_failover"
-            | "weighted_selection_no_match"
-    )
 }
