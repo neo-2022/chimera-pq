@@ -96,6 +96,18 @@ pub struct MeshMultipathFlowPlan {
     pub explain: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeshMultipathFlowDecision {
+    pub action: MeshMultipathFlowAction,
+    pub reason: &'static str,
+    pub selected_lane_id: Option<usize>,
+    pub active_binding_count: usize,
+    pub total_capacity_weight_pct: u16,
+    pub route_binding_configured: bool,
+    pub rebuild_recommended: bool,
+    pub rebuild_reason: &'static str,
+}
+
 impl std::fmt::Debug for MeshMultipathFlowPlan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MeshMultipathFlowPlan")
@@ -120,8 +132,15 @@ pub fn plan_multipath_flow(
     schedule: &MeshMultipathSchedule,
     flow_key: MeshMultipathFlowKey,
 ) -> MeshMultipathFlowPlan {
+    flow_plan(plan_multipath_flow_decision(schedule, flow_key))
+}
+
+pub fn plan_multipath_flow_decision(
+    schedule: &MeshMultipathSchedule,
+    flow_key: MeshMultipathFlowKey,
+) -> MeshMultipathFlowDecision {
     if schedule.transit_payload_policy != FLOW_TRANSIT_PAYLOAD_POLICY {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "transit_payload_policy_not_opaque",
             None,
@@ -131,7 +150,7 @@ pub fn plan_multipath_flow(
         );
     }
     if !local_reserve_is_safe(schedule) {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "local_reserve_invalid",
             None,
@@ -141,7 +160,7 @@ pub fn plan_multipath_flow(
         );
     }
     let Some(route_binding_id) = schedule.route_binding_id.as_ref() else {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "route_binding_missing",
             None,
@@ -160,7 +179,7 @@ pub fn plan_multipath_flow(
             reason,
             active_binding_count,
         } => {
-            return flow_plan(
+            return flow_decision(
                 MeshMultipathFlowAction::FailClosed,
                 reason,
                 None,
@@ -171,7 +190,7 @@ pub fn plan_multipath_flow(
         }
     };
     if active.total_capacity_weight_pct > u16::from(schedule.transit_capacity_budget_pct) {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "active_binding_capacity_over_budget",
             None,
@@ -187,7 +206,7 @@ pub fn plan_multipath_flow(
         active.total_capacity_weight_pct,
     );
     let Some(selected_lane_id) = selected_lane_id else {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "weighted_selection_no_match",
             None,
@@ -196,7 +215,7 @@ pub fn plan_multipath_flow(
             schedule,
         );
     };
-    flow_plan(
+    flow_decision(
         MeshMultipathFlowAction::Assigned,
         "active_carrier_binding_selected",
         Some(selected_lane_id),
@@ -206,46 +225,68 @@ pub fn plan_multipath_flow(
     )
 }
 
-pub(super) fn flow_plan(
+pub(super) fn flow_decision(
     action: MeshMultipathFlowAction,
-    reason: &str,
+    reason: &'static str,
     selected_lane_id: Option<usize>,
     active_binding_count: usize,
     total_capacity_weight_pct: u16,
     schedule: &MeshMultipathSchedule,
-) -> MeshMultipathFlowPlan {
-    let rebuild_reason = rebuild_reason(schedule, active_binding_count).to_string();
+) -> MeshMultipathFlowDecision {
+    let rebuild_reason = rebuild_reason(schedule, active_binding_count);
     let rebuild_recommended = rebuild_reason != REBUILD_REASON_NONE;
-    let selected_lane_status = if selected_lane_id.is_some() {
-        "active"
-    } else {
-        "none"
-    };
-    let explain = vec![
-        format!("multipath_flow_action={}", action.as_str()),
-        format!("multipath_flow_reason={reason}"),
-        format!("multipath_flow_selected_lane={selected_lane_status}"),
-        format!("multipath_flow_active_bindings={active_binding_count}"),
-        format!("multipath_flow_total_capacity_weight_pct={total_capacity_weight_pct}"),
-        format!(
-            "multipath_flow_route_binding_configured={}",
-            schedule.route_binding_id.is_some()
-        ),
-        format!("multipath_flow_rebuild_recommended={rebuild_recommended}"),
-        format!("multipath_flow_rebuild_reason={rebuild_reason}"),
-        format!("multipath_flow_fairness_policy={FLOW_FAIRNESS_POLICY}"),
-        format!("multipath_flow_privacy={FLOW_TRANSIT_PAYLOAD_POLICY}"),
-    ];
-
-    MeshMultipathFlowPlan {
+    MeshMultipathFlowDecision {
         action,
-        reason: reason.to_string(),
+        reason,
         selected_lane_id,
         active_binding_count,
         total_capacity_weight_pct,
         route_binding_configured: schedule.route_binding_id.is_some(),
         rebuild_recommended,
         rebuild_reason,
+    }
+}
+
+pub(super) fn flow_plan(decision: MeshMultipathFlowDecision) -> MeshMultipathFlowPlan {
+    let selected_lane_status = if decision.selected_lane_id.is_some() {
+        "active"
+    } else {
+        "none"
+    };
+    let explain = vec![
+        format!("multipath_flow_action={}", decision.action.as_str()),
+        format!("multipath_flow_reason={}", decision.reason),
+        format!("multipath_flow_selected_lane={selected_lane_status}"),
+        format!(
+            "multipath_flow_active_bindings={}",
+            decision.active_binding_count
+        ),
+        format!(
+            "multipath_flow_total_capacity_weight_pct={}",
+            decision.total_capacity_weight_pct
+        ),
+        format!(
+            "multipath_flow_route_binding_configured={}",
+            decision.route_binding_configured
+        ),
+        format!(
+            "multipath_flow_rebuild_recommended={}",
+            decision.rebuild_recommended
+        ),
+        format!("multipath_flow_rebuild_reason={}", decision.rebuild_reason),
+        format!("multipath_flow_fairness_policy={FLOW_FAIRNESS_POLICY}"),
+        format!("multipath_flow_privacy={FLOW_TRANSIT_PAYLOAD_POLICY}"),
+    ];
+
+    MeshMultipathFlowPlan {
+        action: decision.action,
+        reason: decision.reason.to_string(),
+        selected_lane_id: decision.selected_lane_id,
+        active_binding_count: decision.active_binding_count,
+        total_capacity_weight_pct: decision.total_capacity_weight_pct,
+        route_binding_configured: decision.route_binding_configured,
+        rebuild_recommended: decision.rebuild_recommended,
+        rebuild_reason: decision.rebuild_reason.to_string(),
         fairness_policy: FLOW_FAIRNESS_POLICY.to_string(),
         transit_payload_policy: FLOW_TRANSIT_PAYLOAD_POLICY.to_string(),
         explain,

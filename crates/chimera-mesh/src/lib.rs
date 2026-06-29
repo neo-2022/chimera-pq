@@ -53,12 +53,12 @@ pub use policy_hints::{
 pub use runtime::{
     MeshConnectAttempt, MeshConnectProbeReport, MeshMultipathAggregateAction,
     MeshMultipathAggregatePlan, MeshMultipathAggregateShard, MeshMultipathFlowAction,
-    MeshMultipathFlowKey, MeshMultipathFlowPlan, MeshMultipathRebuildAction,
-    MeshMultipathRebuildDecision, MeshMultipathRebuildDirtyMetadata,
+    MeshMultipathFlowDecision, MeshMultipathFlowKey, MeshMultipathFlowPlan,
+    MeshMultipathRebuildAction, MeshMultipathRebuildDecision, MeshMultipathRebuildDirtyMetadata,
     MeshMultipathRebuildDirtyScope, MeshMultipathRebuildPolicy, MeshMultipathRebuildSignal,
     MeshMultipathRebuildSignalInput, MeshMultipathRebuildUrgency, MeshPeerTableEnforcementReport,
     MeshRuntime, MeshRuntimeStatusReport, evaluate_join_mode, plan_multipath_aggregate_object,
-    plan_multipath_flow,
+    plan_multipath_flow, plan_multipath_flow_decision,
 };
 pub use weave_contract::{
     REQUIRED_WEAVE_NODE_CAPABILITIES, WeaveNodeCapability, WeaveNodeContract,

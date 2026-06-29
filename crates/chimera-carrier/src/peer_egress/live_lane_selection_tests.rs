@@ -1,5 +1,6 @@
 use super::{
-    CarrierLaneSelectionMode, select_carrier_lane_from_mesh_plan,
+    CarrierLaneSelectionMode, select_carrier_binding_from_mesh_plan,
+    select_carrier_binding_from_registrations, select_carrier_lane_from_mesh_plan,
     select_carrier_lane_from_registrations,
 };
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
@@ -242,5 +243,34 @@ fn selection_debug_redacts_binding_and_flow_material() -> Result<(), String> {
     assert!(!debug.contains("777"));
     assert!(!debug.contains("lane_id: 2"));
     assert!(!debug.contains("lane_id: 3"));
+    Ok(())
+}
+
+#[test]
+fn binding_only_selection_matches_registration_selection_contract() -> Result<(), String> {
+    let registrations = vec![
+        planned_registration(7, 1, MeshMultipathLaneRole::Active, Some(70))?,
+        planned_registration(7, 2, MeshMultipathLaneRole::Active, Some(20))?,
+    ];
+    let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-binding-only-live-flow")?;
+    let selected = select_carrier_lane_from_registrations(&registrations, key)?;
+    let binding = select_carrier_binding_from_registrations(&registrations, key)
+        .map_err(|error| error.to_string())?;
+
+    assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
+    assert_eq!(selected.selected_binding, Some(binding));
+    Ok(())
+}
+
+#[test]
+fn binding_only_plan_selection_matches_mesh_plan_selection_contract() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-binding-only-plan-flow")?;
+    let selected = select_carrier_lane_from_mesh_plan(&plan, key);
+    let binding =
+        select_carrier_binding_from_mesh_plan(&plan, key).map_err(|error| error.to_string())?;
+
+    assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
+    assert_eq!(selected.selected_binding, Some(binding));
     Ok(())
 }

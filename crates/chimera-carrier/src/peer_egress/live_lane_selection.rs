@@ -1,6 +1,6 @@
 use chimera_mesh::{
-    MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathLaneRole, MeshPathPlan,
-    plan_multipath_flow,
+    MeshMultipathFlowAction, MeshMultipathFlowDecision, MeshMultipathFlowKey,
+    MeshMultipathLaneRole, MeshPathPlan, plan_multipath_flow, plan_multipath_flow_decision,
 };
 
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
@@ -127,6 +127,14 @@ pub fn select_carrier_lane_from_mesh_plan(
         )
         .with_rebuild_recommended(flow_plan.rebuild_recommended),
     )
+}
+
+pub fn select_carrier_binding_from_mesh_plan(
+    plan: &MeshPathPlan,
+    flow_key: MeshMultipathFlowKey,
+) -> Result<TransitPathBinding, &'static str> {
+    let decision = plan_multipath_flow_decision(&plan.multipath_schedule, flow_key);
+    binding_from_mesh_plan_decision(plan, decision)
 }
 
 pub fn select_carrier_lane_from_registrations(
@@ -257,6 +265,98 @@ fn select_weighted_carrier_lane_from_registrations(
     }
 
     Err("carrier lane selection weighted bucket did not match".to_string())
+}
+
+pub fn select_carrier_binding_from_registrations(
+    registrations: &[TransitLaneRegistration],
+    flow_key: MeshMultipathFlowKey,
+) -> Result<TransitPathBinding, &'static str> {
+    if registrations.is_empty() {
+        return Err("carrier lane selection has no registrations");
+    }
+    if registrations_have_lane_plan(registrations) {
+        return select_weighted_carrier_binding_from_registrations(registrations, flow_key);
+    }
+    if registrations.len() == 1 {
+        return Ok(registrations[0].binding());
+    }
+
+    let slot = flow_key
+        .select_slot_index(registrations.len())
+        .map_err(|_| "carrier lane selection slot overflow")?;
+    Ok(registrations[slot].binding())
+}
+
+fn binding_from_mesh_plan_decision(
+    plan: &MeshPathPlan,
+    decision: MeshMultipathFlowDecision,
+) -> Result<TransitPathBinding, &'static str> {
+    if decision.action != MeshMultipathFlowAction::Assigned {
+        return Err(decision.reason);
+    }
+    let Some(selected_lane_id) = decision.selected_lane_id else {
+        return Err("selected_lane_missing");
+    };
+
+    plan.multipath_schedule
+        .carrier_lane_bindings
+        .iter()
+        .find(|binding| binding.lane_id == selected_lane_id)
+        .and_then(|binding| {
+            let route_id = TransitRouteId::new(binding.route_binding_id.get()).ok()?;
+            let lane_id = TransitLaneId::from_zero_based_lane_index(binding.lane_id).ok()?;
+            Some(TransitPathBinding::new(route_id, lane_id))
+        })
+        .ok_or("selected_lane_not_registered")
+}
+
+fn select_weighted_carrier_binding_from_registrations(
+    registrations: &[TransitLaneRegistration],
+    flow_key: MeshMultipathFlowKey,
+) -> Result<TransitPathBinding, &'static str> {
+    let active = registrations
+        .iter()
+        .filter(|registration| registration.role() == Some(MeshMultipathLaneRole::Active))
+        .collect::<Vec<_>>();
+    if active.is_empty() {
+        return Err("carrier lane selection has no active planned registrations");
+    }
+
+    let mut total_capacity_weight_pct: u16 = 0;
+    for registration in &active {
+        let Some(capacity_weight_pct) = registration.capacity_weight_pct() else {
+            return Err("carrier lane selection active registration capacity missing");
+        };
+        if capacity_weight_pct == 0 {
+            return Err("carrier lane selection active registration capacity is zero");
+        }
+        total_capacity_weight_pct = total_capacity_weight_pct
+            .checked_add(u16::from(capacity_weight_pct))
+            .ok_or("carrier lane selection capacity overflow")?;
+    }
+    if total_capacity_weight_pct == 0 {
+        return Err("carrier lane selection active registration capacity missing");
+    }
+
+    let mut bucket = u16::try_from(
+        flow_key
+            .select_slot_index(total_capacity_weight_pct as usize)
+            .map_err(|_| "carrier lane selection capacity bucket overflow")?,
+    )
+    .map_err(|_| "carrier lane selection capacity bucket overflow")?;
+    for registration in active {
+        let weight = u16::from(
+            registration
+                .capacity_weight_pct()
+                .ok_or("carrier lane selection active registration capacity missing")?,
+        );
+        if bucket < weight {
+            return Ok(registration.binding());
+        }
+        bucket = bucket.saturating_sub(weight);
+    }
+
+    Err("carrier lane selection weighted bucket did not match")
 }
 
 struct SelectionInput<'a> {

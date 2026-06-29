@@ -5,8 +5,8 @@ use crate::multipath_model::{
 };
 
 use super::{
-    MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathFlowPlan,
-    REBUILD_REASON_CAPACITY_OVERFLOW, flow_plan,
+    MeshMultipathFlowAction, MeshMultipathFlowDecision, MeshMultipathFlowKey,
+    REBUILD_REASON_CAPACITY_OVERFLOW, flow_decision,
 };
 
 pub(super) struct ActiveBindingSummary {
@@ -103,11 +103,11 @@ pub(super) fn plan_multipath_flow_slow_sorted(
     schedule: &MeshMultipathSchedule,
     flow_key: MeshMultipathFlowKey,
     route_binding_id: &MeshRouteBindingId,
-) -> MeshMultipathFlowPlan {
+) -> MeshMultipathFlowDecision {
     let active_bindings = active_carrier_bindings(schedule);
     let active_binding_count = active_bindings.len();
     if active_bindings.is_empty() {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "active_binding_missing",
             None,
@@ -120,7 +120,7 @@ pub(super) fn plan_multipath_flow_slow_sorted(
         .iter()
         .any(|binding| &binding.route_binding_id != route_binding_id)
     {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "route_binding_mismatch",
             None,
@@ -130,7 +130,7 @@ pub(super) fn plan_multipath_flow_slow_sorted(
         );
     }
     if duplicate_lane_id(&active_bindings) {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "duplicate_active_lane",
             None,
@@ -143,7 +143,7 @@ pub(super) fn plan_multipath_flow_slow_sorted(
     let total_capacity_weight_pct = match total_active_capacity_weight_pct(&active_bindings) {
         Ok(total) => total,
         Err(reason) => {
-            return flow_plan(
+            return flow_decision(
                 MeshMultipathFlowAction::FailClosed,
                 reason,
                 None,
@@ -154,7 +154,7 @@ pub(super) fn plan_multipath_flow_slow_sorted(
         }
     };
     if total_capacity_weight_pct > u16::from(schedule.transit_capacity_budget_pct) {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "active_binding_capacity_over_budget",
             None,
@@ -171,7 +171,7 @@ pub(super) fn plan_multipath_flow_slow_sorted(
     )
     .map(|binding| binding.lane_id);
     let Some(selected_lane_id) = selected else {
-        return flow_plan(
+        return flow_decision(
             MeshMultipathFlowAction::FailClosed,
             "weighted_selection_no_match",
             None,
@@ -180,7 +180,7 @@ pub(super) fn plan_multipath_flow_slow_sorted(
             schedule,
         );
     };
-    flow_plan(
+    flow_decision(
         MeshMultipathFlowAction::Assigned,
         "active_carrier_binding_selected",
         Some(selected_lane_id),

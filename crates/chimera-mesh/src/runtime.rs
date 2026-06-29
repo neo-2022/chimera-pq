@@ -72,7 +72,8 @@ pub use multipath_aggregate::{
     plan_multipath_aggregate_object,
 };
 pub use multipath_flow::{
-    MeshMultipathFlowAction, MeshMultipathFlowKey, MeshMultipathFlowPlan, plan_multipath_flow,
+    MeshMultipathFlowAction, MeshMultipathFlowDecision, MeshMultipathFlowKey,
+    MeshMultipathFlowPlan, plan_multipath_flow, plan_multipath_flow_decision,
 };
 use multipath_rebuild_control::MeshMultipathRebuildState;
 pub use multipath_rebuild_model::{

@@ -3,7 +3,7 @@ use std::net::TcpStream;
 
 use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
 use crate::peer_egress::live_lane_selection::{
-    select_carrier_lane_from_mesh_plan, select_carrier_lane_from_registrations,
+    select_carrier_binding_from_mesh_plan, select_carrier_binding_from_registrations,
 };
 use crate::peer_egress::options::LOCAL_MAGIC;
 use crate::peer_egress::pool::SharedPeerPool;
@@ -90,10 +90,8 @@ pub fn handle_local_client_with_registrations_and_first_byte(
     );
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
-    let selection = select_carrier_lane_from_registrations(registrations, flow_key)?;
-    let binding = selection
-        .selected_binding
-        .ok_or_else(|| "local ingress selected binding missing".to_string())?;
+    let binding = select_carrier_binding_from_registrations(registrations, flow_key)
+        .map_err(|error| error.to_string())?;
     let peer = dispatcher.pop_for(binding)?;
     eprintln!("event=local_ingress_paired_with_peer");
     connect_local_client_via_peer(local, peer, destination)
@@ -113,19 +111,14 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
     let plan = document.require_mesh_path_plan_ref()?;
-    let selection = select_carrier_lane_from_mesh_plan(plan, flow_key);
-    if selection.action == chimera_mesh::MeshMultipathFlowAction::Assigned {
-        let binding = selection
-            .selected_binding
-            .ok_or_else(|| "local ingress selected binding missing".to_string())?;
-        let peer = dispatcher.pop_for(binding)?;
-        eprintln!("event=local_ingress_paired_with_peer");
-        return connect_local_client_via_peer(local, peer, destination);
+    match select_carrier_binding_from_mesh_plan(plan, flow_key) {
+        Ok(binding) => {
+            let peer = dispatcher.pop_for(binding)?;
+            eprintln!("event=local_ingress_paired_with_peer");
+            connect_local_client_via_peer(local, peer, destination)
+        }
+        Err(reason) => Err(format!("local ingress lane selection failed: {reason}")),
     }
-    Err(format!(
-        "local ingress lane selection failed: {}",
-        selection.reason
-    ))
 }
 
 pub fn read_local_connect_destination(
