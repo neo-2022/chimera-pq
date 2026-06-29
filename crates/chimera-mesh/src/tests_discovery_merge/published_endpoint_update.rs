@@ -328,6 +328,42 @@ fn discovery_without_generation_does_not_downgrade_published_endpoint() {
 }
 
 #[test]
+fn discovery_update_preserves_published_endpoint_generation_and_url() {
+    let mut runtime = runtime_with_peers(&[record("node-a", "198.51.100.10:443")]);
+    let published = endpoint_update(
+        "node-a",
+        "198.51.100.20:9443",
+        Some("https://node.example:9443/chimera.sh"),
+        4,
+    );
+    runtime
+        .merge_published_endpoint_updates("state-publish", std::slice::from_ref(&published))
+        .unwrap_or_else(|e| unreachable!("published endpoint should be accepted: {e}"));
+    let _ = runtime.take_pending_multipath_rebuild_signal();
+
+    runtime
+        .merge_discovery(
+            "seed-c",
+            &[MeshDiscoveryRecord {
+                node_id: "node-a".to_string(),
+                endpoint: "198.51.100.10:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 20,
+                reliability_score: 90,
+            }],
+        )
+        .unwrap_or_else(|e| unreachable!("discovery metadata update should succeed: {e}"));
+
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    runtime
+        .merge_published_endpoint_updates("state-publish", &[published])
+        .unwrap_or_else(|e| unreachable!("same published endpoint should stay noop: {e}"));
+
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    assert_eq!(runtime.peer_snapshot()[0].endpoint, "198.51.100.20:9443");
+}
+
+#[test]
 fn published_endpoint_two_newer_records_count_two() {
     let mut runtime = runtime_with_peers(&[
         record("node-a", "198.51.100.10:443"),

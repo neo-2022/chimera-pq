@@ -24,14 +24,11 @@ impl MeshRuntime {
         self.sources.insert(source.to_string());
         let mut affected_peer_count = 0_usize;
         for record in records {
-            let previous_meta = self.peer_meta.get(&record.node_id).cloned();
-            if self.peers.contains_key(&record.node_id) {
-                if let Some(ctx) =
-                    existing_peer_update_context(self, record, previous_meta.as_ref())
-                {
-                    affected_peer_count = affected_peer_count
-                        .saturating_add(usize::from(apply_existing_peer_update(self, record, ctx)));
-                }
+            let previous_meta = self.peer_meta.get(&record.node_id);
+            if let Some(existing) = self.peers.get(&record.node_id) {
+                let ctx = existing_peer_update_context(self, existing, record, previous_meta);
+                affected_peer_count = affected_peer_count
+                    .saturating_add(usize::from(apply_existing_peer_update(self, record, ctx)));
                 continue;
             }
             affected_peer_count = affected_peer_count.saturating_add(1);

@@ -12,18 +12,15 @@ pub(super) struct ExistingPeerUpdateContext {
     pub(super) previous_degraded: u64,
     pub(super) previous_churn_blocks: u64,
     pub(super) previous_threshold_blocks: u64,
-    pub(super) previous_identity_marker: u64,
-    pub(super) previous_endpoint_generation: u64,
-    pub(super) previous_update_bootstrap_url: Option<String>,
     pub(super) preserve_existing_endpoint: bool,
 }
 
 pub(super) fn existing_peer_update_context(
     runtime: &MeshRuntime,
+    existing: &MeshPeerState,
     record: &MeshDiscoveryRecord,
     previous_meta: Option<&MeshPeerMeta>,
-) -> Option<ExistingPeerUpdateContext> {
-    let existing = runtime.peers.get(&record.node_id)?;
+) -> ExistingPeerUpdateContext {
     let existing_score = peer_priority(existing);
     let incoming_score = (record.reliability_score as i32 * 2) - record.load_score as i32;
     let degraded = runtime
@@ -44,7 +41,7 @@ pub(super) fn existing_peer_update_context(
     let unchanged_record = previous_meta.is_some()
         && within_window
         && usable_peer_metadata_matches(existing, record, preserve_existing_endpoint);
-    Some(ExistingPeerUpdateContext {
+    ExistingPeerUpdateContext {
         unchanged_record,
         existing_score,
         incoming_score,
@@ -80,12 +77,8 @@ pub(super) fn existing_peer_update_context(
         } else {
             0
         },
-        previous_identity_marker: previous_meta.map_or(0, |meta| meta.identity_marker),
-        previous_endpoint_generation: previous_meta.map_or(0, |meta| meta.endpoint_generation),
-        previous_update_bootstrap_url: previous_meta
-            .and_then(|meta| meta.update_bootstrap_url.clone()),
         preserve_existing_endpoint,
-    })
+    }
 }
 
 fn usable_peer_metadata_matches(
@@ -124,51 +117,81 @@ pub(super) fn apply_existing_peer_update(
             existing.reliability_score = record.reliability_score;
             existing.load_score = record.load_score;
         }
-        runtime.peer_meta.insert(
-            record.node_id.clone(),
-            MeshPeerMeta {
-                identity_marker: ctx.previous_identity_marker,
-                last_seen_tick: runtime.tick,
-                update_events: ctx.previous_updates.saturating_add(1),
-                replacement_events: ctx.previous_replacements.saturating_add(1),
-                hold_events: ctx.previous_holds,
-                degraded_events: ctx
-                    .previous_degraded
-                    .saturating_add(u64::from(ctx.degraded)),
-                churn_block_events: ctx.previous_churn_blocks,
-                threshold_block_events: ctx.previous_threshold_blocks,
-                last_effective_replacement_threshold: ctx.effective_replacement_min_score_delta,
-                endpoint_generation: ctx.previous_endpoint_generation,
-                update_bootstrap_url: ctx.previous_update_bootstrap_url.clone(),
-            },
-        );
+        if let Some(meta) = runtime.peer_meta.get_mut(&record.node_id) {
+            meta.last_seen_tick = runtime.tick;
+            meta.update_events = ctx.previous_updates.saturating_add(1);
+            meta.replacement_events = ctx.previous_replacements.saturating_add(1);
+            meta.hold_events = ctx.previous_holds;
+            meta.degraded_events = ctx
+                .previous_degraded
+                .saturating_add(u64::from(ctx.degraded));
+            meta.churn_block_events = ctx.previous_churn_blocks;
+            meta.threshold_block_events = ctx.previous_threshold_blocks;
+            meta.last_effective_replacement_threshold = ctx.effective_replacement_min_score_delta;
+        } else {
+            runtime.peer_meta.insert(
+                record.node_id.clone(),
+                MeshPeerMeta {
+                    identity_marker: 0,
+                    last_seen_tick: runtime.tick,
+                    update_events: ctx.previous_updates.saturating_add(1),
+                    replacement_events: ctx.previous_replacements.saturating_add(1),
+                    hold_events: ctx.previous_holds,
+                    degraded_events: ctx
+                        .previous_degraded
+                        .saturating_add(u64::from(ctx.degraded)),
+                    churn_block_events: ctx.previous_churn_blocks,
+                    threshold_block_events: ctx.previous_threshold_blocks,
+                    last_effective_replacement_threshold: ctx.effective_replacement_min_score_delta,
+                    endpoint_generation: 0,
+                    update_bootstrap_url: None,
+                },
+            );
+        }
         return true;
     }
 
     let blocked_by_churn =
         score_gain >= ctx.effective_replacement_min_score_delta && !churn_replacement_allowed;
     let blocked_by_threshold = score_gain < ctx.effective_replacement_min_score_delta;
-    runtime.peer_meta.insert(
-        record.node_id.clone(),
-        MeshPeerMeta {
-            identity_marker: ctx.previous_identity_marker,
-            last_seen_tick: runtime.tick,
-            update_events: ctx.previous_updates.saturating_add(1),
-            replacement_events: ctx.previous_replacements,
-            hold_events: ctx.previous_holds.saturating_add(1),
-            degraded_events: ctx
-                .previous_degraded
-                .saturating_add(u64::from(ctx.degraded)),
-            churn_block_events: ctx
-                .previous_churn_blocks
-                .saturating_add(u64::from(blocked_by_churn)),
-            threshold_block_events: ctx
-                .previous_threshold_blocks
-                .saturating_add(u64::from(blocked_by_threshold)),
-            last_effective_replacement_threshold: ctx.effective_replacement_min_score_delta,
-            endpoint_generation: ctx.previous_endpoint_generation,
-            update_bootstrap_url: ctx.previous_update_bootstrap_url,
-        },
-    );
+    if let Some(meta) = runtime.peer_meta.get_mut(&record.node_id) {
+        meta.last_seen_tick = runtime.tick;
+        meta.update_events = ctx.previous_updates.saturating_add(1);
+        meta.replacement_events = ctx.previous_replacements;
+        meta.hold_events = ctx.previous_holds.saturating_add(1);
+        meta.degraded_events = ctx
+            .previous_degraded
+            .saturating_add(u64::from(ctx.degraded));
+        meta.churn_block_events = ctx
+            .previous_churn_blocks
+            .saturating_add(u64::from(blocked_by_churn));
+        meta.threshold_block_events = ctx
+            .previous_threshold_blocks
+            .saturating_add(u64::from(blocked_by_threshold));
+        meta.last_effective_replacement_threshold = ctx.effective_replacement_min_score_delta;
+    } else {
+        runtime.peer_meta.insert(
+            record.node_id.clone(),
+            MeshPeerMeta {
+                identity_marker: 0,
+                last_seen_tick: runtime.tick,
+                update_events: ctx.previous_updates.saturating_add(1),
+                replacement_events: ctx.previous_replacements,
+                hold_events: ctx.previous_holds.saturating_add(1),
+                degraded_events: ctx
+                    .previous_degraded
+                    .saturating_add(u64::from(ctx.degraded)),
+                churn_block_events: ctx
+                    .previous_churn_blocks
+                    .saturating_add(u64::from(blocked_by_churn)),
+                threshold_block_events: ctx
+                    .previous_threshold_blocks
+                    .saturating_add(u64::from(blocked_by_threshold)),
+                last_effective_replacement_threshold: ctx.effective_replacement_min_score_delta,
+                endpoint_generation: 0,
+                update_bootstrap_url: None,
+            },
+        );
+    }
     true
 }
