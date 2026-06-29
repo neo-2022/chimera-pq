@@ -130,10 +130,98 @@ pub fn continuity_policy_from_dps_payload(
 }
 
 pub fn traffic_hints_from_dps_payload(payload: &str) -> Result<MeshTrafficHints, String> {
-    let traffic_class = traffic_class_from_dps_payload(payload)?;
-    let multipath_mode = multipath_mode_from_dps_payload(payload)?;
-    let multipath_demand = multipath_demand_from_dps_payload(payload)?;
-    let continuity_policy = continuity_policy_from_dps_payload(payload)?;
+    if payload.trim().is_empty() {
+        return Ok(build_traffic_hints(None, None, None, None));
+    }
+    let mut traffic_class: Option<TrafficClass> = None;
+    let mut multipath_mode: Option<MultipathMode> = None;
+    let mut multipath_demand: Option<MultipathDemand> = None;
+    let mut continuity_policy: Option<ContinuityPolicy> = None;
+    for segment in payload.split(';') {
+        let part = segment.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let Some((key_raw, value_raw)) = part.split_once('=') else {
+            return Err("mesh policy payload field is malformed".to_string());
+        };
+        let key = key_raw.trim();
+        let key_norm = key.to_ascii_lowercase();
+        let value = value_raw.trim();
+        match key_norm.as_str() {
+            "mesh_traffic_class" => {
+                if traffic_class.is_some() {
+                    return Err(
+                        "mesh policy payload contains duplicate field 'mesh_traffic_class'"
+                            .to_string(),
+                    );
+                }
+                if value.is_empty() {
+                    return Err(
+                        "mesh policy payload field 'mesh_traffic_class' is empty".to_string()
+                    );
+                }
+                traffic_class = Some(TrafficClass::from_dps_value(value)?);
+            }
+            "mesh_multipath_mode" => {
+                if multipath_mode.is_some() {
+                    return Err(
+                        "mesh policy payload contains duplicate field 'mesh_multipath_mode'"
+                            .to_string(),
+                    );
+                }
+                if value.is_empty() {
+                    return Err(
+                        "mesh policy payload field 'mesh_multipath_mode' is empty".to_string()
+                    );
+                }
+                multipath_mode = Some(MultipathMode::from_dps_value(value)?);
+            }
+            "mesh_multipath_demand" => {
+                if multipath_demand.is_some() {
+                    return Err(
+                        "mesh policy payload contains duplicate field 'mesh_multipath_demand'"
+                            .to_string(),
+                    );
+                }
+                if value.is_empty() {
+                    return Err(
+                        "mesh policy payload field 'mesh_multipath_demand' is empty".to_string()
+                    );
+                }
+                multipath_demand = Some(MultipathDemand::from_dps_value(value)?);
+            }
+            "mesh_continuity_policy" => {
+                if continuity_policy.is_some() {
+                    return Err(
+                        "mesh policy payload contains duplicate field 'mesh_continuity_policy'"
+                            .to_string(),
+                    );
+                }
+                if value.is_empty() {
+                    return Err(
+                        "mesh policy payload field 'mesh_continuity_policy' is empty".to_string(),
+                    );
+                }
+                continuity_policy = Some(ContinuityPolicy::from_dps_value(value)?);
+            }
+            _ => {}
+        }
+    }
+    Ok(build_traffic_hints(
+        traffic_class,
+        multipath_mode,
+        multipath_demand,
+        continuity_policy,
+    ))
+}
+
+fn build_traffic_hints(
+    traffic_class: Option<TrafficClass>,
+    multipath_mode: Option<MultipathMode>,
+    multipath_demand: Option<MultipathDemand>,
+    continuity_policy: Option<ContinuityPolicy>,
+) -> MeshTrafficHints {
     let shadow_switch_mode = match continuity_policy {
         Some(ContinuityPolicy::AllowFlowDrain) => ShadowSwitchMode::FlowDrain,
         Some(ContinuityPolicy::SameEgressOnly) => ShadowSwitchMode::TransportOnly,
@@ -145,11 +233,11 @@ pub fn traffic_hints_from_dps_payload(payload: &str) -> Result<MeshTrafficHints,
             Some(MultipathMode::Off) | None => ShadowSwitchMode::Unknown,
         },
     };
-    Ok(MeshTrafficHints {
+    MeshTrafficHints {
         traffic_class,
         multipath_mode,
         multipath_demand,
         continuity_policy,
         shadow_switch_mode,
-    })
+    }
 }

@@ -273,3 +273,117 @@ fn peer_table_enforcement_report_tracks_global_cap_drops() {
             && line.contains("drop_global:1")
     }));
 }
+
+#[test]
+fn peer_table_region_cap_tie_keeps_current_node_id_order() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        runtime
+            .set_peer_table_policy(MeshPeerTablePolicy {
+                max_entries: 3,
+                max_entries_per_region: 1,
+                stale_after_ticks: 32,
+                target_distinct_regions: 1,
+                replacement_min_score_delta: 1,
+                degraded_replacement_min_score_delta: 1,
+                max_replacements_per_window: 8,
+                stability_window_ticks: 8,
+                profile_hysteresis_ticks: 4,
+                resilient_region_spread_bonus_weight: 10,
+            })
+            .is_ok()
+    );
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "EU".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.11:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+    ];
+
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+
+    let node_ids: Vec<String> = runtime
+        .peer_snapshot()
+        .into_iter()
+        .map(|peer| peer.node_id)
+        .collect();
+    assert_eq!(node_ids, vec!["node-a".to_string()]);
+    let report = runtime.peer_table_last_enforcement_report();
+    assert_eq!(report.total_peers_before, 2);
+    assert_eq!(report.total_peers_after, 1);
+    assert_eq!(report.dropped_total, 1);
+    assert_eq!(report.dropped_by_region_cap, 1);
+    assert_eq!(report.dropped_by_global_cap, 0);
+}
+
+#[test]
+fn peer_table_global_cap_tie_drops_deterministic_node_id() {
+    let mut runtime =
+        MeshRuntime::bootstrap("cef-public", "seed-a").unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        runtime
+            .set_peer_table_policy(MeshPeerTablePolicy {
+                max_entries: 2,
+                max_entries_per_region: 2,
+                stale_after_ticks: 32,
+                target_distinct_regions: 1,
+                replacement_min_score_delta: 1,
+                degraded_replacement_min_score_delta: 1,
+                max_replacements_per_window: 8,
+                stability_window_ticks: 8,
+                profile_hysteresis_ticks: 4,
+                resilient_region_spread_bonus_weight: 10,
+            })
+            .is_ok()
+    );
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.11:443".to_string(),
+            region: "us".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-c".to_string(),
+            endpoint: "198.51.100.12:443".to_string(),
+            region: "ap".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+    ];
+
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+
+    let node_ids: Vec<String> = runtime
+        .peer_snapshot()
+        .into_iter()
+        .map(|peer| peer.node_id)
+        .collect();
+    assert_eq!(node_ids, vec!["node-b".to_string(), "node-c".to_string()]);
+    let report = runtime.peer_table_last_enforcement_report();
+    assert_eq!(report.total_peers_before, 3);
+    assert_eq!(report.total_peers_after, 2);
+    assert_eq!(report.dropped_total, 1);
+    assert_eq!(report.dropped_by_region_cap, 0);
+    assert_eq!(report.dropped_by_global_cap, 1);
+    assert_eq!(report.protected_region_skips, 0);
+}

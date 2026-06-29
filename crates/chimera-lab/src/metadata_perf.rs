@@ -18,8 +18,12 @@ use std::time::{Duration, Instant};
 
 use crate::Language;
 
+#[path = "metadata_perf_peer_table.rs"]
+mod peer_table;
 #[path = "metadata_perf_pending_rebuild.rs"]
 mod pending_rebuild;
+#[path = "metadata_perf_traffic_hints.rs"]
+mod traffic_hints;
 
 const DEFAULT_ITERATIONS: usize = 100_000;
 const ACTIVE_BINDING_COUNT: usize = 16;
@@ -35,6 +39,8 @@ const DISCOVERY_UPDATE_NOOP_SOURCE: &str = "metadata-perf-discovery-noop";
 const PLAN_SNAPSHOT_ACCESS_MAX_ITERATIONS: usize = 10_000;
 const LANE_DOCUMENT_RENDER_PARSE_MAX_ITERATIONS: usize = 10_000;
 const PEER_UPDATE_STATE_PUBLISH_MAX_ITERATIONS: usize = 10_000;
+const TRAFFIC_HINTS_MAX_ITERATIONS: usize = 10_000;
+const PEER_TABLE_ENFORCEMENT_MAX_ITERATIONS: usize = 10_000;
 const SAMPLE_COUNT: usize = 200;
 const PEER_UPDATE_STATE_SHA256: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -56,7 +62,6 @@ const LIVE_DPS_CARRIER_SELECTION_PAYLOAD: &str = concat!(
     "mesh_multipath_demand=bulk;",
     "mesh_route_binding_id=7006"
 );
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MetadataPerfOptions {
     pub(crate) iterations: usize,
@@ -126,6 +131,15 @@ pub(crate) struct MetadataPerfResult {
     pub(crate) peer_update_state_publish_noop_p95_ns: u128,
     pub(crate) peer_update_state_publish_changed_generation_ops_per_sec: f64,
     pub(crate) peer_update_state_publish_changed_generation_p95_ns: u128,
+    pub(crate) traffic_hints_iterations: usize,
+    pub(crate) traffic_hints_one_pass_ops_per_sec: f64,
+    pub(crate) traffic_hints_one_pass_p95_ns: u128,
+    pub(crate) traffic_hints_four_pass_baseline_ops_per_sec: f64,
+    pub(crate) traffic_hints_four_pass_baseline_p95_ns: u128,
+    pub(crate) peer_table_enforcement_noop_iterations: usize,
+    pub(crate) peer_table_enforcement_peer_count: usize,
+    pub(crate) peer_table_enforcement_noop_ops_per_sec: f64,
+    pub(crate) peer_table_enforcement_noop_p95_ns: u128,
     pub(crate) live_binding_reload_index_iterations: usize,
     pub(crate) live_binding_reload_index_spawn_count: usize,
     pub(crate) live_binding_reload_index_ops_per_sec: f64,
@@ -185,6 +199,8 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
             println!("Hot path: live_pending_rebuild_plan_path");
             println!("Hot path: live_pending_rebuild_plan_core");
             println!("Hot path: status_explain");
+            println!("Hot path: traffic_hints_payload_parse");
+            println!("Hot path: peer_table_enforcement_noop");
             println!("Scope: hot metadata only");
             println!("Iterations: {}", result.iterations);
             println!(
@@ -291,6 +307,21 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
                 result.status_explain_p95_ns,
                 result.status_explain_peer_count
             );
+            println!(
+                "Traffic hints one-pass: {:.0} ops/sec, p95 {} ns",
+                result.traffic_hints_one_pass_ops_per_sec, result.traffic_hints_one_pass_p95_ns
+            );
+            println!(
+                "Traffic hints four-pass baseline: {:.0} ops/sec, p95 {} ns",
+                result.traffic_hints_four_pass_baseline_ops_per_sec,
+                result.traffic_hints_four_pass_baseline_p95_ns
+            );
+            println!(
+                "Peer table enforcement no-op: {:.0} ops/sec, p95 {} ns over {} peers",
+                result.peer_table_enforcement_noop_ops_per_sec,
+                result.peer_table_enforcement_noop_p95_ns,
+                result.peer_table_enforcement_peer_count
+            );
             println!("Transit payload: opaque sealed payload untouched");
             println!("Network state: not modified");
         }
@@ -311,6 +342,8 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
             println!("Горячий путь: live_pending_rebuild_plan_path");
             println!("Горячий путь: live_pending_rebuild_plan_core");
             println!("Горячий путь: status_explain");
+            println!("Горячий путь: traffic_hints_payload_parse");
+            println!("Горячий путь: peer_table_enforcement_noop");
             println!("Область: только служебная metadata");
             println!("Итераций: {}", result.iterations);
             println!(
@@ -416,6 +449,21 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
                 result.status_explain_ops_per_sec,
                 result.status_explain_p95_ns,
                 result.status_explain_peer_count
+            );
+            println!(
+                "Traffic hints one-pass: {:.0} ops/сек, p95 {} нс",
+                result.traffic_hints_one_pass_ops_per_sec, result.traffic_hints_one_pass_p95_ns
+            );
+            println!(
+                "Traffic hints four-pass baseline: {:.0} ops/сек, p95 {} нс",
+                result.traffic_hints_four_pass_baseline_ops_per_sec,
+                result.traffic_hints_four_pass_baseline_p95_ns
+            );
+            println!(
+                "Peer table enforcement no-op: {:.0} ops/сек, p95 {} нс по {} peers",
+                result.peer_table_enforcement_noop_ops_per_sec,
+                result.peer_table_enforcement_noop_p95_ns,
+                result.peer_table_enforcement_peer_count
             );
             println!("Transit payload: opaque sealed payload untouched");
             println!("Состояние сети: не изменялось");
@@ -568,6 +616,30 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
         peer_update_state_publish_sample_count,
         peer_update_state_publish_batch_size,
     );
+    let traffic_hints_iterations = measured_iterations.clamp(1, TRAFFIC_HINTS_MAX_ITERATIONS);
+    let traffic_hints_sample_count = traffic_hints_iterations.clamp(1, SAMPLE_COUNT);
+    let traffic_hints_batch_size = traffic_hints_iterations.div_ceil(traffic_hints_sample_count);
+    let traffic_hints_measured_iterations =
+        traffic_hints_sample_count.saturating_mul(traffic_hints_batch_size);
+    let traffic_hints_one_pass =
+        traffic_hints::measure_one_pass(traffic_hints_sample_count, traffic_hints_batch_size);
+    let traffic_hints_four_pass_baseline = traffic_hints::measure_four_pass_baseline(
+        traffic_hints_sample_count,
+        traffic_hints_batch_size,
+    );
+    let peer_table_enforcement_iterations =
+        measured_iterations.clamp(1, PEER_TABLE_ENFORCEMENT_MAX_ITERATIONS);
+    let peer_table_enforcement_sample_count =
+        peer_table_enforcement_iterations.clamp(1, SAMPLE_COUNT);
+    let peer_table_enforcement_batch_size =
+        peer_table_enforcement_iterations.div_ceil(peer_table_enforcement_sample_count);
+    let peer_table_enforcement_measured_iterations =
+        peer_table_enforcement_sample_count.saturating_mul(peer_table_enforcement_batch_size);
+    let peer_table_enforcement_noop = peer_table::measure_enforcement_noop(
+        PATH_PLANNER_PEER_COUNT,
+        peer_table_enforcement_sample_count,
+        peer_table_enforcement_batch_size,
+    );
     let live_dps_plan_path_iterations =
         measured_iterations.clamp(1, LIVE_DPS_PLAN_PATH_MAX_ITERATIONS);
     let live_dps_plan_path_sample_count = live_dps_plan_path_iterations.clamp(1, SAMPLE_COUNT);
@@ -688,6 +760,24 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
         ),
         peer_update_state_publish_changed_generation_p95_ns: peer_update_state_publish_changed
             .p95_ns,
+        traffic_hints_iterations: traffic_hints_measured_iterations,
+        traffic_hints_one_pass_ops_per_sec: ops_per_sec(
+            traffic_hints_measured_iterations,
+            traffic_hints_one_pass.total_elapsed,
+        ),
+        traffic_hints_one_pass_p95_ns: traffic_hints_one_pass.p95_ns,
+        traffic_hints_four_pass_baseline_ops_per_sec: ops_per_sec(
+            traffic_hints_measured_iterations,
+            traffic_hints_four_pass_baseline.total_elapsed,
+        ),
+        traffic_hints_four_pass_baseline_p95_ns: traffic_hints_four_pass_baseline.p95_ns,
+        peer_table_enforcement_noop_iterations: peer_table_enforcement_measured_iterations,
+        peer_table_enforcement_peer_count: PATH_PLANNER_PEER_COUNT,
+        peer_table_enforcement_noop_ops_per_sec: ops_per_sec(
+            peer_table_enforcement_measured_iterations,
+            peer_table_enforcement_noop.total_elapsed,
+        ),
+        peer_table_enforcement_noop_p95_ns: peer_table_enforcement_noop.p95_ns,
         live_dps_plan_path_from_payload_iterations: live_dps_plan_path_measured_iterations,
         live_dps_plan_path_from_payload_peer_count: PATH_PLANNER_PEER_COUNT,
         live_dps_plan_path_from_payload_ops_per_sec: ops_per_sec(
@@ -739,7 +829,7 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
 
 pub(crate) fn render_metadata_perf_json(result: &MetadataPerfResult) -> String {
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"metadata_perf_smoke\",\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"live_dps_plan_path_with_carrier_selection\",\"live_dps_plan_core_with_carrier_selection\",\"live_pending_rebuild_plan_path\",\"live_pending_rebuild_plan_core\",\"status_explain\"],\"scope\":\"hot_metadata_only\",\"transit_payload_policy\":\"opaque_sealed_payload_untouched\",\"iterations\":{},\"active_bindings\":{},\"fast_sorted_ops_per_sec\":{:.0},\"slow_sorted_fallback_ops_per_sec\":{:.0},\"fast_p95_ns\":{},\"slow_sorted_fallback_p95_ns\":{},\"fast_vs_fallback_speedup_pct\":{:.2},\"path_planner_iterations\":{},\"path_planner_peer_count\":{},\"path_planner_candidate_snapshot_ops_per_sec\":{:.0},\"path_planner_candidate_snapshot_p95_ns\":{},\"discovery_rebuild_iterations\":{},\"discovery_rebuild_peer_count\":{},\"discovery_rebuild_fingerprint_ops_per_sec\":{:.0},\"discovery_rebuild_fingerprint_p95_ns\":{},\"discovery_update_noop_iterations\":{},\"discovery_update_noop_ops_per_sec\":{:.0},\"discovery_update_noop_p95_ns\":{},\"lane_document_plan_snapshot_iterations\":{},\"lane_document_plan_snapshot_borrowed_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_borrowed_p95_ns\":{},\"lane_document_plan_snapshot_owned_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_owned_p95_ns\":{},\"lane_document_render_parse_iterations\":{},\"lane_document_render_parse_ops_per_sec\":{:.0},\"lane_document_render_parse_p95_ns\":{},\"peer_update_state_publish_iterations\":{},\"peer_update_state_publish_noop_ops_per_sec\":{:.0},\"peer_update_state_publish_noop_p95_ns\":{},\"peer_update_state_publish_changed_generation_ops_per_sec\":{:.0},\"peer_update_state_publish_changed_generation_p95_ns\":{},\"live_dps_plan_path_from_payload_iterations\":{},\"live_dps_plan_path_from_payload_peer_count\":{},\"live_dps_plan_path_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_path_from_payload_p95_ns\":{},\"live_dps_plan_core_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_core_from_payload_p95_ns\":{},\"live_dps_plan_path_with_carrier_selection_ops_per_sec\":{:.0},\"live_dps_plan_path_with_carrier_selection_p95_ns\":{},\"live_dps_plan_core_with_carrier_selection_ops_per_sec\":{:.0},\"live_dps_plan_core_with_carrier_selection_p95_ns\":{},\"live_pending_rebuild_plan_iterations\":{},\"live_pending_rebuild_plan_path_ops_per_sec\":{:.0},\"live_pending_rebuild_plan_path_p95_ns\":{},\"live_pending_rebuild_plan_core_ops_per_sec\":{:.0},\"live_pending_rebuild_plan_core_p95_ns\":{},\"status_explain_iterations\":{},\"status_explain_peer_count\":{},\"status_explain_ops_per_sec\":{:.0},\"status_explain_p95_ns\":{},\"live_binding_reload_index_iterations\":{},\"live_binding_reload_index_spawn_count\":{},\"live_binding_reload_index_ops_per_sec\":{:.0},\"live_binding_reload_index_p95_ns\":{},\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"ok\",\"kind\":\"metadata_perf_smoke\",\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"live_dps_plan_path_with_carrier_selection\",\"live_dps_plan_core_with_carrier_selection\",\"live_pending_rebuild_plan_path\",\"live_pending_rebuild_plan_core\",\"status_explain\",\"traffic_hints_payload_parse\",\"peer_table_enforcement_noop\"],\"scope\":\"hot_metadata_only\",\"transit_payload_policy\":\"opaque_sealed_payload_untouched\",\"iterations\":{},\"active_bindings\":{},\"fast_sorted_ops_per_sec\":{:.0},\"slow_sorted_fallback_ops_per_sec\":{:.0},\"fast_p95_ns\":{},\"slow_sorted_fallback_p95_ns\":{},\"fast_vs_fallback_speedup_pct\":{:.2},\"path_planner_iterations\":{},\"path_planner_peer_count\":{},\"path_planner_candidate_snapshot_ops_per_sec\":{:.0},\"path_planner_candidate_snapshot_p95_ns\":{},\"discovery_rebuild_iterations\":{},\"discovery_rebuild_peer_count\":{},\"discovery_rebuild_fingerprint_ops_per_sec\":{:.0},\"discovery_rebuild_fingerprint_p95_ns\":{},\"discovery_update_noop_iterations\":{},\"discovery_update_noop_ops_per_sec\":{:.0},\"discovery_update_noop_p95_ns\":{},\"lane_document_plan_snapshot_iterations\":{},\"lane_document_plan_snapshot_borrowed_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_borrowed_p95_ns\":{},\"lane_document_plan_snapshot_owned_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_owned_p95_ns\":{},\"lane_document_render_parse_iterations\":{},\"lane_document_render_parse_ops_per_sec\":{:.0},\"lane_document_render_parse_p95_ns\":{},\"peer_update_state_publish_iterations\":{},\"peer_update_state_publish_noop_ops_per_sec\":{:.0},\"peer_update_state_publish_noop_p95_ns\":{},\"peer_update_state_publish_changed_generation_ops_per_sec\":{:.0},\"peer_update_state_publish_changed_generation_p95_ns\":{},\"traffic_hints_iterations\":{},\"traffic_hints_one_pass_ops_per_sec\":{:.0},\"traffic_hints_one_pass_p95_ns\":{},\"traffic_hints_four_pass_baseline_ops_per_sec\":{:.0},\"traffic_hints_four_pass_baseline_p95_ns\":{},\"peer_table_enforcement_noop_iterations\":{},\"peer_table_enforcement_peer_count\":{},\"peer_table_enforcement_noop_ops_per_sec\":{:.0},\"peer_table_enforcement_noop_p95_ns\":{},\"live_dps_plan_path_from_payload_iterations\":{},\"live_dps_plan_path_from_payload_peer_count\":{},\"live_dps_plan_path_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_path_from_payload_p95_ns\":{},\"live_dps_plan_core_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_core_from_payload_p95_ns\":{},\"live_dps_plan_path_with_carrier_selection_ops_per_sec\":{:.0},\"live_dps_plan_path_with_carrier_selection_p95_ns\":{},\"live_dps_plan_core_with_carrier_selection_ops_per_sec\":{:.0},\"live_dps_plan_core_with_carrier_selection_p95_ns\":{},\"live_pending_rebuild_plan_iterations\":{},\"live_pending_rebuild_plan_path_ops_per_sec\":{:.0},\"live_pending_rebuild_plan_path_p95_ns\":{},\"live_pending_rebuild_plan_core_ops_per_sec\":{:.0},\"live_pending_rebuild_plan_core_p95_ns\":{},\"status_explain_iterations\":{},\"status_explain_peer_count\":{},\"status_explain_ops_per_sec\":{:.0},\"status_explain_p95_ns\":{},\"live_binding_reload_index_iterations\":{},\"live_binding_reload_index_spawn_count\":{},\"live_binding_reload_index_ops_per_sec\":{:.0},\"live_binding_reload_index_p95_ns\":{},\"network_state\":\"not_modified\"}}",
         result.iterations,
         result.active_bindings,
         result.fast_sorted_ops_per_sec,
@@ -771,6 +861,15 @@ pub(crate) fn render_metadata_perf_json(result: &MetadataPerfResult) -> String {
         result.peer_update_state_publish_noop_p95_ns,
         result.peer_update_state_publish_changed_generation_ops_per_sec,
         result.peer_update_state_publish_changed_generation_p95_ns,
+        result.traffic_hints_iterations,
+        result.traffic_hints_one_pass_ops_per_sec,
+        result.traffic_hints_one_pass_p95_ns,
+        result.traffic_hints_four_pass_baseline_ops_per_sec,
+        result.traffic_hints_four_pass_baseline_p95_ns,
+        result.peer_table_enforcement_noop_iterations,
+        result.peer_table_enforcement_peer_count,
+        result.peer_table_enforcement_noop_ops_per_sec,
+        result.peer_table_enforcement_noop_p95_ns,
         result.live_dps_plan_path_from_payload_iterations,
         result.live_dps_plan_path_from_payload_peer_count,
         result.live_dps_plan_path_from_payload_ops_per_sec,
@@ -1675,7 +1774,7 @@ mod tests {
         assert!(json.contains("\"kind\":\"metadata_perf_smoke\""));
         assert!(json.contains("\"scope\":\"hot_metadata_only\""));
         assert!(json.contains(
-            "\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"live_dps_plan_path_with_carrier_selection\",\"live_dps_plan_core_with_carrier_selection\",\"live_pending_rebuild_plan_path\",\"live_pending_rebuild_plan_core\",\"status_explain\"]"
+            "\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"live_dps_plan_path_with_carrier_selection\",\"live_dps_plan_core_with_carrier_selection\",\"live_pending_rebuild_plan_path\",\"live_pending_rebuild_plan_core\",\"status_explain\",\"traffic_hints_payload_parse\",\"peer_table_enforcement_noop\"]"
         ));
         assert!(json.contains("\"path_planner_candidate_snapshot_ops_per_sec\":"));
         assert!(json.contains("\"discovery_rebuild_fingerprint_ops_per_sec\":"));
@@ -1686,6 +1785,15 @@ mod tests {
         assert!(json.contains("\"lane_document_render_parse_ops_per_sec\":"));
         assert!(json.contains("\"peer_update_state_publish_noop_ops_per_sec\":"));
         assert!(json.contains("\"peer_update_state_publish_changed_generation_ops_per_sec\":"));
+        assert!(json.contains("\"traffic_hints_iterations\":"));
+        assert!(json.contains("\"traffic_hints_one_pass_ops_per_sec\":"));
+        assert!(json.contains("\"traffic_hints_one_pass_p95_ns\":"));
+        assert!(json.contains("\"traffic_hints_four_pass_baseline_ops_per_sec\":"));
+        assert!(json.contains("\"traffic_hints_four_pass_baseline_p95_ns\":"));
+        assert!(json.contains("\"peer_table_enforcement_noop_iterations\":"));
+        assert!(json.contains("\"peer_table_enforcement_peer_count\":64"));
+        assert!(json.contains("\"peer_table_enforcement_noop_ops_per_sec\":"));
+        assert!(json.contains("\"peer_table_enforcement_noop_p95_ns\":"));
         assert!(json.contains("\"live_binding_reload_index_ops_per_sec\":"));
         assert!(json.contains("\"live_dps_plan_path_from_payload_ops_per_sec\":"));
         assert!(json.contains("\"live_dps_plan_core_from_payload_ops_per_sec\":"));
@@ -1708,6 +1816,7 @@ mod tests {
         assert!(!json.contains("peer-"));
         assert!(!json.contains("perf-node"));
         assert!(!json.contains("perf-rebuild-node"));
+        assert!(!json.contains("perf-table-node"));
         assert!(!json.contains("perf-discovery-noop-node"));
         assert!(!json.contains("198.51."));
         assert!(!json.contains("node.invalid"));

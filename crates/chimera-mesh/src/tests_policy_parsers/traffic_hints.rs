@@ -143,3 +143,34 @@ fn traffic_hints_from_dps_payload_includes_coarse_multipath_demand() {
     assert_eq!(hints.multipath_demand.map(|v| v.as_str()), Some("bulk"));
     assert!(hints.has_any_hint());
 }
+
+#[test]
+fn traffic_hints_from_dps_payload_ignores_non_hint_mesh_fields_in_one_pass() {
+    let hints = traffic_hints_from_dps_payload(
+        "allow=mesh;mesh_unknown_future_key=1;mesh_max_peers=2;mesh_multipath_mode=flow_shard",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(hints.multipath_mode.map(|v| v.as_str()), Some("flow_shard"));
+    assert_eq!(hints.shadow_switch_mode.as_str(), "flow_drain");
+}
+
+#[test]
+fn traffic_hints_from_dps_payload_allows_payload_without_mesh_hints() {
+    let hints =
+        traffic_hints_from_dps_payload("allow=mesh").unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert!(!hints.has_any_hint());
+    assert_eq!(hints.shadow_switch_mode.as_str(), "unknown");
+}
+
+#[test]
+fn traffic_hints_from_dps_payload_rejects_malformed_or_duplicate_hint_in_one_pass() {
+    assert!(traffic_hints_from_dps_payload("mesh_multipath_mode").is_err());
+    assert!(
+        traffic_hints_from_dps_payload(
+            "mesh_traffic_class=dns;allow=mesh;MESH_TRAFFIC_CLASS=gaming_fps"
+        )
+        .is_err()
+    );
+}

@@ -10,6 +10,13 @@ pub(super) struct PeerMaintenanceComputation {
     pub(super) effective_target_source: &'static str,
 }
 
+struct EnforcementCandidate<'a> {
+    node_id: &'a str,
+    region_index: usize,
+    priority: i32,
+    dropped: bool,
+}
+
 pub(super) fn compute_enforcement(
     peers: &BTreeMap<String, MeshPeerState>,
     profile_state: &MeshProfileState,
@@ -32,87 +39,102 @@ pub(super) fn compute_enforcement(
             effective_profile,
         );
 
-    let mut region_counts: BTreeMap<String, usize> = BTreeMap::new();
-    let mut all: Vec<(String, i32)> = peers
-        .iter()
-        .map(|(node_id, peer)| (node_id.clone(), peer_priority(peer)))
-        .collect();
-    all.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
-
     let mut drop_set: BTreeSet<String> = BTreeSet::new();
     let mut dropped_by_region_cap = 0usize;
     let mut dropped_by_global_cap = 0usize;
     let mut protected_region_skips = 0usize;
 
-    for (node_id, _) in &all {
-        let Some(peer) = peers.get(node_id) else {
-            continue;
+    if peers.len() <= table_policy.max_entries && peers.len() <= table_policy.max_entries_per_region
+    {
+        return PeerMaintenanceComputation {
+            drop_set,
+            dropped_by_region_cap,
+            dropped_by_global_cap,
+            protected_region_skips,
+            effective_profile,
+            effective_target_distinct_regions,
+            effective_target_source,
         };
-        let count = region_counts
-            .entry(normalize_region_key(&peer.region))
-            .or_insert(0);
+    }
+
+    let mut region_index_by_key: BTreeMap<String, usize> = BTreeMap::new();
+    let mut all: Vec<EnforcementCandidate<'_>> = Vec::with_capacity(peers.len());
+    for (node_id, peer) in peers {
+        let next_region_index = region_index_by_key.len();
+        let region_index = match region_index_by_key.entry(normalize_region_key(&peer.region)) {
+            std::collections::btree_map::Entry::Occupied(entry) => *entry.get(),
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(next_region_index);
+                next_region_index
+            }
+        };
+        all.push(EnforcementCandidate {
+            node_id,
+            region_index,
+            priority: peer_priority(peer),
+            dropped: false,
+        });
+    }
+    all.sort_by(|a, b| {
+        a.priority
+            .cmp(&b.priority)
+            .then_with(|| a.node_id.cmp(b.node_id))
+    });
+
+    let mut region_counts = vec![0usize; region_index_by_key.len()];
+    for candidate in &mut all {
+        let count = &mut region_counts[candidate.region_index];
         *count += 1;
-        if *count > table_policy.max_entries_per_region && drop_set.insert(node_id.clone()) {
+        if *count > table_policy.max_entries_per_region && !candidate.dropped {
+            candidate.dropped = true;
+            drop_set.insert(candidate.node_id.to_string());
             dropped_by_region_cap = dropped_by_region_cap.saturating_add(1);
         }
     }
 
     let mut kept = peers.len().saturating_sub(drop_set.len());
     if kept > table_policy.max_entries {
-        let mut kept_by_region: BTreeMap<String, usize> = BTreeMap::new();
-        for node_id in peers.keys() {
-            if drop_set.contains(node_id) {
-                continue;
+        let mut kept_by_region = vec![0usize; region_index_by_key.len()];
+        for candidate in &all {
+            if !candidate.dropped {
+                kept_by_region[candidate.region_index] =
+                    kept_by_region[candidate.region_index].saturating_add(1);
             }
-            let Some(peer) = peers.get(node_id) else {
-                continue;
-            };
-            *kept_by_region
-                .entry(normalize_region_key(&peer.region))
-                .or_insert(0) += 1;
         }
-        let mut distinct_regions = kept_by_region.len();
+        let mut distinct_regions = kept_by_region.iter().filter(|count| **count > 0).count();
         while kept > table_policy.max_entries {
-            let mut chosen: Option<String> = None;
-            for (node_id, _) in &all {
-                if drop_set.contains(node_id) {
+            let mut chosen: Option<usize> = None;
+            for (index, candidate) in all.iter().enumerate() {
+                if candidate.dropped {
                     continue;
                 }
-                let Some(peer) = peers.get(node_id) else {
-                    continue;
-                };
-                let region = normalize_region_key(&peer.region);
-                let count = kept_by_region.get(&region).copied().unwrap_or(0);
+                let count = kept_by_region[candidate.region_index];
                 let would_remove_last_region = count == 1;
                 if would_remove_last_region && distinct_regions <= effective_target_distinct_regions
                 {
                     protected_region_skips = protected_region_skips.saturating_add(1);
                     continue;
                 }
-                chosen = Some(node_id.clone());
+                chosen = Some(index);
                 break;
             }
-            let Some(node_id) = chosen.or_else(|| {
-                all.iter()
-                    .map(|(id, _)| id)
-                    .find(|id| !drop_set.contains(*id))
-                    .cloned()
-            }) else {
+            let Some(index) =
+                chosen.or_else(|| all.iter().position(|candidate| !candidate.dropped))
+            else {
                 break;
             };
-            if drop_set.insert(node_id.clone()) {
+            let candidate = &mut all[index];
+            if !candidate.dropped {
+                candidate.dropped = true;
+                drop_set.insert(candidate.node_id.to_string());
                 kept = kept.saturating_sub(1);
                 dropped_by_global_cap = dropped_by_global_cap.saturating_add(1);
-                if let Some(peer) = peers.get(&node_id) {
-                    let region = normalize_region_key(&peer.region);
-                    if let Some(count) = kept_by_region.get_mut(&region) {
-                        if *count > 1 {
-                            *count -= 1;
-                        } else {
-                            kept_by_region.remove(&region);
-                            distinct_regions = distinct_regions.saturating_sub(1);
-                        }
-                    }
+                let count = &mut kept_by_region[candidate.region_index];
+                if *count > 1 {
+                    *count -= 1;
+                } else if *count == 1 {
+                    *count = 0;
+                    distinct_regions = distinct_regions.saturating_sub(1);
                 }
             }
         }
