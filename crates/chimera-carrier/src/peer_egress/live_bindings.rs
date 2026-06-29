@@ -325,14 +325,9 @@ fn reconcile_live_transit_lane_workers<F>(
 ) where
     F: FnMut(&TransitLaneRegistration, Arc<AtomicBool>),
 {
-    let desired_by_binding = desired
-        .iter()
-        .map(|registration| (registration.binding(), registration))
-        .collect::<BTreeMap<_, _>>();
     workers.retain(|binding, worker| {
-        if desired_by_binding
-            .get(binding)
-            .is_some_and(|registration| worker.registration == **registration)
+        if last_desired_registration_for_binding(desired, *binding)
+            .is_some_and(|registration| worker.registration == *registration)
         {
             return true;
         }
@@ -341,7 +336,11 @@ fn reconcile_live_transit_lane_workers<F>(
         false
     });
 
-    for (binding, registration) in desired_by_binding {
+    for (index, registration) in desired.iter().enumerate() {
+        let binding = registration.binding();
+        if has_later_desired_registration_for_binding(desired, index, binding) {
+            continue;
+        }
         if workers
             .get(&binding)
             .is_some_and(|worker| worker.registration == *registration)
@@ -359,6 +358,27 @@ fn reconcile_live_transit_lane_workers<F>(
             },
         );
     }
+}
+
+fn last_desired_registration_for_binding(
+    desired: &[TransitLaneRegistration],
+    binding: TransitPathBinding,
+) -> Option<&TransitLaneRegistration> {
+    desired
+        .iter()
+        .rev()
+        .find(|registration| registration.binding() == binding)
+}
+
+fn has_later_desired_registration_for_binding(
+    desired: &[TransitLaneRegistration],
+    index: usize,
+    binding: TransitPathBinding,
+) -> bool {
+    desired.get(index.saturating_add(1)..).is_some_and(|tail| {
+        tail.iter()
+            .any(|registration| registration.binding() == binding)
+    })
 }
 
 fn clear_live_transit_lane_workers(

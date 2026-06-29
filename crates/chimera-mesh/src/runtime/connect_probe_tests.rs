@@ -1,6 +1,7 @@
-use super::build_connect_attempt_plan;
+use super::{build_connect_attempt_plan, visit_connect_attempt_targets};
 use crate::{
-    MeshDiscoveryRecord, MeshJoinRequest, MeshPathPolicy, MeshPublishedEndpointUpdate, MeshRuntime,
+    MeshDiscoveryRecord, MeshJoinRequest, MeshPathPolicy, MeshPeerState,
+    MeshPublishedEndpointUpdate, MeshRuntime,
 };
 
 fn record(node_id: &str, endpoint: &str) -> MeshDiscoveryRecord {
@@ -77,6 +78,19 @@ fn assert_same_connect_attempt_plan(actual: &[String], expected: &[String]) {
             .all(|(actual, expected)| actual == expected),
         "connect attempt plan changed"
     );
+}
+
+fn peer_state(node_id: &str, endpoint: &str) -> MeshPeerState {
+    MeshPeerState {
+        node_id: node_id.to_string(),
+        endpoint: endpoint.to_string(),
+        region: "eu".to_string(),
+        reliability_score: 90,
+        load_score: 10,
+        latency_ms: None,
+        throughput_mbps: None,
+        selection_score: 100,
+    }
 }
 
 #[test]
@@ -165,5 +179,69 @@ fn connect_attempt_plan_survives_invalid_published_endpoint_update_atomically() 
     let after = planned_endpoints(&runtime, &policy)?;
     assert_same_connect_attempt_plan(&after, &before);
     assert_no_endpoint_with_host(&after, "198.51.100.30:");
+    Ok(())
+}
+
+#[test]
+fn connect_attempt_lazy_traversal_matches_snapshot_order() -> Result<(), String> {
+    let selected_peers = vec![
+        peer_state("node-a", "198.51.100.10:9443"),
+        peer_state("node-b", "[2001:db8::10]:9443"),
+    ];
+    let fallback_ports = [9443, 443, 8443, 443, 0];
+    let snapshot = build_connect_attempt_plan(&selected_peers, &fallback_ports)?;
+    let mut lazy = Vec::new();
+
+    let stopped = visit_connect_attempt_targets(&selected_peers, &fallback_ports, |target| {
+        lazy.push((
+            target.peer_index,
+            target.peer_id.to_string(),
+            target.endpoint.to_string(),
+        ));
+        false
+    })?;
+
+    assert!(!stopped);
+    let snapshot: Vec<_> = snapshot
+        .into_iter()
+        .map(|target| (target.peer_index, target.peer_id, target.endpoint))
+        .collect();
+    assert_eq!(lazy, snapshot);
+    assert_eq!(
+        lazy,
+        vec![
+            (0, "node-a".to_string(), "198.51.100.10:9443".to_string()),
+            (0, "node-a".to_string(), "198.51.100.10:443".to_string()),
+            (0, "node-a".to_string(), "198.51.100.10:8443".to_string()),
+            (1, "node-b".to_string(), "[2001:db8::10]:9443".to_string()),
+            (1, "node-b".to_string(), "[2001:db8::10]:443".to_string()),
+            (1, "node-b".to_string(), "[2001:db8::10]:8443".to_string()),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn connect_attempt_lazy_traversal_stops_before_unused_fallbacks() -> Result<(), String> {
+    let selected_peers = vec![
+        peer_state("node-a", "198.51.100.10:9443"),
+        peer_state("node-b", "198.51.100.20:9443"),
+    ];
+    let fallback_ports = [443, 8443, 9443];
+    let mut visited = Vec::new();
+
+    let stopped = visit_connect_attempt_targets(&selected_peers, &fallback_ports, |target| {
+        visited.push(target.endpoint.to_string());
+        visited.len() == 2
+    })?;
+
+    assert!(stopped);
+    assert_eq!(
+        visited,
+        vec![
+            "198.51.100.10:9443".to_string(),
+            "198.51.100.10:443".to_string(),
+        ]
+    );
     Ok(())
 }

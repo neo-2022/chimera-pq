@@ -1,5 +1,4 @@
 use super::*;
-use std::collections::BTreeSet;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
@@ -48,16 +47,17 @@ impl MeshRuntime {
         let mut connected_peer = String::new();
         let mut connected_endpoint = String::new();
 
-        let attempt_plan = build_connect_attempt_plan(selected_peers, fallback_ports)?;
-        for (attempt_index, target) in attempt_plan.iter().enumerate() {
+        let mut attempt_index = 0usize;
+        let connected = visit_connect_attempt_targets(selected_peers, fallback_ports, |target| {
             let peer_label = redacted_peer_label(target.peer_index);
             let endpoint_label = redacted_endpoint_label(attempt_index);
+            attempt_index = attempt_index.saturating_add(1);
             let started = Instant::now();
-            match connect_endpoint(&target.endpoint, timeout) {
+            match connect_endpoint(target.endpoint, timeout) {
                 Ok(()) => {
                     let latency_ms = duration_to_latency_ms(started.elapsed());
                     if let Err(error) = self.update_peer_performance(&[MeshPeerPerformance {
-                        node_id: target.peer_id.clone(),
+                        node_id: target.peer_id.to_string(),
                         latency_ms: Some(latency_ms),
                         throughput_mbps: None,
                     }]) {
@@ -76,15 +76,7 @@ impl MeshRuntime {
                     explain.push(format!(
                         "connect_probe_connected_endpoint={connected_endpoint}"
                     ));
-                    return Ok(MeshConnectProbeReport {
-                        namespace: self.namespace.clone(),
-                        selected_peers: redacted_peer_labels(selected_peers),
-                        connected_peer,
-                        connected_endpoint,
-                        success: true,
-                        attempts,
-                        explain,
-                    });
+                    true
                 }
                 Err(error) => {
                     attempts.push(MeshConnectAttempt {
@@ -93,8 +85,22 @@ impl MeshRuntime {
                         success: false,
                         error: redacted_connect_error(&error),
                     });
+                    false
                 }
             }
+        })
+        .map_err(|error| format!("connect_probe_attempt_plan_error:{error}"))?;
+
+        if connected {
+            return Ok(MeshConnectProbeReport {
+                namespace: self.namespace.clone(),
+                selected_peers: redacted_peer_labels(selected_peers),
+                connected_peer,
+                connected_endpoint,
+                success: true,
+                attempts,
+                explain,
+            });
         }
 
         explain.push("connect_probe_result=failed".to_string());
@@ -146,12 +152,20 @@ fn build_connect_probe_explain(
     explain
 }
 
+#[cfg(test)]
 struct MeshConnectAttemptTarget {
     peer_index: usize,
     peer_id: String,
     endpoint: String,
 }
 
+struct MeshConnectAttemptTargetRef<'a> {
+    peer_index: usize,
+    peer_id: &'a str,
+    endpoint: &'a str,
+}
+
+#[cfg(test)]
 fn build_connect_attempt_plan(
     selected_peers: &[MeshPeerState],
     fallback_ports: &[u16],
@@ -170,6 +184,47 @@ fn build_connect_attempt_plan(
         }
     }
     Ok(targets)
+}
+
+fn visit_connect_attempt_targets(
+    selected_peers: &[MeshPeerState],
+    fallback_ports: &[u16],
+    mut visitor: impl FnMut(MeshConnectAttemptTargetRef<'_>) -> bool,
+) -> Result<bool, String> {
+    for (peer_index, peer) in selected_peers.iter().enumerate() {
+        let (host, current_port) = split_host_port(&peer.endpoint)?;
+        if visitor(MeshConnectAttemptTargetRef {
+            peer_index,
+            peer_id: &peer.node_id,
+            endpoint: &peer.endpoint,
+        }) {
+            return Ok(true);
+        }
+        for (fallback_index, port) in fallback_ports.iter().enumerate() {
+            if fallback_port_already_attempted(fallback_ports, fallback_index, current_port, *port)
+            {
+                continue;
+            }
+            let endpoint = format_endpoint(host, *port);
+            if visitor(MeshConnectAttemptTargetRef {
+                peer_index,
+                peer_id: &peer.node_id,
+                endpoint: &endpoint,
+            }) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn fallback_port_already_attempted(
+    fallback_ports: &[u16],
+    fallback_index: usize,
+    current_port: u16,
+    port: u16,
+) -> bool {
+    port == 0 || port == current_port || fallback_ports[..fallback_index].contains(&port)
 }
 
 fn connect_endpoint(endpoint: &str, timeout: Duration) -> Result<(), String> {
@@ -198,28 +253,26 @@ fn duration_to_latency_ms(duration: Duration) -> u32 {
     duration.as_millis().min(u128::from(u32::MAX)).max(1) as u32
 }
 
+#[cfg(test)]
 fn fallback_endpoints_for_peer(
     peer: &MeshPeerState,
     fallback_ports: &[u16],
 ) -> Result<Vec<String>, String> {
     let (host, current_port) = split_host_port(&peer.endpoint)?;
     let mut ports = Vec::new();
-    let mut seen = BTreeSet::new();
-    if seen.insert(current_port) {
-        ports.push(current_port);
-    }
+    ports.push(current_port);
     for port in fallback_ports {
-        if *port > 0 && seen.insert(*port) {
+        if *port > 0 && !ports.contains(port) {
             ports.push(*port);
         }
     }
     Ok(ports
         .into_iter()
-        .map(|port| format_endpoint(&host, port))
+        .map(|port| format_endpoint(host, port))
         .collect())
 }
 
-fn split_host_port(endpoint: &str) -> Result<(String, u16), String> {
+fn split_host_port(endpoint: &str) -> Result<(&str, u16), String> {
     if endpoint.starts_with('[') {
         let close = endpoint
             .find(']')
@@ -239,7 +292,7 @@ fn split_host_port(endpoint: &str) -> Result<(String, u16), String> {
         if port == 0 {
             return Err("invalid_endpoint:zero_port".to_string());
         }
-        return Ok((host.to_string(), port));
+        return Ok((host, port));
     }
     let (host, port_raw) = endpoint
         .rsplit_once(':')
@@ -253,7 +306,7 @@ fn split_host_port(endpoint: &str) -> Result<(String, u16), String> {
     if port == 0 {
         return Err("invalid_endpoint:zero_port".to_string());
     }
-    Ok((host.to_string(), port))
+    Ok((host, port))
 }
 
 fn format_endpoint(host: &str, port: u16) -> String {
