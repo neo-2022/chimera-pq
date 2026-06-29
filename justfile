@@ -408,7 +408,7 @@ peer-egress-transit-proof-selfcheck:
     cargo test -q -p chimera-carrier peer_egress::proof
     cargo test -q -p chimera-carrier options_tests::proof
     cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode bench --token bench --transit-payload-bytes 64 2>&1 | rg -q 'transit proof flags are only valid in transit inject modes'
-    CHIMERA_PEER_EGRESS_TRANSIT_PAYLOAD_BYTES=bad cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode node --token token 2>&1 | rg -q 'node mode requires --local-listen'
+    CHIMERA_PEER_EGRESS_TRANSIT_PAYLOAD_BYTES=bad cargo run -q -p chimera-carrier --bin chimera-peer-egress -- --mode sealed-transit-inject --server example.invalid:1 2>&1 | rg -q 'transit-payload-bytes must be a positive integer'
     rg -q 'sealed-transit-inject' crates/chimera-carrier/src/peer_egress/options_mode.rs
     rg -q 'bound-transit-inject' crates/chimera-carrier/src/peer_egress/options_mode.rs
     rg -q 'chimera_peer_egress_sealed_transit_inject=ok' crates/chimera-carrier/src/peer_egress/proof.rs
@@ -751,6 +751,12 @@ runtime-forced-stop-rollback-smoke-selfcheck:
 ship-readiness-selfcheck:
     test -x scripts/ship_readiness.sh
     bash -n scripts/ship_readiness.sh
+    test -x scripts/git_tree_hygiene_guard.sh
+    bash -n scripts/git_tree_hygiene_guard.sh
+    rg -q '^just git-tree-hygiene-guard$' scripts/ship_readiness.sh
+    rg -q 'git_tree_hygiene_ok' scripts/ship_readiness.sh
+    rg -q '"git_tree_hygiene_guard":' scripts/ship_readiness.sh
+    rg -q 'Git tree hygiene guard:' scripts/ship_readiness.sh
     rg -q 'artifacts_fresh' scripts/ship_readiness.sh
     rg -q '"status_scope":"lab_source_gate_only"' scripts/ship_readiness.sh
     rg -q 'fresh_checked_artifacts_ok' scripts/ship_readiness.sh
@@ -1652,6 +1658,53 @@ baseline-freeze:
 cleanroom-handoff-check:
     bash scripts/cleanroom_handoff_check.sh
 
+git-tree-hygiene-guard mode="strict":
+    bash scripts/git_tree_hygiene_guard.sh "{{mode}}"
+
+git-tree-hygiene-guard-selfcheck:
+    test -x scripts/git_tree_hygiene_guard.sh
+    bash -n scripts/git_tree_hygiene_guard.sh
+    rg -q 'git status --porcelain=v1 --untracked-files=all' scripts/git_tree_hygiene_guard.sh
+    rg -q 'git diff --check >/dev/null' scripts/git_tree_hygiene_guard.sh
+    rg -q 'git diff --cached --check >/dev/null' scripts/git_tree_hygiene_guard.sh
+    rg -q 'allow-no-git' scripts/git_tree_hygiene_guard.sh
+    rg -q 'dirty_tree staged=' scripts/git_tree_hygiene_guard.sh
+    rg -q 'PASS dirty_tree=false' scripts/git_tree_hygiene_guard.sh
+    set -euo pipefail; \
+      guard="{{justfile_directory()}}/scripts/git_tree_hygiene_guard.sh"; \
+      tmp="$(mktemp -d /tmp/chimera-git-hygiene.XXXXXX)"; \
+      trap 'rm -rf "$tmp"' EXIT; \
+      make_repo() { \
+        local dir="$1"; \
+        mkdir "$dir"; \
+        git -C "$dir" init -q; \
+        git -C "$dir" config user.email hygiene@example.invalid; \
+        git -C "$dir" config user.name "Hygiene Guard"; \
+        git -C "$dir" config commit.gpgsign false; \
+        printf 'target/\nbin/\n' > "$dir/.gitignore"; \
+        printf 'ok\n' > "$dir/README.md"; \
+        git -C "$dir" add .gitignore README.md; \
+        git -C "$dir" commit -q -m init; \
+      }; \
+      make_repo "$tmp/clean"; \
+      (cd "$tmp/clean" && bash "$guard") | rg -q 'PASS dirty_tree=false'; \
+      make_repo "$tmp/dirty"; \
+      printf 'dirty\n' >> "$tmp/dirty/README.md"; \
+      ! (cd "$tmp/dirty" && bash "$guard") >/dev/null 2>&1; \
+      make_repo "$tmp/staged"; \
+      printf 'staged\n' >> "$tmp/staged/README.md"; \
+      git -C "$tmp/staged" add README.md; \
+      ! (cd "$tmp/staged" && bash "$guard") >/dev/null 2>&1; \
+      make_repo "$tmp/untracked"; \
+      printf 'untracked\n' > "$tmp/untracked/loose.tmp"; \
+      ! (cd "$tmp/untracked" && bash "$guard") >/dev/null 2>&1; \
+      make_repo "$tmp/ignored"; \
+      mkdir -p "$tmp/ignored/target" "$tmp/ignored/bin"; \
+      printf 'ignored\n' > "$tmp/ignored/target/generated.tmp"; \
+      printf 'ignored\n' > "$tmp/ignored/bin/generated.tmp"; \
+      (cd "$tmp/ignored" && bash "$guard") | rg -q 'PASS dirty_tree=false'; \
+      (cd / && bash "$guard" allow-no-git) | rg -q 'SKIP not_git_worktree'
+
 json-message-contract-check:
     rg -q '"message_en":"' docs/doctor_latest.json
     rg -q '"message_ru":"' docs/doctor_latest.json
@@ -2407,6 +2460,7 @@ mvp-check:
     just rollback-json-contract-check
 
 handoff-check:
+    just git-tree-hygiene-guard allow-no-git
     just baseline-verify
     just mvp-check
     just release-readiness-report-json

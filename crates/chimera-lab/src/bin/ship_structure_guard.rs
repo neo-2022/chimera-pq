@@ -21,6 +21,7 @@ fn main() {
         .unwrap_or_else(|_| fail(&format!("ship structure guard: missing file: {report_md}")));
 
     let expected_steps: BTreeSet<&str> = [
+        "git_tree_hygiene_guard",
         "baseline_freeze",
         "cleanroom_handoff_check",
         "benchmark_regression_gate",
@@ -94,6 +95,7 @@ fn main() {
     }
 
     let checks = [
+        "- Git tree hygiene guard: `true`",
         "- Baseline freeze: `true`",
         "- Clean-room handoff check: `true`",
         "- CEF track report: `true`",

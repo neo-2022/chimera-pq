@@ -47,6 +47,20 @@ PASS:
 - The outer project directory is not a git repository, so that rule is stored
   as a workspace rule file rather than a product commit.
 
+## Guard Automation
+
+- Added a read-only product guard:
+  `scripts/git_tree_hygiene_guard.sh`.
+- Added `just git-tree-hygiene-guard` and
+  `just git-tree-hygiene-guard-selfcheck`.
+- Wired the guard into `just handoff-check`.
+- Wired the guard into the start of `scripts/ship_readiness.sh`, before that
+  script generates tracked report artifacts.
+- The guard fails on staged, unstaged and untracked files, but reports
+  branch ahead/behind state without treating local commits as dirty tree.
+- The guard does not run `git reset`, `git clean`, `git checkout`, `git stash`,
+  `git add`, `git commit`, `git push` or any network/SSH action.
+
 ## Limits
 
 - No push was performed.

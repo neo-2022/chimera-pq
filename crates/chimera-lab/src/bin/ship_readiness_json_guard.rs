@@ -46,6 +46,7 @@ fn main() {
     require_bool_eq(report_obj, "cef_phase1_smoke_ok", true);
     require_bool_eq(report_obj, "mesh_route_explain_ok", true);
     require_bool_eq(report_obj, "mesh_auto_adaptive_ok", true);
+    require_bool_eq(report_obj, "git_tree_hygiene_ok", true);
     require_bool_eq(report_obj, "runtime_real_world_probe_smoke_ok", true);
     require_bool_eq(report_obj, "runtime_probe_access_smoke_ok", true);
     let probe_access_mode = report_obj
@@ -91,6 +92,7 @@ fn main() {
     }
 
     for key in [
+        "git_tree_hygiene_guard",
         "cef_track_report",
         "cef_track_guard",
         "cef_track_sync_guard",
@@ -169,6 +171,7 @@ fn main() {
     }
 
     require_md_contains(&report_md_raw, "CEF track sync guard:");
+    require_md_contains(&report_md_raw, "Git tree hygiene guard:");
     require_md_contains(&report_md_raw, "Truth boundary:");
     require_md_contains(&report_md_raw, "Status: **PASS (LAB/SOURCE GATE ONLY)**");
     require_md_contains(&report_md_raw, "Fresh checked artifacts in this run:");

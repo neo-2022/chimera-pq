@@ -14,13 +14,17 @@ DNS only to a test file in `/tmp` and then rolls it back.
 ## 2) Fast Gate (Single Command)
 
 1. Run: `just handoff-check`
-2. Expected: exit code `0` (runs baseline integrity + full MVP check + release readiness JSON).
+2. Expected: exit code `0` (runs git tree hygiene + baseline integrity + full MVP check + release readiness JSON).
 3. For isolated reproducibility check (no manual setup), run: `just cleanroom-handoff-check`.
 4. For full final packaging in one command, run: `just ship-readiness`.
 5. Performance gate script integrity is verified inside `just mvp-check` via
    `just benchmark-regression-selfcheck` before benchmark regression check.
 6. Truth-first report consistency can be checked explicitly:
    `just truth-contract-check`.
+7. Before switching worklines or reporting handoff, run:
+   `just git-tree-hygiene-guard`.
+   Expected: exit code `0`; local commits ahead of upstream are reported but do
+   not count as dirty tree.
 
 ## 3) Full M5/M6 Verification Refresh
 
