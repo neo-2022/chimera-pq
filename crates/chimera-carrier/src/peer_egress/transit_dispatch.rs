@@ -174,6 +174,24 @@ impl TransitNextHopDispatcher {
         Ok(state.peers.remove(&binding).map_or(0, |queue| queue.len()))
     }
 
+    pub fn clear_ticket(&self, ticket: TransitNextHopTicket) -> Result<bool, String> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
+        let Some(queue) = state.peers.get_mut(&ticket.binding) else {
+            return Ok(false);
+        };
+        let Some(index) = queue.iter().position(|entry| entry.ticket == ticket) else {
+            return Ok(false);
+        };
+        let _ = queue.remove(index);
+        if queue.is_empty() {
+            state.peers.remove(&ticket.binding);
+        }
+        Ok(true)
+    }
+
     pub fn binding_depth(&self, binding: TransitPathBinding) -> Result<usize, String> {
         let state = self
             .state
@@ -342,6 +360,36 @@ mod tests {
         assert!(!dispatcher.contains_binding(binding)?);
         assert!(!dispatcher.contains_ticket(ticket)?);
         assert!(dispatcher.pop_for(binding).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_clear_ticket_keeps_newer_parallel_stream() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let binding = binding(8, 2);
+        let old_ticket = dispatcher.register(binding, test_peer_stream()?)?;
+        let fresh_ticket = dispatcher.register(binding, test_peer_stream()?)?;
+
+        assert!(dispatcher.clear_ticket(old_ticket)?);
+        assert!(!dispatcher.contains_ticket(old_ticket)?);
+        assert!(dispatcher.contains_ticket(fresh_ticket)?);
+        assert_eq!(dispatcher.binding_depth(binding)?, 1);
+        drop(dispatcher.pop_for(binding)?);
+        assert!(!dispatcher.contains_binding(binding)?);
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_clear_ticket_missing_ticket_is_noop() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let binding = binding(8, 3);
+        let missing_ticket = dispatcher.register(binding, test_peer_stream()?)?;
+        drop(dispatcher.pop_for(binding)?);
+        let fresh_ticket = dispatcher.register(binding, test_peer_stream()?)?;
+
+        assert!(!dispatcher.clear_ticket(missing_ticket)?);
+        assert!(dispatcher.contains_ticket(fresh_ticket)?);
+        assert_eq!(dispatcher.binding_depth(binding)?, 1);
         Ok(())
     }
 
