@@ -149,7 +149,9 @@ install_prepared_release_tree() {
     fi
     return 1
   fi
-  [[ -n "$backup_home" ]] && rm -rf "$backup_home"
+  if [[ -n "$backup_home" ]]; then
+    rm -rf "$backup_home"
+  fi
 }
 
 install_from_archive() {

@@ -149,10 +149,7 @@ generate_runtime_token() {
 
 installer_gate_prepare_upstream_env() {
   mkdir -p "$(dirname "$UPSTREAM_ENV_FILE")"
-  if [[ ! -f "$UPSTREAM_ENV_FILE" && -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
-    cp "$ROOT_DIR/configs/upstream_proxy.env.example" "$UPSTREAM_ENV_FILE"
-    return 0
-  fi
+  touch "$UPSTREAM_ENV_FILE"
   if [[ -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
     local discovery_url discovery_pubkey discovery_probe_timeout
     discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
@@ -168,6 +165,7 @@ installer_gate_prepare_upstream_env() {
       upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
     fi
   fi
+  chmod 600 "$UPSTREAM_ENV_FILE"
 }
 
 run_chimera_cli() {
@@ -430,11 +428,6 @@ else
   configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
 fi
 configure_transparent_runtime_env
-if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$PEER_EGRESS_ENV_FILE"
-  upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN" "${CHIMERA_PEER_EGRESS_TOKEN:-}"
-fi
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \
     "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >"$SYSTEMD_USER_DIR/chimera-gateway.service"
@@ -476,10 +469,6 @@ ln -sfn "$ROOT_DIR/scripts/chimera.sh" "$LOCAL_BIN_DIR/chimera.sh"
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   systemctl --user daemon-reload
-fi
-
-if [[ -x "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" ]]; then
-  "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" ensure-singbox >/dev/null 2>&1 || true
 fi
 
 echo

@@ -153,7 +153,9 @@ install_release_archive() {
     fi
     return 1
   fi
-  [[ -n "$backup_home" ]] && rm -rf "$backup_home"
+  if [[ -n "$backup_home" ]]; then
+    rm -rf "$backup_home"
+  fi
 
   echo "chimera_install=ok version=$VERSION home=$chimera_home"
 }

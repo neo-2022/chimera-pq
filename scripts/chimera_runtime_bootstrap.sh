@@ -75,21 +75,24 @@ install_runtime_singbox() {
   local arch url tmp tgz extracted
   arch="$(detect_arch)"
   url="${SINGBOX_URL:-$(resolve_default_url "$arch")}"
+  if [[ -z "$SINGBOX_SHA256" ]]; then
+    echo "bootstrap_error=missing_singbox_sha256" >&2
+    echo "bootstrap_hint=set_CHIMERA_SINGBOX_SHA256_for_runtime_download_or_ship_runtime_binary" >&2
+    exit 1
+  fi
   tmp="$(mktemp -d)"
   tgz="$tmp/sing-box.tar.gz"
 
   mkdir -p "$SINGBOX_RUNTIME_DIR"
   download_url_to_file "$url" "$tgz"
 
-  if [[ -n "$SINGBOX_SHA256" ]]; then
-    need_cmd sha256sum
-    local got
-    got="$(sha256sum "$tgz" | awk '{print $1}')"
-    if [[ "$got" != "$SINGBOX_SHA256" ]]; then
-      echo "bootstrap_error=sha256_mismatch expected=$SINGBOX_SHA256 got=$got" >&2
-      rm -rf "$tmp"
-      exit 1
-    fi
+  need_cmd sha256sum
+  local got
+  got="$(sha256sum "$tgz" | awk '{print $1}')"
+  if [[ "$got" != "$SINGBOX_SHA256" ]]; then
+    echo "bootstrap_error=sha256_mismatch expected=$SINGBOX_SHA256 got=$got" >&2
+    rm -rf "$tmp"
+    exit 1
   fi
 
   tar -xzf "$tgz" -C "$tmp"

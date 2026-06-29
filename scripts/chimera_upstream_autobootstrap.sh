@@ -25,6 +25,19 @@ split_csv_lines() {
   done
 }
 
+is_placeholder_upstream_value() {
+  local value="${1:-}"
+  value="$(trim_ascii "${value,,}")"
+  case "$value" in
+    your_user|your_password|your_server_host_or_ip|example|example.invalid)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 parse_transport_endpoint() {
   local candidate="${1:-}"
   local transport="ssh"
@@ -91,7 +104,7 @@ load_pool_candidates() {
 main() {
   local user="${CHIMERA_UPSTREAM_POOL_USER:-${CHIMERA_UPSTREAM_USER:-}}"
   local pass="${CHIMERA_UPSTREAM_POOL_PASS:-${CHIMERA_UPSTREAM_PASS:-}}"
-  if [[ -z "$user" || -z "$pass" ]]; then
+  if [[ -z "$user" || -z "$pass" ]] || is_placeholder_upstream_value "$user" || is_placeholder_upstream_value "$pass"; then
     echo "upstream-autobootstrap: skip missing credentials (CHIMERA_UPSTREAM_POOL_USER/PASS)" >&2
     return 0
   fi
@@ -104,8 +117,10 @@ main() {
   done < <(load_pool_candidates)
   if [[ "${#candidates[@]}" -eq 0 && -n "${CHIMERA_UPSTREAM_HOST:-}" ]]; then
     local host="${CHIMERA_UPSTREAM_HOST}"
-    local p22="${CHIMERA_UPSTREAM_PORT:-22}"
-    candidates+=("${host}:${p22}" "${host}:443" "${host}:8443")
+    if ! is_placeholder_upstream_value "$host"; then
+      local p22="${CHIMERA_UPSTREAM_PORT:-22}"
+      candidates+=("${host}:${p22}" "${host}:443" "${host}:8443")
+    fi
   fi
   if [[ "${#candidates[@]}" -eq 0 ]]; then
     echo "upstream-autobootstrap: skip no candidate endpoints" >&2

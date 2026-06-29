@@ -157,22 +157,26 @@ This flow:
 
 ## Self-Contained Runtime Bootstrap
 
-CHIMERA runtime now includes automatic dependency bootstrap for split transparent
+CHIMERA runtime uses a fail-closed dependency bootstrap for split transparent
 mode:
 
-1. `chimera.sh -install` executes runtime bootstrap (`chimera_runtime_bootstrap.sh`)
-   with no manual user action.
-2. `chimera-control.sh start` auto-checks split runtime and bootstraps missing
-   component if needed.
+1. `chimera.sh -install` installs the CHIMERA release and prepares runtime
+   config without downloading third-party runtime binaries.
+2. `chimera-control.sh start` checks the split runtime dependency before
+   starting services.
 3. Runtime binary is placed under:
    `${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box`
-4. Operator can pin version/checksum via env:
+4. If no existing `sing-box` binary is available, runtime bootstrap downloads it
+   only when a checksum is pinned via env:
    - `CHIMERA_SINGBOX_VERSION`
    - `CHIMERA_SINGBOX_URL`
    - `CHIMERA_SINGBOX_SHA256`
 
-This keeps install/start one-command for end users and removes manual
-third-party installation from required flow.
+If `CHIMERA_SINGBOX_SHA256` is missing and no existing runtime binary is
+available, start fails closed with `reason=runtime_bootstrap_failed`. This
+prevents silent execution of an unverified third-party binary. Full
+self-contained runtime delivery remains blocked until CHIMERA ships the runtime
+binary or ships a pinned per-architecture checksum manifest.
 
 ## External Proof Install/Update Contract
 

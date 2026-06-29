@@ -60,6 +60,7 @@ cp -p "${ROOT_DIR}/bin/chimera-bootstrap" "${RELEASE_DIR}/bin/"
 
 echo "build_release: copying configs"
 cp -p "${ROOT_DIR}/configs"/*.example.* "${RELEASE_DIR}/configs/" 2>/dev/null || true
+cp -p "${ROOT_DIR}/configs"/*.env.example "${RELEASE_DIR}/configs/" 2>/dev/null || true
 cp -p "${ROOT_DIR}/configs"/*.conf "${RELEASE_DIR}/configs/" 2>/dev/null || true
 
 echo "build_release: copying deploy units"
@@ -108,6 +109,7 @@ grep -q '^chimera-release/scripts/chimera-update-rerun\.sh$' "${ROOT_DIR}/target
 grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/configs/upstream_proxy\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 
 echo "build_release: done"
 echo "  archive:   target/${ARCHIVE_NAME}"

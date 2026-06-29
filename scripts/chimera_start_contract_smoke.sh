@@ -158,8 +158,101 @@ EOF
   rm -rf "$tmp_dir"
 }
 
+run_bootstrap_failure_case() {
+  local tmp_dir systemctl_dir cache_dir config_dir runtime_dir client_conf output rc install_root bootstrap_script
+
+  tmp_dir="$(mktemp -d)"
+  systemctl_dir="$tmp_dir/bin"
+  cache_dir="$tmp_dir/cache/chimera"
+  config_dir="$tmp_dir/config/chimera"
+  runtime_dir="$tmp_dir/runtime"
+  install_root="$tmp_dir/chimera-release"
+  mkdir -p "$systemctl_dir" "$cache_dir" "$config_dir" "$runtime_dir"
+  mkdir -p "$install_root/scripts" "$install_root/bin" "$install_root/configs" "$install_root/deploy/systemd-user" "$install_root/deploy/desktop"
+  cp "$ROOT_DIR/scripts/chimera-sh" "$install_root/scripts/chimera-sh"
+  cp "$ROOT_DIR/scripts/chimera-update.sh" "$install_root/scripts/chimera-update.sh"
+  cp "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" "$install_root/scripts/chimera-update-runtime-state.sh"
+  cp "$ROOT_DIR/scripts/chimera-update-rerun.sh" "$install_root/scripts/chimera-update-rerun.sh"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  cp "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" "$install_root/deploy/systemd-user/chimera-gateway.service"
+  cp "$ROOT_DIR/deploy/systemd-user/chimera-client.service" "$install_root/deploy/systemd-user/chimera-client.service"
+  cp "$ROOT_DIR/deploy/desktop/chimera-control-gui.desktop" "$install_root/deploy/desktop/chimera-control-gui.desktop"
+  cp "$ROOT_DIR/configs/client.example.conf" "$install_root/configs/client.example.conf"
+  cp "$ROOT_DIR/configs/gateway.example.conf" "$install_root/configs/gateway.example.conf"
+  printf '%s\n' "0.1.86" >"$install_root/.chimera_release_version"
+  printf '%064d\n' 1 >"$install_root/.chimera_release_bundle.sha256"
+
+  client_conf="$tmp_dir/client.conf"
+  cat >"$client_conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = carrier.mesh:443
+carrier.server_name = gateway.local
+capture.mode = tun
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+
+  cat >"$systemctl_dir/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  --user)
+    shift
+    ;;
+esac
+case "${1:-}" in
+  show-environment|daemon-reload|start|is-active|stop|list-units|list-unit-files)
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$systemctl_dir/systemctl"
+
+  bootstrap_script="$tmp_dir/bootstrap-fails.sh"
+  cat >"$bootstrap_script" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "bootstrap_error=contract_failure" >&2
+exit 42
+EOF
+  chmod +x "$bootstrap_script"
+
+  set +e
+  output="$(
+	    PATH="$systemctl_dir:$PATH" \
+	    HOME="$tmp_dir/home" \
+	    XDG_CACHE_HOME="$tmp_dir/cache" \
+	    XDG_CONFIG_HOME="$config_dir" \
+	    XDG_RUNTIME_DIR="$runtime_dir" \
+    CLIENT_CONFIG_FILE="$client_conf" \
+    RUNTIME_BOOTSTRAP_SCRIPT="$bootstrap_script" \
+    CHIMERA_UPDATE_BOOTSTRAP_URL="http://127.0.0.1:9/chimera.sh" \
+    CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC=1 \
+    CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC=1 \
+	    CHIMERA_UPDATE_DOWNLOAD_RETRIES=0 \
+	    CHIMERA_AUTOFIX_MAX_TIME=0 \
+	    timeout 20s bash "$install_root/scripts/chimera-sh" -start 2>&1
+	  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -ne 124 ]] || fail "runtime_bootstrap_failure: launcher start timed out before contract result"
+  [[ "$rc" -ne 0 ]] || fail "runtime_bootstrap_failure: expected non-zero exit"
+  [[ "$output" == *"start_status=fail mode=bootstrap transparent_runtime=stopped reason=runtime_bootstrap_failed"* ]] || fail "runtime_bootstrap_failure: missing bootstrap failure reason"
+  [[ "$output" != *"start_status=ok"* ]] || fail "runtime_bootstrap_failure: false ok status leaked"
+  [[ "$output" != *"systemctl_start_rc="* ]] || fail "runtime_bootstrap_failure: systemd start happened after bootstrap failure"
+
+  rm -rf "$tmp_dir"
+}
+
 run_case "node_service_failure" "1" "node_fail"
 run_case "node_flap_failure" "1" "node_flap"
 run_case "client_service_failure" "1" "client_fail"
+run_bootstrap_failure_case
 
 echo "chimera_start_contract_smoke=pass"

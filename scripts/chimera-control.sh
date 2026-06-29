@@ -469,7 +469,11 @@ ensure_upstream_env_bootstrapped() {
     existing_user="${CHIMERA_UPSTREAM_USER:-}"
     existing_pass="${CHIMERA_UPSTREAM_PASS:-}"
     existing_candidates_csv="${CHIMERA_UPSTREAM_ENDPOINTS_CSV:-}"
-    if [[ -n "${CHIMERA_UPSTREAM_USER:-}" && -n "${CHIMERA_UPSTREAM_HOST:-}" && -n "${CHIMERA_UPSTREAM_PASS:-}" ]]; then
+    if [[ -n "${CHIMERA_UPSTREAM_USER:-}" && -n "${CHIMERA_UPSTREAM_HOST:-}" && -n "${CHIMERA_UPSTREAM_PASS:-}" ]] \
+      && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_USER:-}" \
+      && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_HOST:-}" \
+      && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_PASS:-}"
+    then
       need_bootstrap="0"
     fi
   fi
@@ -1031,6 +1035,19 @@ is_local_upstream_host() {
   return 1
 }
 
+is_placeholder_upstream_value() {
+  local value="${1:-}"
+  value="$(trim_ascii "${value,,}")"
+  case "$value" in
+    your_user|your_password|your_server_host_or_ip|example|example.invalid)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 ensure_vpn_coexist_guard() {
   if [[ "$CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION" == "1" ]]; then
     return 0
@@ -1181,7 +1198,7 @@ build_upstream_candidates() {
     done < <(split_csv_lines "$CHIMERA_UPSTREAM_ENDPOINTS_CSV")
   fi
   if [[ "${#out[@]}" -eq 0 && -n "${CHIMERA_UPSTREAM_HOST:-}" ]]; then
-    if ! is_local_upstream_host "${CHIMERA_UPSTREAM_HOST}"; then
+    if ! is_local_upstream_host "${CHIMERA_UPSTREAM_HOST}" && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_HOST}"; then
       out+=("${CHIMERA_UPSTREAM_HOST}:${CHIMERA_UPSTREAM_PORT:-22}")
     fi
   fi
@@ -2014,7 +2031,10 @@ start_runtime() {
   ensure_upstream_env_bootstrapped
   publish_peer_egress_transit_lane_bindings_from_control_plane || true
   if [[ -x "$RUNTIME_BOOTSTRAP_SCRIPT" ]]; then
-    "$RUNTIME_BOOTSTRAP_SCRIPT" ensure-singbox >/dev/null 2>&1 || true
+    if ! "$RUNTIME_BOOTSTRAP_SCRIPT" ensure-singbox >/dev/null; then
+      echo "start_status=fail mode=bootstrap transparent_runtime=stopped reason=runtime_bootstrap_failed"
+      return 1
+    fi
   fi
   if systemd_user_ready; then
     systemctl --user daemon-reload >/dev/null 2>&1 || true

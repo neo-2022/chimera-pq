@@ -2341,6 +2341,27 @@ release-pack-schema-guard:
       docs/RELEASE_READINESS_REPORT.json \
       docs/REPORT_PACK.json
 
+release-bundle-install-contract-smoke:
+    bash scripts/release_bundle_install_contract_smoke.sh
+
+release-bundle-install-contract-smoke-selfcheck:
+    test -x scripts/release_bundle_install_contract_smoke.sh
+    bash -n scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'cargo_forbidden' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'upstream_proxy.env.example' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'release_bundle_secret_or_stand_literal_found' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'CHIMERA_RELEASE_BUNDLE_FORBIDDEN_PATTERNS_FILE' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'install_without_cargo_ok=true' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_upstream_env_placeholder_credentials' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_upstream_env_peer_token_leak' scripts/release_bundle_install_contract_smoke.sh
+    ! rg -q 'CHIMERA_SINGBOX_RUNTIME_DIR=' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'Release Bundle Install Contract' .github/workflows/release.yml
+    rg -q 'scripts/release_bundle_install_contract_smoke.sh' .github/workflows/release.yml
+    rg -q 'configs/upstream_proxy\\.env\\.example' scripts/build_release.sh
+    rg -q 'missing_singbox_sha256' scripts/chimera_runtime_bootstrap.sh
+    rg -q 'runtime_bootstrap_failed' scripts/chimera-control.sh
+
 release-pack-schema-guard-selfcheck:
     test -x scripts/release_pack_schema_guard.sh
     bash -n scripts/release_pack_schema_guard.sh
@@ -2512,3 +2533,5 @@ chimera-upstream-autobootstrap-selfcheck:
     bash -n scripts/chimera_upstream_autobootstrap.sh
     rg -q 'upstream-autobootstrap: selected=' scripts/chimera_upstream_autobootstrap.sh
     rg -q 'CHIMERA_UPSTREAM_ENDPOINTS_CSV=' scripts/chimera_upstream_autobootstrap.sh
+    rg -q 'is_placeholder_upstream_value' scripts/chimera_upstream_autobootstrap.sh
+    rg -q 'your_server_host_or_ip' scripts/chimera_upstream_autobootstrap.sh

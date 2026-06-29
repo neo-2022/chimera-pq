@@ -474,7 +474,8 @@ fi
 rg -n 'case_auto_update_preserves_bound_transit_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_bound_transit_env_preservation_case"
 rg -n 'case_peer_egress_env_shell_quotes_lane_bindings_path' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_peer_env_shell_quote_case"
 rg -n 'case_auto_update_preserves_quoted_lane_bindings_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_quoted_lane_bindings_preservation_case"
-rg -n 'case_upstream_env_shell_quotes_peer_token' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_upstream_token_shell_quote_case"
+rg -n 'case_peer_token_stays_in_private_peer_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_private_peer_token_case"
+rg -n 'upstream env leaked peer token' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_upstream_token_leak_guard"
 if rg -n 'configure_peer_egress_env "(side_a|side_b)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
   fail "installer_writes_legacy_peer_egress_role"
 fi

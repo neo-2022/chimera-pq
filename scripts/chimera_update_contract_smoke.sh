@@ -740,8 +740,8 @@ EOF
   rm -rf "$tmp_dir"
 )
 
-case_upstream_env_shell_quotes_peer_token() (
-  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum upstream_env injected_token marker output rc
+case_peer_token_stays_in_private_peer_env() (
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum upstream_env peer_env injected_token marker output rc peer_env_mode upstream_env_mode
   tmp_dir="$(mktemp -d)"
   old_home="$tmp_dir/home/chimera"
   xdg_config="$tmp_dir/xdg-config"
@@ -750,6 +750,7 @@ case_upstream_env_shell_quotes_peer_token() (
   local_bin="$tmp_dir/bin"
   fake_bin="$tmp_dir/fake-bin"
   upstream_env="$xdg_config/chimera/upstream_proxy.env"
+  peer_env="$xdg_config/chimera/peer-egress.env"
   marker="$tmp_dir/upstream-token-injection-ran"
   injected_token="test-token;touch $marker"
   mkdir -p "$old_home/scripts" "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
@@ -786,14 +787,20 @@ EOF
 
   [[ "$rc" -eq 0 ]] || fail "upstream env shell quoting install failed: $output"
   [[ ! -f "$marker" ]] || fail "peer token injection executed during install"
-  grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$upstream_env" \
-    || fail "upstream env did not receive peer token"
+  ! grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$upstream_env" \
+    || fail "upstream env leaked peer token"
+  grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$peer_env" \
+    || fail "peer env did not receive peer token"
+  upstream_env_mode="$(stat -c '%a' "$upstream_env")"
+  [[ "$upstream_env_mode" == "600" ]] || fail "upstream env mode was not private"
+  peer_env_mode="$(stat -c '%a' "$peer_env")"
+  [[ "$peer_env_mode" == "600" ]] || fail "peer env mode was not private"
   set -a
   # shellcheck disable=SC1090
-  source "$upstream_env"
+  source "$peer_env"
   set +a
   [[ "${CHIMERA_PEER_EGRESS_TOKEN:-}" == "$injected_token" ]] \
-    || fail "shell quoted upstream peer token did not round-trip"
+    || fail "shell quoted private peer token did not round-trip"
   [[ ! -f "$marker" ]] || fail "peer token injection executed during explicit source"
   rm -rf "$tmp_dir"
 )
@@ -1604,7 +1611,7 @@ case_semver_update_order
 case_auto_update_preserves_bound_transit_env
 case_peer_egress_env_shell_quotes_lane_bindings_path
 case_auto_update_preserves_quoted_lane_bindings_env
-case_upstream_env_shell_quotes_peer_token
+case_peer_token_stays_in_private_peer_env
 case_failed_install_restores_previous_release
 case_failed_launcher_link_restores_previous_release
 case_peer_update_metadata_does_not_execute_peer_bootstrap
