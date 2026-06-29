@@ -12,12 +12,14 @@ use chimera_mesh::{
     MeshCarrierLaneBinding, MeshDiscoveryRecord, MeshJoinRequest, MeshMultipathFlowAction,
     MeshMultipathFlowKey, MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode,
     MeshMultipathRebuildPolicy, MeshMultipathSchedule, MeshPathPolicy, MeshPeerHealth,
-    MeshPeerPerformance, MeshPeerTablePolicy, MeshRouteBindingId, MeshRuntime, MultipathDemand,
-    MultipathMode, plan_multipath_flow,
+    MeshPeerPerformance, MeshPeerTablePolicy, MeshRouteBindingId, MeshRuntime, plan_multipath_flow,
 };
 use std::time::{Duration, Instant};
 
 use crate::Language;
+
+#[path = "metadata_perf_pending_rebuild.rs"]
+mod pending_rebuild;
 
 const DEFAULT_ITERATIONS: usize = 100_000;
 const ACTIVE_BINDING_COUNT: usize = 16;
@@ -599,10 +601,6 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
             live_dps_plan_path_sample_count,
             live_dps_plan_path_batch_size,
         );
-    let (pending_rebuild_runtime, pending_rebuild_request, pending_rebuild_path_policy) =
-        metadata_pending_rebuild_fixture();
-    let pending_rebuild_rebuild_policy =
-        MeshMultipathRebuildPolicy::new(1, 1).unwrap_or_else(|error| unreachable!("{error}"));
     let pending_rebuild_iterations =
         measured_iterations.clamp(1, PENDING_REBUILD_PLAN_MAX_ITERATIONS);
     let pending_rebuild_sample_count = pending_rebuild_iterations.clamp(1, SAMPLE_COUNT);
@@ -610,19 +608,12 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
         pending_rebuild_iterations.div_ceil(pending_rebuild_sample_count);
     let pending_rebuild_measured_iterations =
         pending_rebuild_sample_count.saturating_mul(pending_rebuild_batch_size);
-    let live_pending_rebuild_plan_path = measure_live_pending_rebuild_plan_path(
-        &pending_rebuild_runtime,
-        &pending_rebuild_request,
-        &pending_rebuild_path_policy,
-        &pending_rebuild_rebuild_policy,
-        pending_rebuild_sample_count,
-        pending_rebuild_batch_size,
-    );
-    let live_pending_rebuild_plan_core = measure_live_pending_rebuild_plan_core(
-        &pending_rebuild_runtime,
-        &pending_rebuild_request,
-        &pending_rebuild_path_policy,
-        &pending_rebuild_rebuild_policy,
+    let pending_rebuild::PendingRebuildMeasurements {
+        full_plan: live_pending_rebuild_plan_path,
+        core_plan: live_pending_rebuild_plan_core,
+    } = pending_rebuild::measure_pending_rebuild_plans(
+        PATH_PLANNER_PEER_COUNT,
+        DISCOVERY_REBUILD_SOURCE,
         pending_rebuild_sample_count,
         pending_rebuild_batch_size,
     );
@@ -1150,85 +1141,6 @@ fn measure_live_dps_plan_core_with_carrier_selection(
     }
 }
 
-fn measure_live_pending_rebuild_plan_path(
-    runtime: &MeshRuntime,
-    request: &MeshJoinRequest,
-    path_policy: &MeshPathPolicy,
-    rebuild_policy: &MeshMultipathRebuildPolicy,
-    sample_count: usize,
-    batch_size: usize,
-) -> ScheduleMeasurement {
-    let mut samples = Vec::with_capacity(sample_count);
-    let mut checksum = 0usize;
-    let total_start = Instant::now();
-    for sample in 0..sample_count {
-        let batch_start = Instant::now();
-        for offset in 0..batch_size {
-            let _sequence = sample.saturating_mul(batch_size).saturating_add(offset);
-            let mut runtime = runtime.clone();
-            let (plan, decision) = runtime
-                .plan_path_with_pending_multipath_rebuild(request, path_policy, rebuild_policy)
-                .unwrap_or_else(|error| unreachable!("{error}"));
-            checksum = checksum.wrapping_add(plan.selected_peers.len());
-            checksum = checksum.wrapping_add(plan.explain.len());
-            checksum = checksum.wrapping_add(decision.is_some() as usize);
-            checksum = checksum.wrapping_add(plan.multipath_schedule.active_lane_count);
-        }
-        let elapsed = batch_start.elapsed();
-        samples.push(elapsed.as_nanos() / batch_size as u128);
-    }
-    let total_elapsed = total_start.elapsed();
-    samples.sort_unstable();
-    let p95_index = ((samples.len().saturating_sub(1)) * 95) / 100;
-    let p95_ns = samples.get(p95_index).copied().unwrap_or(0);
-    if checksum == usize::MAX {
-        eprintln!("live pending rebuild plan path metadata perf checksum guard tripped");
-    }
-    ScheduleMeasurement {
-        total_elapsed,
-        p95_ns,
-    }
-}
-
-fn measure_live_pending_rebuild_plan_core(
-    runtime: &MeshRuntime,
-    request: &MeshJoinRequest,
-    path_policy: &MeshPathPolicy,
-    rebuild_policy: &MeshMultipathRebuildPolicy,
-    sample_count: usize,
-    batch_size: usize,
-) -> ScheduleMeasurement {
-    let mut samples = Vec::with_capacity(sample_count);
-    let mut checksum = 0usize;
-    let total_start = Instant::now();
-    for sample in 0..sample_count {
-        let batch_start = Instant::now();
-        for offset in 0..batch_size {
-            let _sequence = sample.saturating_mul(batch_size).saturating_add(offset);
-            let mut runtime = runtime.clone();
-            let (plan, decision) = runtime
-                .plan_path_core_with_pending_multipath_rebuild(request, path_policy, rebuild_policy)
-                .unwrap_or_else(|error| unreachable!("{error}"));
-            checksum = checksum.wrapping_add(plan.selected_peers.len());
-            checksum = checksum.wrapping_add(decision.is_some() as usize);
-            checksum = checksum.wrapping_add(plan.multipath_schedule.active_lane_count);
-        }
-        let elapsed = batch_start.elapsed();
-        samples.push(elapsed.as_nanos() / batch_size as u128);
-    }
-    let total_elapsed = total_start.elapsed();
-    samples.sort_unstable();
-    let p95_index = ((samples.len().saturating_sub(1)) * 95) / 100;
-    let p95_ns = samples.get(p95_index).copied().unwrap_or(0);
-    if checksum == usize::MAX {
-        eprintln!("live pending rebuild plan core metadata perf checksum guard tripped");
-    }
-    ScheduleMeasurement {
-        total_elapsed,
-        p95_ns,
-    }
-}
-
 fn measure_status_explain(
     runtime: &MeshRuntime,
     sample_count: usize,
@@ -1372,72 +1284,6 @@ fn metadata_rebuild_fixture() -> MeshRuntime {
         ])
         .unwrap_or_else(|error| unreachable!("{error}"));
     runtime
-}
-
-fn metadata_pending_rebuild_fixture() -> (MeshRuntime, MeshJoinRequest, MeshPathPolicy) {
-    let mut runtime = MeshRuntime::bootstrap("metadata-perf", "seed-a")
-        .unwrap_or_else(|error| unreachable!("{error}"));
-    runtime
-        .set_peer_table_policy(MeshPeerTablePolicy {
-            stale_after_ticks: 1_000_000,
-            ..MeshPeerTablePolicy::default()
-        })
-        .unwrap_or_else(|error| unreachable!("{error}"));
-    let regions = ["eu", "us", "ap", "EU"];
-    let records: Vec<MeshDiscoveryRecord> = (0..PATH_PLANNER_PEER_COUNT)
-        .map(|index| MeshDiscoveryRecord {
-            node_id: format!("perf-rebuild-node-{index:03}"),
-            endpoint: format!("198.51.101.{}:443", (index % 200) + 1),
-            region: regions[index % regions.len()].to_string(),
-            load_score: ((index * 11) % 70) as u8,
-            reliability_score: (70 + ((index * 3) % 30)) as u8,
-        })
-        .collect();
-    runtime
-        .merge_discovery(DISCOVERY_REBUILD_SOURCE, &records)
-        .unwrap_or_else(|error| unreachable!("{error}"));
-    let request = MeshJoinRequest {
-        namespace: "metadata-perf".to_string(),
-        node_name: "metadata-perf-pending-rebuild".to_string(),
-        invite_token: None,
-    };
-    let policy = MeshPathPolicy {
-        allowed_regions: vec!["eu".to_string(), "us".to_string(), "ap".to_string()],
-        blocked_node_ids: Vec::new(),
-        require_min_reliability: 70,
-        max_load_score: 80,
-        max_peers: 8,
-        prefer_region_diversity: true,
-        max_selected_per_region: 4,
-        min_distinct_regions: 3,
-        path_profile_override: None,
-        multipath_mode: Some(MultipathMode::FlowShard),
-        multipath_demand: Some(MultipathDemand::Bulk),
-        connect_fallback_ports: vec![443, 8443],
-    };
-    let rebuild_policy =
-        MeshMultipathRebuildPolicy::new(1, 1).unwrap_or_else(|error| unreachable!("{error}"));
-    let (_plan, _decision) = runtime
-        .plan_path_core_with_pending_multipath_rebuild(&request, &policy, &rebuild_policy)
-        .unwrap_or_else(|error| unreachable!("{error}"));
-    runtime
-        .update_peer_performance(&[
-            MeshPeerPerformance {
-                node_id: "perf-rebuild-node-000".to_string(),
-                latency_ms: Some(250),
-                throughput_mbps: Some(40),
-            },
-            MeshPeerPerformance {
-                node_id: "perf-rebuild-node-001".to_string(),
-                latency_ms: Some(20),
-                throughput_mbps: Some(900),
-            },
-        ])
-        .unwrap_or_else(|error| unreachable!("{error}"));
-    if runtime.pending_multipath_rebuild_signal().is_none() {
-        unreachable!("pending rebuild fixture must start with a pending signal");
-    }
-    (runtime, request, policy)
 }
 
 fn metadata_lane_document_fixture() -> TransitLaneDocument {
