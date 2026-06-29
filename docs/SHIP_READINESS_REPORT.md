@@ -3,7 +3,10 @@
 Status: **PASS (LAB/SOURCE GATE ONLY)**
 Generated at (UTC): `2026-06-24T22:03:54Z`
 
+Contract sync note: `git_tree_hygiene_guard` was added after the original report generation; this is a source/lab contract sync, not a fresh full ship-readiness run.
+
 Checks:
+- Git tree hygiene guard: `true`
 - Baseline freeze: `true`
 - Clean-room handoff check: `true`
 - CEF track report: `true`
