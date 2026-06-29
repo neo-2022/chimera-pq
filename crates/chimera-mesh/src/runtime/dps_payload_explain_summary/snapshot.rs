@@ -59,6 +59,14 @@ impl<'a> DpsPayloadExplainSnapshot<'a> {
         let mut snapshot = Self::default();
         let mut remaining = TRACKED_FIELD_COUNT;
         for line in explain {
+            if !(line.starts_with("preemptive_shadow_")
+                || line.starts_with("selection_pressure_")
+                || line.starts_with("peer_table_runtime_consistency_")
+                || line.starts_with("plan_setup_discovery_table_compact")
+                || line.starts_with("standby_shadow_"))
+            {
+                continue;
+            }
             let Some((key, value)) = line.split_once('=') else {
                 continue;
             };
