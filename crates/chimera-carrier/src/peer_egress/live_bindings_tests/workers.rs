@@ -97,6 +97,122 @@ fn worker_reconcile_keeps_same_binding_without_spawn_churn() -> Result<(), Strin
 }
 
 #[test]
+fn worker_reconcile_sorted_unique_replaces_changed_binding() -> Result<(), String> {
+    let dispatcher = Arc::new(TransitNextHopDispatcher::default());
+    let unchanged = registration(12, 1, "198.51.100.12:443")?;
+    let old = registration(13, 1, "198.51.100.13:443")?;
+    let changed = registration(13, 1, "198.51.100.113:443")?;
+    let unchanged_cancel = Arc::new(AtomicBool::new(false));
+    let old_cancel = Arc::new(AtomicBool::new(false));
+    let mut workers = BTreeMap::from([
+        (
+            unchanged.binding(),
+            LiveTransitLaneWorker {
+                registration: unchanged.clone(),
+                cancel: unchanged_cancel.clone(),
+            },
+        ),
+        (
+            old.binding(),
+            LiveTransitLaneWorker {
+                registration: old.clone(),
+                cancel: old_cancel.clone(),
+            },
+        ),
+    ]);
+    dispatcher.register(unchanged.binding(), test_peer_stream()?)?;
+    dispatcher.register(old.binding(), test_peer_stream()?)?;
+    let spawned = Arc::new(Mutex::new(Vec::new()));
+    let spawned_log = spawned.clone();
+
+    reconcile_live_transit_lane_workers(
+        &mut workers,
+        &[unchanged.clone(), changed.clone()],
+        &dispatcher,
+        move |registration, _cancel| {
+            spawned_log
+                .lock()
+                .unwrap_or_else(|_| unreachable!("spawn log must lock"))
+                .push(registration.clone());
+        },
+    );
+
+    assert!(!unchanged_cancel.load(Ordering::Relaxed));
+    assert!(old_cancel.load(Ordering::Relaxed));
+    assert!(dispatcher.contains_binding(unchanged.binding())?);
+    assert!(!dispatcher.contains_binding(old.binding())?);
+    assert_eq!(workers.len(), 2);
+    assert_eq!(
+        workers
+            .get(&unchanged.binding())
+            .ok_or_else(|| "unchanged worker missing".to_string())?
+            .registration,
+        unchanged
+    );
+    assert_eq!(
+        workers
+            .get(&changed.binding())
+            .ok_or_else(|| "changed worker missing".to_string())?
+            .registration,
+        changed
+    );
+    assert_eq!(
+        spawned
+            .lock()
+            .map_err(|_| "spawn log lock poisoned".to_string())?
+            .as_slice(),
+        &[changed]
+    );
+    Ok(())
+}
+
+#[test]
+fn worker_reconcile_unsorted_unique_uses_fallback_without_semantic_drift() -> Result<(), String> {
+    let dispatcher = Arc::new(TransitNextHopDispatcher::default());
+    let first = registration(14, 1, "198.51.100.14:443")?;
+    let second = registration(15, 1, "198.51.100.15:443")?;
+    let mut workers = BTreeMap::new();
+    let spawned = Arc::new(Mutex::new(Vec::new()));
+    let spawned_log = spawned.clone();
+
+    reconcile_live_transit_lane_workers(
+        &mut workers,
+        &[second.clone(), first.clone()],
+        &dispatcher,
+        move |registration, _cancel| {
+            spawned_log
+                .lock()
+                .unwrap_or_else(|_| unreachable!("spawn log must lock"))
+                .push(registration.clone());
+        },
+    );
+
+    assert_eq!(workers.len(), 2);
+    assert_eq!(
+        workers
+            .get(&first.binding())
+            .ok_or_else(|| "first worker missing".to_string())?
+            .registration,
+        first
+    );
+    assert_eq!(
+        workers
+            .get(&second.binding())
+            .ok_or_else(|| "second worker missing".to_string())?
+            .registration,
+        second
+    );
+    assert_eq!(
+        spawned
+            .lock()
+            .map_err(|_| "spawn log lock poisoned".to_string())?
+            .as_slice(),
+        &[second, first]
+    );
+    Ok(())
+}
+
+#[test]
 fn clear_workers_evicts_registered_bindings_and_sets_cancel() -> Result<(), String> {
     let dispatcher = Arc::new(TransitNextHopDispatcher::default());
     let registration = registration(11, 2, "198.51.100.11:443")?;

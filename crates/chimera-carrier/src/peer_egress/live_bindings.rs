@@ -325,6 +325,16 @@ fn reconcile_live_transit_lane_workers<F>(
 ) where
     F: FnMut(&TransitLaneRegistration, Arc<AtomicBool>),
 {
+    if desired_registrations_are_sorted_unique(desired) {
+        reconcile_sorted_unique_live_transit_lane_workers(
+            workers,
+            desired,
+            dispatcher,
+            spawn_worker,
+        );
+        return;
+    }
+
     workers.retain(|binding, worker| {
         if last_desired_registration_for_binding(desired, *binding)
             .is_some_and(|registration| worker.registration == *registration)
@@ -358,6 +368,62 @@ fn reconcile_live_transit_lane_workers<F>(
             },
         );
     }
+}
+
+fn reconcile_sorted_unique_live_transit_lane_workers<F>(
+    workers: &mut BTreeMap<TransitPathBinding, LiveTransitLaneWorker>,
+    desired: &[TransitLaneRegistration],
+    dispatcher: &SharedTransitNextHopDispatcher,
+    mut spawn_worker: F,
+) where
+    F: FnMut(&TransitLaneRegistration, Arc<AtomicBool>),
+{
+    workers.retain(|binding, worker| {
+        if sorted_desired_registration_for_binding(desired, *binding)
+            .is_some_and(|registration| worker.registration == *registration)
+        {
+            return true;
+        }
+        worker.cancel.store(true, Ordering::Relaxed);
+        let _ = dispatcher.clear_binding(*binding);
+        false
+    });
+
+    for registration in desired {
+        let binding = registration.binding();
+        if workers
+            .get(&binding)
+            .is_some_and(|worker| worker.registration == *registration)
+        {
+            continue;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let registration = registration.clone();
+        spawn_worker(&registration, cancel.clone());
+        workers.insert(
+            binding,
+            LiveTransitLaneWorker {
+                registration,
+                cancel,
+            },
+        );
+    }
+}
+
+fn desired_registrations_are_sorted_unique(desired: &[TransitLaneRegistration]) -> bool {
+    desired
+        .windows(2)
+        .all(|pair| pair[0].binding() < pair[1].binding())
+}
+
+fn sorted_desired_registration_for_binding(
+    desired: &[TransitLaneRegistration],
+    binding: TransitPathBinding,
+) -> Option<&TransitLaneRegistration> {
+    desired
+        .binary_search_by(|registration| registration.binding().cmp(&binding))
+        .ok()
+        .and_then(|index| desired.get(index))
 }
 
 fn last_desired_registration_for_binding(
