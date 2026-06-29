@@ -3,8 +3,8 @@ use std::net::Shutdown;
 use std::thread;
 
 use chimera_mesh::{
-    MeshMultipathFlowKey, MeshPathPlan, WeaveSealedTransitFrame, forward_weave_transit_frame,
-    validate_weave_sealed_transit_frame,
+    MeshMultipathFlowKey, MeshMultipathSchedule, MeshPathPlan, WeaveSealedTransitFrame,
+    forward_weave_transit_frame, validate_weave_sealed_transit_frame,
 };
 
 use crate::peer_egress::bound_transit::forward_bound_peer_transit_pair;
@@ -21,7 +21,7 @@ use crate::peer_egress::transit_guard::{
     TransitRelayGuard, TransitRelayLimits, apply_transit_stream_limits,
 };
 use crate::peer_egress::transit_lane_selection::{
-    pop_planned_transit_dispatch_next_hop, pop_registered_transit_next_hop,
+    pop_registered_transit_next_hop, pop_scheduled_transit_dispatch_next_hop,
 };
 use crate::peer_egress::wire::PeerMessage;
 
@@ -137,25 +137,39 @@ pub fn forward_peer_sealed_transit_to_planned_next_hop(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first: TransitRelayFrame,
 ) -> Result<(), String> {
-    forward_peer_sealed_transit_to_planned_next_hop_with_limits(
+    forward_peer_sealed_transit_to_scheduled_next_hop(
         source,
-        plan,
+        &plan.multipath_schedule,
+        dispatcher,
+        first,
+    )
+}
+
+pub fn forward_peer_sealed_transit_to_scheduled_next_hop(
+    source: SecurePeerStream,
+    schedule: &MeshMultipathSchedule,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first: TransitRelayFrame,
+) -> Result<(), String> {
+    forward_peer_sealed_transit_to_scheduled_next_hop_with_limits(
+        source,
+        schedule,
         dispatcher,
         first,
         TransitRelayLimits::default(),
     )
 }
 
-pub(crate) fn forward_peer_sealed_transit_to_planned_next_hop_with_limits(
+pub(crate) fn forward_peer_sealed_transit_to_scheduled_next_hop_with_limits(
     source: SecurePeerStream,
-    plan: &MeshPathPlan,
+    schedule: &MeshMultipathSchedule,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first: TransitRelayFrame,
     limits: TransitRelayLimits,
 ) -> Result<(), String> {
     limits.validate()?;
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
-    let next_peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
+    let next_peer = pop_scheduled_transit_dispatch_next_hop(schedule, dispatcher, flow_key)?;
     forward_peer_sealed_transit_pair_with_limits(source, next_peer, first, limits)
 }
 

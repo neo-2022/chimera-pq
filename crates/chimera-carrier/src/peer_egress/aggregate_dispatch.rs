@@ -1,7 +1,10 @@
 use core::fmt;
 use std::thread;
 
-use chimera_mesh::{MeshMultipathAggregateAction, MeshPathPlan, plan_multipath_aggregate_object};
+use chimera_mesh::{
+    MeshMultipathAggregateAction, MeshMultipathSchedule, MeshPathPlan,
+    plan_multipath_aggregate_object,
+};
 
 use crate::peer_egress::aggregate_wire::{AggregateObjectId, AggregateTransitShardFrame};
 use crate::peer_egress::protocol::SecurePeerStream;
@@ -67,10 +70,18 @@ pub(crate) fn build_aggregate_transit_shards(
     frame: &TransitRelayFrame,
     aggregate_id: AggregateObjectId,
 ) -> Result<AggregateTransitShardSet, String> {
+    build_aggregate_transit_shards_from_schedule(&plan.multipath_schedule, frame, aggregate_id)
+}
+
+pub(crate) fn build_aggregate_transit_shards_from_schedule(
+    schedule: &MeshMultipathSchedule,
+    frame: &TransitRelayFrame,
+    aggregate_id: AggregateObjectId,
+) -> Result<AggregateTransitShardSet, String> {
     let sealed = frame.sealed_bytes();
     let object_bytes = u64::try_from(sealed.len())
         .map_err(|_| "aggregate transit object length overflow".to_string())?;
-    let aggregate = plan_multipath_aggregate_object(&plan.multipath_schedule, object_bytes);
+    let aggregate = plan_multipath_aggregate_object(schedule, object_bytes);
     if aggregate.action != MeshMultipathAggregateAction::Assigned {
         return Err(format!(
             "aggregate transit planning failed: {}",
@@ -137,7 +148,21 @@ pub(crate) fn claim_aggregate_transit_shards(
     aggregate_id: AggregateObjectId,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
 ) -> Result<Vec<ClaimedAggregateTransitShard>, String> {
-    let shard_set = build_aggregate_transit_shards(plan, frame, aggregate_id)?;
+    claim_aggregate_transit_shards_from_schedule(
+        &plan.multipath_schedule,
+        frame,
+        aggregate_id,
+        dispatcher,
+    )
+}
+
+pub(crate) fn claim_aggregate_transit_shards_from_schedule(
+    schedule: &MeshMultipathSchedule,
+    frame: &TransitRelayFrame,
+    aggregate_id: AggregateObjectId,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+) -> Result<Vec<ClaimedAggregateTransitShard>, String> {
+    let shard_set = build_aggregate_transit_shards_from_schedule(schedule, frame, aggregate_id)?;
     let bindings = shard_set.bindings();
     let dispatcher = dispatcher
         .ok_or_else(|| "aggregate transit path binding dispatcher unavailable".to_string())?;
@@ -210,8 +235,8 @@ mod aggregate_dispatch_parallel_tests;
 #[cfg(test)]
 mod tests {
     use super::{
-        build_aggregate_transit_shards, claim_aggregate_transit_shards,
-        forward_claimed_aggregate_transit_shards,
+        build_aggregate_transit_shards, build_aggregate_transit_shards_from_schedule,
+        claim_aggregate_transit_shards, forward_claimed_aggregate_transit_shards,
     };
     use crate::peer_egress::aggregate_reassembly::{
         AggregateTransitObjectReassembler, AggregateTransitReassemblyStatus,
@@ -253,6 +278,26 @@ mod tests {
             ],
         )?;
         runtime.plan_path_from_dps_payload(
+            &MeshJoinRequest {
+                namespace: "cef-public".to_string(),
+                node_name: "node-client".to_string(),
+                invite_token: None,
+            },
+            "mesh_allowed_regions=eu;mesh_max_peers=3;mesh_max_selected_per_region=3;mesh_multipath_mode=aggregate_buffered;mesh_route_binding_id=7301",
+        )
+    }
+
+    fn core_plan() -> Result<chimera_mesh::MeshPathPlanCore, String> {
+        let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
+        runtime.merge_discovery(
+            "seed-b",
+            &[
+                record("node-a", "198.51.100.31:443", "eu", 20, 90),
+                record("node-b", "198.51.100.32:443", "eu", 22, 91),
+                record("node-c", "198.51.100.33:443", "eu", 24, 92),
+            ],
+        )?;
+        runtime.plan_path_core_from_dps_payload(
             &MeshJoinRequest {
                 namespace: "cef-public".to_string(),
                 node_name: "node-client".to_string(),
@@ -386,6 +431,31 @@ mod tests {
 
         let debug = format!("{shard_set:?}");
         assert!(!debug.contains("SECRET_AGGREGATE_DISPATCH_PAYLOAD"));
+        assert!(!debug.contains("198.51.100.31"));
+        assert!(debug.contains("<sealed>"));
+        Ok(())
+    }
+
+    #[test]
+    fn aggregate_dispatch_builds_shards_from_core_schedule() -> Result<(), String> {
+        let core = core_plan()?;
+        let frame = transit_frame(b"SECRET_AGGREGATE_DISPATCH_CORE_PAYLOAD")?;
+        let shard_set = build_aggregate_transit_shards_from_schedule(
+            &core.multipath_schedule,
+            &frame,
+            aggregate_id()?,
+        )?;
+
+        assert_eq!(shard_set.shards().len(), 3);
+        assert!(
+            shard_set
+                .explain()
+                .iter()
+                .any(|line| line == "multipath_aggregate_privacy=sealed_opaque_only")
+        );
+
+        let debug = format!("{shard_set:?}");
+        assert!(!debug.contains("SECRET_AGGREGATE_DISPATCH_CORE_PAYLOAD"));
         assert!(!debug.contains("198.51.100.31"));
         assert!(debug.contains("<sealed>"));
         Ok(())

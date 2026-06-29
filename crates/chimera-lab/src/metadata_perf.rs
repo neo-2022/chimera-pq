@@ -7,6 +7,7 @@ use chimera_carrier::peer_egress::lane_binding::{
     transit_lane_document_from_mesh_plan,
 };
 use chimera_carrier::peer_egress::live_bindings::live_binding_reload_index_perf_smoke;
+use chimera_carrier::peer_egress::select_carrier_binding_from_multipath_schedule;
 use chimera_mesh::{
     MeshCarrierLaneBinding, MeshDiscoveryRecord, MeshJoinRequest, MeshMultipathFlowAction,
     MeshMultipathFlowKey, MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode,
@@ -42,6 +43,14 @@ const LIVE_DPS_PLAN_PATH_PAYLOAD: &str = concat!(
     "mesh_multipath_mode=standby_only;",
     "mesh_continuity_policy=same_egress_only;",
     "mesh_route_binding_id=7005"
+);
+const LIVE_DPS_CARRIER_SELECTION_PAYLOAD: &str = concat!(
+    "mesh_allowed_regions=eu,us,ap;",
+    "mesh_max_peers=3;",
+    "mesh_max_selected_per_region=3;",
+    "mesh_multipath_mode=flow_shard;",
+    "mesh_multipath_demand=bulk;",
+    "mesh_route_binding_id=7006"
 );
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +89,10 @@ pub(crate) struct MetadataPerfResult {
     pub(crate) live_dps_plan_path_from_payload_p95_ns: u128,
     pub(crate) live_dps_plan_core_from_payload_ops_per_sec: f64,
     pub(crate) live_dps_plan_core_from_payload_p95_ns: u128,
+    pub(crate) live_dps_plan_path_with_carrier_selection_ops_per_sec: f64,
+    pub(crate) live_dps_plan_path_with_carrier_selection_p95_ns: u128,
+    pub(crate) live_dps_plan_core_with_carrier_selection_ops_per_sec: f64,
+    pub(crate) live_dps_plan_core_with_carrier_selection_p95_ns: u128,
     pub(crate) status_explain_iterations: usize,
     pub(crate) status_explain_peer_count: usize,
     pub(crate) status_explain_ops_per_sec: f64,
@@ -158,6 +171,8 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
             println!("Hot path: live_binding_reload_index");
             println!("Hot path: live_dps_plan_path_from_payload");
             println!("Hot path: live_dps_plan_core_from_payload");
+            println!("Hot path: live_dps_plan_path_with_carrier_selection");
+            println!("Hot path: live_dps_plan_core_with_carrier_selection");
             println!("Hot path: status_explain");
             println!("Scope: hot metadata only");
             println!("Iterations: {}", result.iterations);
@@ -238,6 +253,16 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
                 result.live_dps_plan_core_from_payload_p95_ns
             );
             println!(
+                "Live DPS plan path with carrier selection: {:.0} ops/sec, p95 {} ns",
+                result.live_dps_plan_path_with_carrier_selection_ops_per_sec,
+                result.live_dps_plan_path_with_carrier_selection_p95_ns
+            );
+            println!(
+                "Live DPS plan core with carrier selection: {:.0} ops/sec, p95 {} ns",
+                result.live_dps_plan_core_with_carrier_selection_ops_per_sec,
+                result.live_dps_plan_core_with_carrier_selection_p95_ns
+            );
+            println!(
                 "Status explain: {:.0} ops/sec, p95 {} ns over {} peers",
                 result.status_explain_ops_per_sec,
                 result.status_explain_p95_ns,
@@ -258,6 +283,8 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
             println!("Горячий путь: live_binding_reload_index");
             println!("Горячий путь: live_dps_plan_path_from_payload");
             println!("Горячий путь: live_dps_plan_core_from_payload");
+            println!("Горячий путь: live_dps_plan_path_with_carrier_selection");
+            println!("Горячий путь: live_dps_plan_core_with_carrier_selection");
             println!("Горячий путь: status_explain");
             println!("Область: только служебная metadata");
             println!("Итераций: {}", result.iterations);
@@ -336,6 +363,16 @@ pub(crate) fn run_metadata_perf_smoke(lang: Language, args: &[String]) -> i32 {
                 "Live DPS plan core from payload: {:.0} ops/сек, p95 {} нс",
                 result.live_dps_plan_core_from_payload_ops_per_sec,
                 result.live_dps_plan_core_from_payload_p95_ns
+            );
+            println!(
+                "Live DPS plan path with carrier selection: {:.0} ops/сек, p95 {} нс",
+                result.live_dps_plan_path_with_carrier_selection_ops_per_sec,
+                result.live_dps_plan_path_with_carrier_selection_p95_ns
+            );
+            println!(
+                "Live DPS plan core with carrier selection: {:.0} ops/сек, p95 {} нс",
+                result.live_dps_plan_core_with_carrier_selection_ops_per_sec,
+                result.live_dps_plan_core_with_carrier_selection_p95_ns
             );
             println!(
                 "Status explain: {:.0} ops/сек, p95 {} нс по {} peers",
@@ -513,6 +550,20 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
         live_dps_plan_path_sample_count,
         live_dps_plan_path_batch_size,
     );
+    let live_dps_plan_path_with_carrier_selection =
+        measure_live_dps_plan_path_with_carrier_selection(
+            &runtime,
+            &request,
+            live_dps_plan_path_sample_count,
+            live_dps_plan_path_batch_size,
+        );
+    let live_dps_plan_core_with_carrier_selection =
+        measure_live_dps_plan_core_with_carrier_selection(
+            &runtime,
+            &request,
+            live_dps_plan_path_sample_count,
+            live_dps_plan_path_batch_size,
+        );
     let status_explain_runtime = metadata_rebuild_fixture();
     let status_explain_iterations = measured_iterations.clamp(1, STATUS_EXPLAIN_MAX_ITERATIONS);
     let status_explain_sample_count = status_explain_iterations.clamp(1, SAMPLE_COUNT);
@@ -596,6 +647,18 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
             live_dps_plan_core.total_elapsed,
         ),
         live_dps_plan_core_from_payload_p95_ns: live_dps_plan_core.p95_ns,
+        live_dps_plan_path_with_carrier_selection_ops_per_sec: ops_per_sec(
+            live_dps_plan_path_measured_iterations,
+            live_dps_plan_path_with_carrier_selection.total_elapsed,
+        ),
+        live_dps_plan_path_with_carrier_selection_p95_ns: live_dps_plan_path_with_carrier_selection
+            .p95_ns,
+        live_dps_plan_core_with_carrier_selection_ops_per_sec: ops_per_sec(
+            live_dps_plan_path_measured_iterations,
+            live_dps_plan_core_with_carrier_selection.total_elapsed,
+        ),
+        live_dps_plan_core_with_carrier_selection_p95_ns: live_dps_plan_core_with_carrier_selection
+            .p95_ns,
         status_explain_iterations: status_explain_measured_iterations,
         status_explain_peer_count: PATH_PLANNER_PEER_COUNT,
         status_explain_ops_per_sec: ops_per_sec(
@@ -612,7 +675,7 @@ pub(crate) fn execute_metadata_perf_smoke(options: MetadataPerfOptions) -> Metad
 
 pub(crate) fn render_metadata_perf_json(result: &MetadataPerfResult) -> String {
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"metadata_perf_smoke\",\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"status_explain\"],\"scope\":\"hot_metadata_only\",\"transit_payload_policy\":\"opaque_sealed_payload_untouched\",\"iterations\":{},\"active_bindings\":{},\"fast_sorted_ops_per_sec\":{:.0},\"slow_sorted_fallback_ops_per_sec\":{:.0},\"fast_p95_ns\":{},\"slow_sorted_fallback_p95_ns\":{},\"fast_vs_fallback_speedup_pct\":{:.2},\"path_planner_iterations\":{},\"path_planner_peer_count\":{},\"path_planner_candidate_snapshot_ops_per_sec\":{:.0},\"path_planner_candidate_snapshot_p95_ns\":{},\"discovery_rebuild_iterations\":{},\"discovery_rebuild_peer_count\":{},\"discovery_rebuild_fingerprint_ops_per_sec\":{:.0},\"discovery_rebuild_fingerprint_p95_ns\":{},\"discovery_update_noop_iterations\":{},\"discovery_update_noop_ops_per_sec\":{:.0},\"discovery_update_noop_p95_ns\":{},\"lane_document_plan_snapshot_iterations\":{},\"lane_document_plan_snapshot_borrowed_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_borrowed_p95_ns\":{},\"lane_document_plan_snapshot_owned_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_owned_p95_ns\":{},\"lane_document_render_parse_iterations\":{},\"lane_document_render_parse_ops_per_sec\":{:.0},\"lane_document_render_parse_p95_ns\":{},\"peer_update_state_publish_iterations\":{},\"peer_update_state_publish_noop_ops_per_sec\":{:.0},\"peer_update_state_publish_noop_p95_ns\":{},\"peer_update_state_publish_changed_generation_ops_per_sec\":{:.0},\"peer_update_state_publish_changed_generation_p95_ns\":{},\"live_dps_plan_path_from_payload_iterations\":{},\"live_dps_plan_path_from_payload_peer_count\":{},\"live_dps_plan_path_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_path_from_payload_p95_ns\":{},\"live_dps_plan_core_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_core_from_payload_p95_ns\":{},\"status_explain_iterations\":{},\"status_explain_peer_count\":{},\"status_explain_ops_per_sec\":{:.0},\"status_explain_p95_ns\":{},\"live_binding_reload_index_iterations\":{},\"live_binding_reload_index_spawn_count\":{},\"live_binding_reload_index_ops_per_sec\":{:.0},\"live_binding_reload_index_p95_ns\":{},\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"ok\",\"kind\":\"metadata_perf_smoke\",\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"live_dps_plan_path_with_carrier_selection\",\"live_dps_plan_core_with_carrier_selection\",\"status_explain\"],\"scope\":\"hot_metadata_only\",\"transit_payload_policy\":\"opaque_sealed_payload_untouched\",\"iterations\":{},\"active_bindings\":{},\"fast_sorted_ops_per_sec\":{:.0},\"slow_sorted_fallback_ops_per_sec\":{:.0},\"fast_p95_ns\":{},\"slow_sorted_fallback_p95_ns\":{},\"fast_vs_fallback_speedup_pct\":{:.2},\"path_planner_iterations\":{},\"path_planner_peer_count\":{},\"path_planner_candidate_snapshot_ops_per_sec\":{:.0},\"path_planner_candidate_snapshot_p95_ns\":{},\"discovery_rebuild_iterations\":{},\"discovery_rebuild_peer_count\":{},\"discovery_rebuild_fingerprint_ops_per_sec\":{:.0},\"discovery_rebuild_fingerprint_p95_ns\":{},\"discovery_update_noop_iterations\":{},\"discovery_update_noop_ops_per_sec\":{:.0},\"discovery_update_noop_p95_ns\":{},\"lane_document_plan_snapshot_iterations\":{},\"lane_document_plan_snapshot_borrowed_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_borrowed_p95_ns\":{},\"lane_document_plan_snapshot_owned_ops_per_sec\":{:.0},\"lane_document_plan_snapshot_owned_p95_ns\":{},\"lane_document_render_parse_iterations\":{},\"lane_document_render_parse_ops_per_sec\":{:.0},\"lane_document_render_parse_p95_ns\":{},\"peer_update_state_publish_iterations\":{},\"peer_update_state_publish_noop_ops_per_sec\":{:.0},\"peer_update_state_publish_noop_p95_ns\":{},\"peer_update_state_publish_changed_generation_ops_per_sec\":{:.0},\"peer_update_state_publish_changed_generation_p95_ns\":{},\"live_dps_plan_path_from_payload_iterations\":{},\"live_dps_plan_path_from_payload_peer_count\":{},\"live_dps_plan_path_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_path_from_payload_p95_ns\":{},\"live_dps_plan_core_from_payload_ops_per_sec\":{:.0},\"live_dps_plan_core_from_payload_p95_ns\":{},\"live_dps_plan_path_with_carrier_selection_ops_per_sec\":{:.0},\"live_dps_plan_path_with_carrier_selection_p95_ns\":{},\"live_dps_plan_core_with_carrier_selection_ops_per_sec\":{:.0},\"live_dps_plan_core_with_carrier_selection_p95_ns\":{},\"status_explain_iterations\":{},\"status_explain_peer_count\":{},\"status_explain_ops_per_sec\":{:.0},\"status_explain_p95_ns\":{},\"live_binding_reload_index_iterations\":{},\"live_binding_reload_index_spawn_count\":{},\"live_binding_reload_index_ops_per_sec\":{:.0},\"live_binding_reload_index_p95_ns\":{},\"network_state\":\"not_modified\"}}",
         result.iterations,
         result.active_bindings,
         result.fast_sorted_ops_per_sec,
@@ -650,6 +713,10 @@ pub(crate) fn render_metadata_perf_json(result: &MetadataPerfResult) -> String {
         result.live_dps_plan_path_from_payload_p95_ns,
         result.live_dps_plan_core_from_payload_ops_per_sec,
         result.live_dps_plan_core_from_payload_p95_ns,
+        result.live_dps_plan_path_with_carrier_selection_ops_per_sec,
+        result.live_dps_plan_path_with_carrier_selection_p95_ns,
+        result.live_dps_plan_core_with_carrier_selection_ops_per_sec,
+        result.live_dps_plan_core_with_carrier_selection_p95_ns,
         result.status_explain_iterations,
         result.status_explain_peer_count,
         result.status_explain_ops_per_sec,
@@ -919,6 +986,85 @@ fn measure_live_dps_plan_core(
     let p95_ns = samples.get(p95_index).copied().unwrap_or(0);
     if checksum == usize::MAX {
         eprintln!("live dps plan core metadata perf checksum guard tripped");
+    }
+    ScheduleMeasurement {
+        total_elapsed,
+        p95_ns,
+    }
+}
+
+fn measure_live_dps_plan_path_with_carrier_selection(
+    runtime: &MeshRuntime,
+    request: &MeshJoinRequest,
+    sample_count: usize,
+    batch_size: usize,
+) -> ScheduleMeasurement {
+    let mut samples = Vec::with_capacity(sample_count);
+    let mut checksum = 0usize;
+    let total_start = Instant::now();
+    for sample in 0..sample_count {
+        let batch_start = Instant::now();
+        for offset in 0..batch_size {
+            let flow_index = sample.saturating_mul(batch_size).saturating_add(offset);
+            let key = MeshMultipathFlowKey::from_stable_hash(flow_hash(flow_index));
+            let plan = runtime
+                .plan_path_from_dps_payload(request, LIVE_DPS_CARRIER_SELECTION_PAYLOAD)
+                .unwrap_or_else(|error| unreachable!("{error}"));
+            let binding =
+                select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, key)
+                    .unwrap_or_else(|error| unreachable!("{error}"));
+            checksum = checksum.wrapping_add(plan.selected_peers.len());
+            checksum = checksum.wrapping_add(plan.explain.len());
+            checksum = checksum.wrapping_add(usize::from(binding.lane_id().get()));
+        }
+        let elapsed = batch_start.elapsed();
+        samples.push(elapsed.as_nanos() / batch_size as u128);
+    }
+    let total_elapsed = total_start.elapsed();
+    samples.sort_unstable();
+    let p95_index = ((samples.len().saturating_sub(1)) * 95) / 100;
+    let p95_ns = samples.get(p95_index).copied().unwrap_or(0);
+    if checksum == usize::MAX {
+        eprintln!("live dps plan path carrier selection metadata perf checksum guard tripped");
+    }
+    ScheduleMeasurement {
+        total_elapsed,
+        p95_ns,
+    }
+}
+
+fn measure_live_dps_plan_core_with_carrier_selection(
+    runtime: &MeshRuntime,
+    request: &MeshJoinRequest,
+    sample_count: usize,
+    batch_size: usize,
+) -> ScheduleMeasurement {
+    let mut samples = Vec::with_capacity(sample_count);
+    let mut checksum = 0usize;
+    let total_start = Instant::now();
+    for sample in 0..sample_count {
+        let batch_start = Instant::now();
+        for offset in 0..batch_size {
+            let flow_index = sample.saturating_mul(batch_size).saturating_add(offset);
+            let key = MeshMultipathFlowKey::from_stable_hash(flow_hash(flow_index));
+            let plan = runtime
+                .plan_path_core_from_dps_payload(request, LIVE_DPS_CARRIER_SELECTION_PAYLOAD)
+                .unwrap_or_else(|error| unreachable!("{error}"));
+            let binding =
+                select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, key)
+                    .unwrap_or_else(|error| unreachable!("{error}"));
+            checksum = checksum.wrapping_add(plan.selected_peers.len());
+            checksum = checksum.wrapping_add(usize::from(binding.lane_id().get()));
+        }
+        let elapsed = batch_start.elapsed();
+        samples.push(elapsed.as_nanos() / batch_size as u128);
+    }
+    let total_elapsed = total_start.elapsed();
+    samples.sort_unstable();
+    let p95_index = ((samples.len().saturating_sub(1)) * 95) / 100;
+    let p95_ns = samples.get(p95_index).copied().unwrap_or(0);
+    if checksum == usize::MAX {
+        eprintln!("live dps plan core carrier selection metadata perf checksum guard tripped");
     }
     ScheduleMeasurement {
         total_elapsed,
@@ -1460,7 +1606,7 @@ mod tests {
         assert!(json.contains("\"kind\":\"metadata_perf_smoke\""));
         assert!(json.contains("\"scope\":\"hot_metadata_only\""));
         assert!(json.contains(
-            "\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"status_explain\"]"
+            "\"hot_paths\":[\"multipath_flow_lane_selection\",\"path_planner_candidate_snapshot\",\"discovery_rebuild_fingerprint\",\"discovery_update_noop_dirty_set\",\"lane_document_plan_snapshot_access\",\"lane_document_render_parse\",\"peer_update_state_publish_generation\",\"live_binding_reload_index\",\"live_dps_plan_path_from_payload\",\"live_dps_plan_core_from_payload\",\"live_dps_plan_path_with_carrier_selection\",\"live_dps_plan_core_with_carrier_selection\",\"status_explain\"]"
         ));
         assert!(json.contains("\"path_planner_candidate_snapshot_ops_per_sec\":"));
         assert!(json.contains("\"discovery_rebuild_fingerprint_ops_per_sec\":"));
@@ -1475,6 +1621,9 @@ mod tests {
         assert!(json.contains("\"live_dps_plan_path_from_payload_ops_per_sec\":"));
         assert!(json.contains("\"live_dps_plan_core_from_payload_ops_per_sec\":"));
         assert!(json.contains("\"live_dps_plan_core_from_payload_p95_ns\":"));
+        assert!(json.contains("\"live_dps_plan_path_with_carrier_selection_ops_per_sec\":"));
+        assert!(json.contains("\"live_dps_plan_core_with_carrier_selection_ops_per_sec\":"));
+        assert!(json.contains("\"live_dps_plan_core_with_carrier_selection_p95_ns\":"));
         assert!(json.contains("\"status_explain_ops_per_sec\":"));
         assert!(json.contains("\"status_explain_peer_count\":64"));
         assert!(json.contains("\"live_dps_plan_path_from_payload_peer_count\":64"));

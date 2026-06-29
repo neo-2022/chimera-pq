@@ -1,7 +1,7 @@
 use crate::peer_egress::lane_binding::TransitLaneDocument;
 use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::transit::{
-    TransitRelayFrame, forward_peer_sealed_transit_to_planned_next_hop_with_limits,
+    TransitRelayFrame, forward_peer_sealed_transit_to_scheduled_next_hop_with_limits,
 };
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 use crate::peer_egress::transit_guard::TransitRelayLimits;
@@ -30,7 +30,11 @@ pub(crate) fn forward_peer_sealed_transit_with_lane_document_and_limits(
     limits: TransitRelayLimits,
 ) -> Result<(), String> {
     let plan = document.require_mesh_path_plan_ref()?;
-    forward_peer_sealed_transit_to_planned_next_hop_with_limits(
-        source, plan, dispatcher, first, limits,
+    forward_peer_sealed_transit_to_scheduled_next_hop_with_limits(
+        source,
+        &plan.multipath_schedule,
+        dispatcher,
+        first,
+        limits,
     )
 }

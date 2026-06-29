@@ -1,6 +1,7 @@
 use chimera_mesh::{
     MeshMultipathFlowAction, MeshMultipathFlowDecision, MeshMultipathFlowKey,
-    MeshMultipathLaneRole, MeshPathPlan, plan_multipath_flow, plan_multipath_flow_decision,
+    MeshMultipathLaneRole, MeshMultipathSchedule, MeshPathPlan, plan_multipath_flow,
+    plan_multipath_flow_decision,
 };
 
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
@@ -59,7 +60,14 @@ pub fn select_carrier_lane_from_mesh_plan(
     plan: &MeshPathPlan,
     flow_key: MeshMultipathFlowKey,
 ) -> CarrierLaneSelection {
-    let flow_plan = plan_multipath_flow(&plan.multipath_schedule, flow_key);
+    select_carrier_lane_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+}
+
+pub fn select_carrier_lane_from_multipath_schedule(
+    schedule: &MeshMultipathSchedule,
+    flow_key: MeshMultipathFlowKey,
+) -> CarrierLaneSelection {
+    let flow_plan = plan_multipath_flow(schedule, flow_key);
     if flow_plan.action != MeshMultipathFlowAction::Assigned {
         return selection(
             SelectionInput::new(
@@ -90,8 +98,7 @@ pub fn select_carrier_lane_from_mesh_plan(
         );
     };
 
-    let binding = plan
-        .multipath_schedule
+    let binding = schedule
         .carrier_lane_bindings
         .iter()
         .find(|binding| binding.lane_id == selected_lane_id)
@@ -133,8 +140,15 @@ pub fn select_carrier_binding_from_mesh_plan(
     plan: &MeshPathPlan,
     flow_key: MeshMultipathFlowKey,
 ) -> Result<TransitPathBinding, &'static str> {
-    let decision = plan_multipath_flow_decision(&plan.multipath_schedule, flow_key);
-    binding_from_mesh_plan_decision(plan, decision)
+    select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+}
+
+pub fn select_carrier_binding_from_multipath_schedule(
+    schedule: &MeshMultipathSchedule,
+    flow_key: MeshMultipathFlowKey,
+) -> Result<TransitPathBinding, &'static str> {
+    let decision = plan_multipath_flow_decision(schedule, flow_key);
+    binding_from_schedule_decision(schedule, decision)
 }
 
 pub fn select_carrier_lane_from_registrations(
@@ -287,8 +301,8 @@ pub fn select_carrier_binding_from_registrations(
     Ok(registrations[slot].binding())
 }
 
-fn binding_from_mesh_plan_decision(
-    plan: &MeshPathPlan,
+fn binding_from_schedule_decision(
+    schedule: &MeshMultipathSchedule,
     decision: MeshMultipathFlowDecision,
 ) -> Result<TransitPathBinding, &'static str> {
     if decision.action != MeshMultipathFlowAction::Assigned {
@@ -298,7 +312,7 @@ fn binding_from_mesh_plan_decision(
         return Err("selected_lane_missing");
     };
 
-    plan.multipath_schedule
+    schedule
         .carrier_lane_bindings
         .iter()
         .find(|binding| binding.lane_id == selected_lane_id)

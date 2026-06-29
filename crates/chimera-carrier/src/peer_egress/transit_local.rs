@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::net::{Shutdown, TcpStream};
 
-use chimera_mesh::{MeshMultipathFlowKey, MeshPathPlan};
+use chimera_mesh::{MeshMultipathFlowKey, MeshMultipathSchedule, MeshPathPlan};
 
 use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
 use crate::peer_egress::net::tune_tcp;
@@ -18,7 +18,7 @@ use crate::peer_egress::transit_guard::{
     TransitRelayGuard, TransitRelayLimits, apply_transit_stream_limits,
 };
 use crate::peer_egress::transit_lane_selection::{
-    pop_planned_transit_dispatch_next_hop, pop_registered_transit_next_hop,
+    pop_registered_transit_next_hop, pop_scheduled_transit_dispatch_next_hop,
 };
 use crate::peer_egress::wire::{write_bound_sealed_transit_message, write_sealed_transit_message};
 
@@ -103,9 +103,23 @@ pub fn relay_local_sealed_transit_to_planned_next_hop(
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first_byte: u8,
 ) -> Result<(), String> {
-    relay_local_sealed_transit_to_planned_next_hop_with_limits(
+    relay_local_sealed_transit_to_scheduled_next_hop(
         local,
-        plan,
+        &plan.multipath_schedule,
+        dispatcher,
+        first_byte,
+    )
+}
+
+pub fn relay_local_sealed_transit_to_scheduled_next_hop(
+    local: TcpStream,
+    schedule: &MeshMultipathSchedule,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first_byte: u8,
+) -> Result<(), String> {
+    relay_local_sealed_transit_to_scheduled_next_hop_with_limits(
+        local,
+        schedule,
         dispatcher,
         first_byte,
         TransitRelayLimits::default(),
@@ -113,8 +127,24 @@ pub fn relay_local_sealed_transit_to_planned_next_hop(
 }
 
 pub fn relay_local_sealed_transit_to_planned_next_hop_with_limits(
-    mut local: TcpStream,
+    local: TcpStream,
     plan: &MeshPathPlan,
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    first_byte: u8,
+    limits: TransitRelayLimits,
+) -> Result<(), String> {
+    relay_local_sealed_transit_to_scheduled_next_hop_with_limits(
+        local,
+        &plan.multipath_schedule,
+        dispatcher,
+        first_byte,
+        limits,
+    )
+}
+
+pub fn relay_local_sealed_transit_to_scheduled_next_hop_with_limits(
+    mut local: TcpStream,
+    schedule: &MeshMultipathSchedule,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     first_byte: u8,
     limits: TransitRelayLimits,
@@ -124,7 +154,7 @@ pub fn relay_local_sealed_transit_to_planned_next_hop_with_limits(
     apply_transit_stream_limits(&local, limits)?;
     let first = read_weave_sealed_transit_frame(&mut local, first_byte)?;
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(first.sealed_bytes())?;
-    let peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
+    let peer = pop_scheduled_transit_dispatch_next_hop(schedule, dispatcher, flow_key)?;
     relay_local_sealed_transit_after_first_with_limits(local, peer, first, limits)
 }
 

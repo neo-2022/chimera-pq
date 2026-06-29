@@ -48,7 +48,8 @@ pub use lane_binding::{
 };
 pub use live_bindings::{LiveTransitLaneRegistry, load_live_transit_lane_registrations};
 pub use live_lane_selection::{
-    CarrierLaneSelection, CarrierLaneSelectionMode, select_carrier_lane_from_mesh_plan,
+    CarrierLaneSelection, CarrierLaneSelectionMode, select_carrier_binding_from_multipath_schedule,
+    select_carrier_lane_from_mesh_plan, select_carrier_lane_from_multipath_schedule,
     select_carrier_lane_from_registrations,
 };
 pub use modes::{
@@ -63,7 +64,8 @@ pub use pool::PeerPool;
 pub use proof::{run_bound_transit_inject, run_sealed_transit_inject};
 pub use protocol::{Destination, SecurePeerStream};
 pub use transit::{
-    TransitRelayFrame, forward_bound_peer_sealed_transit_to_next_hop, forward_transit_relay_frame,
+    TransitRelayFrame, forward_bound_peer_sealed_transit_to_next_hop,
+    forward_peer_sealed_transit_to_scheduled_next_hop, forward_transit_relay_frame,
     read_weave_bound_sealed_transit_frame, read_weave_sealed_transit_frame,
     validate_transit_relay_frame,
 };
@@ -79,6 +81,7 @@ pub use transit_local::{
     relay_local_bound_sealed_transit, relay_local_bound_sealed_transit_to_next_hop,
     relay_local_sealed_transit, relay_local_sealed_transit_to_next_hop,
     relay_local_sealed_transit_to_planned_next_hop,
+    relay_local_sealed_transit_to_scheduled_next_hop,
     relay_local_sealed_transit_with_lane_document_and_first_byte,
     relay_local_sealed_transit_with_registrations,
     relay_local_sealed_transit_with_registrations_with_limits,

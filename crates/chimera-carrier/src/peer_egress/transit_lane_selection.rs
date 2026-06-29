@@ -1,19 +1,26 @@
-use chimera_mesh::{MeshMultipathFlowKey, MeshPathPlan};
+use chimera_mesh::{MeshMultipathFlowKey, MeshMultipathSchedule};
 
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
 use crate::peer_egress::live_lane_selection::{
-    select_carrier_binding_from_mesh_plan, select_carrier_binding_from_registrations,
+    select_carrier_binding_from_multipath_schedule, select_carrier_binding_from_registrations,
 };
 use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 
-pub(crate) fn pop_planned_transit_dispatch_next_hop(
-    plan: &MeshPathPlan,
+pub(crate) fn pop_scheduled_transit_dispatch_next_hop(
+    schedule: &MeshMultipathSchedule,
     dispatcher: Option<SharedTransitNextHopDispatcher>,
     flow_key: MeshMultipathFlowKey,
 ) -> Result<SecurePeerStream, String> {
-    let binding = select_carrier_binding_from_mesh_plan(plan, flow_key)
+    let binding = select_carrier_binding_from_multipath_schedule(schedule, flow_key)
         .map_err(|reason| format!("sealed transit lane selection failed: {reason}"))?;
+    pop_dispatch_next_hop_for_binding(dispatcher, binding)
+}
+
+fn pop_dispatch_next_hop_for_binding(
+    dispatcher: Option<SharedTransitNextHopDispatcher>,
+    binding: crate::peer_egress::transit_binding::TransitPathBinding,
+) -> Result<SecurePeerStream, String> {
     let dispatcher = dispatcher
         .ok_or_else(|| "sealed transit path binding dispatcher unavailable".to_string())?;
     dispatcher.pop_for(binding)

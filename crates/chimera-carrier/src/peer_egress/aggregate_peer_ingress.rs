@@ -17,7 +17,7 @@ use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 use crate::peer_egress::transit_guard::{
     TransitRelayGuard, TransitRelayLimits, apply_transit_stream_limits,
 };
-use crate::peer_egress::transit_lane_selection::pop_planned_transit_dispatch_next_hop;
+use crate::peer_egress::transit_lane_selection::pop_scheduled_transit_dispatch_next_hop;
 use crate::peer_egress::wire::write_sealed_transit_message;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,7 +67,11 @@ fn forward_completed_aggregate_transit_frame(
     {
         let plan = document.require_mesh_path_plan_ref()?;
         let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(frame.sealed_bytes())?;
-        let peer = pop_planned_transit_dispatch_next_hop(plan, dispatcher, flow_key)?;
+        let peer = pop_scheduled_transit_dispatch_next_hop(
+            &plan.multipath_schedule,
+            dispatcher,
+            flow_key,
+        )?;
         return forward_peer_sealed_transit_frame_once(peer, frame, limits);
     }
     let flow_key = MeshMultipathFlowKey::from_opaque_flow_bytes(frame.sealed_bytes())?;

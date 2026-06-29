@@ -1,6 +1,7 @@
 use super::{
     CarrierLaneSelectionMode, select_carrier_binding_from_mesh_plan,
-    select_carrier_binding_from_registrations, select_carrier_lane_from_mesh_plan,
+    select_carrier_binding_from_multipath_schedule, select_carrier_binding_from_registrations,
+    select_carrier_lane_from_mesh_plan, select_carrier_lane_from_multipath_schedule,
     select_carrier_lane_from_registrations,
 };
 use crate::peer_egress::lane_binding::TransitLaneRegistration;
@@ -54,6 +55,41 @@ fn multipath_plan() -> Result<chimera_mesh::MeshPathPlan, String> {
         ],
     )?;
     runtime.plan_path_from_dps_payload(
+        &MeshJoinRequest {
+            namespace: "cef-public".to_string(),
+            node_name: "node-client".to_string(),
+            invite_token: None,
+        },
+        concat!(
+            "mesh_allowed_regions=eu;",
+            "mesh_multipath_mode=flow_shard;",
+            "mesh_route_binding_id=7003"
+        ),
+    )
+}
+
+fn multipath_core_plan() -> Result<chimera_mesh::MeshPathPlanCore, String> {
+    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
+    runtime.merge_discovery(
+        "seed-b",
+        &[
+            MeshDiscoveryRecord {
+                node_id: "node-a".to_string(),
+                endpoint: "198.51.100.31:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 20,
+                reliability_score: 90,
+            },
+            MeshDiscoveryRecord {
+                node_id: "node-b".to_string(),
+                endpoint: "198.51.100.32:443".to_string(),
+                region: "eu".to_string(),
+                load_score: 22,
+                reliability_score: 91,
+            },
+        ],
+    )?;
+    runtime.plan_path_core_from_dps_payload(
         &MeshJoinRequest {
             namespace: "cef-public".to_string(),
             node_name: "node-client".to_string(),
@@ -189,6 +225,27 @@ fn plan_backed_selection_returns_live_carrier_lane_binding() -> Result<(), Strin
     assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
     assert_eq!(selected.mode, CarrierLaneSelectionMode::Multipath);
     assert!(matches!(selected.selected_lane_id, Some(1 | 2)));
+    assert_eq!(selected.reason, "active_carrier_binding_selected");
+    assert!(
+        selected
+            .explain
+            .iter()
+            .any(|line| line == "carrier_lane_selection_privacy=sealed_opaque_only")
+    );
+    Ok(())
+}
+
+#[test]
+fn core_schedule_selection_returns_live_carrier_lane_binding() -> Result<(), String> {
+    let core = multipath_core_plan()?;
+    let key = MeshMultipathFlowKey::from_opaque_flow_id("opaque-core-schedule-flow")?;
+    let selected = select_carrier_lane_from_multipath_schedule(&core.multipath_schedule, key);
+    let binding = select_carrier_binding_from_multipath_schedule(&core.multipath_schedule, key)
+        .map_err(|error| error.to_string())?;
+
+    assert_eq!(selected.action, MeshMultipathFlowAction::Assigned);
+    assert_eq!(selected.mode, CarrierLaneSelectionMode::Multipath);
+    assert_eq!(selected.selected_binding, Some(binding));
     assert_eq!(selected.reason, "active_carrier_binding_selected");
     assert!(
         selected

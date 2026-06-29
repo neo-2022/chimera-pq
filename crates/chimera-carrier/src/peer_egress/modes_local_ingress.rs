@@ -3,7 +3,7 @@ use std::net::TcpStream;
 
 use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
 use crate::peer_egress::live_lane_selection::{
-    select_carrier_binding_from_mesh_plan, select_carrier_binding_from_registrations,
+    select_carrier_binding_from_multipath_schedule, select_carrier_binding_from_registrations,
 };
 use crate::peer_egress::options::LOCAL_MAGIC;
 use crate::peer_egress::pool::SharedPeerPool;
@@ -111,7 +111,7 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
     let plan = document.require_mesh_path_plan_ref()?;
-    match select_carrier_binding_from_mesh_plan(plan, flow_key) {
+    match select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key) {
         Ok(binding) => {
             let peer = dispatcher.pop_for(binding)?;
             eprintln!("event=local_ingress_paired_with_peer");
