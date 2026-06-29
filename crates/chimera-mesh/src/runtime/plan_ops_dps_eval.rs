@@ -47,6 +47,17 @@ pub(super) fn plan_path_from_dps_payload(
     Ok(plan)
 }
 
+pub(super) fn plan_path_core_from_dps_payload(
+    runtime: &MeshRuntime,
+    request: &MeshJoinRequest,
+    payload: &str,
+) -> Result<MeshPathPlanCore, String> {
+    let context = policy_and_snapshot_from_dps_payload(payload)?;
+    let mut plan = runtime.plan_path_core(request, &context.policy)?;
+    apply_dps_multipath_schedule_core(&context.snapshot, &mut plan)?;
+    Ok(plan)
+}
+
 pub(super) fn apply_dps_multipath_schedule(
     snapshot: &MeshDpsPayloadSnapshot,
     plan: &mut MeshPathPlan,
@@ -54,6 +65,22 @@ pub(super) fn apply_dps_multipath_schedule(
     let hints = snapshot.traffic_hints();
     if let Some(mode) = hints.multipath_mode {
         replace_multipath_schedule(
+            plan,
+            schedule_mode_from_multipath_hint(mode),
+            snapshot.route_binding_id(),
+            hints.multipath_demand,
+        )?;
+    }
+    Ok(())
+}
+
+pub(super) fn apply_dps_multipath_schedule_core(
+    snapshot: &MeshDpsPayloadSnapshot,
+    plan: &mut MeshPathPlanCore,
+) -> Result<(), String> {
+    let hints = snapshot.traffic_hints();
+    if let Some(mode) = hints.multipath_mode {
+        replace_multipath_schedule_core(
             plan,
             schedule_mode_from_multipath_hint(mode),
             snapshot.route_binding_id(),

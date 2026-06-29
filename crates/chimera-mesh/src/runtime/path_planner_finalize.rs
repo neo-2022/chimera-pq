@@ -17,6 +17,7 @@ pub(super) fn finalize_selection(
     runtime: &MeshRuntime,
     input: SelectionFinalizeInput<'_>,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) -> Result<Vec<MeshPeerState>, String> {
     let SelectionFinalizeInput {
         policy,
@@ -27,7 +28,9 @@ pub(super) fn finalize_selection(
         effective_max_selected_per_region,
         effective_min_distinct_regions,
     } = input;
-    explain.reserve(52);
+    if explain_mode.enabled() {
+        explain.reserve(52);
+    }
     candidates.sort_by(|a, b| {
         b.selection_score
             .cmp(&a.selection_score)
@@ -67,22 +70,26 @@ pub(super) fn finalize_selection(
     if selected_peers.is_empty() {
         return Err("mesh path plan has zero eligible peers".to_string());
     }
-    explain.push(format!(
-        "selection_region_cap={}",
-        effective_max_selected_per_region
-    ));
-    explain.push(format!("region_cap_rejections={region_cap_rejections}"));
-    if effective_prefer_region_diversity {
-        explain.push("selection_strategy=region_diversity".to_string());
-    } else {
-        explain.push("selection_strategy=score_only".to_string());
+    if explain_mode.enabled() {
+        explain.push(format!(
+            "selection_region_cap={}",
+            effective_max_selected_per_region
+        ));
+        explain.push(format!("region_cap_rejections={region_cap_rejections}"));
+        if effective_prefer_region_diversity {
+            explain.push("selection_strategy=region_diversity".to_string());
+        } else {
+            explain.push("selection_strategy=score_only".to_string());
+        }
+        explain.push(format!("selected_peers={}", selected_peers.len()));
     }
-    explain.push(format!("selected_peers={}", selected_peers.len()));
     let selected_region_count = distinct_region_count(
         selected_peers.iter().map(|peer| peer.region.as_str()),
         selected_peers.len(),
     );
-    explain.push(format!("selected_regions={}", selected_region_count));
+    if explain_mode.enabled() {
+        explain.push(format!("selected_regions={}", selected_region_count));
+    }
     let distinct_region_ratio_pct = if selected_peers.is_empty() {
         0
     } else {
@@ -91,38 +98,40 @@ pub(super) fn finalize_selection(
     let min_distinct_regions_met = selected_region_count >= effective_min_distinct_regions;
     let distinct_region_deficit =
         effective_min_distinct_regions.saturating_sub(selected_region_count);
-    explain.push(format!(
-        "candidate_distinct_regions={}",
-        candidate_distinct_region_count
-    ));
-    explain.push(format!(
-        "min_distinct_regions_feasible={min_distinct_regions_feasible}"
-    ));
-    explain.push(format!(
-        "min_distinct_regions_feasibility_gap={min_distinct_regions_feasibility_gap}"
-    ));
-    explain.push(format!(
-        "min_distinct_regions_target={}",
-        effective_min_distinct_regions
-    ));
-    explain.push(format!(
-        "min_distinct_regions_met={min_distinct_regions_met}"
-    ));
-    explain.push(format!("distinct_region_deficit={distinct_region_deficit}"));
-    explain.push(format!(
-        "distinct_region_ratio_pct={distinct_region_ratio_pct}"
-    ));
-    append_selection_explain(
-        runtime,
-        policy,
-        &selected_peers,
-        SelectionExplainInput {
-            stats,
-            region_cap_rejections,
-            effective_max_peers,
-        },
-        explain,
-    );
+    if explain_mode.enabled() {
+        explain.push(format!(
+            "candidate_distinct_regions={}",
+            candidate_distinct_region_count
+        ));
+        explain.push(format!(
+            "min_distinct_regions_feasible={min_distinct_regions_feasible}"
+        ));
+        explain.push(format!(
+            "min_distinct_regions_feasibility_gap={min_distinct_regions_feasibility_gap}"
+        ));
+        explain.push(format!(
+            "min_distinct_regions_target={}",
+            effective_min_distinct_regions
+        ));
+        explain.push(format!(
+            "min_distinct_regions_met={min_distinct_regions_met}"
+        ));
+        explain.push(format!("distinct_region_deficit={distinct_region_deficit}"));
+        explain.push(format!(
+            "distinct_region_ratio_pct={distinct_region_ratio_pct}"
+        ));
+        append_selection_explain(
+            runtime,
+            policy,
+            &selected_peers,
+            SelectionExplainInput {
+                stats,
+                region_cap_rejections,
+                effective_max_peers,
+            },
+            explain,
+        );
+    }
     Ok(selected_peers)
 }
 

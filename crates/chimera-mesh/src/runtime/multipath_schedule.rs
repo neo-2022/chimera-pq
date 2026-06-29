@@ -78,6 +78,22 @@ pub(super) fn replace_multipath_schedule(
     Ok(())
 }
 
+pub(super) fn replace_multipath_schedule_core(
+    plan: &mut MeshPathPlanCore,
+    mode: MeshMultipathMode,
+    route_binding_id: Option<MeshRouteBindingId>,
+    demand: Option<MultipathDemand>,
+) -> Result<(), String> {
+    plan.multipath_schedule = build_multipath_schedule_with_reason(
+        &plan.selected_peers,
+        mode,
+        route_binding_id,
+        demand,
+        PLANNER_REBUILD_REASON_MULTIPATH_HINT_REPLAN,
+    )?;
+    Ok(())
+}
+
 pub(super) fn append_multipath_schedule_explain(
     explain: &mut Vec<String>,
     schedule: &MeshMultipathSchedule,

@@ -18,6 +18,14 @@ impl MeshRuntime {
         dps_eval::plan_path_from_dps_payload(self, request, payload)
     }
 
+    pub fn plan_path_core_from_dps_payload(
+        &self,
+        request: &MeshJoinRequest,
+        payload: &str,
+    ) -> Result<MeshPathPlanCore, String> {
+        dps_eval::plan_path_core_from_dps_payload(self, request, payload)
+    }
+
     pub fn evaluate_dps_policy_payload(
         &self,
         request: &MeshJoinRequest,

@@ -31,9 +31,12 @@ pub(super) fn run_auto_recovery<'p>(
     mut stats: CandidateStats,
     input: AutoRecoveryInput<'_>,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) -> AutoRecoveryOutcomeRef<'p> {
     let mut state = steps::AutoRecoveryState::default();
-    explain.reserve(20);
+    if explain_mode.enabled() {
+        explain.reserve(20);
+    }
 
     steps::run_primary_health_step(
         peers,
@@ -42,6 +45,7 @@ pub(super) fn run_auto_recovery<'p>(
         &input,
         &mut state,
         explain,
+        explain_mode,
     );
     steps::run_secondary_relax_step(
         peers,
@@ -50,6 +54,7 @@ pub(super) fn run_auto_recovery<'p>(
         &input,
         &mut state,
         explain,
+        explain_mode,
     );
     steps::run_last_chance_health_step(
         peers,
@@ -58,32 +63,37 @@ pub(super) fn run_auto_recovery<'p>(
         &input,
         &mut state,
         explain,
+        explain_mode,
     );
 
-    append_auto_recovery_explain(
-        explain,
-        AutoRecoveryExplainSummary {
-            health_relax_applied: state.health_relax_applied,
-            health_relax_reason: state.health_relax_reason,
-            health_relax_stage: state.health_relax_stage,
-            auto_recovery_attempts: state.auto_recovery_attempts,
-            auto_recovery_final_result: state.auto_recovery_final_result,
-            auto_recovery_trace: &state.auto_recovery_trace,
-            auto_recovery_trace_steps: state.auto_recovery_trace_steps,
-        },
-    );
+    if explain_mode.enabled() {
+        append_auto_recovery_explain(
+            explain,
+            AutoRecoveryExplainSummary {
+                health_relax_applied: state.health_relax_applied,
+                health_relax_reason: state.health_relax_reason,
+                health_relax_stage: state.health_relax_stage,
+                auto_recovery_attempts: state.auto_recovery_attempts,
+                auto_recovery_final_result: state.auto_recovery_final_result,
+                auto_recovery_trace: &state.auto_recovery_trace,
+                auto_recovery_trace_steps: state.auto_recovery_trace_steps,
+            },
+        );
+    }
 
     let (spread_bonus_applied, spread_bonus_total) = apply_resilient_region_spread_bonus(
         &mut candidates,
         input.path_profile,
         input.spread_bonus_weight,
     );
-    explain.push(format!(
-        "resilient_region_spread_bonus_applied={spread_bonus_applied}"
-    ));
-    explain.push(format!(
-        "resilient_region_spread_bonus_total={spread_bonus_total}"
-    ));
+    if explain_mode.enabled() {
+        explain.push(format!(
+            "resilient_region_spread_bonus_applied={spread_bonus_applied}"
+        ));
+        explain.push(format!(
+            "resilient_region_spread_bonus_total={spread_bonus_total}"
+        ));
+    }
 
     AutoRecoveryOutcomeRef { candidates, stats }
 }

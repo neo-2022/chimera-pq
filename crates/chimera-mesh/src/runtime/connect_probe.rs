@@ -10,15 +10,45 @@ impl MeshRuntime {
         policy: &MeshPathPolicy,
         timeout_ms: u64,
     ) -> Result<MeshConnectProbeReport, String> {
-        let plan = self.plan_path(request, policy)?;
+        let plan = self.plan_path_core(request, policy)?;
+        self.connect_probe_from_selected_peers(
+            &plan.selected_peers,
+            &policy.connect_fallback_ports,
+            timeout_ms,
+        )
+    }
+
+    pub fn connect_probe_from_dps_payload(
+        &mut self,
+        request: &MeshJoinRequest,
+        payload: &str,
+        timeout_ms: u64,
+    ) -> Result<MeshConnectProbeReport, String> {
+        super::payload_utils::ensure_mesh_payload_nonempty(payload)?;
+        let plan = self.plan_path_core_from_dps_payload(request, payload)?;
+        let policy = MeshPathPolicy::from_dps_payload(payload)?;
+        self.connect_probe_from_selected_peers(
+            &plan.selected_peers,
+            &policy.connect_fallback_ports,
+            timeout_ms,
+        )
+    }
+}
+
+impl MeshRuntime {
+    fn connect_probe_from_selected_peers(
+        &mut self,
+        selected_peers: &[MeshPeerState],
+        fallback_ports: &[u16],
+        timeout_ms: u64,
+    ) -> Result<MeshConnectProbeReport, String> {
         let mut attempts = Vec::new();
-        let mut explain = plan.explain.clone();
+        let mut explain = build_connect_probe_explain(selected_peers, fallback_ports);
         let timeout = Duration::from_millis(timeout_ms.max(1));
         let mut connected_peer = String::new();
         let mut connected_endpoint = String::new();
 
-        let attempt_plan =
-            build_connect_attempt_plan(&plan.selected_peers, &policy.connect_fallback_ports)?;
+        let attempt_plan = build_connect_attempt_plan(selected_peers, fallback_ports)?;
         for (attempt_index, target) in attempt_plan.iter().enumerate() {
             let peer_label = redacted_peer_label(target.peer_index);
             let endpoint_label = redacted_endpoint_label(attempt_index);
@@ -48,7 +78,7 @@ impl MeshRuntime {
                     ));
                     return Ok(MeshConnectProbeReport {
                         namespace: self.namespace.clone(),
-                        selected_peers: redacted_peer_labels(&plan.selected_peers),
+                        selected_peers: redacted_peer_labels(selected_peers),
                         connected_peer,
                         connected_endpoint,
                         success: true,
@@ -70,7 +100,7 @@ impl MeshRuntime {
         explain.push("connect_probe_result=failed".to_string());
         Ok(MeshConnectProbeReport {
             namespace: self.namespace.clone(),
-            selected_peers: redacted_peer_labels(&plan.selected_peers),
+            selected_peers: redacted_peer_labels(selected_peers),
             connected_peer,
             connected_endpoint,
             success: false,
@@ -78,17 +108,42 @@ impl MeshRuntime {
             explain,
         })
     }
+}
 
-    pub fn connect_probe_from_dps_payload(
-        &mut self,
-        request: &MeshJoinRequest,
-        payload: &str,
-        timeout_ms: u64,
-    ) -> Result<MeshConnectProbeReport, String> {
-        super::payload_utils::ensure_mesh_payload_nonempty(payload)?;
-        let policy = MeshPathPolicy::from_dps_payload(payload)?;
-        self.connect_probe(request, &policy, timeout_ms)
+fn build_connect_probe_explain(
+    selected_peers: &[MeshPeerState],
+    fallback_ports: &[u16],
+) -> Vec<String> {
+    let mut explain = Vec::with_capacity(8);
+    if selected_peers.is_empty() {
+        explain.push("selected_peer_ids=none".to_string());
+        explain.push("selected_peer_endpoints=none".to_string());
+        explain.push("selected_peer_connect_priority=none".to_string());
+        explain.push("selected_peer_connect_retry_plan=none".to_string());
+        explain.push("selected_peer_connect_backoff_profile=initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=0".to_string());
+        return explain;
     }
+    explain.push(format!(
+        "selected_peer_ids={}",
+        redacted_peer_labels(selected_peers).join(",")
+    ));
+    explain.push(format!(
+        "selected_peer_endpoints={}",
+        redacted_endpoint_labels(selected_peers).join(",")
+    ));
+    explain.push(format!(
+        "selected_peer_connect_priority={}",
+        super::connect_retry_profile::build_connect_priority(selected_peers)
+    ));
+    explain.push(format!(
+        "selected_peer_connect_retry_plan={}",
+        super::connect_retry_profile::build_connect_retry_plan(selected_peers, fallback_ports)
+    ));
+    explain.push(format!(
+        "selected_peer_connect_backoff_profile={}",
+        super::connect_retry_profile::build_connect_backoff_profile(selected_peers.len())
+    ));
+    explain
 }
 
 struct MeshConnectAttemptTarget {
@@ -214,6 +269,14 @@ fn redacted_peer_labels(selected_peers: &[MeshPeerState]) -> Vec<String> {
         .iter()
         .enumerate()
         .map(|(index, _)| redacted_peer_label(index))
+        .collect()
+}
+
+fn redacted_endpoint_labels(selected_peers: &[MeshPeerState]) -> Vec<String> {
+    selected_peers
+        .iter()
+        .enumerate()
+        .map(|(index, _)| redacted_endpoint_label(index))
         .collect()
 }
 

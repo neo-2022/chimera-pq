@@ -128,6 +128,14 @@ pub struct MeshPathPlan {
     pub explain: Vec<String>,
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct MeshPathPlanCore {
+    pub namespace: String,
+    pub join_mode: MeshJoinMode,
+    pub selected_peers: Vec<MeshPeerState>,
+    pub multipath_schedule: MeshMultipathSchedule,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeshFailoverEvent {
     pub failed_node_id: String,

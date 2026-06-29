@@ -1,4 +1,6 @@
-use crate::model::{MeshDiscoveryRecord, MeshPathPlan, MeshPeerState, MeshPublishedEndpointUpdate};
+use crate::model::{
+    MeshDiscoveryRecord, MeshPathPlan, MeshPathPlanCore, MeshPeerState, MeshPublishedEndpointUpdate,
+};
 
 impl std::fmt::Debug for MeshDiscoveryRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -49,6 +51,17 @@ impl std::fmt::Debug for MeshPathPlan {
             .field("selected_peer_count", &self.selected_peers.len())
             .field("multipath_schedule", &self.multipath_schedule)
             .field("explain_line_count", &self.explain.len())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for MeshPathPlanCore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MeshPathPlanCore")
+            .field("namespace", &"<redacted>")
+            .field("join_mode", &self.join_mode)
+            .field("selected_peer_count", &self.selected_peers.len())
+            .field("multipath_schedule", &self.multipath_schedule)
             .finish()
     }
 }

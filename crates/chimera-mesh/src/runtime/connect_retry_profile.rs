@@ -1,12 +1,9 @@
-#[cfg(test)]
 use crate::model::MeshPeerState;
-#[cfg(test)]
 use std::fmt::Write;
 
 const BACKOFF_PROFILE_PREFIX: &str =
     "initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=";
 
-#[cfg(test)]
 pub(crate) fn build_connect_priority(selected_peers: &[MeshPeerState]) -> String {
     let mut out = String::with_capacity(selected_peers.len().saturating_mul(24));
     for (idx, _) in selected_peers.iter().enumerate() {
@@ -18,7 +15,6 @@ pub(crate) fn build_connect_priority(selected_peers: &[MeshPeerState]) -> String
     out
 }
 
-#[cfg(test)]
 pub(crate) fn build_connect_retry_plan(
     selected_peers: &[MeshPeerState],
     fallback_ports: &[u16],

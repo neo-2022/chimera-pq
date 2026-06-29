@@ -40,6 +40,7 @@ pub(super) fn collect_candidates<'p>(
     peers: &'p BTreeMap<String, MeshPeerState>,
     filter: &CandidateFilter<'_>,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) -> (Vec<CandidateSlot<'p>>, CandidateStats) {
     let mut candidates = Vec::with_capacity(peers.len());
     let mut stats = CandidateStats {
@@ -50,7 +51,9 @@ pub(super) fn collect_candidates<'p>(
         rejected_load: 0,
         accepted_count: 0,
     };
-    explain.reserve(peers.len());
+    if explain_mode.enabled() {
+        explain.reserve(peers.len());
+    }
 
     for (index, peer) in peers.values().enumerate() {
         match evaluate_candidate_peer(peer, filter) {
@@ -59,10 +62,12 @@ pub(super) fn collect_candidates<'p>(
                 normalized_region,
             } => {
                 stats.accepted_count = stats.accepted_count.saturating_add(1);
-                explain.push(format!(
-                    "candidate#{} accepted score={score}",
-                    index.saturating_add(1)
-                ));
+                if explain_mode.enabled() {
+                    explain.push(format!(
+                        "candidate#{} accepted score={score}",
+                        index.saturating_add(1)
+                    ));
+                }
                 candidates.push(CandidateSlot {
                     peer,
                     normalized_region,
@@ -71,11 +76,13 @@ pub(super) fn collect_candidates<'p>(
             }
             CandidateEval::Rejected(reason) => {
                 register_candidate_rejection(&mut stats, reason);
-                explain.push(format!(
-                    "candidate#{} rejected={}",
-                    index.saturating_add(1),
-                    reason.as_str()
-                ));
+                if explain_mode.enabled() {
+                    explain.push(format!(
+                        "candidate#{} rejected={}",
+                        index.saturating_add(1),
+                        reason.as_str()
+                    ));
+                }
             }
         }
     }

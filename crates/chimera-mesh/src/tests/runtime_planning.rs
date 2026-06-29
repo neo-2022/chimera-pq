@@ -403,3 +403,108 @@ fn runtime_bootstrap_discovery_and_plan_select_best_peer() {
         )
     }));
 }
+
+#[test]
+fn runtime_plan_core_matches_full_selection_and_schedule() {
+    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
+        .unwrap_or_else(|error| unreachable!("runtime bootstrap should succeed: {error}"));
+    let records = vec![
+        MeshDiscoveryRecord {
+            node_id: "node-a".to_string(),
+            endpoint: "198.51.100.10:443".to_string(),
+            region: "eu".to_string(),
+            load_score: 20,
+            reliability_score: 90,
+        },
+        MeshDiscoveryRecord {
+            node_id: "node-b".to_string(),
+            endpoint: "198.51.100.11:8443".to_string(),
+            region: "us".to_string(),
+            load_score: 15,
+            reliability_score: 95,
+        },
+    ];
+    runtime
+        .merge_discovery("seed-b", &records)
+        .unwrap_or_else(|error| unreachable!("merge discovery should succeed: {error}"));
+
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: Some("inv-123".to_string()),
+    };
+    let policy = MeshPathPolicy::from_dps_payload(
+        "allow=mesh;mesh_allowed_regions=eu,us;mesh_max_peers=2;mesh_max_selected_per_region=1;mesh_min_distinct_regions=2;mesh_multipath_mode=flow_shard;mesh_route_binding_id=8123",
+    )
+    .unwrap_or_else(|error| unreachable!("policy should parse: {error}"));
+
+    let full = runtime
+        .plan_path(&req, &policy)
+        .unwrap_or_else(|error| unreachable!("full plan should succeed: {error}"));
+    let core = runtime
+        .plan_path_core(&req, &policy)
+        .unwrap_or_else(|error| unreachable!("core plan should succeed: {error}"));
+
+    assert_eq!(core.namespace, full.namespace);
+    assert_eq!(core.join_mode, full.join_mode);
+    assert_eq!(core.selected_peers, full.selected_peers);
+    assert_eq!(core.multipath_schedule, full.multipath_schedule);
+}
+
+#[test]
+fn runtime_plan_core_from_dps_payload_matches_full_selection_and_schedule() {
+    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
+        .unwrap_or_else(|error| unreachable!("runtime bootstrap should succeed: {error}"));
+    runtime
+        .merge_discovery(
+            "seed-b",
+            &[
+                MeshDiscoveryRecord {
+                    node_id: "node-a".to_string(),
+                    endpoint: "198.51.100.10:443".to_string(),
+                    region: "eu".to_string(),
+                    load_score: 20,
+                    reliability_score: 90,
+                },
+                MeshDiscoveryRecord {
+                    node_id: "node-b".to_string(),
+                    endpoint: "198.51.100.11:8443".to_string(),
+                    region: "us".to_string(),
+                    load_score: 15,
+                    reliability_score: 95,
+                },
+            ],
+        )
+        .unwrap_or_else(|error| unreachable!("merge discovery should succeed: {error}"));
+
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: Some("inv-123".to_string()),
+    };
+    let payload = concat!(
+        "mesh_allowed_regions=eu,us;",
+        "mesh_max_peers=2;",
+        "mesh_max_selected_per_region=1;",
+        "mesh_min_distinct_regions=2;",
+        "mesh_multipath_mode=flow_shard;",
+        "mesh_route_binding_id=8123"
+    );
+
+    let full = runtime
+        .plan_path_from_dps_payload(&req, payload)
+        .unwrap_or_else(|error| unreachable!("full dps plan should succeed: {error}"));
+    let core = runtime
+        .plan_path_core_from_dps_payload(&req, payload)
+        .unwrap_or_else(|error| unreachable!("core dps plan should succeed: {error}"));
+
+    assert_eq!(core.namespace, full.namespace);
+    assert_eq!(core.join_mode, full.join_mode);
+    assert_eq!(core.selected_peers, full.selected_peers);
+    assert_eq!(core.multipath_schedule, full.multipath_schedule);
+    assert_eq!(
+        core.multipath_schedule.route_binding_id,
+        full.multipath_schedule.route_binding_id
+    );
+    assert!(!full.explain.is_empty());
+}

@@ -5,6 +5,18 @@ use super::path_planner_setup::build_plan_setup;
 use super::standby_shadow_explain::append_standby_shadow_explain;
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PlanningExplainMode {
+    Full,
+    None,
+}
+
+impl PlanningExplainMode {
+    pub(super) fn enabled(self) -> bool {
+        matches!(self, Self::Full)
+    }
+}
+
 impl MeshRuntime {
     pub fn plan_path(
         &self,
@@ -18,6 +30,19 @@ impl MeshRuntime {
         policy.validate()?;
         self.rebuild_plan_snapshot_from_runtime_state(join_mode, policy)
     }
+
+    pub fn plan_path_core(
+        &self,
+        request: &MeshJoinRequest,
+        policy: &MeshPathPolicy,
+    ) -> Result<MeshPathPlanCore, String> {
+        if request.namespace.trim() != self.namespace {
+            return Err("mesh request namespace does not match runtime".to_string());
+        }
+        let join_mode = evaluate_join_mode(request)?;
+        policy.validate()?;
+        self.rebuild_plan_snapshot_core_from_runtime_state(join_mode, policy)
+    }
 }
 
 pub(super) fn build_plan_from_runtime_state(
@@ -25,8 +50,64 @@ pub(super) fn build_plan_from_runtime_state(
     join_mode: MeshJoinMode,
     policy: &MeshPathPolicy,
 ) -> Result<MeshPathPlan, String> {
-    let mut explain = Vec::with_capacity(128 + runtime.peers.len().saturating_mul(4));
-    let setup = build_plan_setup(runtime, join_mode.clone(), policy, &mut explain);
+    let outcome = build_plan_outcome_from_runtime_state(
+        runtime,
+        join_mode.clone(),
+        policy,
+        PlanningExplainMode::Full,
+    )?;
+    Ok(MeshPathPlan {
+        namespace: runtime.namespace.clone(),
+        join_mode,
+        selected_peers: outcome.selected_peers,
+        multipath_schedule: outcome.multipath_schedule,
+        explain: outcome.explain,
+    })
+}
+
+pub(super) fn build_plan_core_from_runtime_state(
+    runtime: &MeshRuntime,
+    join_mode: MeshJoinMode,
+    policy: &MeshPathPolicy,
+) -> Result<MeshPathPlanCore, String> {
+    let outcome = build_plan_outcome_from_runtime_state(
+        runtime,
+        join_mode.clone(),
+        policy,
+        PlanningExplainMode::None,
+    )?;
+    Ok(MeshPathPlanCore {
+        namespace: runtime.namespace.clone(),
+        join_mode,
+        selected_peers: outcome.selected_peers,
+        multipath_schedule: outcome.multipath_schedule,
+    })
+}
+
+struct BuildPlanOutcome {
+    selected_peers: Vec<MeshPeerState>,
+    multipath_schedule: MeshMultipathSchedule,
+    explain: Vec<String>,
+}
+
+fn build_plan_outcome_from_runtime_state(
+    runtime: &MeshRuntime,
+    join_mode: MeshJoinMode,
+    policy: &MeshPathPolicy,
+    explain_mode: PlanningExplainMode,
+) -> Result<BuildPlanOutcome, String> {
+    let mut explain = if explain_mode.enabled() {
+        Vec::with_capacity(128 + runtime.peers.len().saturating_mul(4))
+    } else {
+        Vec::new()
+    };
+    let setup = build_plan_setup(
+        runtime,
+        join_mode.clone(),
+        policy,
+        &mut explain,
+        explain_mode,
+    );
     let blocked: BTreeSet<&str> = setup
         .blocked_node_ids
         .iter()
@@ -54,41 +135,44 @@ pub(super) fn build_plan_from_runtime_state(
             profile: setup.path_profile,
         },
         &mut explain,
+        explain_mode,
     );
-    explain.push(format!(
-        "effective_min_reliability={}",
-        setup.effective_reliability
-    ));
-    explain.push(format!("effective_max_load={}", setup.effective_load));
-    explain.push(format!("effective_max_peers={}", setup.effective_max_peers));
-    explain.push(format!(
-        "effective_min_distinct_regions={}",
-        setup.effective_min_distinct_regions
-    ));
-    explain.push(format!(
-        "effective_prefer_region_diversity={}",
-        setup.effective_prefer_region_diversity
-    ));
-    explain.push(format!(
-        "effective_max_selected_per_region={}",
-        setup.effective_max_selected_per_region
-    ));
-    explain.push(format!(
-        "effective_filter_source={}",
-        if setup.auto_mode {
-            "auto_profile"
-        } else {
-            "manual_override"
-        }
-    ));
-    explain.push(format!(
-        "effective_health_filter_source={}",
-        if setup.auto_mode {
-            "auto"
-        } else {
-            "manual_disabled"
-        }
-    ));
+    if explain_mode.enabled() {
+        explain.push(format!(
+            "effective_min_reliability={}",
+            setup.effective_reliability
+        ));
+        explain.push(format!("effective_max_load={}", setup.effective_load));
+        explain.push(format!("effective_max_peers={}", setup.effective_max_peers));
+        explain.push(format!(
+            "effective_min_distinct_regions={}",
+            setup.effective_min_distinct_regions
+        ));
+        explain.push(format!(
+            "effective_prefer_region_diversity={}",
+            setup.effective_prefer_region_diversity
+        ));
+        explain.push(format!(
+            "effective_max_selected_per_region={}",
+            setup.effective_max_selected_per_region
+        ));
+        explain.push(format!(
+            "effective_filter_source={}",
+            if setup.auto_mode {
+                "auto_profile"
+            } else {
+                "manual_override"
+            }
+        ));
+        explain.push(format!(
+            "effective_health_filter_source={}",
+            if setup.auto_mode {
+                "auto"
+            } else {
+                "manual_disabled"
+            }
+        ));
+    }
     let recovery = run_auto_recovery(
         &runtime.peers,
         candidates,
@@ -106,6 +190,7 @@ pub(super) fn build_plan_from_runtime_state(
             spread_bonus_weight: runtime.table_policy.resilient_region_spread_bonus_weight,
         },
         &mut explain,
+        explain_mode,
     );
     let candidates = recovery.candidates;
     let stats = recovery.stats;
@@ -122,8 +207,11 @@ pub(super) fn build_plan_from_runtime_state(
             effective_min_distinct_regions: setup.effective_min_distinct_regions,
         },
         &mut explain,
+        explain_mode,
     )?;
-    append_standby_shadow_explain(&selected_peers, &mut explain);
+    if explain_mode.enabled() {
+        append_standby_shadow_explain(&selected_peers, &mut explain);
+    }
     let multipath_mode = policy
         .multipath_mode
         .map(schedule_mode_from_multipath_hint)
@@ -134,11 +222,11 @@ pub(super) fn build_plan_from_runtime_state(
         None,
         policy.multipath_demand,
     )?;
-    multipath_schedule::append_multipath_schedule_explain(&mut explain, &multipath_schedule);
+    if explain_mode.enabled() {
+        multipath_schedule::append_multipath_schedule_explain(&mut explain, &multipath_schedule);
+    }
 
-    Ok(MeshPathPlan {
-        namespace: runtime.namespace.clone(),
-        join_mode,
+    Ok(BuildPlanOutcome {
         selected_peers,
         multipath_schedule,
         explain,

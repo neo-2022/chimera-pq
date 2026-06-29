@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::model::{
     MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, MeshPublishedEndpointUpdate, peer_priority,
+    MeshPathPlanCore, MeshPeerHealth, MeshPeerPerformance, MeshPeerState,
+    MeshPublishedEndpointUpdate, peer_priority,
 };
 use crate::multipath_model::{MeshMultipathMode, MeshMultipathSchedule};
 use crate::policy::{MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode};
@@ -83,7 +84,8 @@ pub use multipath_rebuild_model::{
 };
 use multipath_rebuild_trigger::MeshMultipathRebuildTriggerCause;
 use multipath_schedule::{
-    build_multipath_schedule, replace_multipath_schedule, schedule_mode_from_multipath_hint,
+    build_multipath_schedule, replace_multipath_schedule, replace_multipath_schedule_core,
+    schedule_mode_from_multipath_hint,
 };
 pub use reports::{
     MeshConnectAttempt, MeshConnectProbeReport, MeshPeerTableEnforcementReport,
@@ -397,5 +399,13 @@ impl MeshRuntime {
         policy: &MeshPathPolicy,
     ) -> Result<MeshPathPlan, String> {
         path_planner::build_plan_from_runtime_state(self, join_mode, policy)
+    }
+
+    pub(super) fn rebuild_plan_snapshot_core_from_runtime_state(
+        &self,
+        join_mode: MeshJoinMode,
+        policy: &MeshPathPolicy,
+    ) -> Result<MeshPathPlanCore, String> {
+        path_planner::build_plan_core_from_runtime_state(self, join_mode, policy)
     }
 }

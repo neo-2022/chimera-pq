@@ -30,6 +30,7 @@ pub(super) fn build_plan_setup(
     join_mode: MeshJoinMode,
     policy: &MeshPathPolicy,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) -> PlanSetup {
     let manual_overrides = policy.manual_override_fields();
     let auto_mode = manual_overrides.is_empty();
@@ -44,33 +45,37 @@ pub(super) fn build_plan_setup(
         avg_reliability_score,
     );
 
-    append_plan_setup_preface_explain(
-        runtime,
-        explain,
-        &PlanSetupPrefaceExplainContext {
-            manual_overrides: &manual_overrides,
-            path_profile,
-            path_profile_reason,
-            path_profile_overridden: policy.path_profile_override.is_some(),
-            avg_load_score,
-            avg_reliability_score,
-        },
-    );
-    append_plan_setup_discovery_table_explain(runtime, explain, join_mode);
+    if explain_mode.enabled() {
+        append_plan_setup_preface_explain(
+            runtime,
+            explain,
+            &PlanSetupPrefaceExplainContext {
+                manual_overrides: &manual_overrides,
+                path_profile,
+                path_profile_reason,
+                path_profile_overridden: policy.path_profile_override.is_some(),
+                avg_load_score,
+                avg_reliability_score,
+            },
+        );
+        append_plan_setup_discovery_table_explain(runtime, explain, join_mode);
+    }
 
     let blocked_node_ids = policy.blocked_node_ids.clone();
     let health_blocked_all = unhealthy_node_ids_from_health_state(&runtime.health_state);
-    explain.push(format!(
-        "effective_health_blocked_candidates={}",
-        health_blocked_all.len()
-    ));
-    let health_blocked_node_ids = crate::runtime::diagnostic_redaction::peer_labels_from_table(
-        &health_blocked_all,
-        &runtime.peers,
-    );
-    explain.push(format!(
-        "effective_health_blocked_node_ids={health_blocked_node_ids}"
-    ));
+    if explain_mode.enabled() {
+        explain.push(format!(
+            "effective_health_blocked_candidates={}",
+            health_blocked_all.len()
+        ));
+        let health_blocked_node_ids = crate::runtime::diagnostic_redaction::peer_labels_from_table(
+            &health_blocked_all,
+            &runtime.peers,
+        );
+        explain.push(format!(
+            "effective_health_blocked_node_ids={health_blocked_node_ids}"
+        ));
+    }
 
     let allowed_regions: BTreeSet<String> = policy
         .allowed_regions

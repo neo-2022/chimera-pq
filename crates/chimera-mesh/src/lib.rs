@@ -19,8 +19,8 @@ mod weave_contract;
 
 pub use model::{
     MeshDiscoveryRecord, MeshFailoverEvent, MeshJoinMode, MeshJoinRequest, MeshPathPlan,
-    MeshPeerHealth, MeshPeerPerformance, MeshPeerState, MeshPublishedEndpointUpdate,
-    PreemptiveRisk, SwitchDecision,
+    MeshPathPlanCore, MeshPeerHealth, MeshPeerPerformance, MeshPeerState,
+    MeshPublishedEndpointUpdate, PreemptiveRisk, SwitchDecision,
 };
 pub use multipath_model::{
     MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode,

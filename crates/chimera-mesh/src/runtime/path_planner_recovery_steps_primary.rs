@@ -7,6 +7,7 @@ pub(super) fn run_primary_health_step<'p>(
     input: &AutoRecoveryInput<'_>,
     state: &mut AutoRecoveryState,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) {
     state.ensure_defaults();
     if input.auto_mode
@@ -16,8 +17,10 @@ pub(super) fn run_primary_health_step<'p>(
     {
         state.auto_recovery_attempts = state.auto_recovery_attempts.saturating_add(1);
         append_auto_recovery_trace_step(state, "primary:health");
-        explain.push("auto_recovery=activated".to_string());
-        explain.push("auto_recovery_relaxed_filters=health".to_string());
+        if explain_mode.enabled() {
+            explain.push("auto_recovery=activated".to_string());
+            explain.push("auto_recovery_relaxed_filters=health".to_string());
+        }
         let empty_health_blocked = BTreeSet::new();
         let (fallback_candidates, fallback_stats) = collect_candidates(
             peers,
@@ -30,18 +33,23 @@ pub(super) fn run_primary_health_step<'p>(
                 profile: input.path_profile,
             },
             explain,
+            explain_mode,
         );
         if !fallback_candidates.is_empty() {
             *candidates = fallback_candidates;
             *stats = fallback_stats;
-            explain.push("auto_recovery_result=selected_from_relaxed_health".to_string());
+            if explain_mode.enabled() {
+                explain.push("auto_recovery_result=selected_from_relaxed_health".to_string());
+            }
             state.health_relax_applied = true;
             state.health_relax_reason = "resilient_health_relax";
             state.health_relax_stage = "primary";
             state.auto_recovery_final_result = "selected_from_relaxed_health";
             append_auto_recovery_trace_step(state, "primary:selected_from_relaxed_health");
         } else {
-            explain.push("auto_recovery_result=no_candidate_after_relax_health".to_string());
+            if explain_mode.enabled() {
+                explain.push("auto_recovery_result=no_candidate_after_relax_health".to_string());
+            }
             state.health_relax_reason = "relax_attempt_no_gain";
             state.auto_recovery_final_result = "no_candidate_after_relax_health";
             append_auto_recovery_trace_step(state, "primary:no_candidate_after_relax_health");

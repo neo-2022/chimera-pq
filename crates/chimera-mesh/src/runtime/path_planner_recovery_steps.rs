@@ -52,8 +52,17 @@ pub(super) fn run_primary_health_step<'p>(
     input: &AutoRecoveryInput<'_>,
     state: &mut AutoRecoveryState,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) {
-    primary::run_primary_health_step(peers, candidates, stats, input, state, explain);
+    primary::run_primary_health_step(
+        peers,
+        candidates,
+        stats,
+        input,
+        state,
+        explain,
+        explain_mode,
+    );
 }
 
 pub(super) fn run_secondary_relax_step<'p>(
@@ -63,8 +72,17 @@ pub(super) fn run_secondary_relax_step<'p>(
     input: &AutoRecoveryInput<'_>,
     state: &mut AutoRecoveryState,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) {
-    secondary::run_secondary_relax_step(peers, candidates, stats, input, state, explain);
+    secondary::run_secondary_relax_step(
+        peers,
+        candidates,
+        stats,
+        input,
+        state,
+        explain,
+        explain_mode,
+    );
 }
 
 pub(super) fn run_last_chance_health_step<'p>(
@@ -74,8 +92,17 @@ pub(super) fn run_last_chance_health_step<'p>(
     input: &AutoRecoveryInput<'_>,
     state: &mut AutoRecoveryState,
     explain: &mut Vec<String>,
+    explain_mode: super::path_planner::PlanningExplainMode,
 ) {
-    last_chance::run_last_chance_health_step(peers, candidates, stats, input, state, explain);
+    last_chance::run_last_chance_health_step(
+        peers,
+        candidates,
+        stats,
+        input,
+        state,
+        explain,
+        explain_mode,
+    );
 }
 
 pub(super) fn append_auto_recovery_trace_step(state: &mut AutoRecoveryState, step: &'static str) {
