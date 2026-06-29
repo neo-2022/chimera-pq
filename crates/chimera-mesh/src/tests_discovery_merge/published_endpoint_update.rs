@@ -114,6 +114,73 @@ fn published_endpoint_stale_generation_is_ignored_without_dirty_signal() {
 }
 
 #[test]
+fn published_endpoint_noop_batch_skips_dirty_rebuild_for_liveness_only_updates() {
+    let mut runtime = runtime_with_peers(&[
+        record("node-a", "198.51.100.10:443"),
+        record("node-b", "198.51.100.11:443"),
+    ]);
+    runtime
+        .merge_published_endpoint_updates(
+            "state-publish",
+            &[
+                endpoint_update("node-a", "198.51.100.20:9443", None, 4),
+                endpoint_update("node-b", "198.51.100.21:9443", None, 3),
+            ],
+        )
+        .unwrap_or_else(|e| unreachable!("initial endpoint update should succeed: {e}"));
+    let _ = runtime.take_pending_multipath_rebuild_signal();
+    let before_snapshot = runtime.peer_snapshot();
+
+    runtime
+        .merge_published_endpoint_updates(
+            "state-publish",
+            &[
+                endpoint_update("node-a", "198.51.100.20:9443", None, 4),
+                endpoint_update("node-b", "198.51.100.31:9443", None, 2),
+                endpoint_update("missing-node", "198.51.100.99:9443", None, 1),
+            ],
+        )
+        .unwrap_or_else(|e| unreachable!("noop endpoint batch should succeed: {e}"));
+
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    assert_eq!(runtime.peer_snapshot(), before_snapshot);
+}
+
+#[test]
+fn published_endpoint_empty_batch_is_liveness_noop_without_dirty_rebuild() {
+    let mut runtime = runtime_with_peers(&[record("node-a", "198.51.100.10:443")]);
+    let before_snapshot = runtime.peer_snapshot();
+
+    runtime
+        .merge_published_endpoint_updates("state-publish", &[])
+        .unwrap_or_else(|e| unreachable!("empty endpoint batch should succeed: {e}"));
+
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    assert_eq!(runtime.peer_snapshot(), before_snapshot);
+}
+
+#[test]
+fn published_endpoint_unknown_only_batch_is_noop_without_dirty_rebuild() {
+    let mut runtime = runtime_with_peers(&[record("node-a", "198.51.100.10:443")]);
+    let before_snapshot = runtime.peer_snapshot();
+
+    runtime
+        .merge_published_endpoint_updates(
+            "state-publish",
+            &[endpoint_update(
+                "missing-node",
+                "198.51.100.99:9443",
+                Some("https://missing.example:9443/chimera.sh"),
+                1,
+            )],
+        )
+        .unwrap_or_else(|e| unreachable!("unknown-only endpoint batch should succeed: {e}"));
+
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    assert_eq!(runtime.peer_snapshot(), before_snapshot);
+}
+
+#[test]
 fn published_endpoint_zero_generation_is_rejected_atomically() -> Result<(), String> {
     let mut runtime = runtime_with_peers(&[record("node-a", "198.51.100.10:443")]);
     let before_snapshot = runtime.peer_snapshot();
