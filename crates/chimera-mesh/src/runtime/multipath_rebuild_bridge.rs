@@ -15,12 +15,8 @@ impl MeshRuntime {
         rebuild_policy: &MeshMultipathRebuildPolicy,
     ) -> Result<(MeshPathPlan, Option<MeshMultipathRebuildDecision>), String> {
         let mut plan = self.plan_path(request, planning_policy)?;
-        let decision = self.apply_pending_multipath_rebuild_with_policy_to_plan(
-            request,
-            planning_policy,
-            &mut plan,
-            rebuild_policy,
-        )?;
+        let decision =
+            self.apply_pending_multipath_rebuild_to_fresh_plan(&mut plan, rebuild_policy)?;
         Ok((plan, decision))
     }
 
@@ -31,12 +27,8 @@ impl MeshRuntime {
         rebuild_policy: &MeshMultipathRebuildPolicy,
     ) -> Result<(MeshPathPlanCore, Option<MeshMultipathRebuildDecision>), String> {
         let mut plan = self.plan_path_core(request, planning_policy)?;
-        let decision = self.apply_pending_multipath_rebuild_with_policy_to_plan_core(
-            request,
-            planning_policy,
-            &mut plan,
-            rebuild_policy,
-        )?;
+        let decision =
+            self.apply_pending_multipath_rebuild_to_fresh_plan_core(&mut plan, rebuild_policy)?;
         Ok((plan, decision))
     }
 
@@ -174,6 +166,56 @@ impl MeshRuntime {
             &signal,
             rebuild_policy,
         ) {
+            Ok(decision) => {
+                if decision.action == MeshMultipathRebuildAction::FailClosed {
+                    return Err(format!(
+                        "mesh multipath pending rebuild failed closed: {}",
+                        decision.reason
+                    ));
+                }
+                Ok(Some(decision))
+            }
+            Err(error) => {
+                self.restore_pending_multipath_rebuild_signal(signal);
+                Err(error)
+            }
+        }
+    }
+
+    fn apply_pending_multipath_rebuild_to_fresh_plan(
+        &mut self,
+        plan: &mut MeshPathPlan,
+        rebuild_policy: &MeshMultipathRebuildPolicy,
+    ) -> Result<Option<MeshMultipathRebuildDecision>, String> {
+        let Some(signal) = self.take_pending_multipath_rebuild_signal() else {
+            return Ok(None);
+        };
+        match self.apply_multipath_rebuild_to_plan(plan, &signal, rebuild_policy) {
+            Ok(decision) => {
+                if decision.action == MeshMultipathRebuildAction::FailClosed {
+                    return Err(format!(
+                        "mesh multipath pending rebuild failed closed: {}",
+                        decision.reason
+                    ));
+                }
+                Ok(Some(decision))
+            }
+            Err(error) => {
+                self.restore_pending_multipath_rebuild_signal(signal);
+                Err(error)
+            }
+        }
+    }
+
+    fn apply_pending_multipath_rebuild_to_fresh_plan_core(
+        &mut self,
+        plan: &mut MeshPathPlanCore,
+        rebuild_policy: &MeshMultipathRebuildPolicy,
+    ) -> Result<Option<MeshMultipathRebuildDecision>, String> {
+        let Some(signal) = self.take_pending_multipath_rebuild_signal() else {
+            return Ok(None);
+        };
+        match self.apply_multipath_rebuild_to_plan_core(plan, &signal, rebuild_policy) {
             Ok(decision) => {
                 if decision.action == MeshMultipathRebuildAction::FailClosed {
                     return Err(format!(
