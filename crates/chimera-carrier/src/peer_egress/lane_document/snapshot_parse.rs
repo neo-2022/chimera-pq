@@ -28,149 +28,6 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         draft.snapshot_seen = true;
         return Ok(true);
     }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_NAMESPACE) {
-        draft.snapshot_seen = true;
-        draft.namespace = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_JOIN_MODE) {
-        draft.snapshot_seen = true;
-        draft.join_mode = Some(parse_join_mode(value)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_MODE) {
-        draft.snapshot_seen = true;
-        draft.mode = Some(parse_multipath_mode(value)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_ROUTE_BINDING_ID) {
-        draft.snapshot_seen = true;
-        draft.route_binding_id = parse_optional_route_binding_id(value)?;
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_REQUESTED) {
-        draft.snapshot_seen = true;
-        draft.lane_requested = Some(parse_usize_field(value, PLAN_KEY_LANE_REQUESTED)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_ADMITTED) {
-        draft.snapshot_seen = true;
-        draft.lane_admitted = Some(parse_usize_field(value, PLAN_KEY_LANE_ADMITTED)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_REJECTED) {
-        draft.snapshot_seen = true;
-        draft.lane_rejected = Some(parse_usize_field(value, PLAN_KEY_LANE_REJECTED)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LANE_CAPACITY_STATUS) {
-        draft.snapshot_seen = true;
-        draft.lane_capacity_status = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_LOCAL_RESERVE_PCT) {
-        draft.snapshot_seen = true;
-        draft.local_reserve_pct = Some(parse_u8_field(value, PLAN_KEY_LOCAL_RESERVE_PCT)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_TRANSIT_BUDGET_PCT) {
-        draft.snapshot_seen = true;
-        draft.transit_budget_pct = Some(parse_u8_field(value, PLAN_KEY_TRANSIT_BUDGET_PCT)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_POLICY) {
-        draft.snapshot_seen = true;
-        draft.demand_policy = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_POLICY_SOURCE) {
-        draft.snapshot_seen = true;
-        draft.demand_policy_source = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_REQUESTED) {
-        draft.snapshot_seen = true;
-        draft.demand_requested = Some(parse_usize_field(value, PLAN_KEY_DEMAND_REQUESTED)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_PLANNED) {
-        draft.snapshot_seen = true;
-        draft.demand_planned = Some(parse_usize_field(value, PLAN_KEY_DEMAND_PLANNED)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_ADMITTED_CAPACITY_PCT) {
-        draft.snapshot_seen = true;
-        draft.demand_admitted_capacity_pct = Some(parse_u8_field(
-            value,
-            PLAN_KEY_DEMAND_ADMITTED_CAPACITY_PCT,
-        )?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_UNMET) {
-        draft.snapshot_seen = true;
-        draft.demand_unmet = Some(parse_usize_field(value, PLAN_KEY_DEMAND_UNMET)?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_STATUS) {
-        draft.snapshot_seen = true;
-        draft.demand_status = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_DEMAND_REBUILD_RECOMMENDED) {
-        draft.snapshot_seen = true;
-        draft.demand_rebuild_recommended = Some(parse_bool_field(
-            value,
-            PLAN_KEY_DEMAND_REBUILD_RECOMMENDED,
-        )?);
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_FAIRNESS_POLICY) {
-        draft.snapshot_seen = true;
-        draft.fairness_policy = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_EXECUTION_STATUS) {
-        draft.snapshot_seen = true;
-        draft.execution_status = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_TRANSIT_PAYLOAD_POLICY) {
-        draft.snapshot_seen = true;
-        draft.transit_payload_policy = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = strip_plan_value(comment, PLAN_KEY_PLANNER_REBUILD_REASON) {
-        draft.snapshot_seen = true;
-        draft.planner_rebuild_reason = Some(value.to_string());
-        return Ok(true);
-    }
-    if let Some(value) = comment.strip_prefix("chimera_plan_active_lane_count=") {
-        draft.snapshot_seen = true;
-        draft.active_lane_count = Some(parse_usize_field(value, "chimera_plan_active_lane_count")?);
-        return Ok(true);
-    }
-    if let Some(value) = comment.strip_prefix("chimera_plan_standby_lane_count=") {
-        draft.snapshot_seen = true;
-        draft.standby_lane_count =
-            Some(parse_usize_field(value, "chimera_plan_standby_lane_count")?);
-        return Ok(true);
-    }
-    if let Some(value) = comment.strip_prefix("chimera_plan_active_weight_sum_pct=") {
-        draft.snapshot_seen = true;
-        draft.active_weight_sum_pct = Some(parse_u16_field(
-            value,
-            "chimera_plan_active_weight_sum_pct",
-        )?);
-        return Ok(true);
-    }
-    if let Some(value) = comment.strip_prefix("chimera_plan_active_capacity_sum_pct=") {
-        draft.snapshot_seen = true;
-        draft.active_capacity_sum_pct = Some(parse_u16_field(
-            value,
-            "chimera_plan_active_capacity_sum_pct",
-        )?);
-        return Ok(true);
-    }
     if let Some(value) = strip_plan_tab(comment, PLAN_KEY_SELECTED_PEER) {
         draft.snapshot_seen = true;
         let parts = split_tab_fields::<7>(value, PLAN_KEY_SELECTED_PEER)?;
@@ -219,17 +76,114 @@ pub(super) fn parse_transit_lane_plan_snapshot_line(
         }
         return Ok(true);
     }
+    if let Some((key, value)) = split_plan_value(comment) {
+        return parse_plan_value(key, value, draft);
+    }
 
     if comment.starts_with(PLAN_KEY_PREFIX) {
-        return Err(format!("unknown transit plan snapshot key: {comment}"));
+        let key = split_plan_key(comment);
+        return Err(format!("unknown transit plan snapshot key: {key}"));
     }
 
     Ok(false)
 }
 
-fn strip_plan_value<'a>(comment: &'a str, key: &str) -> Option<&'a str> {
-    let value = comment.strip_prefix(key)?;
-    value.strip_prefix('=')
+fn split_plan_value(comment: &str) -> Option<(&str, &str)> {
+    let (key, value) = comment.split_once('=')?;
+    if key.starts_with(PLAN_KEY_PREFIX) {
+        Some((key, value))
+    } else {
+        None
+    }
+}
+
+fn split_plan_key(comment: &str) -> &str {
+    let boundary = comment
+        .find(|byte: char| byte == '=' || byte.is_ascii_whitespace())
+        .unwrap_or(comment.len());
+    &comment[..boundary]
+}
+
+fn parse_plan_value(
+    key: &str,
+    value: &str,
+    draft: &mut TransitLanePlanSnapshotDraft,
+) -> Result<bool, String> {
+    draft.snapshot_seen = true;
+    match key {
+        PLAN_KEY_NAMESPACE => draft.namespace = Some(value.to_string()),
+        PLAN_KEY_JOIN_MODE => draft.join_mode = Some(parse_join_mode(value)?),
+        PLAN_KEY_MODE => draft.mode = Some(parse_multipath_mode(value)?),
+        PLAN_KEY_ROUTE_BINDING_ID => {
+            draft.route_binding_id = parse_optional_route_binding_id(value)?
+        }
+        PLAN_KEY_LANE_REQUESTED => {
+            draft.lane_requested = Some(parse_usize_field(value, PLAN_KEY_LANE_REQUESTED)?)
+        }
+        PLAN_KEY_LANE_ADMITTED => {
+            draft.lane_admitted = Some(parse_usize_field(value, PLAN_KEY_LANE_ADMITTED)?)
+        }
+        PLAN_KEY_LANE_REJECTED => {
+            draft.lane_rejected = Some(parse_usize_field(value, PLAN_KEY_LANE_REJECTED)?)
+        }
+        PLAN_KEY_LANE_CAPACITY_STATUS => draft.lane_capacity_status = Some(value.to_string()),
+        PLAN_KEY_LOCAL_RESERVE_PCT => {
+            draft.local_reserve_pct = Some(parse_u8_field(value, PLAN_KEY_LOCAL_RESERVE_PCT)?)
+        }
+        PLAN_KEY_TRANSIT_BUDGET_PCT => {
+            draft.transit_budget_pct = Some(parse_u8_field(value, PLAN_KEY_TRANSIT_BUDGET_PCT)?)
+        }
+        PLAN_KEY_DEMAND_POLICY => draft.demand_policy = Some(value.to_string()),
+        PLAN_KEY_DEMAND_POLICY_SOURCE => draft.demand_policy_source = Some(value.to_string()),
+        PLAN_KEY_DEMAND_REQUESTED => {
+            draft.demand_requested = Some(parse_usize_field(value, PLAN_KEY_DEMAND_REQUESTED)?)
+        }
+        PLAN_KEY_DEMAND_PLANNED => {
+            draft.demand_planned = Some(parse_usize_field(value, PLAN_KEY_DEMAND_PLANNED)?)
+        }
+        PLAN_KEY_DEMAND_ADMITTED_CAPACITY_PCT => {
+            draft.demand_admitted_capacity_pct = Some(parse_u8_field(
+                value,
+                PLAN_KEY_DEMAND_ADMITTED_CAPACITY_PCT,
+            )?)
+        }
+        PLAN_KEY_DEMAND_UNMET => {
+            draft.demand_unmet = Some(parse_usize_field(value, PLAN_KEY_DEMAND_UNMET)?)
+        }
+        PLAN_KEY_DEMAND_STATUS => draft.demand_status = Some(value.to_string()),
+        PLAN_KEY_DEMAND_REBUILD_RECOMMENDED => {
+            draft.demand_rebuild_recommended = Some(parse_bool_field(
+                value,
+                PLAN_KEY_DEMAND_REBUILD_RECOMMENDED,
+            )?)
+        }
+        PLAN_KEY_FAIRNESS_POLICY => draft.fairness_policy = Some(value.to_string()),
+        PLAN_KEY_EXECUTION_STATUS => draft.execution_status = Some(value.to_string()),
+        PLAN_KEY_TRANSIT_PAYLOAD_POLICY => draft.transit_payload_policy = Some(value.to_string()),
+        PLAN_KEY_PLANNER_REBUILD_REASON => draft.planner_rebuild_reason = Some(value.to_string()),
+        "chimera_plan_active_lane_count" => {
+            draft.active_lane_count =
+                Some(parse_usize_field(value, "chimera_plan_active_lane_count")?)
+        }
+        "chimera_plan_standby_lane_count" => {
+            draft.standby_lane_count =
+                Some(parse_usize_field(value, "chimera_plan_standby_lane_count")?)
+        }
+        "chimera_plan_active_weight_sum_pct" => {
+            draft.active_weight_sum_pct = Some(parse_u16_field(
+                value,
+                "chimera_plan_active_weight_sum_pct",
+            )?)
+        }
+        "chimera_plan_active_capacity_sum_pct" => {
+            draft.active_capacity_sum_pct = Some(parse_u16_field(
+                value,
+                "chimera_plan_active_capacity_sum_pct",
+            )?)
+        }
+        _ => return Err(format!("unknown transit plan snapshot key: {key}")),
+    }
+    Ok(true)
 }
 
 fn strip_plan_tab<'a>(comment: &'a str, key: &str) -> Option<&'a str> {

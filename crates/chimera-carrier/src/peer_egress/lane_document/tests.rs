@@ -189,6 +189,108 @@ fn document_rejects_rows_that_diverge_from_snapshot() -> Result<(), String> {
 }
 
 #[test]
+fn document_rejects_short_rows_when_snapshot_is_present() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let rendered = render_transit_lane_document(&document)?;
+    let mut tampered = String::new();
+    let mut changed = false;
+    for line in rendered.lines() {
+        let trimmed = line.trim();
+        if !changed && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            let mut parts = trimmed.split(',').map(str::trim);
+            let route = parts
+                .next()
+                .ok_or_else(|| "test row missing route".to_string())?;
+            let lane = parts
+                .next()
+                .ok_or_else(|| "test row missing lane".to_string())?;
+            let endpoint = parts
+                .next()
+                .ok_or_else(|| "test row missing endpoint".to_string())?;
+            tampered.push_str(route);
+            tampered.push(',');
+            tampered.push_str(lane);
+            tampered.push(',');
+            tampered.push_str(endpoint);
+            tampered.push('\n');
+            changed = true;
+            continue;
+        }
+        tampered.push_str(line);
+        tampered.push('\n');
+    }
+    if !changed {
+        return Err("test did not find a lane row to shorten".to_string());
+    }
+
+    let error = match parse_transit_lane_document(&tampered) {
+        Ok(_) => return Err("snapshot-backed short lane row must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("must be route_id,lane_index,endpoint"));
+    assert!(!error.contains("198.51.100"));
+    Ok(())
+}
+
+#[test]
+fn document_rejects_unknown_plan_key_without_value_leak() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let rendered = render_transit_lane_document(&document)?;
+    let tampered = rendered.replace(
+        "# chimera_plan_snapshot=v1\n",
+        "# chimera_plan_snapshot=v1\n# chimera_plan_unknown_endpoint=198.51.100.99:443\n",
+    );
+
+    let error = match parse_transit_lane_document(&tampered) {
+        Ok(_) => return Err("unknown plan key must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("unknown transit plan snapshot key: chimera_plan_unknown_endpoint"));
+    assert!(!error.contains("198.51.100"));
+    Ok(())
+}
+
+#[test]
+fn document_rejects_unknown_plan_tab_key_without_value_leak() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let rendered = render_transit_lane_document(&document)?;
+    let tampered = rendered.replace(
+        "# chimera_plan_snapshot=v1\n",
+        "# chimera_plan_snapshot=v1\n# chimera_plan_unknown_endpoint\t198.51.100.99:443\n",
+    );
+
+    let error = match parse_transit_lane_document(&tampered) {
+        Ok(_) => return Err("unknown plan tab key must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("unknown transit plan snapshot key: chimera_plan_unknown_endpoint"));
+    assert!(!error.contains("198.51.100"));
+    Ok(())
+}
+
+#[test]
+fn document_rejects_unknown_plan_space_key_without_value_leak() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let rendered = render_transit_lane_document(&document)?;
+    let tampered = rendered.replace(
+        "# chimera_plan_snapshot=v1\n",
+        "# chimera_plan_snapshot=v1\n# chimera_plan_unknown_endpoint 198.51.100.99:443\n",
+    );
+
+    let error = match parse_transit_lane_document(&tampered) {
+        Ok(_) => return Err("unknown plan space key must fail".to_string()),
+        Err(error) => error,
+    };
+    assert!(error.contains("unknown transit plan snapshot key: chimera_plan_unknown_endpoint"));
+    assert!(!error.contains("198.51.100"));
+    Ok(())
+}
+
+#[test]
 fn document_falls_back_to_registrations_without_snapshot() -> Result<(), String> {
     let document = TransitLaneDocument::new(
         vec![TransitLaneRegistration::new(
