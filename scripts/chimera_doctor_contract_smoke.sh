@@ -170,7 +170,9 @@ carrier_server_name=stand.internal.example listen_addr=127.0.0.1:9443 server_nam
 CHIMERA_PEER_EGRESS_TOKEN="quoted-token" SECRET='quoted-secret' password=plain-password url=https://node.example.org:443/path home=/home/rawuser/chimera
 Authorization: Bearer raw-bearer-token
 token: colon-token
+token: "quoted-colon-token"
 secret = spaced-secret
+secret: 'quoted-colon-secret'
 peer connected from 203.0.113.77:5555
 peer connected from [2001:db8::1]:9443
 raw fallback host control.private.example
@@ -201,7 +203,9 @@ EOF
   [[ "$output" != *"control.private.example"* ]] || fail "logs_redaction: leaked public-style hostname"
   [[ "$output" != *"raw-bearer-token"* ]] || fail "logs_redaction: leaked authorization token"
   [[ "$output" != *"colon-token"* ]] || fail "logs_redaction: leaked colon token"
+  [[ "$output" != *"quoted-colon-token"* ]] || fail "logs_redaction: leaked quoted colon token"
   [[ "$output" != *"spaced-secret"* ]] || fail "logs_redaction: leaked spaced secret"
+  [[ "$output" != *"quoted-colon-secret"* ]] || fail "logs_redaction: leaked quoted colon secret"
   [[ "$output" != *"quoted-token"* ]] || fail "logs_redaction: leaked quoted token"
   [[ "$output" != *"quoted-secret"* ]] || fail "logs_redaction: leaked quoted secret"
   [[ "$output" != *"plain-password"* ]] || fail "logs_redaction: leaked plain password"

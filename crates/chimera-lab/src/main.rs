@@ -5119,9 +5119,41 @@ mod tests {
     }
 
     #[test]
+    fn doctor_artifacts_check_fails_for_raw_hostname_and_ipv6_values() {
+        let dir = std::env::temp_dir();
+        let p1 = dir.join("chimera_doctor_raw_host_invalid.json");
+        let p2 = dir.join("chimera_gateway_doctor_raw_ipv6_invalid.json");
+        let p3 = dir.join("chimera_lab_doctor_valid_for_raw_host_guard.json");
+        let d1 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"carrier_addr\":\"<redacted>\",\"carrier_endpoint_state\":\"configured\",\"leaked_host\":\"control.private.example\",\"network_state\":\"not_modified\"}";
+        let d2 = "{\"status\":\"ok\",\"kind\":\"gateway_doctor\",\"listen_addr\":\"<redacted>\",\"listen_state\":\"configured\",\"peer\":\"2001:db8::1\",\"network_state\":\"not_modified\"}";
+        let d3 = "{\"status\":\"ok\",\"kind\":\"lab_doctor\",\"network_state\":\"not_modified\"}";
+        assert!(fs::write(&p1, d1).is_ok());
+        assert!(fs::write(&p2, d2).is_ok());
+        assert!(fs::write(&p3, d3).is_ok());
+
+        let path1 = p1.to_string_lossy().to_string();
+        let path2 = p2.to_string_lossy().to_string();
+        let path3 = p3.to_string_lossy().to_string();
+        assert!(!check_doctor_artifacts(&[
+            (&path1, "doctor"),
+            (&path2, "gateway_doctor"),
+            (&path3, "lab_doctor"),
+        ]));
+    }
+
+    #[test]
     fn diag_export_artifact_check_fails_for_raw_json_secret() {
         let path = std::env::temp_dir().join("chimera_diag_export_raw_secret_invalid.json");
         let payload = "{\"status\":\"ok\",\"kind\":\"diag_export\",\"secrets\":\"<redacted>\",\"carrier_addr\":\"<redacted>\",\"carrier_server_name\":\"<redacted>\",\"token\":\"raw-token\",\"network_state\":\"not_modified\"}";
+        assert!(fs::write(&path, payload).is_ok());
+        let path_text = path.to_string_lossy().to_string();
+        assert!(!check_diag_export_artifact(&path_text));
+    }
+
+    #[test]
+    fn diag_export_artifact_check_fails_for_raw_hostname_and_ipv6() {
+        let path = std::env::temp_dir().join("chimera_diag_export_raw_host_ipv6_invalid.json");
+        let payload = "{\"status\":\"ok\",\"kind\":\"diag_export\",\"secrets\":\"<redacted>\",\"carrier_addr\":\"<redacted>\",\"carrier_server_name\":\"<redacted>\",\"leaked_host\":\"control.private.example\",\"leaked_ipv6\":\"2001:db8::1\",\"network_state\":\"not_modified\"}";
         assert!(fs::write(&path, payload).is_ok());
         let path_text = path.to_string_lossy().to_string();
         assert!(!check_diag_export_artifact(&path_text));

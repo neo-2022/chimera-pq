@@ -157,6 +157,8 @@ pub(crate) fn check_diag_export_artifact(path: &str) -> bool {
 fn contains_raw_diagnostic_value(content: &str) -> bool {
     let lower = content.to_ascii_lowercase();
     contains_ipv4_literal(&lower)
+        || contains_ipv6_literal(&lower)
+        || contains_public_hostname_leak(&lower)
         || lower.contains("/home/")
         || lower.contains("gateway.local")
         || lower.contains("node.example")
@@ -206,6 +208,53 @@ fn is_ipv4_literal(token: &str) -> bool {
 
 fn is_ipv4_octet(part: &str) -> bool {
     !part.is_empty() && part.len() <= 3 && part.parse::<u8>().is_ok()
+}
+
+fn contains_ipv6_literal(content: &str) -> bool {
+    content
+        .split(|c: char| !(c.is_ascii_hexdigit() || c == ':'))
+        .any(is_ipv6_literal)
+}
+
+fn is_ipv6_literal(token: &str) -> bool {
+    let trimmed = token.trim_matches(':');
+    trimmed.contains("::")
+        || (trimmed.matches(':').count() >= 2
+            && trimmed
+                .split(':')
+                .filter(|part| !part.is_empty())
+                .all(|part| part.len() <= 4 && part.chars().all(|c| c.is_ascii_hexdigit())))
+}
+
+fn contains_public_hostname_leak(content: &str) -> bool {
+    content
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '-'))
+        .any(is_public_hostname_leak)
+}
+
+fn is_public_hostname_leak(token: &str) -> bool {
+    let trimmed = token.trim_matches('.');
+    if trimmed.len() < 4 || trimmed.contains("<redacted") {
+        return false;
+    }
+    let mut labels = trimmed.split('.');
+    let mut label_count = 0usize;
+    let mut last = "";
+    for label in labels.by_ref() {
+        if label.is_empty()
+            || label.starts_with('-')
+            || label.ends_with('-')
+            || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        {
+            return false;
+        }
+        label_count = label_count.saturating_add(1);
+        last = label;
+    }
+    label_count >= 2
+        && last.len() >= 2
+        && last.len() <= 24
+        && last.chars().all(|c| c.is_ascii_alphabetic())
 }
 
 fn contains_unredacted_sensitive_assignment(content: &str) -> bool {

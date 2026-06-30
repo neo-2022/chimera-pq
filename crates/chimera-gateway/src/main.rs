@@ -506,8 +506,8 @@ fn render_help(lang: Language) -> String {
 mod tests {
     use super::{
         Language, carrier_label, parse_gateway_doctor_options, parse_language_flag,
-        render_gateway_doctor_json, render_gateway_health, render_gateway_plan, render_help,
-        render_usage, validate_gateway_runtime,
+        render_gateway_doctor, render_gateway_doctor_json, render_gateway_health,
+        render_gateway_plan, render_help, render_usage, validate_gateway_runtime,
     };
     use chimera_config::{ConfigCarrierProfile, GatewayConfig, RekeyLimits};
 
@@ -623,5 +623,21 @@ mod tests {
         assert!(json.contains("\"listen_addr\":\"<redacted>\""));
         assert!(json.contains("\"listen_state\":\"local_or_wildcard\""));
         assert!(!json.contains("0.0.0.0:443"));
+    }
+
+    #[test]
+    fn doctor_text_redacts_listen_addr() {
+        let config = GatewayConfig {
+            carrier_profile: ConfigCarrierProfile::Tls,
+            listen_addr: "0.0.0.0:443".to_string(),
+            rekey: RekeyLimits {
+                max_age_seconds: 300,
+                max_packets_per_key: 10_000,
+            },
+        };
+        let text = render_gateway_doctor(Language::En, &config);
+        assert!(text.contains("listen=<redacted>"));
+        assert!(text.contains("listen_state=local_or_wildcard"));
+        assert!(!text.contains("0.0.0.0:443"));
     }
 }

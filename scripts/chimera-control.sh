@@ -1991,6 +1991,7 @@ redact_diagnostic_stream() {
     -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*=[[:space:]]*([^[:space:]"'"'"']+)#\1=<redacted>#g' \
     -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*=[[:space:]]*("([^"]*)"|'\''([^'\'']*)'\'')#\1=<redacted>#g' \
     -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*:[[:space:]]*([^[:space:]"'"'"']+)#\1:<redacted>#g' \
+    -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*:[[:space:]]*("([^"]*)"|'\''([^'\'']*)'\'')#\1:<redacted>#g' \
     -e 's#(CHIMERA_[A-Za-z0-9_]*(TOKEN|SECRET|PRIVATE_KEY|PASSWORD)[A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*([^[:space:]"'"'"']+)#\1=<redacted>#g' \
     -e 's#(CHIMERA_[A-Za-z0-9_]*(TOKEN|SECRET|PRIVATE_KEY|PASSWORD)[A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*("([^"]*)"|'\''([^'\'']*)'\'')#\1=<redacted>#g' \
     -e 's#(endpoint|carrier_addr|carrier_server_name|server_name|listen_addr|server|target|listen|remote|host)[[:space:]]*=[[:space:]]*([^[:space:]"'"'"']+)#\1=<redacted>#Ig' \
