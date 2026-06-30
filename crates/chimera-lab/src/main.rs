@@ -4082,8 +4082,8 @@ mod tests {
         MvpSpecReportOptions, MvpVerifyOptions, NetSimOptions, NetSimResult, PerfSmokeOptions,
         ReleaseGateChecklist, ReleaseReadinessArtifacts, ReleaseReadinessReportOptions,
         ReportPackOptions, check_benchmark_artifact, check_cef_phase1_smoke_artifact,
-        check_datapath_artifact, check_doctor_artifacts, check_net_sim_regression,
-        check_rollback_json_artifacts, check_route_explain_artifact,
+        check_datapath_artifact, check_diag_export_artifact, check_doctor_artifacts,
+        check_net_sim_regression, check_rollback_json_artifacts, check_route_explain_artifact,
         detect_real_world_datapath_closed_from_paths, execute_net_sim, extract_json_f64,
         parse_artifact_audit_options, parse_benchmark_report_options,
         parse_cef_phase1_smoke_options, parse_config_smoke_options, parse_doctor_options,
@@ -4971,9 +4971,9 @@ mod tests {
         let p1 = dir.join("chimera_rollback_status_valid.json");
         let p2 = dir.join("chimera_rollback_recover_valid.json");
         let p3 = dir.join("chimera_rollback_status_after_valid.json");
-        let status = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":true,\"state_file\":\"docs/runtime_state_latest.json\",\"network_state\":\"not_modified\"}";
-        let recover = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"recover\",\"state_existed\":true,\"state_file\":\"docs/runtime_state_latest.json\",\"network_state\":\"not_modified\"}";
-        let status_after = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":false,\"state_file\":\"docs/runtime_state_latest.json\",\"network_state\":\"not_modified\"}";
+        let status = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":true,\"state_file\":\"<redacted>\",\"state_file_state\":\"present\",\"network_state\":\"not_modified\"}";
+        let recover = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"recover\",\"state_existed\":true,\"state_file\":\"<redacted>\",\"state_file_state\":\"present\",\"network_state\":\"not_modified\"}";
+        let status_after = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":false,\"state_file\":\"<redacted>\",\"state_file_state\":\"missing\",\"network_state\":\"not_modified\"}";
 
         assert!(fs::write(&p1, status).is_ok());
         assert!(fs::write(&p2, recover).is_ok());
@@ -4995,9 +4995,9 @@ mod tests {
         let p1 = dir.join("chimera_rollback_status_invalid.json");
         let p2 = dir.join("chimera_rollback_recover_invalid.json");
         let p3 = dir.join("chimera_rollback_status_after_invalid.json");
-        let status = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":true,\"state_file\":\"docs/runtime_state_latest.json\",\"network_state\":\"not_modified\"}";
-        let bad_recover = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":true,\"state_file\":\"docs/runtime_state_latest.json\",\"network_state\":\"not_modified\"}";
-        let status_after = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":false,\"state_file\":\"docs/runtime_state_latest.json\",\"network_state\":\"not_modified\"}";
+        let status = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":true,\"state_file\":\"<redacted>\",\"state_file_state\":\"present\",\"network_state\":\"not_modified\"}";
+        let bad_recover = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":true,\"state_file\":\"<redacted>\",\"state_file_state\":\"present\",\"network_state\":\"not_modified\"}";
+        let status_after = "{\"status\":\"ok\",\"kind\":\"rollback\",\"action\":\"status\",\"state_existed\":false,\"state_file\":\"<redacted>\",\"state_file_state\":\"missing\",\"network_state\":\"not_modified\"}";
 
         assert!(fs::write(&p1, status).is_ok());
         assert!(fs::write(&p2, bad_recover).is_ok());
@@ -5055,9 +5055,8 @@ mod tests {
         let p1 = dir.join("chimera_doctor_valid.json");
         let p2 = dir.join("chimera_gateway_doctor_valid.json");
         let p3 = dir.join("chimera_lab_doctor_valid.json");
-        let d1 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"network_state\":\"not_modified\"}";
-        let d2 =
-            "{\"status\":\"ok\",\"kind\":\"gateway_doctor\",\"network_state\":\"not_modified\"}";
+        let d1 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"carrier_addr\":\"<redacted>\",\"carrier_endpoint_state\":\"configured\",\"network_state\":\"not_modified\"}";
+        let d2 = "{\"status\":\"ok\",\"kind\":\"gateway_doctor\",\"listen_addr\":\"<redacted>\",\"listen_state\":\"configured\",\"network_state\":\"not_modified\"}";
         let d3 = "{\"status\":\"ok\",\"kind\":\"lab_doctor\",\"network_state\":\"not_modified\"}";
         assert!(fs::write(&p1, d1).is_ok());
         assert!(fs::write(&p2, d2).is_ok());
@@ -5079,8 +5078,8 @@ mod tests {
         let p1 = dir.join("chimera_doctor_invalid.json");
         let p2 = dir.join("chimera_gateway_doctor_invalid.json");
         let p3 = dir.join("chimera_lab_doctor_invalid.json");
-        let d1 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"network_state\":\"not_modified\"}";
-        let d2 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"network_state\":\"not_modified\"}";
+        let d1 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"carrier_addr\":\"<redacted>\",\"carrier_endpoint_state\":\"configured\",\"network_state\":\"not_modified\"}";
+        let d2 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"listen_addr\":\"<redacted>\",\"listen_state\":\"configured\",\"network_state\":\"not_modified\"}";
         let d3 = "{\"status\":\"ok\",\"kind\":\"lab_doctor\",\"network_state\":\"not_modified\"}";
         assert!(fs::write(&p1, d1).is_ok());
         assert!(fs::write(&p2, d2).is_ok());
@@ -5094,6 +5093,38 @@ mod tests {
             (&path2, "gateway_doctor"),
             (&path3, "lab_doctor"),
         ]));
+    }
+
+    #[test]
+    fn doctor_artifacts_check_fails_for_raw_diagnostic_values() {
+        let dir = std::env::temp_dir();
+        let p1 = dir.join("chimera_doctor_raw_ip_invalid.json");
+        let p2 = dir.join("chimera_gateway_doctor_raw_secret_invalid.json");
+        let p3 = dir.join("chimera_lab_doctor_valid_for_raw_guard.json");
+        let d1 = "{\"status\":\"ok\",\"kind\":\"doctor\",\"carrier_addr\":\"203.0.113.10:443\",\"carrier_endpoint_state\":\"configured\",\"network_state\":\"not_modified\"}";
+        let d2 = "{\"status\":\"ok\",\"kind\":\"gateway_doctor\",\"listen_addr\":\"<redacted>\",\"listen_state\":\"configured\",\"token\":\"raw-token\",\"network_state\":\"not_modified\"}";
+        let d3 = "{\"status\":\"ok\",\"kind\":\"lab_doctor\",\"network_state\":\"not_modified\"}";
+        assert!(fs::write(&p1, d1).is_ok());
+        assert!(fs::write(&p2, d2).is_ok());
+        assert!(fs::write(&p3, d3).is_ok());
+
+        let path1 = p1.to_string_lossy().to_string();
+        let path2 = p2.to_string_lossy().to_string();
+        let path3 = p3.to_string_lossy().to_string();
+        assert!(!check_doctor_artifacts(&[
+            (&path1, "doctor"),
+            (&path2, "gateway_doctor"),
+            (&path3, "lab_doctor"),
+        ]));
+    }
+
+    #[test]
+    fn diag_export_artifact_check_fails_for_raw_json_secret() {
+        let path = std::env::temp_dir().join("chimera_diag_export_raw_secret_invalid.json");
+        let payload = "{\"status\":\"ok\",\"kind\":\"diag_export\",\"secrets\":\"<redacted>\",\"carrier_addr\":\"<redacted>\",\"carrier_server_name\":\"<redacted>\",\"token\":\"raw-token\",\"network_state\":\"not_modified\"}";
+        assert!(fs::write(&path, payload).is_ok());
+        let path_text = path.to_string_lossy().to_string();
+        assert!(!check_diag_export_artifact(&path_text));
     }
 
     #[test]

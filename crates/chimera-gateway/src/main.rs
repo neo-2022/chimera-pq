@@ -260,14 +260,24 @@ fn run_gateway_runtime(lang: Language, config: &GatewayConfig) -> Result<(), Str
         return Ok(());
     }
 
-    let listener = TcpListener::bind(&config.listen_addr)
-        .map_err(|error| format!("Не удалось выполнить bind {}: {error}", config.listen_addr))?;
+    let listener = TcpListener::bind(&config.listen_addr).map_err(|error| {
+        format!(
+            "Не удалось выполнить bind <redacted> listen_state={}: {error}",
+            listen_state(&config.listen_addr)
+        )
+    })?;
     listener
         .set_nonblocking(true)
         .map_err(|error| format!("Не удалось включить nonblocking: {error}"))?;
     match lang {
-        Language::En => println!("Gateway listener started on {}", config.listen_addr),
-        Language::Ru => println!("Слушатель gateway запущен на {}", config.listen_addr),
+        Language::En => println!(
+            "Gateway listener started on <redacted> listen_state={}",
+            listen_state(&config.listen_addr)
+        ),
+        Language::Ru => println!(
+            "Слушатель gateway запущен на <redacted> listen_state={}",
+            listen_state(&config.listen_addr)
+        ),
     }
 
     let run_once = std::env::var("CHIMERA_GATEWAY_RUN_ONCE").ok().as_deref() == Some("1");
@@ -277,10 +287,10 @@ fn run_gateway_runtime(lang: Language, config: &GatewayConfig) -> Result<(), Str
     let started_at = Instant::now();
     loop {
         match listener.accept() {
-            Ok((_stream, addr)) => {
+            Ok((_stream, _addr)) => {
                 match lang {
-                    Language::En => println!("Gateway accepted connection from {addr}"),
-                    Language::Ru => println!("Gateway принял соединение от {addr}"),
+                    Language::En => println!("Gateway accepted connection from <redacted>"),
+                    Language::Ru => println!("Gateway принял соединение от <redacted>"),
                 }
                 if run_once {
                     return Ok(());
@@ -308,7 +318,10 @@ fn render_gateway_plan(lang: Language, config: &GatewayConfig) -> String {
                 "Carrier: {}\n",
                 carrier_label(config.carrier_profile)
             ));
-            out.push_str(&format!("Listen target: {}\n", config.listen_addr));
+            out.push_str(&format!(
+                "Listen target: <redacted>, listen_state={}\n",
+                listen_state(&config.listen_addr)
+            ));
             out.push_str(&format!(
                 "Rekey limits: max age={} sec, max packets={}\n",
                 config.rekey.max_age_seconds, config.rekey.max_packets_per_key
@@ -322,7 +335,10 @@ fn render_gateway_plan(lang: Language, config: &GatewayConfig) -> String {
                 "Канал: {}\n",
                 carrier_label(config.carrier_profile)
             ));
-            out.push_str(&format!("Точка прослушивания: {}\n", config.listen_addr));
+            out.push_str(&format!(
+                "Точка прослушивания: <redacted>, listen_state={}\n",
+                listen_state(&config.listen_addr)
+            ));
             out.push_str(&format!(
                 "Лимиты смены ключа: макс. возраст={} сек, макс. пакетов={}\n",
                 config.rekey.max_age_seconds, config.rekey.max_packets_per_key
@@ -344,9 +360,9 @@ fn render_gateway_health(lang: Language, config: &GatewayConfig) -> String {
             out.push_str("  - Carrier profile: ok\n");
             out.push_str("  - Rekey policy: ok\n");
             out.push_str(&format!(
-                "Summary: carrier={}, listen={}, rekey_age={} sec, rekey_packets={}\n",
+                "Summary: carrier={}, listen=<redacted>, listen_state={}, rekey_age={} sec, rekey_packets={}\n",
                 carrier_label(config.carrier_profile),
-                config.listen_addr,
+                listen_state(&config.listen_addr),
                 config.rekey.max_age_seconds,
                 config.rekey.max_packets_per_key
             ));
@@ -359,9 +375,9 @@ fn render_gateway_health(lang: Language, config: &GatewayConfig) -> String {
             out.push_str("  - Профиль канала: в норме\n");
             out.push_str("  - Политика смены ключа: в норме\n");
             out.push_str(&format!(
-                "Сводка: канал={}, прослушивание={}, возраст_ключа={} сек, пакетов_на_ключ={}\n",
+                "Сводка: канал={}, прослушивание=<redacted>, listen_state={}, возраст_ключа={} сек, пакетов_на_ключ={}\n",
                 carrier_label(config.carrier_profile),
-                config.listen_addr,
+                listen_state(&config.listen_addr),
                 config.rekey.max_age_seconds,
                 config.rekey.max_packets_per_key
             ));
@@ -381,9 +397,9 @@ fn render_gateway_doctor(lang: Language, config: &GatewayConfig) -> String {
             out.push_str("  - Carrier profile: ok\n");
             out.push_str("  - Rekey policy: ok\n");
             out.push_str(&format!(
-                "Summary: carrier={}, listen={}, rekey_age={} sec, rekey_packets={}\n",
+                "Summary: carrier={}, listen=<redacted>, listen_state={}, rekey_age={} sec, rekey_packets={}\n",
                 carrier_label(config.carrier_profile),
-                config.listen_addr,
+                listen_state(&config.listen_addr),
                 config.rekey.max_age_seconds,
                 config.rekey.max_packets_per_key
             ));
@@ -397,9 +413,9 @@ fn render_gateway_doctor(lang: Language, config: &GatewayConfig) -> String {
             out.push_str("  - Профиль канала: в норме\n");
             out.push_str("  - Политика смены ключа: в норме\n");
             out.push_str(&format!(
-                "Сводка: канал={}, прослушивание={}, возраст_ключа={} сек, пакетов_на_ключ={}\n",
+                "Сводка: канал={}, прослушивание=<redacted>, listen_state={}, возраст_ключа={} сек, пакетов_на_ключ={}\n",
                 carrier_label(config.carrier_profile),
-                config.listen_addr,
+                listen_state(&config.listen_addr),
                 config.rekey.max_age_seconds,
                 config.rekey.max_packets_per_key
             ));
@@ -412,12 +428,27 @@ fn render_gateway_doctor(lang: Language, config: &GatewayConfig) -> String {
 
 fn render_gateway_doctor_json(config: &GatewayConfig) -> String {
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"gateway_doctor\",\"message_en\":\"Gateway doctor check is ready.\",\"message_ru\":\"Проверка gateway doctor готова.\",\"secrets\":\"<redacted>\",\"carrier_profile\":\"{}\",\"listen_addr\":\"{}\",\"rekey_max_age_sec\":{},\"rekey_max_packets\":{},\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"ok\",\"kind\":\"gateway_doctor\",\"message_en\":\"Gateway doctor check is ready.\",\"message_ru\":\"Проверка gateway doctor готова.\",\"secrets\":\"<redacted>\",\"carrier_profile\":\"{}\",\"listen_addr\":\"<redacted>\",\"listen_state\":\"{}\",\"rekey_max_age_sec\":{},\"rekey_max_packets\":{},\"network_state\":\"not_modified\"}}",
         carrier_label(config.carrier_profile),
-        config.listen_addr,
+        listen_state(&config.listen_addr),
         config.rekey.max_age_seconds,
         config.rekey.max_packets_per_key
     )
+}
+
+fn listen_state(listen_addr: &str) -> &'static str {
+    let value = listen_addr.trim();
+    if value.is_empty() {
+        return "unconfigured";
+    }
+    if value.starts_with("0.0.0.0:")
+        || value.starts_with("127.0.0.1:")
+        || value.starts_with("[::]:")
+        || value.starts_with("[::1]:")
+    {
+        return "local_or_wildcard";
+    }
+    "configured"
 }
 
 fn carrier_label(profile: ConfigCarrierProfile) -> &'static str {
@@ -493,7 +524,8 @@ mod tests {
         let rendered = render_gateway_plan(Language::En, &config);
         assert!(rendered.contains("Gateway plan: config accepted"));
         assert!(rendered.contains("Carrier: tls-tcp"));
-        assert!(rendered.contains("Listen target: 0.0.0.0:443"));
+        assert!(rendered.contains("Listen target: <redacted>, listen_state=local_or_wildcard"));
+        assert!(!rendered.contains("0.0.0.0:443"));
         assert!(rendered.contains("Listener: will be started by `run` command"));
     }
 
@@ -549,6 +581,8 @@ mod tests {
         let rendered = render_gateway_health(Language::Ru, &config);
         assert!(rendered.contains("Состояние gateway: в норме"));
         assert!(rendered.contains("канал=quic"));
+        assert!(rendered.contains("прослушивание=<redacted>, listen_state=local_or_wildcard"));
+        assert!(!rendered.contains("127.0.0.1:8443"));
         assert!(rendered.contains("Состояние сети: не изменялось"));
     }
 
@@ -586,5 +620,8 @@ mod tests {
         assert!(json.contains("\"message_ru\":\"Проверка gateway doctor готова.\""));
         assert!(json.contains("\"secrets\":\"<redacted>\""));
         assert!(json.contains("\"carrier_profile\":\"tls-tcp\""));
+        assert!(json.contains("\"listen_addr\":\"<redacted>\""));
+        assert!(json.contains("\"listen_state\":\"local_or_wildcard\""));
+        assert!(!json.contains("0.0.0.0:443"));
     }
 }

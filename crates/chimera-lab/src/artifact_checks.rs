@@ -72,8 +72,10 @@ pub(crate) fn check_rollback_json_artifacts(paths: &[(&str, &str, bool)]) -> boo
             && content.contains("\"kind\":\"rollback\"")
             && content.contains(&format!("\"action\":\"{expected_action}\""))
             && content.contains(&format!("\"state_existed\":{expected_state_existed}"))
-            && content.contains("\"state_file\":\"")
-            && content.contains("\"network_state\":\"not_modified\""))
+            && content.contains("\"state_file\":\"<redacted>\"")
+            && content.contains("\"state_file_state\":\"")
+            && content.contains("\"network_state\":\"not_modified\"")
+            && !contains_raw_diagnostic_value(&content))
         {
             return false;
         }
@@ -115,7 +117,9 @@ pub(crate) fn check_doctor_artifacts(paths: &[(&str, &str)]) -> bool {
         };
         if !(content.contains("\"status\":\"ok\"")
             && content.contains(&format!("\"kind\":\"{expected_kind}\""))
-            && content.contains("\"network_state\":\"not_modified\""))
+            && content.contains("\"network_state\":\"not_modified\"")
+            && doctor_redaction_contract_ok(&content, expected_kind)
+            && !contains_raw_diagnostic_value(&content))
         {
             return false;
         }
@@ -145,8 +149,119 @@ pub(crate) fn check_diag_export_artifact(path: &str) -> bool {
     content.contains("\"status\":\"ok\"")
         && content.contains("\"kind\":\"diag_export\"")
         && content.contains("\"secrets\":\"<redacted>\"")
-        && !content.to_ascii_lowercase().contains("password")
-        && !content.to_ascii_lowercase().contains("private_key")
+        && content.contains("\"carrier_addr\":\"<redacted>\"")
+        && content.contains("\"carrier_server_name\":\"<redacted>\"")
+        && !contains_raw_diagnostic_value(&content)
+}
+
+fn contains_raw_diagnostic_value(content: &str) -> bool {
+    let lower = content.to_ascii_lowercase();
+    contains_ipv4_literal(&lower)
+        || lower.contains("/home/")
+        || lower.contains("gateway.local")
+        || lower.contains("node.example")
+        || lower.contains("localhost:")
+        || lower.contains("[::")
+        || contains_unredacted_sensitive_assignment(&lower)
+}
+
+fn doctor_redaction_contract_ok(content: &str, expected_kind: &str) -> bool {
+    match expected_kind {
+        "doctor" => {
+            content.contains("\"carrier_addr\":\"<redacted>\"")
+                && content.contains("\"carrier_endpoint_state\":\"")
+        }
+        "gateway_doctor" => {
+            content.contains("\"listen_addr\":\"<redacted>\"")
+                && content.contains("\"listen_state\":\"")
+        }
+        _ => true,
+    }
+}
+
+fn contains_ipv4_literal(content: &str) -> bool {
+    content
+        .split(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .any(is_ipv4_literal)
+}
+
+fn is_ipv4_literal(token: &str) -> bool {
+    let mut parts = token.split('.');
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if !is_ipv4_octet(first) {
+        return false;
+    }
+    for _ in 0..3 {
+        let Some(part) = parts.next() else {
+            return false;
+        };
+        if !is_ipv4_octet(part) {
+            return false;
+        }
+    }
+    parts.next().is_none()
+}
+
+fn is_ipv4_octet(part: &str) -> bool {
+    !part.is_empty() && part.len() <= 3 && part.parse::<u8>().is_ok()
+}
+
+fn contains_unredacted_sensitive_assignment(content: &str) -> bool {
+    const KEYS: &[&str] = &[
+        "password",
+        "pass",
+        "token",
+        "secret",
+        "private_key",
+        "privatekey",
+        "authorization",
+    ];
+    KEYS.iter()
+        .any(|key| contains_unredacted_assignment_for_key(content, key))
+}
+
+fn contains_unredacted_assignment_for_key(content: &str, key: &str) -> bool {
+    let mut search_from = 0;
+    while let Some(relative) = content[search_from..].find(key) {
+        let start = search_from + relative;
+        let end = start + key.len();
+        search_from = end;
+        if !has_key_boundary(content, start, end) {
+            continue;
+        }
+        let mut rest = &content[end..];
+        rest = rest.trim_start();
+        if rest.starts_with('"') {
+            rest = rest[1..].trim_start();
+        }
+        if !(rest.starts_with('=') || rest.starts_with(':')) {
+            continue;
+        }
+        rest = rest[1..].trim_start();
+        if rest.starts_with("<redacted>")
+            || rest.starts_with("\"<redacted>\"")
+            || rest.starts_with("'<redacted>'")
+            || rest.starts_with("bearer <redacted>")
+        {
+            continue;
+        }
+        if !rest.is_empty() {
+            return true;
+        }
+    }
+    false
+}
+
+fn has_key_boundary(content: &str, start: usize, end: usize) -> bool {
+    let before = content[..start].chars().next_back();
+    let after = content[end..].chars().next();
+    !before.is_some_and(is_key_char) && !after.is_some_and(is_key_char)
+}
+
+fn is_key_char(value: char) -> bool {
+    value.is_ascii_alphanumeric() || value == '_'
 }
 
 pub(crate) fn check_json_bilingual_message_fields(paths: &[&str]) -> bool {

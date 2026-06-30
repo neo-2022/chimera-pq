@@ -2462,6 +2462,7 @@ mvp-check:
     just client-doctor
     just gateway-doctor
     just lab-doctor
+    bash scripts/chimera_doctor_contract_smoke.sh
     just mvp-spec-check
     just mvp-spec-report
     just cef-track-report

@@ -22,6 +22,7 @@ use chimera_policy::{
 };
 use chimera_session::{RekeyPolicy, RekeyReason, RekeyState};
 
+mod diagnostic_redaction;
 mod mesh_cli;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2098,10 +2099,15 @@ fn render_status_runtime_profile(
                 "Carrier profile: {}\n",
                 carrier_profile_label_en(options.carrier_profile)
             ));
-            out.push_str(&format!("Carrier target: {}\n", options.carrier_addr));
             out.push_str(&format!(
-                "Carrier server name: {}\n",
-                options.carrier_server_name
+                "Carrier target: {}, target_state={}\n",
+                diagnostic_redaction::redacted_endpoint(),
+                diagnostic_redaction::endpoint_state(&options.carrier_addr)
+            ));
+            out.push_str(&format!(
+                "Carrier server name: {}, server_name_state={}\n",
+                diagnostic_redaction::redacted_server_name(),
+                diagnostic_redaction::server_name_state(&options.carrier_server_name)
             ));
         }
         Language::Ru => {
@@ -2118,10 +2124,15 @@ fn render_status_runtime_profile(
                 "Профиль carrier: {}\n",
                 carrier_profile_label_ru(options.carrier_profile)
             ));
-            out.push_str(&format!("Цель carrier: {}\n", options.carrier_addr));
             out.push_str(&format!(
-                "Имя сервера carrier: {}\n",
-                options.carrier_server_name
+                "Цель carrier: {}, target_state={}\n",
+                diagnostic_redaction::redacted_endpoint(),
+                diagnostic_redaction::endpoint_state(&options.carrier_addr)
+            ));
+            out.push_str(&format!(
+                "Имя сервера carrier: {}, server_name_state={}\n",
+                diagnostic_redaction::redacted_server_name(),
+                diagnostic_redaction::server_name_state(&options.carrier_server_name)
             ));
         }
     }
@@ -2522,13 +2533,15 @@ fn render_diag_export_json(
         "fail_closed"
     };
     format!(
-        "{{\"status\":\"{}\",\"kind\":\"diag_export\",\"message_en\":\"Diagnostic export is ready.\",\"message_ru\":\"Экспорт диагностики готов.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"{}\",\"kind\":\"diag_export\",\"message_en\":\"Diagnostic export is ready.\",\"message_ru\":\"Экспорт диагностики готов.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_endpoint_state\":\"{}\",\"carrier_server_name\":\"{}\",\"carrier_server_name_state\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
         report_status,
         capture_mode_label_en(capture_plan.mode),
-        capture_plan.reason,
+        escape_json(&capture_plan.reason),
         carrier_profile_label_en(status.carrier_profile),
-        status.carrier_addr,
-        status.carrier_server_name,
+        diagnostic_redaction::redacted_endpoint(),
+        diagnostic_redaction::endpoint_state(&status.carrier_addr),
+        diagnostic_redaction::redacted_server_name(),
+        diagnostic_redaction::server_name_state(&status.carrier_server_name),
         status.mock_age_seconds,
         status.mock_packets,
         rekey_reason.is_some(),
@@ -2610,10 +2623,11 @@ fn render_health_block(
                 if ready { "ok" } else { "fail-closed" }
             ));
             out.push_str(&format!(
-                "Summary: capture={}, carrier={}, target={}\n",
+                "Summary: capture={}, carrier={}, target={}, target_state={}\n",
                 capture_mode_label_en(capture_plan.mode),
                 carrier_profile_label_en(options.carrier_profile),
-                options.carrier_addr
+                diagnostic_redaction::redacted_endpoint(),
+                diagnostic_redaction::endpoint_state(&options.carrier_addr)
             ));
             if !ready {
                 out.push_str(&format!(
@@ -2638,10 +2652,11 @@ fn render_health_block(
                 if ready { "ok" } else { "fail-closed" }
             ));
             out.push_str(&format!(
-                "Сводка: capture={}, carrier={}, target={}\n",
+                "Сводка: capture={}, carrier={}, target={}, target_state={}\n",
                 capture_mode_label_ru(capture_plan.mode),
                 carrier_profile_label_ru(options.carrier_profile),
-                options.carrier_addr
+                diagnostic_redaction::redacted_endpoint(),
+                diagnostic_redaction::endpoint_state(&options.carrier_addr)
             ));
             if !ready {
                 out.push_str(&format!(
@@ -2679,10 +2694,11 @@ fn render_doctor_block(
                 if ready { "ok" } else { "fail-closed" }
             ));
             out.push_str(&format!(
-                "Summary: capture={}, carrier={}, target={}\n",
+                "Summary: capture={}, carrier={}, target={}, target_state={}\n",
                 capture_mode_label_en(capture_plan.mode),
                 carrier_profile_label_en(options.carrier_profile),
-                options.carrier_addr
+                diagnostic_redaction::redacted_endpoint(),
+                diagnostic_redaction::endpoint_state(&options.carrier_addr)
             ));
             if !ready {
                 out.push_str(&format!(
@@ -2709,10 +2725,11 @@ fn render_doctor_block(
                 if ready { "ok" } else { "fail-closed" }
             ));
             out.push_str(&format!(
-                "Сводка: capture={}, carrier={}, target={}\n",
+                "Сводка: capture={}, carrier={}, target={}, target_state={}\n",
                 capture_mode_label_ru(capture_plan.mode),
                 carrier_profile_label_ru(options.carrier_profile),
-                options.carrier_addr
+                diagnostic_redaction::redacted_endpoint(),
+                diagnostic_redaction::endpoint_state(&options.carrier_addr)
             ));
             if !ready {
                 out.push_str(&format!(
@@ -2744,12 +2761,13 @@ fn render_doctor_json(
         "fail_closed"
     };
     format!(
-        "{{\"status\":\"{}\",\"kind\":\"doctor\",\"message_en\":\"Doctor check is ready.\",\"message_ru\":\"Проверка doctor готова.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"{}\",\"kind\":\"doctor\",\"message_en\":\"Doctor check is ready.\",\"message_ru\":\"Проверка doctor готова.\",\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_endpoint_state\":\"{}\",\"session_age_sec\":{},\"packets\":{},\"rekey_required\":{},\"rekey_reason\":\"{}\",\"network_state\":\"not_modified\"}}",
         report_status,
         capture_mode_label_en(capture_plan.mode),
         escape_json(&capture_plan.reason),
         carrier_profile_label_en(status.carrier_profile),
-        status.carrier_addr,
+        diagnostic_redaction::redacted_endpoint(),
+        diagnostic_redaction::endpoint_state(&status.carrier_addr),
         status.mock_age_seconds,
         status.mock_packets,
         rekey_reason.is_some(),
@@ -3374,8 +3392,8 @@ fn build_up_runtime_state(options: &UpDownOptions) -> Result<UpRuntimeState, Str
 fn probe_carrier_reachability(status: &StatusOptions) -> Result<(), String> {
     if is_self_loop_carrier_target(&status.carrier_addr)? {
         return Err(format!(
-            "carrier target '{}' matches local host address (self-loop blocked)",
-            status.carrier_addr
+            "carrier target <redacted> target_state={} matches local host address (self-loop blocked)",
+            diagnostic_redaction::endpoint_state(&status.carrier_addr)
         ));
     }
     match status.carrier_profile {
@@ -3385,7 +3403,10 @@ fn probe_carrier_reachability(status: &StatusOptions) -> Result<(), String> {
             TcpStream::connect_timeout(&target, Duration::from_millis(1500))
                 .map(|_| ())
                 .map_err(|error| {
-                    format!("carrier tcp reachability check failed for {target}: {error}")
+                    format!(
+                        "carrier tcp reachability check failed for <redacted> target_state={}: {error}",
+                        diagnostic_redaction::endpoint_state(&status.carrier_addr)
+                    )
                 })
         }
         CarrierProfile::Quic => {
@@ -3393,7 +3414,10 @@ fn probe_carrier_reachability(status: &StatusOptions) -> Result<(), String> {
             let socket = UdpSocket::bind("0.0.0.0:0")
                 .map_err(|error| format!("udp bind failed: {error}"))?;
             socket.connect(target).map_err(|error| {
-                format!("carrier udp reachability check failed for {target}: {error}")
+                format!(
+                    "carrier udp reachability check failed for <redacted> target_state={}: {error}",
+                    diagnostic_redaction::endpoint_state(&status.carrier_addr)
+                )
             })
         }
     }
@@ -3430,9 +3454,19 @@ fn is_self_loop_carrier_target(carrier_addr: &str) -> Result<bool, String> {
 
 fn resolve_first_socket_addr(addr: &str) -> Result<SocketAddr, String> {
     addr.to_socket_addrs()
-        .map_err(|error| format!("carrier address resolve failed for {addr}: {error}"))?
+        .map_err(|error| {
+            format!(
+                "carrier address resolve failed for <redacted> target_state={}: {error}",
+                diagnostic_redaction::endpoint_state(addr)
+            )
+        })?
         .next()
-        .ok_or_else(|| format!("carrier address has no resolved endpoints: {addr}"))
+        .ok_or_else(|| {
+            format!(
+                "carrier address has no resolved endpoints: <redacted> target_state={}",
+                diagnostic_redaction::endpoint_state(addr)
+            )
+        })
 }
 
 fn apply_tun_interface(
@@ -4292,14 +4326,14 @@ fn rollback_state_details(state_path: &Path) -> RollbackStateDetails {
 fn render_rollback_json(
     action: &str,
     state_existed: bool,
-    state_path: &str,
+    _state_path: &str,
     details: &RollbackStateDetails,
 ) -> String {
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"rollback\",\"message_en\":\"Rollback action completed.\",\"message_ru\":\"Действие rollback завершено.\",\"action\":\"{}\",\"state_existed\":{},\"state_file\":\"{}\",\"network_state\":\"{}\",\"tun_applied\":{},\"route_applied\":{},\"dns_applied\":{}}}",
+        "{{\"status\":\"ok\",\"kind\":\"rollback\",\"message_en\":\"Rollback action completed.\",\"message_ru\":\"Действие rollback завершено.\",\"action\":\"{}\",\"state_existed\":{},\"state_file\":\"<redacted>\",\"state_file_state\":\"{}\",\"network_state\":\"{}\",\"tun_applied\":{},\"route_applied\":{},\"dns_applied\":{}}}",
         action,
         state_existed,
-        state_path,
+        if state_existed { "present" } else { "missing" },
         details.network_state,
         details.tun_applied,
         details.route_applied,
@@ -4315,10 +4349,10 @@ mod tests {
         down_command, lab_command, mesh_command, parse_diag_export_options, parse_doctor_options,
         parse_language_flag, parse_mesh_route_explain_options, parse_rollback_options,
         parse_route_explain_options, parse_status_options, parse_up_down_options, probe_command,
-        render_diag_export_json, render_diag_rekey_block, render_doctor_json, render_health_block,
-        render_help_text, render_policy_validate_block, render_route_explain_block,
-        render_route_explain_json, render_status_rekey_block, rollback_command, route_command,
-        up_command,
+        render_diag_export_json, render_diag_rekey_block, render_doctor_block, render_doctor_json,
+        render_health_block, render_help_text, render_policy_validate_block,
+        render_route_explain_block, render_route_explain_json, render_status_rekey_block,
+        rollback_command, route_command, up_command,
     };
     use chimera_policy::{
         FlowContext, OutboundMode, Policy, PolicySummary, Protocol, RouteDecision,
@@ -4457,6 +4491,30 @@ mod tests {
         assert_eq!(parsed.carrier_profile, CarrierProfile::Quic);
         assert_eq!(parsed.carrier_addr, "198.51.100.10:9443");
         assert_eq!(parsed.carrier_server_name, "gw.example.org");
+    }
+
+    #[test]
+    fn status_runtime_profile_redacts_carrier_endpoint_and_server_name() {
+        let options = StatusOptions {
+            config_path: None,
+            mock_packets: 2,
+            mock_age_seconds: 10,
+            max_age_seconds: 300,
+            max_packets_per_key: 10_000,
+            capture_preference: CapturePreference::Tun,
+            tun_supported: true,
+            carrier_profile: CarrierProfile::Tls,
+            carrier_addr: "198.51.100.10:9443".to_string(),
+            carrier_server_name: "gw.example.org".to_string(),
+        };
+        let plan = crate::status_capture_plan(&options);
+        let rendered = crate::render_status_runtime_profile(Language::En, &options, &plan);
+        assert!(rendered.contains("Carrier target: <redacted>, target_state=placeholder"));
+        assert!(
+            rendered.contains("Carrier server name: <redacted>, server_name_state=placeholder")
+        );
+        assert!(!rendered.contains("198.51.100.10:9443"));
+        assert!(!rendered.contains("gw.example.org"));
     }
 
     #[test]
@@ -4845,7 +4903,30 @@ mod tests {
         let rendered = render_health_block(Language::Ru, &options, &plan);
         assert!(rendered.contains("Проверка клиента: ok"));
         assert!(rendered.contains("capture=tun, carrier=tls-tcp"));
+        assert!(rendered.contains("target=<redacted>, target_state=placeholder"));
+        assert!(!rendered.contains("203.0.113.10:443"));
         assert!(rendered.contains("Состояние сети: не изменялось"));
+    }
+
+    #[test]
+    fn doctor_text_render_redacts_carrier_endpoint() {
+        let options = StatusOptions {
+            config_path: None,
+            mock_packets: 1,
+            mock_age_seconds: 120,
+            max_age_seconds: 300,
+            max_packets_per_key: 10_000,
+            capture_preference: CapturePreference::Tun,
+            tun_supported: true,
+            carrier_profile: CarrierProfile::Tls,
+            carrier_addr: "198.51.100.10:443".to_string(),
+            carrier_server_name: crate::DEFAULT_CARRIER_SERVER_NAME.to_string(),
+        };
+        let plan = crate::status_capture_plan(&options);
+        let rendered = render_doctor_block(Language::En, &options, &plan, None);
+        assert!(rendered.contains("Doctor report: ok"));
+        assert!(rendered.contains("target=<redacted>, target_state=placeholder"));
+        assert!(!rendered.contains("198.51.100.10:443"));
     }
 
     #[test]
@@ -5825,6 +5906,9 @@ yt = exact:www.youtube.com => direct\n";
         assert!(report.contains("\"message_ru\":\"Действие rollback завершено.\""));
         assert!(report.contains("\"action\":\"status\""));
         assert!(report.contains("\"state_existed\":true"));
+        assert!(report.contains("\"state_file\":\"<redacted>\""));
+        assert!(report.contains("\"state_file_state\":\"present\""));
+        assert!(!report.contains(&state_text));
 
         let clean_args = vec![
             "clean".to_string(),
@@ -5862,6 +5946,8 @@ yt = exact:www.youtube.com => direct\n";
         let report = std::fs::read_to_string(&out_text).unwrap_or_default();
         assert!(report.contains("\"network_state\":\"modified\""));
         assert!(report.contains("\"dns_applied\":true"));
+        assert!(report.contains("\"state_file\":\"<redacted>\""));
+        assert!(!report.contains(&state_text));
 
         let _ = std::fs::remove_file(state_text);
         let _ = std::fs::remove_file(out_text);
@@ -5931,6 +6017,12 @@ yt = exact:www.youtube.com => direct\n";
         let plan = crate::status_capture_plan(&status);
         let json = render_diag_export_json(&status, &plan, Some(RekeyReason::PacketLimitExceeded));
         assert!(json.contains("\"secrets\":\"<redacted>\""));
+        assert!(json.contains("\"carrier_addr\":\"<redacted>\""));
+        assert!(json.contains("\"carrier_server_name\":\"<redacted>\""));
+        assert!(json.contains("\"carrier_endpoint_state\":\"placeholder\""));
+        assert!(json.contains("\"carrier_server_name_state\":\"placeholder\""));
+        assert!(!json.contains(crate::DEFAULT_CARRIER_ADDR));
+        assert!(!json.contains(crate::DEFAULT_CARRIER_SERVER_NAME));
         assert!(json.contains("\"kind\":\"diag_export\""));
         assert!(json.contains("\"message_en\":\"Diagnostic export is ready.\""));
         assert!(json.contains("\"message_ru\":\"Экспорт диагностики готов.\""));
@@ -5958,6 +6050,9 @@ yt = exact:www.youtube.com => direct\n";
         assert!(json.contains("\"message_en\":\"Doctor check is ready.\""));
         assert!(json.contains("\"message_ru\":\"Проверка doctor готова.\""));
         assert!(json.contains("\"secrets\":\"<redacted>\""));
+        assert!(json.contains("\"carrier_addr\":\"<redacted>\""));
+        assert!(json.contains("\"carrier_endpoint_state\":\"placeholder\""));
+        assert!(!json.contains(crate::DEFAULT_CARRIER_ADDR));
         assert!(json.contains("\"rekey_reason\":\"session_age_exceeded\""));
     }
 

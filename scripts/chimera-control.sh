@@ -1984,17 +1984,38 @@ services_running() {
   ps -eo comm= 2>/dev/null | awk 'NF {print}' | sort -u
 }
 
+redact_diagnostic_stream() {
+  sed -E \
+    -e 's#([A-Za-z0-9._%+-]+://)[^[:space:]"'"'"'<>]+#\1<redacted>#g' \
+    -e 's#([Aa]uthorization:[[:space:]]*[Bb]earer)[[:space:]]+[^[:space:]"'"'"'<>]+#\1 <redacted>#g' \
+    -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*=[[:space:]]*([^[:space:]"'"'"']+)#\1=<redacted>#g' \
+    -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*=[[:space:]]*("([^"]*)"|'\''([^'\'']*)'\'')#\1=<redacted>#g' \
+    -e 's#([Pp]ass(word)?|TOKEN|Token|token|SECRET|Secret|secret|PRIVATE_KEY|PrivateKey|private_key)[[:space:]]*:[[:space:]]*([^[:space:]"'"'"']+)#\1:<redacted>#g' \
+    -e 's#(CHIMERA_[A-Za-z0-9_]*(TOKEN|SECRET|PRIVATE_KEY|PASSWORD)[A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*([^[:space:]"'"'"']+)#\1=<redacted>#g' \
+    -e 's#(CHIMERA_[A-Za-z0-9_]*(TOKEN|SECRET|PRIVATE_KEY|PASSWORD)[A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*("([^"]*)"|'\''([^'\'']*)'\'')#\1=<redacted>#g' \
+    -e 's#(endpoint|carrier_addr|carrier_server_name|server_name|listen_addr|server|target|listen|remote|host)[[:space:]]*=[[:space:]]*([^[:space:]"'"'"']+)#\1=<redacted>#Ig' \
+    -e 's#"(endpoint|carrier_addr|carrier_server_name|server|target|listen|listen_addr|remote|host)"[[:space:]]*:[[:space:]]*"[^"]*"#"\1":"<redacted>"#Ig' \
+    -e 's#"(password|token|secret|private_key|privateKey)"[[:space:]]*:[[:space:]]*"[^"]*"#"\1":"<redacted>"#Ig' \
+    -e 's#\[[0-9A-Fa-f:]{2,}\](:[0-9]{1,5})?#<redacted-ip>#g' \
+    -e 's#[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]{1,5})?#<redacted-ip>#g' \
+    -e 's#([A-Za-z0-9._-]+\.)+[A-Za-z]{2,}(:[0-9]{1,5})?#<redacted-host>#g' \
+    -e 's#(/home/)[^/[:space:]]+#\1<redacted-user>#g'
+}
+
 logs_tail() {
   local lines="${1:-200}"
   if ! [[ "$lines" =~ ^[0-9]+$ ]]; then
     lines=200
   fi
-  echo "=== node log: $GATEWAY_LOG ==="
-  tail -n "$lines" "$GATEWAY_LOG" 2>/dev/null || true
-  echo "=== transparent-runtime log: $CLIENT_LOG ==="
-  tail -n "$lines" "$CLIENT_LOG" 2>/dev/null || true
-  echo "=== autofix log: $AUTOFIX_LOG_FILE ==="
-  tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null || true
+  echo "=== node log: <redacted> ==="
+  echo "node_log_path_state=present"
+  tail -n "$lines" "$GATEWAY_LOG" 2>/dev/null | redact_diagnostic_stream || true
+  echo "=== transparent-runtime log: <redacted> ==="
+  echo "transparent_runtime_log_path_state=present"
+  tail -n "$lines" "$CLIENT_LOG" 2>/dev/null | redact_diagnostic_stream || true
+  echo "=== autofix log: <redacted> ==="
+  echo "autofix_log_path_state=present"
+  tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null | redact_diagnostic_stream || true
 }
 
 write_doctor_fail_json() {
@@ -2172,10 +2193,11 @@ runtime_status() {
   route_mode="$(read_route_mode)"
   split_mode="$(read_split_list_mode)"
   watch_status="$(site_auto_watch_status)"
-  echo "runtime_root=$ROOT_DIR"
+  echo "runtime_root=<redacted>"
+  echo "runtime_root_state=present"
   echo "node_service_state=$gateway_state"
   echo "transparent_runtime_service_state=$client_state"
-  echo "peer_egress_state_file=$(peer_egress_state_path)"
+  echo "peer_egress_state_file=<redacted>"
   echo "$watch_status"
   if [[ "$gateway_state" == "active" ]]; then
     echo "node_runtime=running"
@@ -2217,21 +2239,27 @@ runtime_status() {
     echo "client_config_ready=false"
   fi
   if [[ -f "$STATE_FILE" ]]; then
-    echo "state_file=$STATE_FILE"
+    echo "state_file=<redacted>"
+    echo "state_file_state=present"
     awk -F= '
-      /^carrier\.addr[[:space:]]*=/ { print "carrier_addr=" $2 }
-      /^selected_node[[:space:]]*=/ { print "selected_node=" $2 }
-      /^mesh_node[[:space:]]*=/ { print "mesh_node=" $2 }
+      /^carrier\.addr[[:space:]]*=/ { print "carrier_addr=<redacted>"; print "carrier_addr_state=present" }
+      /^selected_node[[:space:]]*=/ { print "selected_node=<redacted>"; print "selected_node_state=present" }
+      /^mesh_node[[:space:]]*=/ { print "mesh_node=<redacted>"; print "mesh_node_state=present" }
       /^autoconnect[[:space:]]*=/ { print "autoconnect=" $2 }
     ' "$STATE_FILE" 2>/dev/null || true
+  else
+    echo "state_file_state=missing"
   fi
   if [[ -f "$(peer_egress_state_path)" ]]; then
-    echo "peer_egress_state=$(peer_egress_state_path)"
+    echo "peer_egress_state=<redacted>"
+    echo "peer_egress_state_file_state=present"
     awk -F= '
-      /^resolved_local_listen[[:space:]]*=/ { print "peer_egress_resolved_local_listen=" $2 }
-      /^resolved_peer_listen[[:space:]]*=/ { print "peer_egress_resolved_peer_listen=" $2 }
+      /^resolved_local_listen[[:space:]]*=/ { print "peer_egress_resolved_local_listen=<redacted>"; print "peer_egress_resolved_local_listen_state=present" }
+      /^resolved_peer_listen[[:space:]]*=/ { print "peer_egress_resolved_peer_listen=<redacted>"; print "peer_egress_resolved_peer_listen_state=present" }
       /^mode[[:space:]]*=/ { print "peer_egress_mode=" $2 }
     ' "$(peer_egress_state_path)" 2>/dev/null || true
+  else
+    echo "peer_egress_state_file_state=missing"
   fi
 }
 
