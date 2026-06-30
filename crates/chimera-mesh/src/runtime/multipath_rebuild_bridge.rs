@@ -42,7 +42,7 @@ impl MeshRuntime {
         remove_multipath_rebuild_explain(&mut plan.explain);
 
         if decision.rebuild_allowed {
-            let mode = plan.multipath_schedule.mode.clone();
+            let mode = plan.multipath_schedule.mode;
             let route_binding_id = plan.multipath_schedule.route_binding_id;
             let demand = current_schedule_demand(&plan.multipath_schedule)?;
             replace_multipath_schedule(plan, mode, route_binding_id, demand)?;
@@ -66,7 +66,7 @@ impl MeshRuntime {
         if decision.rebuild_allowed {
             let route_binding_id = plan.multipath_schedule.route_binding_id;
             let mut rebuilt = self.plan_path(request, planning_policy)?;
-            let mode = rebuilt.multipath_schedule.mode.clone();
+            let mode = rebuilt.multipath_schedule.mode;
             let demand = current_schedule_demand(&rebuilt.multipath_schedule)?;
             replace_multipath_schedule(&mut rebuilt, mode, route_binding_id, demand)?;
             *plan = rebuilt;
@@ -118,7 +118,7 @@ impl MeshRuntime {
         let decision = self.evaluate_multipath_rebuild(signal, policy)?;
 
         if decision.rebuild_allowed {
-            let mode = plan.multipath_schedule.mode.clone();
+            let mode = plan.multipath_schedule.mode;
             let route_binding_id = plan.multipath_schedule.route_binding_id;
             let demand = current_schedule_demand(&plan.multipath_schedule)?;
             replace_multipath_schedule_core(plan, mode, route_binding_id, demand)?;
@@ -140,7 +140,7 @@ impl MeshRuntime {
         if decision.rebuild_allowed {
             let route_binding_id = plan.multipath_schedule.route_binding_id;
             let mut rebuilt = self.plan_path_core(request, planning_policy)?;
-            let mode = rebuilt.multipath_schedule.mode.clone();
+            let mode = rebuilt.multipath_schedule.mode;
             let demand = current_schedule_demand(&rebuilt.multipath_schedule)?;
             replace_multipath_schedule_core(&mut rebuilt, mode, route_binding_id, demand)?;
             *plan = rebuilt;

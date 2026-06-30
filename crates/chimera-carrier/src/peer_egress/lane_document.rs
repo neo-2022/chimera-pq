@@ -135,8 +135,8 @@ fn transit_lane_registration_from_mesh_lane(
 ) -> Result<TransitLaneRegistration, String> {
     TransitLaneRegistration::new_with_lane_plan(
         transit_path_binding_from_mesh_lane(binding)?,
-        binding.carrier_endpoint.clone(),
-        Some(binding.role.clone()),
+        &binding.carrier_endpoint,
+        Some(binding.role),
         Some(binding.weight_pct),
         Some(binding.capacity_weight_pct),
     )

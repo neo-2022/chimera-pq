@@ -19,8 +19,8 @@ use crate::peer_egress::wire::{PeerMessage, read_peer_message};
 
 fn registrations() -> Result<Vec<TransitLaneRegistration>, String> {
     Ok(vec![
-        TransitLaneRegistration::new(binding(91, 1), "198.51.100.91:443".to_string())?,
-        TransitLaneRegistration::new(binding(91, 2), "198.51.100.92:443".to_string())?,
+        TransitLaneRegistration::new(binding(91, 1), "198.51.100.91:443")?,
+        TransitLaneRegistration::new(binding(91, 2), "198.51.100.92:443")?,
     ])
 }
 
@@ -188,7 +188,7 @@ fn planned_local_ingress_selection_dispatches_selected_lane() -> Result<(), Stri
     let fin_encoded = encoded_frame(FrameKind::Fin, 812, b"");
     let registrations = vec![TransitLaneRegistration::new(
         binding(94, 4),
-        "198.51.100.94:443".to_string(),
+        "198.51.100.94:443",
     )?];
     let first_byte = first_encoded[0];
     local_writer

@@ -92,7 +92,7 @@ fn local_client_uses_binding_backed_dispatcher_when_registrations_exist() -> Res
     let (selected_peer_writer, mut selected_peer_reader) = test_peer_pair()?;
     let registrations = vec![TransitLaneRegistration::new(
         binding(301, 4),
-        "198.51.100.44:443".to_string(),
+        "198.51.100.44:443",
     )?];
     let dispatcher = new_shared_transit_dispatcher();
     dispatcher.register(binding(301, 4), selected_peer_writer)?;
@@ -154,7 +154,7 @@ fn local_client_fails_closed_when_reload_selects_new_binding() -> Result<(), Str
     let (old_peer_writer, mut old_peer_reader) = test_peer_pair()?;
     let registrations = vec![TransitLaneRegistration::new(
         binding(302, 5),
-        "198.51.100.45:443".to_string(),
+        "198.51.100.45:443",
     )?];
     let dispatcher = new_shared_transit_dispatcher();
     dispatcher.register(binding(301, 4), old_peer_writer)?;

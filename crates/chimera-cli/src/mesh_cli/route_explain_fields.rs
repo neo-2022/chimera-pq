@@ -226,7 +226,7 @@ pub(crate) fn collect_mesh_route_explain_fields(
         contract_version: render.contract_version.to_string(),
         namespace: render.options.namespace.clone(),
         node_name: public_diagnostic_node_label(&render.options.node_name),
-        join_mode: render.initial.join_mode.clone(),
+        join_mode: render.initial.join_mode,
         initial_selected,
         failover_selected: render.failover_selected.to_string(),
         cooldown_selected: render.cooldown_selected.to_string(),

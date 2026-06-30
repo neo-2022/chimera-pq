@@ -86,10 +86,10 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
     let transit_limits = options.transit_relay_limits();
     if reverse_connect {
         let peer_pool = new_shared_pool();
-        let r_pool = peer_pool.clone();
-        let r_token = token.clone();
-        let r_dispatcher = transit_dispatcher.clone();
-        let r_aggregate_ingress = aggregate_ingress.clone();
+        let r_pool = peer_pool;
+        let r_token = token;
+        let r_dispatcher = transit_dispatcher;
+        let r_aggregate_ingress = aggregate_ingress;
         let r_transit_limits = transit_limits;
         thread::spawn(move || {
             for incoming in peer_listener.incoming() {

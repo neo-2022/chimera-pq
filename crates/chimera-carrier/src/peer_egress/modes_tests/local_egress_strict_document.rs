@@ -15,7 +15,7 @@ fn local_client_rejects_registration_only_lane_document() -> Result<(), String> 
     let document = TransitLaneDocument::new(
         vec![TransitLaneRegistration::new(
             binding(7091, 1),
-            "198.51.100.91:443".to_string(),
+            "198.51.100.91:443",
         )?],
         None,
     );
@@ -54,7 +54,7 @@ fn local_sealed_transit_rejects_registration_only_lane_document() -> Result<(), 
     let document = TransitLaneDocument::new(
         vec![TransitLaneRegistration::new(
             binding(7092, 1),
-            "198.51.100.92:443".to_string(),
+            "198.51.100.92:443",
         )?],
         None,
     );

@@ -208,6 +208,31 @@ fn invalid_discovery_batch_does_not_mark_pending_rebuild() -> Result<(), String>
 }
 
 #[test]
+fn invalid_discovery_record_after_valid_record_keeps_batch_atomic() -> Result<(), String> {
+    let mut runtime = runtime_with_peers(vec![record("node-a", "198.51.100.31:443", "eu", 10, 95)]);
+    let _ = runtime.take_pending_multipath_rebuild_signal();
+    let before_sources = runtime.source_count();
+    let before_snapshot = runtime.peer_snapshot();
+
+    let error = match runtime.merge_discovery(
+        "seed-c",
+        &[
+            record("node-b", "198.51.100.32:443", "eu", 20, 99),
+            record("node-c", "198.51.100.33", "eu", 21, 98),
+        ],
+    ) {
+        Ok(_) => return Err("invalid discovery batch must fail".to_string()),
+        Err(error) => error,
+    };
+
+    assert!(error.contains("endpoint"));
+    assert_eq!(runtime.source_count(), before_sources);
+    assert_eq!(runtime.peer_snapshot(), before_snapshot);
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    Ok(())
+}
+
+#[test]
 fn empty_discovery_batch_keeps_pending_rebuild_clear_on_stable_state() {
     let mut runtime = runtime_with_peers(vec![record("node-a", "198.51.100.31:443", "eu", 10, 95)]);
     let _ = runtime.take_pending_multipath_rebuild_signal();
@@ -216,6 +241,42 @@ fn empty_discovery_batch_keeps_pending_rebuild_clear_on_stable_state() {
         .merge_discovery("seed-c", &[])
         .unwrap_or_else(|e| unreachable!("empty discovery should succeed: {e}"));
 
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+}
+
+#[test]
+fn repeated_discovery_source_does_not_increase_source_count() {
+    let unchanged = record("node-a", "198.51.100.31:443", "eu", 10, 95);
+    let mut runtime = runtime_with_peers(vec![unchanged.clone()]);
+    let before_sources = runtime.source_count();
+    let _ = runtime.take_pending_multipath_rebuild_signal();
+
+    runtime
+        .merge_discovery("seed-b", std::slice::from_ref(&unchanged))
+        .unwrap_or_else(|e| unreachable!("repeated source discovery should succeed: {e}"));
+    runtime
+        .merge_discovery("seed-b", std::slice::from_ref(&unchanged))
+        .unwrap_or_else(|e| unreachable!("repeated source discovery should succeed: {e}"));
+
+    assert_eq!(runtime.source_count(), before_sources);
+    assert!(runtime.pending_multipath_rebuild_signal().is_none());
+}
+
+#[test]
+fn new_valid_discovery_source_increases_source_count_once() {
+    let unchanged = record("node-a", "198.51.100.31:443", "eu", 10, 95);
+    let mut runtime = runtime_with_peers(vec![unchanged.clone()]);
+    let before_sources = runtime.source_count();
+    let _ = runtime.take_pending_multipath_rebuild_signal();
+
+    runtime
+        .merge_discovery("seed-c", std::slice::from_ref(&unchanged))
+        .unwrap_or_else(|e| unreachable!("new source discovery should succeed: {e}"));
+    runtime
+        .merge_discovery("seed-c", std::slice::from_ref(&unchanged))
+        .unwrap_or_else(|e| unreachable!("repeated new source discovery should succeed: {e}"));
+
+    assert_eq!(runtime.source_count(), before_sources + 1);
     assert!(runtime.pending_multipath_rebuild_signal().is_none());
 }
 

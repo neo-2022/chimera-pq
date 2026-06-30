@@ -48,10 +48,11 @@ impl LiveTransitLaneRegistry {
         options: &Options,
         dispatcher: SharedTransitNextHopDispatcher,
     ) -> Result<Self, String> {
-        let initial =
-            load_live_transit_lane_document(options.transit_lane_bindings_file.as_deref())?;
+        let initial = Arc::new(load_live_transit_lane_document(
+            options.transit_lane_bindings_file.as_deref(),
+        )?);
         validate_live_transit_lane_document_contract(options, &initial)?;
-        let snapshot = Arc::new(Mutex::new(Ok(Arc::new(initial.clone()))));
+        let snapshot = Arc::new(Mutex::new(Ok(Arc::clone(&initial))));
         let registry = Self {
             snapshot: snapshot.clone(),
         };
@@ -66,7 +67,7 @@ impl LiveTransitLaneRegistry {
                 worker_options,
                 dispatcher,
                 snapshot,
-                initial.registrations().to_vec(),
+                initial,
             );
         });
         Ok(registry)
@@ -115,7 +116,7 @@ pub fn live_binding_reload_index_perf_smoke(
     let initial_desired = live_binding_reload_index_fixture("198.51.100.61")?;
     let changed_desired = live_binding_reload_index_fixture("198.51.100.162")?;
     let initial_document = TransitLaneDocument::new(initial_desired.clone(), None);
-    let changed_document = TransitLaneDocument::new(changed_desired.clone(), None);
+    let changed_document = TransitLaneDocument::new(changed_desired, None);
     let snapshot = Arc::new(Mutex::new(Ok(Arc::new(initial_document.clone()))));
     let mut workers = initial_desired
         .iter()
@@ -179,12 +180,12 @@ fn watch_live_transit_lane_registrations(
     options: Options,
     dispatcher: SharedTransitNextHopDispatcher,
     snapshot: Arc<Mutex<LiveTransitLaneSnapshot>>,
-    initial: Vec<TransitLaneRegistration>,
+    initial: Arc<TransitLaneDocument>,
 ) {
     let mut workers = BTreeMap::new();
     reconcile_live_transit_lane_workers(
         &mut workers,
-        &initial,
+        initial.registrations(),
         &dispatcher,
         |registration, cancel| {
             spawn_live_transit_lane_worker(

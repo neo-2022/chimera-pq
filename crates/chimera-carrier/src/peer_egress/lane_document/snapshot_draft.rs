@@ -128,34 +128,29 @@ impl TransitLanePlanSnapshotDraft {
 
         let selected_peers = ordered_selected_peers(self.selected_peers)?;
         let carrier_lane_bindings = ordered_carrier_bindings(self.carrier_bindings)?;
-        let lanes = carrier_lane_bindings
-            .iter()
-            .map(|binding| MeshMultipathLane {
+        let mut lanes = Vec::with_capacity(carrier_lane_bindings.len());
+        let mut derived_active_lane_count = 0_usize;
+        let mut derived_standby_lane_count = 0_usize;
+        let mut derived_active_weight_sum_pct = 0_u16;
+        let mut derived_active_capacity_sum_pct = 0_u16;
+        for binding in &carrier_lane_bindings {
+            if binding.role == MeshMultipathLaneRole::Active {
+                derived_active_lane_count = derived_active_lane_count.saturating_add(1);
+                derived_active_weight_sum_pct =
+                    derived_active_weight_sum_pct.saturating_add(binding.weight_pct as u16);
+                derived_active_capacity_sum_pct = derived_active_capacity_sum_pct
+                    .saturating_add(binding.capacity_weight_pct as u16);
+            } else {
+                derived_standby_lane_count = derived_standby_lane_count.saturating_add(1);
+            }
+            lanes.push(MeshMultipathLane {
                 lane_id: binding.lane_id,
                 peer_node_id: binding.peer_node_id.clone(),
-                role: binding.role.clone(),
+                role: binding.role,
                 weight_pct: binding.weight_pct,
                 capacity_weight_pct: binding.capacity_weight_pct,
-            })
-            .collect::<Vec<_>>();
-        let derived_active_lane_count = lanes
-            .iter()
-            .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
-            .count();
-        let derived_standby_lane_count = lanes
-            .iter()
-            .filter(|lane| lane.role == MeshMultipathLaneRole::Standby)
-            .count();
-        let derived_active_weight_sum_pct: u16 = lanes
-            .iter()
-            .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
-            .map(|lane| lane.weight_pct as u16)
-            .sum();
-        let derived_active_capacity_sum_pct: u16 = lanes
-            .iter()
-            .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
-            .map(|lane| lane.capacity_weight_pct as u16)
-            .sum();
+            });
+        }
         if derived_active_lane_count != active_lane_count {
             return Err("transit plan snapshot active lane count mismatch".to_string());
         }
@@ -234,7 +229,6 @@ fn ordered_carrier_bindings(
     for (_index, binding) in carrier_bindings {
         ordered.push(binding);
     }
-    ordered.sort_by_key(|binding| binding.lane_id);
     Ok(ordered)
 }
 

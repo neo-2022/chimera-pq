@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshMultipathMode {
     Off,
     StandbyOnly,
@@ -19,7 +19,7 @@ impl MeshMultipathMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshMultipathLaneRole {
     Active,
     Standby,

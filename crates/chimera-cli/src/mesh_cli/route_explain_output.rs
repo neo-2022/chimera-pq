@@ -18,7 +18,7 @@ pub(crate) fn build_mesh_route_explain_output(
         namespace: &fields.namespace,
         node_name: &fields.node_name,
         selected_peer: &fields.initial_selected,
-        join_mode: fields.join_mode.clone(),
+        join_mode: fields.join_mode,
         consistency_gate: &fields.table_runtime_consistency_gate,
         degraded_path: &fields.preemptive_degraded_path,
         confidence_summary: &fields.preemptive_shadow_switch_confidence_summary,

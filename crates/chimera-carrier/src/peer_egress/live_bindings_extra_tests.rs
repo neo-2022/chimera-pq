@@ -15,7 +15,7 @@ fn binding(route: u64, lane: u16) -> TransitPathBinding {
 }
 
 fn registration(route: u64, lane: u16, endpoint: &str) -> Result<TransitLaneRegistration, String> {
-    TransitLaneRegistration::new(binding(route, lane), endpoint.to_string())
+    TransitLaneRegistration::new(binding(route, lane), endpoint)
 }
 
 fn options_with_lane_file(path: &str, allow_bound_transit: bool) -> Options {

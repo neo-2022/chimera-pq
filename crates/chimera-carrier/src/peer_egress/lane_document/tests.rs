@@ -133,6 +133,48 @@ fn document_round_trips_snapshot_and_rows() -> Result<(), String> {
 }
 
 #[test]
+fn document_snapshot_parse_orders_mixed_carrier_binding_rows_by_lane_id() -> Result<(), String> {
+    let plan = multipath_plan()?;
+    let document = transit_lane_document_from_mesh_plan(&plan)?;
+    let rendered = render_transit_lane_document(&document)?;
+    let mut carrier_binding_rows = rendered
+        .lines()
+        .filter(|line| line.starts_with("# chimera_plan_carrier_binding\t"))
+        .collect::<Vec<_>>();
+    carrier_binding_rows.reverse();
+    if carrier_binding_rows.len() < 2 {
+        return Err("test requires at least two carrier binding rows".to_string());
+    }
+
+    let mut mixed = String::with_capacity(rendered.len());
+    let mut next_binding_row = 0usize;
+    for line in rendered.lines() {
+        if line.starts_with("# chimera_plan_carrier_binding\t") {
+            mixed.push_str(carrier_binding_rows[next_binding_row]);
+            mixed.push('\n');
+            next_binding_row = next_binding_row.saturating_add(1);
+            continue;
+        }
+        mixed.push_str(line);
+        mixed.push('\n');
+    }
+
+    let reparsed = parse_transit_lane_document(&mixed)?;
+    let reparsed_plan = reparsed
+        .mesh_path_plan()?
+        .ok_or_else(|| "plan snapshot missing".to_string())?;
+    let lane_ids = reparsed_plan
+        .multipath_schedule
+        .carrier_lane_bindings
+        .iter()
+        .map(|binding| binding.lane_id)
+        .collect::<Vec<_>>();
+
+    assert_eq!(lane_ids, vec![0, 1]);
+    Ok(())
+}
+
+#[test]
 fn document_borrowed_snapshot_plan_matches_owned_access() -> Result<(), String> {
     let plan = multipath_plan()?;
     let document = transit_lane_document_from_mesh_plan(&plan)?;
@@ -295,7 +337,7 @@ fn document_falls_back_to_registrations_without_snapshot() -> Result<(), String>
     let document = TransitLaneDocument::new(
         vec![TransitLaneRegistration::new(
             super::transit_path_binding_from_mesh_lane(&mesh_binding(80, 0))?,
-            "198.51.100.80:443".to_string(),
+            "198.51.100.80:443",
         )?],
         None,
     );

@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write as _;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
@@ -131,11 +132,11 @@ fn build_connect_probe_explain(
     }
     explain.push(format!(
         "selected_peer_ids={}",
-        redacted_peer_labels(selected_peers).join(",")
+        redacted_peer_label_csv(selected_peers)
     ));
     explain.push(format!(
         "selected_peer_endpoints={}",
-        redacted_endpoint_labels(selected_peers).join(",")
+        redacted_endpoint_label_csv(selected_peers)
     ));
     explain.push(format!(
         "selected_peer_connect_priority={}",
@@ -325,12 +326,26 @@ fn redacted_peer_labels(selected_peers: &[MeshPeerState]) -> Vec<String> {
         .collect()
 }
 
-fn redacted_endpoint_labels(selected_peers: &[MeshPeerState]) -> Vec<String> {
-    selected_peers
-        .iter()
-        .enumerate()
-        .map(|(index, _)| redacted_endpoint_label(index))
-        .collect()
+fn redacted_peer_label_csv(selected_peers: &[MeshPeerState]) -> String {
+    let mut labels = String::with_capacity(selected_peers.len().saturating_mul(8));
+    for index in 0..selected_peers.len() {
+        if index > 0 {
+            labels.push(',');
+        }
+        append_redacted_peer_label(&mut labels, index);
+    }
+    labels
+}
+
+fn redacted_endpoint_label_csv(selected_peers: &[MeshPeerState]) -> String {
+    let mut labels = String::with_capacity(selected_peers.len().saturating_mul(22));
+    for index in 0..selected_peers.len() {
+        if index > 0 {
+            labels.push(',');
+        }
+        append_redacted_endpoint_label(&mut labels, index);
+    }
+    labels
 }
 
 fn redacted_peer_label(index: usize) -> String {
@@ -339,6 +354,17 @@ fn redacted_peer_label(index: usize) -> String {
 
 fn redacted_endpoint_label(index: usize) -> String {
     format!("endpoint#{}:<redacted>", index + 1)
+}
+
+fn append_redacted_peer_label(output: &mut String, index: usize) {
+    output.push_str("peer#");
+    let _ = write!(output, "{}", index + 1);
+}
+
+fn append_redacted_endpoint_label(output: &mut String, index: usize) {
+    output.push_str("endpoint#");
+    let _ = write!(output, "{}", index + 1);
+    output.push_str(":<redacted>");
 }
 
 fn redacted_connect_error(error: &str) -> String {

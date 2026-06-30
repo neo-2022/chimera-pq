@@ -301,6 +301,12 @@ impl MeshRuntime {
         self.sources.len()
     }
 
+    fn remember_source(&mut self, source: &str) {
+        if !self.sources.contains(source) {
+            self.sources.insert(source.to_string());
+        }
+    }
+
     pub fn source_list(&self) -> Vec<String> {
         self.sources.iter().cloned().collect()
     }

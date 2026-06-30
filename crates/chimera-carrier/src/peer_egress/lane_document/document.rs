@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use super::format::{parse_role, parse_u8_field, split_comma_fields};
-use super::registration::render_transit_lane_registrations;
+use super::registration::render_transit_lane_registrations_into;
 use super::snapshot_draft::TransitLanePlanSnapshotDraft;
 use super::snapshot_parse::parse_transit_lane_plan_snapshot_line;
 use super::snapshot_render::render_transit_lane_plan_snapshot;
@@ -26,7 +26,7 @@ pub fn render_transit_lane_document(document: &TransitLaneDocument) -> Result<St
             render_transit_lane_document_rows_into(&mut output, &document.registrations)?;
         }
     } else if !document.registrations.is_empty() {
-        output.push_str(&render_transit_lane_registrations(&document.registrations)?);
+        render_transit_lane_registrations_into(&mut output, &document.registrations)?;
     }
     Ok(output)
 }
@@ -194,7 +194,7 @@ fn parse_transit_lane_document_row(
     let binding = parse_row_binding(parts[0], parts[1], zero_based_line_index, seen)?;
     TransitLaneRegistration::new_with_lane_plan(
         binding,
-        parts[2].to_string(),
+        parts[2],
         Some(parse_role(parts[3])?),
         Some(parse_u8_field(
             parts[4],
@@ -247,7 +247,7 @@ fn parse_transit_lane_registration_row(
         ));
     };
     let binding = parse_row_binding(parts[0], parts[1], zero_based_line_index, seen)?;
-    TransitLaneRegistration::new(binding, parts[2].to_string())
+    TransitLaneRegistration::new(binding, parts[2])
 }
 
 pub fn load_transit_lane_document(path: &str) -> Result<TransitLaneDocument, String> {
@@ -293,7 +293,7 @@ fn validate_transit_lane_document_rows_match_plan(
                 "sealed transit lane document endpoint mismatches plan snapshot".to_string(),
             );
         }
-        if registration.role() != Some(binding.role.clone()) {
+        if registration.role() != Some(binding.role) {
             return Err("sealed transit lane document role mismatches plan snapshot".to_string());
         }
         if registration.weight_pct() != Some(binding.weight_pct) {

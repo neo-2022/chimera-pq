@@ -9,17 +9,17 @@ impl MeshRuntime {
         for item in performance {
             item.validate()?;
             validate_runtime_node_id(&item.node_id, "mesh peer performance node_id")?;
-            if !self.peers.contains_key(&item.node_id) {
+            if !self.peers.contains_key(item.node_id.as_str()) {
                 return Err("mesh peer performance references unknown node".to_string());
             }
-            validated.push((item.node_id.clone(), item.latency_ms, item.throughput_mbps));
+            validated.push((item.node_id.as_str(), item.latency_ms, item.throughput_mbps));
         }
         let before_fingerprint = self.rebuild_trigger_fingerprint();
         let mut affected_peer_count = 0_usize;
         for (node_id, latency_ms, throughput_mbps) in validated {
             let peer = self
                 .peers
-                .get_mut(&node_id)
+                .get_mut(node_id)
                 .ok_or_else(|| "mesh peer performance references unknown node".to_string())?;
             let mut changed = false;
             if let Some(latency_ms) = latency_ms {

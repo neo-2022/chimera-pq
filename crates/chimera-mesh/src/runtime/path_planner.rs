@@ -52,7 +52,7 @@ pub(super) fn build_plan_from_runtime_state(
 ) -> Result<MeshPathPlan, String> {
     let outcome = build_plan_outcome_from_runtime_state(
         runtime,
-        join_mode.clone(),
+        join_mode,
         policy,
         PlanningExplainMode::Full,
     )?;
@@ -72,7 +72,7 @@ pub(super) fn build_plan_core_from_runtime_state(
 ) -> Result<MeshPathPlanCore, String> {
     let outcome = build_plan_outcome_from_runtime_state(
         runtime,
-        join_mode.clone(),
+        join_mode,
         policy,
         PlanningExplainMode::None,
     )?;
@@ -101,13 +101,7 @@ fn build_plan_outcome_from_runtime_state(
     } else {
         Vec::new()
     };
-    let setup = build_plan_setup(
-        runtime,
-        join_mode.clone(),
-        policy,
-        &mut explain,
-        explain_mode,
-    );
+    let setup = build_plan_setup(runtime, join_mode, policy, &mut explain, explain_mode);
     let blocked: BTreeSet<&str> = setup
         .blocked_node_ids
         .iter()

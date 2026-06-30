@@ -21,7 +21,7 @@ impl MeshRuntime {
 
         let before_fingerprint = self.rebuild_trigger_fingerprint();
         self.tick = self.tick.saturating_add(1);
-        self.sources.insert(source.to_string());
+        self.remember_source(source);
         let mut affected_peer_count = 0_usize;
         for record in records {
             let previous_meta = self.peer_meta.get(&record.node_id);

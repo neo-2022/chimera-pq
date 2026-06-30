@@ -238,12 +238,13 @@ fn build_active_lanes(
     selected_peers: &[MeshPeerState],
     max_active: usize,
 ) -> Vec<MeshMultipathLane> {
-    let active_peers: Vec<&MeshPeerState> = selected_peers.iter().take(max_active).collect();
-    let weights = active_lane_weights(&active_peers);
+    let active_count = selected_peers.len().min(max_active);
+    let active_peers = &selected_peers[..active_count];
+    let weights = active_lane_weights(active_peers);
     let capacity_weights =
         capacity_weights_from_relative_weights(&weights, TRANSIT_CAPACITY_BUDGET_PCT);
     active_peers
-        .into_iter()
+        .iter()
         .zip(weights)
         .zip(capacity_weights)
         .enumerate()
@@ -362,7 +363,7 @@ fn carrier_lane_bindings(
                 lane_id: lane.lane_id,
                 peer_node_id: lane.peer_node_id.clone(),
                 carrier_endpoint: peer.endpoint.clone(),
-                role: lane.role.clone(),
+                role: lane.role,
                 weight_pct: lane.weight_pct,
                 capacity_weight_pct: lane.capacity_weight_pct,
             })

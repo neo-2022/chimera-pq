@@ -1,13 +1,10 @@
 use super::MeshPeerState;
 
-pub(super) fn active_lane_weights(active_peers: &[&MeshPeerState]) -> Vec<u8> {
+pub(super) fn active_lane_weights(active_peers: &[MeshPeerState]) -> Vec<u8> {
     if active_peers.is_empty() {
         return Vec::new();
     }
-    let scores: Vec<u16> = active_peers
-        .iter()
-        .map(|peer| lane_weight_score(peer))
-        .collect();
+    let scores: Vec<u16> = active_peers.iter().map(lane_weight_score).collect();
     weights_from_scores(&scores, 100)
 }
 
@@ -133,7 +130,7 @@ mod tests {
     fn active_lane_weights_shift_capacity_toward_faster_peer() {
         let slow = peer(Some(250), Some(40));
         let fast = peer(Some(30), Some(400));
-        let weights = active_lane_weights(&[&slow, &fast]);
+        let weights = active_lane_weights(&[slow, fast]);
 
         assert_eq!(
             weights.iter().map(|weight| u16::from(*weight)).sum::<u16>(),
@@ -146,7 +143,7 @@ mod tests {
     fn active_lane_weights_preserve_evenish_legacy_without_performance() {
         let first = peer(None, None);
         let second = peer(None, None);
-        let weights = active_lane_weights(&[&first, &second]);
+        let weights = active_lane_weights(&[first, second]);
 
         assert_eq!(weights, vec![50, 50]);
     }

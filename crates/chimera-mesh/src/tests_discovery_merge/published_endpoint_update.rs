@@ -92,6 +92,46 @@ fn published_endpoint_same_generation_same_state_is_noop() {
 }
 
 #[test]
+fn published_endpoint_repeated_source_does_not_grow_source_count() {
+    let mut runtime = runtime_with_peers(&[record("node-a", "198.51.100.10:443")]);
+    let after_discovery_source_count = runtime.source_count();
+
+    runtime
+        .merge_published_endpoint_updates(
+            "state-publish",
+            &[endpoint_update("node-a", "198.51.100.20:9443", None, 3)],
+        )
+        .unwrap_or_else(|e| unreachable!("initial endpoint update should succeed: {e}"));
+    assert_eq!(
+        runtime.source_count(),
+        after_discovery_source_count.saturating_add(1)
+    );
+
+    let _ = runtime.take_pending_multipath_rebuild_signal();
+    runtime
+        .merge_published_endpoint_updates(
+            "state-publish",
+            &[endpoint_update("node-a", "198.51.100.20:9443", None, 3)],
+        )
+        .unwrap_or_else(|e| unreachable!("same-source endpoint update should succeed: {e}"));
+    assert_eq!(
+        runtime.source_count(),
+        after_discovery_source_count.saturating_add(1)
+    );
+
+    runtime
+        .merge_published_endpoint_updates(
+            "state-publish-2",
+            &[endpoint_update("node-a", "198.51.100.20:9443", None, 3)],
+        )
+        .unwrap_or_else(|e| unreachable!("new-source endpoint update should succeed: {e}"));
+    assert_eq!(
+        runtime.source_count(),
+        after_discovery_source_count.saturating_add(2)
+    );
+}
+
+#[test]
 fn published_endpoint_stale_generation_is_ignored_without_dirty_signal() {
     let mut runtime = runtime_with_peers(&[record("node-a", "198.51.100.10:443")]);
     runtime
@@ -254,7 +294,7 @@ fn published_endpoint_generation_conflict_is_rejected_atomically() -> Result<(),
 fn published_endpoint_mixed_batch_counts_only_changed_existing_peers() {
     let unchanged = record("node-a", "198.51.100.10:443");
     let mut runtime = runtime_with_peers(&[
-        unchanged.clone(),
+        unchanged,
         record("node-b", "198.51.100.11:443"),
         record("node-c", "198.51.100.12:443"),
     ]);

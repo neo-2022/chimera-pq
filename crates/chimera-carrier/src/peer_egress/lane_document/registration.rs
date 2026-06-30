@@ -11,10 +11,19 @@ use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, Tra
 pub fn render_transit_lane_registrations(
     registrations: &[TransitLaneRegistration],
 ) -> Result<String, String> {
+    let mut output = String::with_capacity(estimate_registration_render_capacity(registrations));
+    render_transit_lane_registrations_into(&mut output, registrations)?;
+    Ok(output)
+}
+
+pub(super) fn render_transit_lane_registrations_into(
+    output: &mut String,
+    registrations: &[TransitLaneRegistration],
+) -> Result<(), String> {
     if registrations.is_empty() {
         return Err("sealed transit lane registrations are empty".to_string());
     }
-    let mut output = String::from("# route_id,lane_index,endpoint\n");
+    output.push_str("# route_id,lane_index,endpoint\n");
     for registration in registrations {
         let lane_index = registration
             .binding()
@@ -23,13 +32,22 @@ pub fn render_transit_lane_registrations(
             .checked_sub(1)
             .ok_or_else(|| "sealed transit lane binding id underflow".to_string())?;
         append_registration_row_fields(
-            &mut output,
+            output,
             registration.binding().route_id().get(),
             lane_index,
             registration.endpoint(),
         )?;
     }
-    Ok(output)
+    Ok(())
+}
+
+fn estimate_registration_render_capacity(registrations: &[TransitLaneRegistration]) -> usize {
+    "# route_id,lane_index,endpoint\n".len().saturating_add(
+        registrations
+            .iter()
+            .map(|registration| registration.endpoint().len() + 32)
+            .sum(),
+    )
 }
 
 pub fn render_transit_lane_registrations_from_mesh_plan(
@@ -86,7 +104,7 @@ pub(super) fn parse_transit_lane_registration_line(
     if !seen.insert(binding) {
         return Err("sealed transit path binding ambiguous".to_string());
     }
-    TransitLaneRegistration::new(binding, parts[2].to_string()).map(Some)
+    TransitLaneRegistration::new(binding, parts[2]).map(Some)
 }
 
 pub(super) fn append_registration_row_fields(

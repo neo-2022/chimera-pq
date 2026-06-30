@@ -12,18 +12,18 @@ pub struct TransitLaneRegistration {
 }
 
 impl TransitLaneRegistration {
-    pub fn new(binding: TransitPathBinding, endpoint: String) -> Result<Self, String> {
+    pub fn new(binding: TransitPathBinding, endpoint: impl AsRef<str>) -> Result<Self, String> {
         Self::new_with_lane_plan(binding, endpoint, None, None, None)
     }
 
     pub fn new_with_lane_plan(
         binding: TransitPathBinding,
-        endpoint: String,
+        endpoint: impl AsRef<str>,
         role: Option<MeshMultipathLaneRole>,
         weight_pct: Option<u8>,
         capacity_weight_pct: Option<u8>,
     ) -> Result<Self, String> {
-        let endpoint = endpoint.trim();
+        let endpoint = endpoint.as_ref().trim();
         split_host_port(endpoint)
             .map_err(|error| format!("sealed transit lane endpoint invalid: {error}"))?;
         Ok(Self {
@@ -44,7 +44,7 @@ impl TransitLaneRegistration {
     }
 
     pub fn role(&self) -> Option<MeshMultipathLaneRole> {
-        self.role.clone()
+        self.role
     }
 
     pub fn weight_pct(&self) -> Option<u8> {
@@ -91,8 +91,8 @@ pub fn transit_lane_registration_from_mesh_lane(
 ) -> Result<TransitLaneRegistration, String> {
     TransitLaneRegistration::new_with_lane_plan(
         transit_path_binding_from_mesh_lane(binding)?,
-        binding.carrier_endpoint.clone(),
-        Some(binding.role.clone()),
+        &binding.carrier_endpoint,
+        Some(binding.role),
         Some(binding.weight_pct),
         Some(binding.capacity_weight_pct),
     )
