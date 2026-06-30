@@ -6,6 +6,7 @@ use crate::{
 use super::{explain_has, record, request, runtime_with_peers, seeded_runtime};
 
 mod bridge;
+mod pending;
 
 fn policy() -> MeshMultipathRebuildPolicy {
     MeshMultipathRebuildPolicy::new(3, 4)
@@ -91,18 +92,18 @@ fn first_rebuild_signal_is_allowed() {
         MeshMultipathRebuildDirtyScope::Unknown
     );
     assert_eq!(decision.affected_peer_count, 0);
+    let explain = decision.explain();
     assert!(
-        decision
-            .explain
+        explain
             .iter()
             .any(|line| line == "multipath_rebuild_action=allow_rebuild")
     );
     assert!(explain_has(
-        &decision.explain,
+        &explain,
         "multipath_rebuild_dirty_scope=unknown"
     ));
     assert!(explain_has(
-        &decision.explain,
+        &explain,
         "multipath_rebuild_affected_peer_count=0"
     ));
 }
@@ -122,19 +123,20 @@ fn peer_set_dirty_scope_is_redacted_and_explained() {
         MeshMultipathRebuildDirtyScope::PeerSet
     );
     assert_eq!(decision.affected_peer_count, 2);
+    let explain = decision.explain();
     assert!(explain_has(
-        &decision.explain,
+        &explain,
         "multipath_rebuild_dirty_scope=peer_set"
     ));
     assert!(explain_has(
-        &decision.explain,
+        &explain,
         "multipath_rebuild_affected_peer_count=2"
     ));
     let debug = format!("{decision:?}");
     assert!(debug.contains("affected_peer_count"));
     assert!(!debug.contains("node-a"));
     assert!(!debug.contains("198.51."));
-    assert!(!decision.explain.iter().any(|line| line.contains("0x1001")));
+    assert!(!explain.iter().any(|line| line.contains("0x1001")));
 }
 
 #[test]
@@ -323,7 +325,7 @@ fn rebuild_control_diagnostics_are_aggregate_and_redacted() {
     let decision = runtime
         .evaluate_multipath_rebuild(&signal, &policy())
         .unwrap_or_else(|e| unreachable!("signal should evaluate: {e}"));
-    let explain = decision.explain.join("|");
+    let explain = decision.explain().join("|");
     let debug_signal = format!("{signal:?}");
     let debug_decision = format!("{decision:?}");
 

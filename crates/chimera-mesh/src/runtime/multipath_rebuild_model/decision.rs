@@ -16,9 +16,6 @@ pub struct MeshMultipathRebuildDecision {
     pub pending_count: u64,
     pub dirty_scope: MeshMultipathRebuildDirtyScope,
     pub affected_peer_count: usize,
-    pub policy: String,
-    pub privacy: String,
-    pub explain: Vec<String>,
 }
 
 impl std::fmt::Debug for MeshMultipathRebuildDecision {
@@ -35,9 +32,57 @@ impl std::fmt::Debug for MeshMultipathRebuildDecision {
             .field("pending_count", &self.pending_count)
             .field("dirty_scope", &self.dirty_scope)
             .field("affected_peer_count", &self.affected_peer_count)
-            .field("policy", &self.policy)
-            .field("privacy", &self.privacy)
+            .field("policy", &REBUILD_CONTROL_POLICY)
+            .field("privacy", &REBUILD_CONTROL_PRIVACY)
             .finish()
+    }
+}
+
+impl MeshMultipathRebuildDecision {
+    pub fn append_explain_to(&self, explain: &mut Vec<String>) {
+        explain.reserve(13);
+        explain.push(format!("multipath_rebuild_action={}", self.action.as_str()));
+        explain.push(format!("multipath_rebuild_reason={}", self.reason));
+        explain.push(format!(
+            "multipath_rebuild_signal_reason={}",
+            self.signal_reason
+        ));
+        explain.push(format!(
+            "multipath_rebuild_allowed={}",
+            self.rebuild_allowed
+        ));
+        explain.push(format!("multipath_rebuild_debounced={}", self.debounced));
+        explain.push(format!("multipath_rebuild_stale={}", self.stale));
+        explain.push(format!(
+            "multipath_rebuild_generation_changed={}",
+            self.generation_changed
+        ));
+        explain.push(format!(
+            "multipath_rebuild_fingerprint_changed={}",
+            self.fingerprint_changed
+        ));
+        explain.push(format!(
+            "multipath_rebuild_dirty_scope={}",
+            self.dirty_scope.as_str()
+        ));
+        explain.push(format!(
+            "multipath_rebuild_affected_peer_count={}",
+            self.affected_peer_count
+        ));
+        explain.push(format!(
+            "multipath_rebuild_pending_count={}",
+            self.pending_count
+        ));
+        explain.push(format!("multipath_rebuild_policy={REBUILD_CONTROL_POLICY}"));
+        explain.push(format!(
+            "multipath_rebuild_privacy={REBUILD_CONTROL_PRIVACY}"
+        ));
+    }
+
+    pub fn explain(&self) -> Vec<String> {
+        let mut explain = Vec::with_capacity(13);
+        self.append_explain_to(&mut explain);
+        explain
     }
 }
 
@@ -57,33 +102,6 @@ pub(in crate::runtime) fn build_decision(
     pending_count: u64,
 ) -> MeshMultipathRebuildDecision {
     let rebuild_allowed = action == MeshMultipathRebuildAction::AllowRebuild;
-    let explain = vec![
-        format!("multipath_rebuild_action={}", action.as_str()),
-        format!("multipath_rebuild_reason={reason}"),
-        format!("multipath_rebuild_signal_reason={}", signal.reason()),
-        format!("multipath_rebuild_allowed={rebuild_allowed}"),
-        format!("multipath_rebuild_debounced={debounced}"),
-        format!("multipath_rebuild_stale={stale}"),
-        format!(
-            "multipath_rebuild_generation_changed={}",
-            changes.generation_changed
-        ),
-        format!(
-            "multipath_rebuild_fingerprint_changed={}",
-            changes.fingerprint_changed
-        ),
-        format!(
-            "multipath_rebuild_dirty_scope={}",
-            signal.dirty_scope().as_str()
-        ),
-        format!(
-            "multipath_rebuild_affected_peer_count={}",
-            signal.affected_peer_count()
-        ),
-        format!("multipath_rebuild_pending_count={pending_count}"),
-        format!("multipath_rebuild_policy={REBUILD_CONTROL_POLICY}"),
-        format!("multipath_rebuild_privacy={REBUILD_CONTROL_PRIVACY}"),
-    ];
     MeshMultipathRebuildDecision {
         action,
         reason: reason.to_string(),
@@ -96,8 +114,5 @@ pub(in crate::runtime) fn build_decision(
         pending_count,
         dirty_scope: signal.dirty_scope(),
         affected_peer_count: signal.affected_peer_count(),
-        policy: REBUILD_CONTROL_POLICY.to_string(),
-        privacy: REBUILD_CONTROL_PRIVACY.to_string(),
-        explain,
     }
 }

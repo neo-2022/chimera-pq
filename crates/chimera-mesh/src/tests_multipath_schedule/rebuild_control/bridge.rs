@@ -271,7 +271,7 @@ fn core_rebuild_with_policy_matches_full_plan_schedule_without_explain_plan() {
     ));
     assert!(
         core_decision
-            .explain
+            .explain()
             .iter()
             .all(|line| !line.contains("0x3003"))
     );
@@ -314,18 +314,13 @@ fn core_pending_rebuild_reselects_peer_and_clears_pending_signal() {
         "sealed_opaque_only"
     );
     assert!(runtime.pending_multipath_rebuild_signal().is_none());
+    let explain = decision.explain();
     assert!(
-        decision
-            .explain
+        explain
             .iter()
             .any(|line| line.contains("multipath_rebuild_signal_reason=peer_performance_changed"))
     );
-    assert!(
-        decision
-            .explain
-            .iter()
-            .all(|line| !line.contains("198.51."))
-    );
+    assert!(explain.iter().all(|line| !line.contains("198.51.")));
 }
 
 #[test]
@@ -392,7 +387,7 @@ fn suppressed_core_rebuild_preserves_existing_schedule() {
     assert_eq!(plan.multipath_schedule, refreshed);
     assert!(
         decision
-            .explain
+            .explain()
             .iter()
             .any(|line| line.contains("multipath_rebuild_debounced=true"))
     );

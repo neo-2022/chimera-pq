@@ -48,7 +48,7 @@ impl MeshRuntime {
             replace_multipath_schedule(plan, mode, route_binding_id, demand)?;
         }
 
-        plan.explain.extend(decision.explain.iter().cloned());
+        decision.append_explain_to(&mut plan.explain);
         Ok(decision)
     }
 
@@ -72,7 +72,7 @@ impl MeshRuntime {
             *plan = rebuilt;
         }
 
-        plan.explain.extend(decision.explain.iter().cloned());
+        decision.append_explain_to(&mut plan.explain);
         Ok(decision)
     }
 
