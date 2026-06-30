@@ -61,6 +61,26 @@ upsert_env_kv() {
   rm -f "$tmp_file"
 }
 
+remove_env_kv() {
+  local file="${1:?file_required}"
+  local key="${2:?key_required}"
+  local tmp_file line
+  [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+    echo "error: invalid env key: $key" >&2
+    exit 2
+  }
+  [[ -f "$file" ]] || return 0
+  tmp_file="$(mktemp)"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "$key="* ]]; then
+      continue
+    fi
+    printf '%s\n' "$line"
+  done <"$file" >"$tmp_file"
+  cat "$tmp_file" >"$file"
+  rm -f "$tmp_file"
+}
+
 shell_quote_env_value() {
   local key="${1:?key_required}"
   local value="${2:-}"
@@ -150,6 +170,7 @@ generate_runtime_token() {
 installer_gate_prepare_upstream_env() {
   mkdir -p "$(dirname "$UPSTREAM_ENV_FILE")"
   touch "$UPSTREAM_ENV_FILE"
+  remove_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"
   if [[ -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
     local discovery_url discovery_pubkey discovery_probe_timeout
     discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"

@@ -145,6 +145,11 @@ install_log="$tmp_dir/install.log"
 doctor_log="$tmp_dir/doctor.log"
 mkdir -p "$fake_bin" "$home" "$cache" "$config" "$data" "$runtime"
 : >"$cargo_marker"
+mkdir -p "$config/chimera"
+cat >"$config/chimera/upstream_proxy.env" <<'EOF'
+CHIMERA_PEER_EGRESS_TOKEN=stale-token-from-previous-release
+EOF
+chmod 600 "$config/chimera/upstream_proxy.env"
 
 write_fake_systemctl "$fake_bin/systemctl"
 write_fake_sudo "$fake_bin/sudo"

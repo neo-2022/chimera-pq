@@ -2352,6 +2352,7 @@ release-bundle-install-contract-smoke-selfcheck:
     rg -q 'upstream_proxy.env.example' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'release_bundle_secret_or_stand_literal_found' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'CHIMERA_RELEASE_BUNDLE_FORBIDDEN_PATTERNS_FILE' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'stale-token-from-previous-release' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'install_without_cargo_ok=true' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'installed_upstream_env_placeholder_credentials' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'installed_upstream_env_peer_token_leak' scripts/release_bundle_install_contract_smoke.sh
@@ -2361,6 +2362,7 @@ release-bundle-install-contract-smoke-selfcheck:
     rg -q 'configs/upstream_proxy\\.env\\.example' scripts/build_release.sh
     rg -q 'missing_singbox_sha256' scripts/chimera_runtime_bootstrap.sh
     rg -q 'runtime_bootstrap_failed' scripts/chimera-control.sh
+    rg -q 'remove_env_kv "\$UPSTREAM_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"' scripts/install_desktop_control.sh
 
 release-pack-schema-guard-selfcheck:
     test -x scripts/release_pack_schema_guard.sh
