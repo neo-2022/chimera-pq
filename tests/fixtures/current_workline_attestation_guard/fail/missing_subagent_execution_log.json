@@ -1,0 +1,63 @@
+{
+  "kind": "current_workline_attestation",
+  "schema_version": 1,
+  "status": "pass",
+  "current_workline_id": "ai-architect-guard-hardening-2026-07-01",
+  "updated_at_utc": "2026-07-01T10:49:30Z",
+  "canonical_only_not_sufficient": true,
+  "requires_current_workline_attestation": true,
+  "requires_real_subagent_trace": true,
+  "requires_interdisciplinary_trace": true,
+  "canonical_lifecycle_attestation": "docs/WORKFLOW_ATTESTATION.json",
+  "workline_attestation": "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
+  "latest_handoff": "tests/fixtures/current_workline_attestation_guard/pass/MESH_SESSION_HANDOFF_FIXTURE.md",
+  "truth_boundary": {
+    "local_runtime_started": false,
+    "network_state": "not_modified",
+    "secrets_redacted": true,
+    "stand_literals_absent": true
+  },
+  "deepseek_stage_check": {
+    "stage_count": 8,
+    "covered_required_item_count": 227,
+    "all_stage_gates_accounted": true,
+    "canonical_workflow_guard_passed": true,
+    "evidence": [
+      "docs/WORKFLOW_ATTESTATION.json",
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+    ]
+  },
+  "interdisciplinary_trace": {
+    "required": true,
+    "used_by_each_subagent": true,
+    "software_only": false,
+    "source_list_count": 7,
+    "knowledge_transfer_checked": true,
+    "rejected_analogies_recorded": true,
+    "evidence": [
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
+      "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md"
+    ]
+  },
+  "subagent_execution_log": [],
+  "review_results": {
+    "risks_found": [
+      "stale canonical proof reuse"
+    ],
+    "accepted_fixes": [
+      "current workline proof required"
+    ],
+    "rejected_items": [],
+    "open_blockers": []
+  },
+  "gap_resolution": {
+    "old_canonical_pass_bypass_blocked": true,
+    "subagent_trace_required": true,
+    "interdisciplinary_trace_required": true,
+    "stale_handoff_binding_blocked": true,
+    "evidence": [
+      "crates/chimera-lab/src/current_workline_attestation_guard.rs",
+      "justfile"
+    ]
+  }
+}

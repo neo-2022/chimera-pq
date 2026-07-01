@@ -2505,6 +2505,8 @@ handoff-check:
 session-process-guard:
     just workflow-attestation-guard-selfcheck
     just workflow-attestation-guard
+    just current-workline-attestation-guard-selfcheck
+    just current-workline-attestation-guard
     just ai-architect-artifact-guard-selfcheck
     just ai-architect-artifact-guard
 
@@ -2521,6 +2523,9 @@ ship-readiness:
 
 workflow-attestation-guard attestation="docs/WORKFLOW_ATTESTATION.json":
     bash scripts/workflow_attestation_guard.sh "{{attestation}}"
+
+current-workline-attestation-guard attestation="docs/CURRENT_WORKLINE_ATTESTATION.json":
+    bash scripts/current_workline_attestation_guard.sh "{{attestation}}"
 
 ai-architect-artifact-guard:
     bash scripts/ai_architect_artifact_guard.sh \
@@ -2660,6 +2665,24 @@ workflow-attestation-guard-selfcheck:
     ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_source_text_coverage.json >/dev/null 2>&1
     ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_final_done_checklist.json >/dev/null 2>&1
     ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_interdisciplinary_source_lists.json >/dev/null 2>&1
+
+current-workline-attestation-guard-selfcheck:
+    test -x scripts/current_workline_attestation_guard.sh
+    bash -n scripts/current_workline_attestation_guard.sh
+    rg -q 'cargo run -q -p chimera-lab --bin current_workline_attestation_guard --' scripts/current_workline_attestation_guard.sh
+    test -f crates/chimera-lab/src/bin/current_workline_attestation_guard.rs
+    test -f crates/chimera-lab/src/current_workline_attestation_guard.rs
+    test -f docs/CURRENT_WORKLINE_ATTESTATION.json
+    rg -q 'canonical_only_not_sufficient' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'requires_real_subagent_trace' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'subagent_execution_log' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'source_list_count' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'latest_handoff is not the newest handoff' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    test -f tests/fixtures/current_workline_attestation_guard/pass/current_workline.json
+    test -f tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log.json
+    cargo test -q -p chimera-lab --bin current_workline_attestation_guard
+    cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- tests/fixtures/current_workline_attestation_guard/pass/current_workline.json
+    ! cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log.json >/dev/null 2>&1
 
 automation-debt-guard:
     bash scripts/automation_debt_guard.sh docs/AUTOMATION_DEBT_REGISTER.md
