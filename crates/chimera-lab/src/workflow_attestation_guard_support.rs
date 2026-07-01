@@ -308,15 +308,20 @@ fn is_allowed_file_evidence(trimmed: &str) -> bool {
 }
 
 fn is_allowed_command_evidence(trimmed: &str) -> bool {
-    const ALLOWED_COMMANDS: [&str; 20] = [
+    const ALLOWED_COMMANDS: [&str; 25] = [
         "cargo fmt --all -- --check",
         "cargo check -q --workspace --all-targets",
         "cargo clippy -q --workspace --all-targets -- -D warnings",
+        "cargo clippy -q -p chimera-lab --bin current_workline_attestation_guard -- -D warnings",
         "cargo test -q -p chimera-lab --bin workflow_attestation_guard",
+        "cargo test -q -p chimera-lab --bin current_workline_attestation_guard",
         "cargo run -q -p chimera-lab --bin workflow_attestation_guard -- docs/WORKFLOW_ATTESTATION.json",
+        "cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- docs/CURRENT_WORKLINE_ATTESTATION.json",
         "cargo run -q -p chimera-lab --bin ai_architect_artifact_guard -- docs/AI_ARCHITECT_LIFECYCLE_GUARD.md docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json docs/WORKFLOW_ATTESTATION.json docs/RESEARCH_DEBT.md",
         "just workflow-attestation-guard-selfcheck",
         "just workflow-attestation-guard",
+        "just current-workline-attestation-guard-selfcheck",
+        "just current-workline-attestation-guard",
         "just ai-architect-artifact-guard-selfcheck",
         "just ai-architect-artifact-guard",
         "just session-process-guard",

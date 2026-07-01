@@ -60,7 +60,6 @@
       "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md"
     ]
   },
-  "subagent_execution_log": [],
   "review_results": {
     "risks_found": [
       "stale canonical proof reuse"

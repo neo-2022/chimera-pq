@@ -30,6 +30,22 @@
 - Require per-role prompt/output summary hashes.
 - Require current handoff binding to the newest handoff.
 - Wire the current-workline guard into `just session-process-guard`.
+- Wire the current-workline guard into `handoff-check` and
+  `ship_readiness.sh`, so old canonical proof cannot pass those paths alone.
+- Require explicit current-workline `stage_trace` with the eight lifecycle
+  stages in order.
+- Require `workline_attestation_sha256`, binding the current JSON proof to the
+  exact workline report file content.
+- Add negative checks for old canonical kind mismatch and a fully missing
+  `subagent_execution_log` field.
+- Require a separate `SUBAGENT_EXECUTION_TRACE` artifact and verify its
+  SHA-256 digest before accepting current workline proof.
+- Require `latest_handoff_sha256`, so the current proof is bound to the exact
+  handoff content as well as the newest handoff path.
+- Require per-stage current-workline reports with gate decision, council review
+  and red-team review flags for all eight lifecycle stages.
+- Require per-role interdisciplinary checks, not only a global
+  `interdisciplinary_trace=true` style flag.
 
 ## Boundaries
 

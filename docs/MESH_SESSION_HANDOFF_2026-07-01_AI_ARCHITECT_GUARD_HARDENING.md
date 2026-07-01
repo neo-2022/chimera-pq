@@ -22,10 +22,22 @@
   - missing `subagent_execution_log` fails;
   - old canonical `docs/WORKFLOW_ATTESTATION.json` is not accepted as current
     workline proof.
+- Hardened the current-workline proof after council review:
+  - `handoff-check` and `ship_readiness.sh` also require the current-workline
+    guard;
+  - current proof is bound to workline report, handoff and subagent trace
+    artifacts by SHA-256;
+  - `stage_trace` now requires eight per-stage reports;
+  - interdisciplinary proof now requires the seven source lists and per-role
+    checks;
+  - subagent trace is stored in a separate
+    `docs/SUBAGENT_EXECUTION_TRACE_*.json` artifact and cross-checked against
+    `docs/CURRENT_WORKLINE_ATTESTATION.json`.
 
 ## Evidence
 
 - `docs/CURRENT_WORKLINE_ATTESTATION.json`
+- `docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json`
 - `docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md`
 - `crates/chimera-lab/src/current_workline_attestation_guard.rs`
 - `scripts/current_workline_attestation_guard.sh`

@@ -1,6 +1,12 @@
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, fmt::Write as _, fs, path::Path, time::SystemTime};
+use std::{
+    collections::BTreeSet,
+    fmt::Write as _,
+    fs,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 
 #[path = "workflow_attestation_guard_redaction.rs"]
 mod redaction;
@@ -18,6 +24,27 @@ const REQUIRED_ROLES: [&str; 6] = [
     "security_engineer",
     "devops_engineer",
     "critic_skeptic",
+];
+
+const REQUIRED_STAGE_ORDER: [&str; 8] = [
+    "ANALYZE",
+    "IMPACT_ANALYSIS",
+    "RESEARCH_PLANNING",
+    "RESEARCH",
+    "ARCHITECTURE_SYNTHESIS",
+    "IMPLEMENTATION",
+    "VALIDATION",
+    "POSTMORTEM",
+];
+
+const REQUIRED_INTERDISCIPLINARY_SOURCE_LISTS: [&str; 7] = [
+    "council_interdisciplinary_disciplines",
+    "council_fundamental_knowledge_items",
+    "stage_research_disciplines",
+    "stage_research_fundamental_items",
+    "knowledge_transfer_checks",
+    "analogical_thinking_questions",
+    "found_idea_evaluation_criteria",
 ];
 
 pub fn validate_file(path: &str) -> Result<(), String> {
@@ -55,9 +82,12 @@ fn validate_root(root: &Map<String, Value>) -> Result<(), String> {
     validate_workline_artifact(root, current_workline_id)?;
     validate_latest_handoff(root)?;
     validate_truth_boundary(require_obj(root, "truth_boundary")?)?;
+    validate_stage_trace(require_obj(root, "stage_trace")?)?;
     validate_deepseek_stage_check(require_obj(root, "deepseek_stage_check")?)?;
     validate_interdisciplinary_trace(require_obj(root, "interdisciplinary_trace")?)?;
-    validate_subagent_execution_log(require_array(root, "subagent_execution_log")?, status)?;
+    let subagent_items = require_array(root, "subagent_execution_log")?;
+    validate_subagent_execution_log(subagent_items, status)?;
+    validate_subagent_execution_trace_artifact(root, current_workline_id, subagent_items, status)?;
     validate_review_results(require_obj(root, "review_results")?, status)?;
     validate_gap_resolution(require_obj(root, "gap_resolution")?)?;
     Ok(())
@@ -87,13 +117,18 @@ fn validate_workline_artifact(
                 .to_string(),
         );
     }
+    validate_file_sha256(
+        path,
+        require_non_empty_str(root, "workline_attestation_sha256")?,
+    )?;
     Ok(())
 }
 
 fn validate_latest_handoff(root: &Map<String, Value>) -> Result<(), String> {
     let path = require_non_empty_str(root, "latest_handoff")?;
     if path.starts_with("tests/fixtures/") {
-        return validate_path_exists(path, "latest_handoff");
+        validate_path_exists(path, "latest_handoff")?;
+        return validate_file_sha256(path, require_non_empty_str(root, "latest_handoff_sha256")?);
     }
     if !path.starts_with("docs/MESH_SESSION_HANDOFF_") {
         return Err(
@@ -109,12 +144,13 @@ fn validate_latest_handoff(root: &Map<String, Value>) -> Result<(), String> {
                 .to_string(),
         );
     }
-    Ok(())
+    validate_file_sha256(path, require_non_empty_str(root, "latest_handoff_sha256")?)
 }
 
 fn latest_handoff_path() -> Result<String, String> {
     let mut paths = Vec::new();
-    let entries = fs::read_dir("docs")
+    let docs_dir = project_root().join("docs");
+    let entries = fs::read_dir(&docs_dir)
         .map_err(|err| format!("current workline attestation guard: cannot read docs: {err}"))?;
     for entry in entries {
         let entry = entry.map_err(|err| {
@@ -146,6 +182,48 @@ fn validate_truth_boundary(truth: &Map<String, Value>) -> Result<(), String> {
     require_bool(truth, "stand_literals_absent", true)
 }
 
+fn validate_stage_trace(trace: &Map<String, Value>) -> Result<(), String> {
+    require_bool(trace, "required", true)?;
+    require_i64(trace, "stage_count", REQUIRED_STAGE_ORDER.len() as i64)?;
+    let stages = require_array(trace, "stage_order")?;
+    if stages.len() != REQUIRED_STAGE_ORDER.len() {
+        return Err("current workline attestation guard: stage_order length mismatch".to_string());
+    }
+    for (index, expected) in REQUIRED_STAGE_ORDER.iter().enumerate() {
+        let actual = stages.get(index).and_then(Value::as_str).ok_or_else(|| {
+            "current workline attestation guard: stage_order item is not string".to_string()
+        })?;
+        if actual != *expected {
+            return Err(format!(
+                "current workline attestation guard: stage_order mismatch at index {index}"
+            ));
+        }
+    }
+    require_bool(trace, "gate_decisions_recorded", true)?;
+    require_bool(trace, "rollback_rules_checked", true)?;
+    validate_stage_reports(require_array(trace, "stage_reports")?)?;
+    validate_evidence_array(trace, "evidence")
+}
+
+fn validate_stage_reports(reports: &[Value]) -> Result<(), String> {
+    if reports.len() != REQUIRED_STAGE_ORDER.len() {
+        return Err(
+            "current workline attestation guard: stage_reports length mismatch".to_string(),
+        );
+    }
+    for (index, expected_stage) in REQUIRED_STAGE_ORDER.iter().enumerate() {
+        let report = value_obj(&reports[index], "stage report")?;
+        require_str(report, "stage", expected_stage)?;
+        require_non_empty_str(report, "goal")?;
+        require_non_empty_str(report, "outcome")?;
+        require_enum(report, "gate_decision", &["pass", "return", "stop"])?;
+        require_bool(report, "council_review_recorded", true)?;
+        require_bool(report, "red_team_review_recorded", true)?;
+        validate_evidence_array(report, "evidence")?;
+    }
+    Ok(())
+}
+
 fn validate_deepseek_stage_check(check: &Map<String, Value>) -> Result<(), String> {
     require_i64(check, "stage_count", 8)?;
     require_i64(check, "covered_required_item_count", 227)?;
@@ -161,7 +239,96 @@ fn validate_interdisciplinary_trace(trace: &Map<String, Value>) -> Result<(), St
     require_i64(trace, "source_list_count", 7)?;
     require_bool(trace, "knowledge_transfer_checked", true)?;
     require_bool(trace, "rejected_analogies_recorded", true)?;
+    validate_interdisciplinary_source_lists(trace)?;
+    validate_interdisciplinary_role_checks(require_array(trace, "per_role_checks")?)?;
     validate_evidence_array(trace, "evidence")
+}
+
+fn validate_interdisciplinary_source_lists(trace: &Map<String, Value>) -> Result<(), String> {
+    let values = require_array(trace, "source_lists_checked")?;
+    if values.len() != REQUIRED_INTERDISCIPLINARY_SOURCE_LISTS.len() {
+        return Err(
+            "current workline attestation guard: source_lists_checked length mismatch".to_string(),
+        );
+    }
+    require_string_array_contains_all(
+        trace,
+        "source_lists_checked",
+        &REQUIRED_INTERDISCIPLINARY_SOURCE_LISTS,
+    )
+}
+
+fn validate_interdisciplinary_role_checks(items: &[Value]) -> Result<(), String> {
+    if items.len() != REQUIRED_ROLES.len() {
+        return Err(
+            "current workline attestation guard: per_role_checks role count mismatch".to_string(),
+        );
+    }
+    let mut roles = BTreeSet::new();
+    for item in items {
+        let obj = value_obj(item, "per-role interdisciplinary check")?;
+        let role = require_enum(obj, "role", &REQUIRED_ROLES)?;
+        if !roles.insert(role.to_string()) {
+            return Err(format!(
+                "current workline attestation guard: duplicate interdisciplinary role: {role}"
+            ));
+        }
+        require_bool(obj, "interdisciplinary_research_used", true)?;
+        require_min_string_array(obj, "disciplines_considered", 3)?;
+        require_min_string_array(obj, "fundamental_principles_checked", 2)?;
+        require_bool(obj, "knowledge_transfer_checked", true)?;
+        require_non_empty_str(obj, "transfer_principle")?;
+        require_non_empty_str(obj, "rejected_analogy_reason")?;
+        validate_evidence_array(obj, "evidence")?;
+    }
+    for role in REQUIRED_ROLES {
+        if !roles.contains(role) {
+            return Err(format!(
+                "current workline attestation guard: missing interdisciplinary role: {role}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_subagent_execution_trace_artifact(
+    root: &Map<String, Value>,
+    current_workline_id: &str,
+    root_items: &[Value],
+    status: &str,
+) -> Result<(), String> {
+    let path = require_non_empty_str(root, "subagent_execution_trace")?;
+    if !(path.starts_with("docs/SUBAGENT_EXECUTION_TRACE_")
+        || path.starts_with("tests/fixtures/current_workline_attestation_guard/"))
+    {
+        return Err(
+            "current workline attestation guard: subagent_execution_trace must be a trace artifact"
+                .to_string(),
+        );
+    }
+    validate_file_sha256(
+        path,
+        require_non_empty_str(root, "subagent_execution_trace_sha256")?,
+    )?;
+    let trace = read_resolved_obj(path, "subagent_execution_trace")?;
+    require_str(&trace, "kind", "subagent_execution_trace")?;
+    require_i64(&trace, "schema_version", 1)?;
+    let trace_workline_id = require_non_empty_str(&trace, "current_workline_id")?;
+    if trace_workline_id != current_workline_id {
+        return Err(
+            "current workline attestation guard: subagent trace workline mismatch".to_string(),
+        );
+    }
+    require_bool(&trace, "external_signed_receipt_available", false)?;
+    require_bool(&trace, "truth_boundary_recorded", true)?;
+    validate_evidence_array(&trace, "evidence")?;
+    let trace_items = require_array(&trace, "entries")?;
+    if root_items != trace_items {
+        return Err(
+            "current workline attestation guard: subagent trace entries mismatch".to_string(),
+        );
+    }
+    validate_subagent_execution_log(trace_items, status)
 }
 
 fn validate_subagent_execution_log(items: &[Value], status: &str) -> Result<(), String> {
@@ -185,20 +352,24 @@ fn validate_subagent_execution_log(items: &[Value], status: &str) -> Result<(), 
                 "current workline attestation guard: duplicate subagent role: {role}"
             ));
         }
-        require_non_empty_str(obj, "agent_id")?;
+        validate_agent_id(require_non_empty_str(obj, "agent_id")?)?;
         require_str(obj, "tool", "multi_agent_v1.spawn_agent")?;
         require_str(obj, "status", "completed")?;
-        validate_timestamp(
-            require_non_empty_str(obj, "started_at_utc")?,
-            "started_at_utc",
-        )?;
-        validate_timestamp(
-            require_non_empty_str(obj, "completed_at_utc")?,
-            "completed_at_utc",
-        )?;
+        require_enum(obj, "verdict", &["PASS", "PARTIAL", "FAIL"])?;
+        let started_at = require_non_empty_str(obj, "started_at_utc")?;
+        let completed_at = require_non_empty_str(obj, "completed_at_utc")?;
+        validate_timestamp(started_at, "started_at_utc")?;
+        validate_timestamp(completed_at, "completed_at_utc")?;
+        if completed_at < started_at {
+            return Err(
+                "current workline attestation guard: completed_at_utc before started_at_utc"
+                    .to_string(),
+            );
+        }
         require_bool(obj, "deepseek_stages_checked", true)?;
         require_bool(obj, "interdisciplinary_research_used", true)?;
         require_bool(obj, "independent_before_cross_review", true)?;
+        require_bool(obj, "truth_boundary_recorded", true)?;
         validate_evidence_array(obj, "evidence")?;
 
         validate_hashed_summary(obj, "prompt_summary", "prompt_sha256", &mut prompt_hashes)?;
@@ -299,18 +470,61 @@ fn validate_path_field(root: &Map<String, Value>, key: &str, expected: &str) -> 
 }
 
 fn validate_path_exists(path: &str, key: &str) -> Result<(), String> {
+    let _ = resolve_project_path(path, key)?;
+    Ok(())
+}
+
+fn resolve_project_path(path: &str, key: &str) -> Result<PathBuf, String> {
     if path.contains("..") || path.contains("://") || path.contains('\\') {
         return Err(format!(
             "current workline attestation guard: unsafe path in {key}"
         ));
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    if !(Path::new(path).exists() || root.join(path).exists()) {
-        return Err(format!(
-            "current workline attestation guard: missing path in {key}: {path}"
-        ));
+    let root = project_root();
+    let path_ref = Path::new(path);
+    if path_ref.exists() {
+        return Ok(path_ref.to_path_buf());
+    }
+    let root_path = root.join(path);
+    if root_path.exists() {
+        return Ok(root_path);
+    }
+    Err(format!(
+        "current workline attestation guard: missing path in {key}: {path}"
+    ))
+}
+
+fn project_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn validate_file_sha256(path: &str, expected: &str) -> Result<(), String> {
+    if !is_sha256_hex(expected) {
+        return Err(
+            "current workline attestation guard: artifact_sha256 is not sha256 hex".to_string(),
+        );
+    }
+    let resolved = resolve_project_path(path, "workline_attestation")?;
+    let bytes = fs::read(&resolved).map_err(|err| {
+        format!("current workline attestation guard: cannot read workline_attestation: {err}")
+    })?;
+    let actual = sha256_bytes(&bytes);
+    if actual != expected {
+        return Err("current workline attestation guard: artifact_sha256 mismatch".to_string());
     }
     Ok(())
+}
+
+fn read_resolved_obj(path: &str, key: &str) -> Result<Map<String, Value>, String> {
+    let resolved = resolve_project_path(path, key)?;
+    let raw = fs::read_to_string(&resolved)
+        .map_err(|err| format!("current workline attestation guard: cannot read {key}: {err}"))?;
+    let value: Value = serde_json::from_str(&raw)
+        .map_err(|err| format!("current workline attestation guard: invalid {key} json: {err}"))?;
+    value
+        .as_object()
+        .cloned()
+        .ok_or_else(|| format!("current workline attestation guard: {key} root is not object"))
 }
 
 fn validate_slug(value: &str, key: &str) -> Result<(), String> {
@@ -342,12 +556,36 @@ fn validate_timestamp(value: &str, key: &str) -> Result<(), String> {
     }
 }
 
+fn validate_agent_id(value: &str) -> Result<(), String> {
+    let bytes = value.as_bytes();
+    let dash_positions = [8, 13, 18, 23];
+    if bytes.len() != 36 {
+        return Err("current workline attestation guard: invalid agent_id format".to_string());
+    }
+    for (index, byte) in bytes.iter().enumerate() {
+        if dash_positions.contains(&index) {
+            if *byte != b'-' {
+                return Err(
+                    "current workline attestation guard: invalid agent_id format".to_string(),
+                );
+            }
+        } else if !byte.is_ascii_hexdigit() {
+            return Err("current workline attestation guard: invalid agent_id format".to_string());
+        }
+    }
+    Ok(())
+}
+
 fn is_sha256_hex(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn sha256_hex(value: &str) -> String {
-    let digest = Sha256::digest(value.as_bytes());
+    sha256_bytes(value.as_bytes())
+}
+
+fn sha256_bytes(value: &[u8]) -> String {
+    let digest = Sha256::digest(value);
     let mut out = String::with_capacity(64);
     for byte in digest {
         let _ = write!(&mut out, "{byte:02x}");
@@ -369,20 +607,165 @@ mod tests {
             .into_owned()
     }
 
-    #[test]
-    fn accepts_current_workline_fixture() -> Result<(), String> {
-        validate_file(&fixture("pass/current_workline.json"))
+    fn current_artifact() -> String {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("docs/CURRENT_WORKLINE_ATTESTATION.json")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn valid_root() -> Result<Map<String, Value>, String> {
+        read_obj(&current_artifact())
     }
 
     #[test]
-    fn rejects_missing_subagent_trace_fixture() {
-        let result = validate_file(&fixture("fail/missing_subagent_execution_log.json"));
+    fn accepts_current_workline_artifact() -> Result<(), String> {
+        validate_file(&current_artifact())
+    }
+
+    #[test]
+    fn rejects_empty_subagent_trace() -> Result<(), String> {
+        let mut root = valid_root()?;
+        root.insert(
+            "subagent_execution_log".to_string(),
+            Value::Array(Vec::new()),
+        );
+        let result = validate_root(&root);
         assert!(result.is_err(), "expected missing trace failure");
         let err = result.err().unwrap_or_default();
         assert!(
-            err.contains("subagent_execution_log role count mismatch")
-                || err.contains("missing array: subagent_execution_log"),
+            err.contains("subagent_execution_log role count mismatch"),
             "unexpected error: {err}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_old_canonical_workflow_attestation() {
+        let canonical = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("docs/WORKFLOW_ATTESTATION.json")
+            .to_string_lossy()
+            .into_owned();
+        let result = validate_file(&canonical);
+        assert!(result.is_err(), "expected canonical attestation rejection");
+        let err = result.err().unwrap_or_default();
+        assert!(err.contains("kind mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rejects_missing_subagent_trace_field() -> Result<(), String> {
+        let mut root = valid_root()?;
+        root.remove("subagent_execution_log");
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected missing trace field failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("missing array: subagent_execution_log"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_kind_mismatch_fixture() {
+        let result = validate_file(&fixture("fail/canonical_kind_mismatch.json"));
+        assert!(result.is_err(), "expected kind mismatch failure");
+        let err = result.err().unwrap_or_default();
+        assert!(err.contains("kind mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rejects_tampered_workline_attestation_hash() -> Result<(), String> {
+        let mut root = valid_root()?;
+        root.insert(
+            "workline_attestation_sha256".to_string(),
+            Value::String("0".repeat(64)),
+        );
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected hash mismatch failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("artifact_sha256 mismatch"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_tampered_handoff_hash() -> Result<(), String> {
+        let mut root = valid_root()?;
+        root.insert(
+            "latest_handoff_sha256".to_string(),
+            Value::String("0".repeat(64)),
+        );
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected handoff hash mismatch failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("artifact_sha256 mismatch"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_missing_stage_reports() -> Result<(), String> {
+        let mut root = valid_root()?;
+        let stage_trace = root
+            .get_mut("stage_trace")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| "missing stage_trace".to_string())?;
+        stage_trace.remove("stage_reports");
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected missing stage_reports failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("missing array: stage_reports"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_weak_interdisciplinary_trace() -> Result<(), String> {
+        let mut root = valid_root()?;
+        let trace = root
+            .get_mut("interdisciplinary_trace")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| "missing interdisciplinary_trace".to_string())?;
+        trace.remove("per_role_checks");
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected weak interdisciplinary failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("missing array: per_role_checks"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_fake_agent_id_format() -> Result<(), String> {
+        let mut root = valid_root()?;
+        let first_agent = root
+            .get_mut("subagent_execution_log")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| items.first_mut())
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| "missing first subagent".to_string())?;
+        first_agent.insert(
+            "agent_id".to_string(),
+            Value::String("fixture-architect".to_string()),
+        );
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected fake agent id failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("invalid agent_id format"),
+            "unexpected error: {err}"
+        );
+        Ok(())
     }
 }

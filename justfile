@@ -774,9 +774,11 @@ ship-readiness-selfcheck:
     rg -q 'just rust-no-hardcode-guard' scripts/ship_readiness.sh
     rg -q 'just workflow-attestation-guard-selfcheck' scripts/ship_readiness.sh
     rg -q 'just workflow-attestation-guard' scripts/ship_readiness.sh
+    rg -q 'just current-workline-attestation-guard-selfcheck' scripts/ship_readiness.sh
+    rg -q 'just current-workline-attestation-guard' scripts/ship_readiness.sh
     rg -q 'just cef-phase1-smoke' scripts/ship_readiness.sh
     rg -q 'just benchmark-regression-check' scripts/ship_readiness.sh
-    line_git=$(grep -n '^just git-tree-hygiene-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_workflow_self=$(grep -n '^just workflow-attestation-guard-selfcheck$' scripts/ship_readiness.sh | cut -d: -f1); line_workflow=$(grep -n '^just workflow-attestation-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); line_first_runtime=$(grep -n '^just runtime-' scripts/ship_readiness.sh | head -n 1 | cut -d: -f1); test -n "$line_git" && test -n "$line_workflow_self" && test -n "$line_workflow" && test -n "$line_cleanroom" && test -n "$line_first_runtime" && test "$line_git" -lt "$line_workflow_self" && test "$line_workflow_self" -lt "$line_workflow" && test "$line_workflow" -lt "$line_cleanroom" && test "$line_cleanroom" -lt "$line_first_runtime"
+    line_git=$(grep -n '^just git-tree-hygiene-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_workflow_self=$(grep -n '^just workflow-attestation-guard-selfcheck$' scripts/ship_readiness.sh | cut -d: -f1); line_workflow=$(grep -n '^just workflow-attestation-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_current_self=$(grep -n '^just current-workline-attestation-guard-selfcheck$' scripts/ship_readiness.sh | cut -d: -f1); line_current=$(grep -n '^just current-workline-attestation-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); line_first_runtime=$(grep -n '^just runtime-' scripts/ship_readiness.sh | head -n 1 | cut -d: -f1); test -n "$line_git" && test -n "$line_workflow_self" && test -n "$line_workflow" && test -n "$line_current_self" && test -n "$line_current" && test -n "$line_cleanroom" && test -n "$line_first_runtime" && test "$line_git" -lt "$line_workflow_self" && test "$line_workflow_self" -lt "$line_workflow" && test "$line_workflow" -lt "$line_current_self" && test "$line_current_self" -lt "$line_current" && test "$line_current" -lt "$line_cleanroom" && test "$line_cleanroom" -lt "$line_first_runtime"
     line_bench=$(grep -n '^just benchmark-regression-check$' scripts/ship_readiness.sh | cut -d: -f1); line_baseline=$(grep -n '^just baseline-freeze$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); test -n "$line_bench" && test -n "$line_baseline" && test -n "$line_cleanroom" && test "$line_bench" -lt "$line_baseline" && test "$line_baseline" -lt "$line_cleanroom"
     rg -q 'CHIMERA_ACCEPT_BENCHMARK_BASELINE_REFRESH' scripts/baseline_freeze.sh
     ! rg -q '^cp docs/benchmark_latest.json docs/benchmark_baseline.json$' scripts/baseline_freeze.sh
@@ -820,6 +822,8 @@ ship-readiness-selfcheck:
     rg -q '"runtime_forced_stop_rollback_smoke":true' scripts/ship_readiness.sh
     rg -q '"workflow_attestation_guard_selfcheck":true' scripts/ship_readiness.sh
     rg -q '"workflow_attestation_guard":true' scripts/ship_readiness.sh
+    rg -q '"current_workline_attestation_guard_selfcheck":true' scripts/ship_readiness.sh
+    rg -q '"current_workline_attestation_guard":true' scripts/ship_readiness.sh
     rg -q '"reality_ship_sync_guard_selfcheck":true' scripts/ship_readiness.sh
     rg -q '"reality_ship_sync_guard":true' scripts/ship_readiness.sh
     rg -q '^deny:' justfile
@@ -2499,6 +2503,8 @@ handoff-check:
     just baseline-verify
     just workflow-attestation-guard-selfcheck
     just workflow-attestation-guard
+    just current-workline-attestation-guard-selfcheck
+    just current-workline-attestation-guard
     just mvp-check
     just release-readiness-report-json
 
@@ -2678,11 +2684,25 @@ current-workline-attestation-guard-selfcheck:
     rg -q 'subagent_execution_log' crates/chimera-lab/src/current_workline_attestation_guard.rs
     rg -q 'source_list_count' crates/chimera-lab/src/current_workline_attestation_guard.rs
     rg -q 'latest_handoff is not the newest handoff' crates/chimera-lab/src/current_workline_attestation_guard.rs
-    test -f tests/fixtures/current_workline_attestation_guard/pass/current_workline.json
+    rg -q 'workline_attestation_sha256' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'latest_handoff_sha256' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'subagent_execution_trace_sha256' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'validate_subagent_execution_trace_artifact' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'validate_stage_trace' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'validate_stage_reports' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'per_role_checks' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'stage_order mismatch' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    rg -q 'invalid agent_id format' crates/chimera-lab/src/current_workline_attestation_guard.rs
+    test -f docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json
     test -f tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log.json
+    test -f tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log_field.json
+    test -f tests/fixtures/current_workline_attestation_guard/fail/canonical_kind_mismatch.json
     cargo test -q -p chimera-lab --bin current_workline_attestation_guard
-    cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- tests/fixtures/current_workline_attestation_guard/pass/current_workline.json
+    cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- docs/CURRENT_WORKLINE_ATTESTATION.json
     ! cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log_field.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- tests/fixtures/current_workline_attestation_guard/fail/canonical_kind_mismatch.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin current_workline_attestation_guard -- docs/WORKFLOW_ATTESTATION.json >/dev/null 2>&1
 
 automation-debt-guard:
     bash scripts/automation_debt_guard.sh docs/AUTOMATION_DEBT_REGISTER.md
