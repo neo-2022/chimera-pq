@@ -1,0 +1,2280 @@
+{
+  "status": "pass",
+  "kind": "workflow_attestation",
+  "schema_version": 1,
+  "task_id": "ai-architect-lifecycle-guard-2026-06-30",
+  "scope": "process_guard_tooling",
+  "algorithm_source": "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+  "truth_boundary": {
+    "lab_scope_only": true,
+    "real_world_datapath_closed": false,
+    "local_runtime_started": false,
+    "network_state": "not_modified"
+  },
+  "claims": {
+    "task_done": true,
+    "prod_ready": false,
+    "real_world_pass": false
+  },
+  "council": {
+    "real_subagents_used": true,
+    "independent_reports_published": true,
+    "cross_analysis_done": true,
+    "red_team_done": true,
+    "consensus": "accepted_with_constraints",
+    "participants": [
+      {
+        "role": "architect",
+        "agent_id": "019f198f-bbc8-7e83-87a9-6d1971261917",
+        "status": "completed"
+      },
+      {
+        "role": "senior_developer",
+        "agent_id": "019f198f-bc00-7111-b0f0-fd3b92599cc4",
+        "status": "completed"
+      },
+      {
+        "role": "tester",
+        "agent_id": "019f198f-bc3b-7032-9355-c061aac62c28",
+        "status": "completed"
+      },
+      {
+        "role": "security_engineer",
+        "agent_id": "019f198f-bc6f-7700-8761-0e302c3b9238",
+        "status": "completed"
+      },
+      {
+        "role": "devops_engineer",
+        "agent_id": "019f198f-bca8-7392-abab-3d7aab2e952b",
+        "status": "completed"
+      },
+      {
+        "role": "critic_skeptic",
+        "agent_id": "019f198f-bced-7a81-8105-fa0fe0f5cd1b",
+        "status": "completed"
+      }
+    ],
+    "open_blockers": [],
+    "detail": {
+      "assignments_unique": true,
+      "minimal_context_given": true,
+      "independent_work_before_cross_reading": true,
+      "publication_barrier_respected": true,
+      "each_expert_researched": true,
+      "interdisciplinary_research_used_by_each_expert": true,
+      "cross_analysis_done": true,
+      "red_team_done": true,
+      "additional_research_loop_done": true,
+      "review_cycles_completed": true,
+      "council_report_formed": true,
+      "evidence": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+      ],
+      "individual_reports": [
+        {
+          "role": "architect",
+          "responsibility": "lifecycle contract and source coverage",
+          "context_scope": "process guard only",
+          "research_task": "map source algorithm stages to permanent guard artifacts",
+          "confidence": "high for structure, bounded for subjective quality",
+          "evidence": [
+            "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+          ],
+          "sources": [
+            "source algorithm",
+            "project rules"
+          ],
+          "findings": [
+            "lifecycle must be machine checked"
+          ],
+          "interdisciplinary_findings": [
+            "non-software principles were considered for the role scope"
+          ],
+          "disciplines_considered": [
+            "graph theory",
+            "operations research",
+            "information theory",
+            "control theory"
+          ],
+          "fundamental_principles": [
+            "invariants, feedback loops, path optimization and information minimization"
+          ],
+          "knowledge_transfer_checks": [
+            "checked what can transfer and what must not be copied as implementation"
+          ],
+          "transfer_risks": [
+            "false analogy can add process burden or hide weak evidence"
+          ],
+          "tradeoffs": [
+            "stronger proof costs more artifact detail but prevents skipped lifecycle work"
+          ],
+          "rejected_analogies": [
+            "software-only opinion and direct implementation copying were rejected"
+          ],
+          "research_results": [
+            "checked source algorithm requirements against guard artifacts"
+          ],
+          "engineering_solutions": [
+            "machine-checkable workflow attestation with Rust guard"
+          ],
+          "found_alternative_architectures": [
+            "markdown-only process",
+            "external service gate",
+            "JSON plus local Rust guard"
+          ],
+          "found_risks": [
+            "weak evidence can create false pass",
+            "software-only critique can miss source requirements"
+          ],
+          "found_constraints": [
+            "no local runtime/network checks",
+            "no secrets or stand endpoints",
+            "MVP scope remains higher authority"
+          ],
+          "improvement_proposals": [
+            "full source line coverage",
+            "stage-bound coverage IDs",
+            "structured interdisciplinary proof"
+          ],
+          "additional_research_questions": [
+            "future subjective quality scoring remains outside machine proof"
+          ],
+          "confidence_by_conclusion": [
+            "proven: source hash and counts",
+            "assumption: current field set is sufficient for process slice"
+          ],
+          "found_invariants": [
+            "stage order, evidence binding, no-secret artifact and no false pass invariants"
+          ]
+        },
+        {
+          "role": "senior_developer",
+          "responsibility": "Rust guard implementation",
+          "context_scope": "guard tooling only",
+          "research_task": "check enforceable schema and failure modes",
+          "confidence": "high for checked fields",
+          "evidence": [
+            "crates/chimera-lab/src/workflow_attestation_guard.rs"
+          ],
+          "sources": [
+            "Rust guard",
+            "fixtures"
+          ],
+          "findings": [
+            "boolean stage reports are insufficient without detail"
+          ],
+          "interdisciplinary_findings": [
+            "non-software principles were considered for the role scope"
+          ],
+          "disciplines_considered": [
+            "graph theory",
+            "operations research",
+            "information theory",
+            "control theory"
+          ],
+          "fundamental_principles": [
+            "invariants, feedback loops, path optimization and information minimization"
+          ],
+          "knowledge_transfer_checks": [
+            "checked what can transfer and what must not be copied as implementation"
+          ],
+          "transfer_risks": [
+            "false analogy can add process burden or hide weak evidence"
+          ],
+          "tradeoffs": [
+            "stronger proof costs more artifact detail but prevents skipped lifecycle work"
+          ],
+          "rejected_analogies": [
+            "software-only opinion and direct implementation copying were rejected"
+          ],
+          "research_results": [
+            "checked source algorithm requirements against guard artifacts"
+          ],
+          "engineering_solutions": [
+            "machine-checkable workflow attestation with Rust guard"
+          ],
+          "found_alternative_architectures": [
+            "markdown-only process",
+            "external service gate",
+            "JSON plus local Rust guard"
+          ],
+          "found_risks": [
+            "weak evidence can create false pass",
+            "software-only critique can miss source requirements"
+          ],
+          "found_constraints": [
+            "no local runtime/network checks",
+            "no secrets or stand endpoints",
+            "MVP scope remains higher authority"
+          ],
+          "improvement_proposals": [
+            "full source line coverage",
+            "stage-bound coverage IDs",
+            "structured interdisciplinary proof"
+          ],
+          "additional_research_questions": [
+            "future subjective quality scoring remains outside machine proof"
+          ],
+          "confidence_by_conclusion": [
+            "proven: source hash and counts",
+            "assumption: current field set is sufficient for process slice"
+          ],
+          "found_invariants": [
+            "stage order, evidence binding, no-secret artifact and no false pass invariants"
+          ]
+        },
+        {
+          "role": "tester",
+          "responsibility": "positive and negative fixtures",
+          "context_scope": "guard test matrix",
+          "research_task": "verify skipped lifecycle pieces fail",
+          "confidence": "medium until every future fixture class is expanded",
+          "evidence": [
+            "tests/fixtures/workflow_attestation_guard/pass/full_lifecycle.json"
+          ],
+          "sources": [
+            "fixtures",
+            "just selfcheck"
+          ],
+          "findings": [
+            "negative cases must cover council and research omissions"
+          ],
+          "interdisciplinary_findings": [
+            "non-software principles were considered for the role scope"
+          ],
+          "disciplines_considered": [
+            "graph theory",
+            "operations research",
+            "information theory",
+            "control theory"
+          ],
+          "fundamental_principles": [
+            "invariants, feedback loops, path optimization and information minimization"
+          ],
+          "knowledge_transfer_checks": [
+            "checked what can transfer and what must not be copied as implementation"
+          ],
+          "transfer_risks": [
+            "false analogy can add process burden or hide weak evidence"
+          ],
+          "tradeoffs": [
+            "stronger proof costs more artifact detail but prevents skipped lifecycle work"
+          ],
+          "rejected_analogies": [
+            "software-only opinion and direct implementation copying were rejected"
+          ],
+          "research_results": [
+            "checked source algorithm requirements against guard artifacts"
+          ],
+          "engineering_solutions": [
+            "machine-checkable workflow attestation with Rust guard"
+          ],
+          "found_alternative_architectures": [
+            "markdown-only process",
+            "external service gate",
+            "JSON plus local Rust guard"
+          ],
+          "found_risks": [
+            "weak evidence can create false pass",
+            "software-only critique can miss source requirements"
+          ],
+          "found_constraints": [
+            "no local runtime/network checks",
+            "no secrets or stand endpoints",
+            "MVP scope remains higher authority"
+          ],
+          "improvement_proposals": [
+            "full source line coverage",
+            "stage-bound coverage IDs",
+            "structured interdisciplinary proof"
+          ],
+          "additional_research_questions": [
+            "future subjective quality scoring remains outside machine proof"
+          ],
+          "confidence_by_conclusion": [
+            "proven: source hash and counts",
+            "assumption: current field set is sufficient for process slice"
+          ],
+          "found_invariants": [
+            "stage order, evidence binding, no-secret artifact and no false pass invariants"
+          ]
+        },
+        {
+          "role": "security_engineer",
+          "responsibility": "secrecy and truth boundaries",
+          "context_scope": "process artifacts only",
+          "research_task": "reject secrets, local paths, local addresses and false real-world claims",
+          "confidence": "high for deny-list coverage, bounded for unknown secret forms",
+          "evidence": [
+            "crates/chimera-lab/src/workflow_attestation_guard.rs"
+          ],
+          "sources": [
+            "AGENTS.md",
+            "guard deny-list"
+          ],
+          "findings": [
+            "lab/source guard must not become production-readiness claim"
+          ],
+          "interdisciplinary_findings": [
+            "non-software principles were considered for the role scope"
+          ],
+          "disciplines_considered": [
+            "graph theory",
+            "operations research",
+            "information theory",
+            "control theory"
+          ],
+          "fundamental_principles": [
+            "invariants, feedback loops, path optimization and information minimization"
+          ],
+          "knowledge_transfer_checks": [
+            "checked what can transfer and what must not be copied as implementation"
+          ],
+          "transfer_risks": [
+            "false analogy can add process burden or hide weak evidence"
+          ],
+          "tradeoffs": [
+            "stronger proof costs more artifact detail but prevents skipped lifecycle work"
+          ],
+          "rejected_analogies": [
+            "software-only opinion and direct implementation copying were rejected"
+          ],
+          "research_results": [
+            "checked source algorithm requirements against guard artifacts"
+          ],
+          "engineering_solutions": [
+            "machine-checkable workflow attestation with Rust guard"
+          ],
+          "found_alternative_architectures": [
+            "markdown-only process",
+            "external service gate",
+            "JSON plus local Rust guard"
+          ],
+          "found_risks": [
+            "weak evidence can create false pass",
+            "software-only critique can miss source requirements"
+          ],
+          "found_constraints": [
+            "no local runtime/network checks",
+            "no secrets or stand endpoints",
+            "MVP scope remains higher authority"
+          ],
+          "improvement_proposals": [
+            "full source line coverage",
+            "stage-bound coverage IDs",
+            "structured interdisciplinary proof"
+          ],
+          "additional_research_questions": [
+            "future subjective quality scoring remains outside machine proof"
+          ],
+          "confidence_by_conclusion": [
+            "proven: source hash and counts",
+            "assumption: current field set is sufficient for process slice"
+          ],
+          "found_invariants": [
+            "stage order, evidence binding, no-secret artifact and no false pass invariants"
+          ]
+        },
+        {
+          "role": "devops_engineer",
+          "responsibility": "process integration",
+          "context_scope": "justfile and ship readiness scripts",
+          "research_task": "ensure process guard is available before handoff and ship checks",
+          "confidence": "high for static integration",
+          "evidence": [
+            "justfile",
+            "scripts/ship_readiness.sh"
+          ],
+          "sources": [
+            "justfile",
+            "ship script"
+          ],
+          "findings": [
+            "process-only checks must stay separate from runtime checks"
+          ],
+          "interdisciplinary_findings": [
+            "non-software principles were considered for the role scope"
+          ],
+          "disciplines_considered": [
+            "graph theory",
+            "operations research",
+            "information theory",
+            "control theory"
+          ],
+          "fundamental_principles": [
+            "invariants, feedback loops, path optimization and information minimization"
+          ],
+          "knowledge_transfer_checks": [
+            "checked what can transfer and what must not be copied as implementation"
+          ],
+          "transfer_risks": [
+            "false analogy can add process burden or hide weak evidence"
+          ],
+          "tradeoffs": [
+            "stronger proof costs more artifact detail but prevents skipped lifecycle work"
+          ],
+          "rejected_analogies": [
+            "software-only opinion and direct implementation copying were rejected"
+          ],
+          "research_results": [
+            "checked source algorithm requirements against guard artifacts"
+          ],
+          "engineering_solutions": [
+            "machine-checkable workflow attestation with Rust guard"
+          ],
+          "found_alternative_architectures": [
+            "markdown-only process",
+            "external service gate",
+            "JSON plus local Rust guard"
+          ],
+          "found_risks": [
+            "weak evidence can create false pass",
+            "software-only critique can miss source requirements"
+          ],
+          "found_constraints": [
+            "no local runtime/network checks",
+            "no secrets or stand endpoints",
+            "MVP scope remains higher authority"
+          ],
+          "improvement_proposals": [
+            "full source line coverage",
+            "stage-bound coverage IDs",
+            "structured interdisciplinary proof"
+          ],
+          "additional_research_questions": [
+            "future subjective quality scoring remains outside machine proof"
+          ],
+          "confidence_by_conclusion": [
+            "proven: source hash and counts",
+            "assumption: current field set is sufficient for process slice"
+          ],
+          "found_invariants": [
+            "stage order, evidence binding, no-secret artifact and no false pass invariants"
+          ]
+        },
+        {
+          "role": "critic_skeptic",
+          "responsibility": "block shallow compliance",
+          "context_scope": "source algorithm coverage and gaps",
+          "research_task": "find places where flags could replace actual evidence",
+          "confidence": "high for current guard gap detection",
+          "evidence": [
+            "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+          ],
+          "sources": [
+            "source algorithm",
+            "coverage catalog"
+          ],
+          "findings": [
+            "stage_report=true alone is not enough"
+          ],
+          "interdisciplinary_findings": [
+            "non-software principles were considered for the role scope"
+          ],
+          "disciplines_considered": [
+            "graph theory",
+            "operations research",
+            "information theory",
+            "control theory"
+          ],
+          "fundamental_principles": [
+            "invariants, feedback loops, path optimization and information minimization"
+          ],
+          "knowledge_transfer_checks": [
+            "checked what can transfer and what must not be copied as implementation"
+          ],
+          "transfer_risks": [
+            "false analogy can add process burden or hide weak evidence"
+          ],
+          "tradeoffs": [
+            "stronger proof costs more artifact detail but prevents skipped lifecycle work"
+          ],
+          "rejected_analogies": [
+            "software-only opinion and direct implementation copying were rejected"
+          ],
+          "research_results": [
+            "checked source algorithm requirements against guard artifacts"
+          ],
+          "engineering_solutions": [
+            "machine-checkable workflow attestation with Rust guard"
+          ],
+          "found_alternative_architectures": [
+            "markdown-only process",
+            "external service gate",
+            "JSON plus local Rust guard"
+          ],
+          "found_risks": [
+            "weak evidence can create false pass",
+            "software-only critique can miss source requirements"
+          ],
+          "found_constraints": [
+            "no local runtime/network checks",
+            "no secrets or stand endpoints",
+            "MVP scope remains higher authority"
+          ],
+          "improvement_proposals": [
+            "full source line coverage",
+            "stage-bound coverage IDs",
+            "structured interdisciplinary proof"
+          ],
+          "additional_research_questions": [
+            "future subjective quality scoring remains outside machine proof"
+          ],
+          "confidence_by_conclusion": [
+            "proven: source hash and counts",
+            "assumption: current field set is sufficient for process slice"
+          ],
+          "found_invariants": [
+            "stage order, evidence binding, no-secret artifact and no false pass invariants"
+          ]
+        }
+      ],
+      "cross_analysis_findings": [
+        "coarse boolean reports were rejected as insufficient"
+      ],
+      "red_team_findings": [
+        "future sessions must fail if they omit interdisciplinary research or detailed reports"
+      ],
+      "additional_research_checks": [
+        "source headings and stage-specific requirements were rechecked against the source catalog"
+      ],
+      "completion_criteria": [
+        "all required roles reported",
+        "cross review completed",
+        "red-team blockers resolved"
+      ],
+      "problem_description": [
+        "future sessions could skip parts of the user algorithm without a machine-checkable trail"
+      ],
+      "participant_list": [
+        "architect",
+        "senior_developer",
+        "tester",
+        "security_engineer",
+        "devops_engineer",
+        "critic_skeptic"
+      ],
+      "responsibility_areas": [
+        "architecture",
+        "implementation",
+        "testing",
+        "security",
+        "process integration",
+        "skeptical review"
+      ],
+      "researched_architectures": [
+        "markdown-only process",
+        "JSON attestation with Rust guard",
+        "external service gate"
+      ],
+      "engineering_alternatives": [
+        "manual checklist",
+        "machine guard",
+        "runtime gate integration"
+      ],
+      "found_fundamental_principles": [
+        "stage machines",
+        "coverage sets",
+        "negative testing",
+        "minimum disclosure"
+      ],
+      "found_invariants": [
+        "no skipped stages",
+        "no pass with blockers",
+        "no secrets",
+        "no lab-to-prod promotion"
+      ],
+      "found_constraints": [
+        "process-only local checks",
+        "SSH-only runtime checks",
+        "MVP-first authority"
+      ],
+      "found_engineering_risks": [
+        "weak fields",
+        "wrong-stage coverage",
+        "secret leakage",
+        "full/runtime target misuse"
+      ],
+      "red_team_results": [
+        "found missing line coverage and weak evidence validation"
+      ],
+      "additional_research_results": [
+        "interdisciplinary source spans require structured transfer proof"
+      ],
+      "rejected_options": [
+        "chat-memory-only rule",
+        "software-only critique",
+        "markdown-only guard"
+      ],
+      "rejection_reasons": [
+        "not machine-checkable",
+        "too easy to skip",
+        "does not satisfy user zero-interpretation command"
+      ],
+      "remaining_open_questions": [
+        "subjective reasoning quality cannot be fully machine-proven"
+      ],
+      "council_recommendations": [
+        "keep process guard separate from product runtime checks",
+        "fail closed on incomplete attestation"
+      ]
+    },
+    "resolved_consensus_constraints": [
+      {
+        "constraint": "subjective perfect understanding is not machine-provable",
+        "resolved": true,
+        "evidence": [
+          "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+        ]
+      },
+      {
+        "constraint": "process guard is not real-runtime or prod-readiness proof",
+        "resolved": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      }
+    ]
+  },
+  "council_summary": {
+    "accepted": [
+      "Make the user-supplied lifecycle permanent through a local project document.",
+      "Require a machine-readable workflow attestation artifact.",
+      "Implement the guard as Rust audit tooling with positive and negative fixtures.",
+      "Integrate the guard into handoff-check and ship-readiness, not mvp-check.",
+      "Keep CHIMERA safety, MVP-scope, secrecy and Lab-vs-Real-World rules above the lifecycle."
+    ],
+    "rejected": [
+      "Markdown-only process rule, because it would not force future sessions to leave machine-checkable evidence.",
+      "Claiming literal 100 percent subjective understanding, because it cannot be verified by files, hashes, commands or exit codes.",
+      "Using the lifecycle to expand MVP into post-MVP research fabric work."
+    ],
+    "risks_processed": [
+      "Subjective words such as best, complete and fully understood are bounded by evidence-backed fields.",
+      "Lab/source process PASS is not promoted to real-world or production-readiness PASS.",
+      "Council and red-team participation are required in the attestation.",
+      "Sensitive stand, secret and payload data are rejected by the guard."
+    ]
+  },
+  "rollback_events": [],
+  "stages": [
+    {
+      "id": "analyze",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "AGENTS.md",
+        "CHIMERA-PQ_MVP_SPEC.md",
+        "Agent.md",
+        "docs/EXECUTION_MODE_NO_TIMELINES.md",
+        "docs/MESH_SESSION_HANDOFF_2026-06-30_PENDING_REBUILD_EXPLAIN_LAZY.md"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "AGENTS.md",
+          "docs/EXECUTION_MODE_NO_TIMELINES.md"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.analyze"
+    },
+    {
+      "id": "impact_analysis",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "AGENTS.md",
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "AGENTS.md",
+          "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.impact_analysis"
+    },
+    {
+      "id": "research_planning",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "tests/fixtures/workflow_attestation_guard/pass/full_lifecycle.json"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+          "tests/fixtures/workflow_attestation_guard/fail/missing_stage.json"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.research_planning"
+    },
+    {
+      "id": "research",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "crates/chimera-lab/src/bin/workflow_attestation_guard.rs"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "crates/chimera-lab/src/bin/report_pack_guard.rs",
+          "crates/chimera-lab/src/bin/ship_structure_guard.rs"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.research"
+    },
+    {
+      "id": "architecture_synthesis",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "scripts/workflow_attestation_guard.sh"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.architecture_synthesis"
+    },
+    {
+      "id": "implementation",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "crates/chimera-lab/src/bin/workflow_attestation_guard.rs",
+        "scripts/workflow_attestation_guard.sh",
+        "justfile",
+        "scripts/ship_readiness.sh"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "crates/chimera-lab/src/bin/workflow_attestation_guard.rs",
+          "scripts/workflow_attestation_guard.sh"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.implementation"
+    },
+    {
+      "id": "validation",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "tests/fixtures/workflow_attestation_guard/pass/full_lifecycle.json",
+        "tests/fixtures/workflow_attestation_guard/pass/stop_no_done.json",
+        "tests/fixtures/workflow_attestation_guard/fail/missing_stage.json",
+        "tests/fixtures/workflow_attestation_guard/fail/pass_without_council.json",
+        "tests/fixtures/workflow_attestation_guard/fail/lab_promoted_to_real_world.json"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "tests/fixtures/workflow_attestation_guard/pass/full_lifecycle.json",
+          "tests/fixtures/workflow_attestation_guard/fail/lab_promoted_to_real_world.json"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.validation"
+    },
+    {
+      "id": "postmortem",
+      "stage_report": true,
+      "council_review": true,
+      "red_team": true,
+      "council_report": true,
+      "evidence": [
+        "docs/RESEARCH_DEBT.md",
+        "docs/WORKFLOW_ATTESTATION.json"
+      ],
+      "open_questions": [],
+      "critical_risks": [],
+      "blocking_issues": [],
+      "gate": {
+        "decision": "pass",
+        "evidence": [
+          "docs/RESEARCH_DEBT.md",
+          "docs/WORKFLOW_ATTESTATION.json"
+        ],
+        "checks": {
+          "completeness": true,
+          "quality": true,
+          "risk": true,
+          "research": true,
+          "red_team": true,
+          "readiness": true
+        },
+        "rollback_stage": null,
+        "stop_reasons": []
+      },
+      "stage_report_ref": "stage_reports.postmortem"
+    }
+  ],
+  "final_decision": {
+    "state": "done",
+    "postmortem_done": true,
+    "research_debt_updated": true,
+    "decision_log_updated": true,
+    "final_done_conditions_met": true,
+    "final_done_evidence": [
+      "stage reports present",
+      "council detail present",
+      "workflow guard integrated",
+      "research debt updated"
+    ],
+    "final_done_conditions": [
+      {
+        "id": "all_stages_reported",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "all_gates_passed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "council_consensus_resolved",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "red_team_processed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "interdisciplinary_research_proven",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json",
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "accepted_decisions_recorded",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "rejected_decisions_recorded",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "open_questions_recorded",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "research_debt_updated",
+        "met": true,
+        "evidence": [
+          "docs/RESEARCH_DEBT.md"
+        ]
+      },
+      {
+        "id": "truth_boundary_preserved",
+        "met": true,
+        "evidence": [
+          "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+        ]
+      }
+    ],
+    "final_done_checklist": [
+      {
+        "id": "council_review_completed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "red_team_mode_completed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "council_report_formed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "universal_gate_passed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "final_postmortem_report_formed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "confirmed_engineering_knowledge_preserved",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "confirmed_fundamental_principles_preserved",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "new_architectural_invariants_preserved",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      },
+      {
+        "id": "updated_research_debt_preserved",
+        "met": true,
+        "evidence": [
+          "docs/RESEARCH_DEBT.md"
+        ]
+      },
+      {
+        "id": "next_lifecycle_recommendations_formed",
+        "met": true,
+        "evidence": [
+          "docs/WORKFLOW_ATTESTATION.json"
+        ]
+      }
+    ]
+  },
+  "algorithm_coverage": {
+    "coverage_file": "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
+    "source_sha256": "c03a66bf5359c83696233b3abc20681eada471d30ba3f9191a2e20abd36f901a",
+    "source_line_count": 5405,
+    "required_item_count": 227,
+    "coverage_digest_fnv1a": "abdbad3e02da3a7a",
+    "evidence": [
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
+      "crates/chimera-lab/src/workflow_attestation_guard.rs"
+    ],
+    "source_newline_count": 5404
+  },
+  "interdisciplinary_research": {
+    "required": true,
+    "planned": true,
+    "performed": true,
+    "council_used_for_critique": true,
+    "knowledge_transfer_checked": true,
+    "software_only": false,
+    "disciplines": [
+      "mathematics",
+      "discrete_mathematics",
+      "linear_algebra",
+      "graph_theory",
+      "probability_theory",
+      "statistics",
+      "operations_research",
+      "optimisation_theory",
+      "game_theory",
+      "information_theory",
+      "control_theory",
+      "complex_systems_theory",
+      "queueing_theory",
+      "automata_theory",
+      "category_theory",
+      "logic",
+      "cryptography",
+      "physics",
+      "chemistry",
+      "biology",
+      "genetics",
+      "neuroscience",
+      "evolutionary_biology",
+      "ecology",
+      "cognitive_sciences",
+      "psychology",
+      "economics",
+      "sociology",
+      "organisation_theory",
+      "distributed_systems",
+      "network_science",
+      "robotics",
+      "aerospace_engineering",
+      "mechanics",
+      "systems_engineering",
+      "reliability_theory"
+    ],
+    "evidence": [
+      "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+    ],
+    "discipline_matrix": [
+      {
+        "discipline": "mathematics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "discrete_mathematics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "linear_algebra",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "graph_theory",
+        "decision": "selected",
+        "result": "graph_theory checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "probability_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "statistics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "operations_research",
+        "decision": "selected",
+        "result": "operations_research checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "optimisation_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "game_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "information_theory",
+        "decision": "selected",
+        "result": "information_theory checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "control_theory",
+        "decision": "selected",
+        "result": "control_theory checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "complex_systems_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "queueing_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "automata_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "category_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "logic",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "cryptography",
+        "decision": "selected",
+        "result": "cryptography checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "physics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "chemistry",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "biology",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "genetics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "neuroscience",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "evolutionary_biology",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "ecology",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "cognitive_sciences",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "psychology",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "economics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "sociology",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "organisation_theory",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "distributed_systems",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "network_science",
+        "decision": "selected",
+        "result": "network_science checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "robotics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "aerospace_engineering",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "mechanics",
+        "decision": "rejected",
+        "result": "not selected for this process-guard slice",
+        "non_applicability_reason": "no stronger direct transfer than selected process, proof, secrecy, or reliability disciplines for this guard slice",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "systems_engineering",
+        "decision": "selected",
+        "result": "systems_engineering checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "discipline": "reliability_theory",
+        "decision": "selected",
+        "result": "reliability_theory checked for transferable lifecycle/control principle",
+        "non_applicability_reason": "",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      }
+    ],
+    "any_other_disciplines": {
+      "source_clause_preserved": true,
+      "selection_rule": "Any additional discipline must be selected when it offers a plausible transferable fundamental principle for the current problem.",
+      "non_applicability_rule": "Additional disciplines may be rejected only with a recorded non-applicability reason and evidence boundary.",
+      "evidence": [
+        "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+      ]
+    },
+    "source_list_count": 7,
+    "source_lists_checked": [
+      {
+        "id": "council_interdisciplinary_disciplines",
+        "source_line_start": 797,
+        "source_line_end": 873,
+        "item_count": 37,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "council_fundamental_knowledge_items",
+        "source_line_start": 883,
+        "source_line_end": 927,
+        "item_count": 23,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_disciplines",
+        "source_line_start": 3161,
+        "source_line_end": 3229,
+        "item_count": 33,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_fundamental_items",
+        "source_line_start": 3237,
+        "source_line_end": 3295,
+        "item_count": 29,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "knowledge_transfer_checks",
+        "source_line_start": 3307,
+        "source_line_end": 3323,
+        "item_count": 8,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "analogical_thinking_questions",
+        "source_line_start": 3415,
+        "source_line_end": 3451,
+        "item_count": 19,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "found_idea_evaluation_criteria",
+        "source_line_start": 3457,
+        "source_line_end": 3481,
+        "item_count": 12,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      }
+    ]
+  },
+  "detailed_algorithm_contract": {
+    "current_state": "done",
+    "conclusion_classification_required": true,
+    "stage_report_contract": {
+      "analyze_required_fields": [
+        "original_task",
+        "fundamental_problem",
+        "goals",
+        "constraints",
+        "invariants",
+        "dependencies",
+        "contracts",
+        "technical_debt",
+        "risks",
+        "assumptions",
+        "open_questions",
+        "missing_information",
+        "research_questions",
+        "user_clarification_questions",
+        "confidence_by_conclusion"
+      ],
+      "impact_analysis_required_fields": [
+        "proposed_changes",
+        "impact_scope",
+        "affected_components",
+        "interfaces",
+        "contracts",
+        "dependencies",
+        "invariants",
+        "backward_compatibility",
+        "cascading_consequences",
+        "tradeoffs",
+        "risk_register",
+        "risk_minimization",
+        "impact_minimization",
+        "open_questions",
+        "next_stage_recommendations"
+      ],
+      "research_planning_required_fields": [
+        "research_goals",
+        "rationale",
+        "sequence",
+        "required_experts",
+        "knowledge_fields",
+        "evaluation_criteria",
+        "inputs_from_analyze",
+        "inputs_from_impact",
+        "open_questions",
+        "engineering_risks",
+        "known_unknowns",
+        "research_may_start_only_after_plan"
+      ],
+      "research_required_fields": [
+        "researched_directions",
+        "solution_families",
+        "researched_disciplines",
+        "researched_sources",
+        "fundamental_principles",
+        "invariants",
+        "opposite_architectures",
+        "simplification_results",
+        "rejected_solutions",
+        "open_questions",
+        "additional_research_directions",
+        "confidence_levels",
+        "knowledge_transfer",
+        "analogical_thinking",
+        "transfer_principles",
+        "rejected_irrelevant_analogies",
+        "analogy_rejection_reasons",
+        "council_interdisciplinary_critique",
+        "found_theories",
+        "found_models",
+        "found_patterns",
+        "found_architectural_alternatives",
+        "comparative_analysis",
+        "rejection_reasons_per_solution"
+      ],
+      "architecture_synthesis_required_fields": [
+        "solution_space",
+        "synthesized_variants",
+        "invariant_checks",
+        "criteria_matrix",
+        "opposite_architecture",
+        "simplification_review",
+        "tradeoff_analysis",
+        "self_verification",
+        "readiness_criterion",
+        "architecture_report",
+        "architect_decision",
+        "council_architecture_verification",
+        "final_architecture_description",
+        "architectural_invariants",
+        "architectural_contracts",
+        "accepted_engineering_decisions",
+        "considered_alternatives",
+        "choice_reasons",
+        "rejected_solution_reasons",
+        "accepted_tradeoffs",
+        "implementation_recommendations"
+      ],
+      "implementation_required_fields": [
+        "implementation_plan",
+        "minimal_impact_review",
+        "invariant_monitoring",
+        "deviation_log",
+        "new_knowledge_log",
+        "rollback_policy",
+        "phase_reports",
+        "change_checks",
+        "implementation_report",
+        "architect_decision",
+        "council_engineering_verification",
+        "implemented_changes",
+        "changed_components",
+        "changed_interfaces",
+        "changed_contracts",
+        "discovered_deviations",
+        "new_engineering_knowledge",
+        "identified_risks",
+        "unresolved_questions",
+        "technical_debts",
+        "recommendations"
+      ],
+      "validation_required_fields": [
+        "requirements_verification",
+        "architecture_verification",
+        "functional_verification",
+        "non_functional_verification",
+        "stress_testing",
+        "reproducibility_check",
+        "undiscovered_problem_search",
+        "defects",
+        "risks",
+        "remaining_constraints",
+        "known_technical_debt",
+        "recommendations",
+        "independent_assessment_ready"
+      ],
+      "postmortem_required_fields": [
+        "decision_analysis",
+        "error_analysis",
+        "invariant_analysis",
+        "research_analysis",
+        "process_analysis",
+        "engineering_knowledge",
+        "research_debt_update",
+        "architect_self_assessment",
+        "knowledge_reuse",
+        "postmortem_council_review",
+        "postmortem_red_team",
+        "final_project_assessment",
+        "confirmed_engineering_decisions",
+        "erroneous_decisions",
+        "successful_decision_reasons",
+        "erroneous_decision_reasons",
+        "confirmed_invariants",
+        "new_invariants",
+        "confirmed_fundamental_principles",
+        "confirmed_architectural_patterns",
+        "identified_engineering_lessons",
+        "future_recommendations",
+        "open_questions",
+        "updated_research_debt"
+      ]
+    },
+    "research_contract": {
+      "known_solution_families_min": 2,
+      "source_classes_min": 2,
+      "requires_interdisciplinary_search": true,
+      "requires_knowledge_transfer": true,
+      "requires_opposite_architecture": true,
+      "requires_simplification_search": true,
+      "requires_confidence_levels": true,
+      "repeat_cycle_policy_required": true,
+      "requires_rejected_irrelevant_analogies": true,
+      "requires_transfer_principle_properties": true,
+      "requires_per_role_interdisciplinary_proof": true
+    },
+    "council_contract": {
+      "individual_reports_required": true,
+      "publication_barrier_required": true,
+      "independent_work_before_cross_reading_required": true,
+      "cross_analysis_required": true,
+      "red_team_required": true,
+      "additional_research_loop_required": true,
+      "review_cycles_required": true,
+      "council_report_required_fields": [
+        "role_responsibilities",
+        "independent_findings",
+        "interdisciplinary_findings",
+        "cross_review_findings",
+        "red_team_findings",
+        "additional_research",
+        "accepted_recommendations",
+        "rejected_recommendations",
+        "open_questions",
+        "completion_criteria",
+        "problem_description",
+        "participant_list",
+        "responsibility_areas",
+        "researched_architectures",
+        "engineering_alternatives",
+        "found_fundamental_principles",
+        "found_invariants",
+        "found_constraints",
+        "found_engineering_risks",
+        "red_team_results",
+        "additional_research_results",
+        "rejected_options",
+        "rejection_reasons",
+        "remaining_open_questions",
+        "council_recommendations"
+      ]
+    },
+    "gate_contract": {
+      "gate_report_required_fields": [
+        "stage_id",
+        "check_result",
+        "found_problems",
+        "found_risks",
+        "found_violations",
+        "unmet_requirements",
+        "recommendations",
+        "decision",
+        "rollback_stage",
+        "justification",
+        "transfer_of_control"
+      ],
+      "research_check_required_fields": [
+        "mandatory_directions",
+        "solution_space",
+        "known_solution_families_count",
+        "interdisciplinary_search",
+        "fundamental_principles",
+        "knowledge_transfer",
+        "invariants",
+        "opposite_architecture",
+        "simplification_search",
+        "new_ideas_from_council_researched"
+      ],
+      "return_requires_earliest_rollback_analysis": true,
+      "gate_does_not_fix_or_replace_council": true
+    },
+    "implementation_preconditions": [
+      "problem_understood",
+      "research_domain_defined",
+      "constraints_identified",
+      "architectural_options_researched",
+      "criticism_done",
+      "fundamental_risks_identified",
+      "architecture_decision_made"
+    ],
+    "validation_done_conditions": [
+      "validation_report_done",
+      "validation_council_review_done",
+      "validation_red_team_done",
+      "validation_universal_gate_passed"
+    ],
+    "final_done_conditions": [
+      "validation_report_done",
+      "validation_council_review_done",
+      "validation_red_team_done",
+      "validation_universal_gate_passed",
+      "final_postmortem_report_formed",
+      "engineering_knowledge_preserved",
+      "fundamental_principles_preserved",
+      "new_architectural_invariants_preserved",
+      "research_debt_preserved",
+      "next_lifecycle_recommendations_formed"
+    ],
+    "research_debt_snapshot": {
+      "items": [],
+      "no_open_research_debt_reason": "Workflow guard slice has no blocking research debt; subjective perfect understanding remains impossible and is handled as truth-boundary limitation."
+    },
+    "evidence": [
+      "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
+      "crates/chimera-lab/src/workflow_attestation_guard.rs"
+    ]
+  },
+  "workline_id": "ai-architect-lifecycle-guard-2026-06-30",
+  "updated_at_utc": "2026-06-30T00:00:00Z",
+  "handoff_id": "MESH_SESSION_HANDOFF_2026-06-30_PENDING_REBUILD_EXPLAIN_LAZY",
+  "source_coverage_ref": "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json#abdbad3e02da3a7a",
+  "normative_requirement_coverage": {
+    "source_sha256": "c03a66bf5359c83696233b3abc20681eada471d30ba3f9191a2e20abd36f901a",
+    "line_spans_cover_required_interdisciplinary_content": true,
+    "stage_reports_must_prove_each_span": true,
+    "evidence": [
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
+      "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+      "crates/chimera-lab/src/workflow_attestation_guard.rs"
+    ],
+    "spans": [
+      {
+        "id": "council_interdisciplinary_research",
+        "source_line_start": 779,
+        "source_line_end": 936,
+        "required_proof": "council roles must examine non-software disciplines and transferable fundamental principles",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "council_knowledge_transfer",
+        "source_line_start": 937,
+        "source_line_end": 962,
+        "required_proof": "transfer checks must record properties, invariants, constraints, benefits, risks and tradeoffs",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "council_analogical_thinking",
+        "source_line_start": 1025,
+        "source_line_end": 1062,
+        "required_proof": "analogies must be checked and irrelevant analogies rejected with reasons",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "research_planning_interdisciplinary_search",
+        "source_line_start": 2829,
+        "source_line_end": 2854,
+        "required_proof": "research planning must include interdisciplinary search before research starts",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_interdisciplinary_research",
+        "source_line_start": 3119,
+        "source_line_end": 3158,
+        "required_proof": "research must not be limited to software engineering",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_mandatory_other_disciplines",
+        "source_line_start": 3159,
+        "source_line_end": 3230,
+        "required_proof": "selected and rejected disciplines must be recorded with result or non-applicability reason",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_fundamental_principles",
+        "source_line_start": 3231,
+        "source_line_end": 3304,
+        "required_proof": "research must look for fundamental principles, not copy implementations",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_knowledge_transfer",
+        "source_line_start": 3305,
+        "source_line_end": 3328,
+        "required_proof": "each transferred principle must list invariants, constraints, adaptable and non-transferable parts, benefits and risks",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_analogical_thinking_and_evaluation",
+        "source_line_start": 3405,
+        "source_line_end": 3508,
+        "required_proof": "analogical ideas must be evaluated and weak or irrelevant ones rejected",
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      }
+    ]
+  },
+  "source_text_coverage": {
+    "source_sha256": "c03a66bf5359c83696233b3abc20681eada471d30ba3f9191a2e20abd36f901a",
+    "line_count": 5405,
+    "newline_count": 5404,
+    "non_empty_line_count": 2703,
+    "bullet_line_count": 1229,
+    "numbered_line_count": 38,
+    "uppercase_heading_line_count": 227,
+    "structural_heading_line_count": 168,
+    "required_marker_line_count": 1494,
+    "all_source_lines_accounted_for": true,
+    "blank_lines_preserved_in_line_ranges": true,
+    "evidence": [
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
+      "crates/chimera-lab/src/workflow_attestation_guard_coverage.rs"
+    ],
+    "full_line_range": {
+      "stage_id": "analyze",
+      "source_line_start": 1,
+      "source_line_end": 5405,
+      "non_empty_line_count": 2703,
+      "required_marker_line_count": 1494,
+      "evidence": [
+        "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+      ]
+    },
+    "stage_line_ranges": [
+      {
+        "stage_id": "analyze",
+        "source_line_start": 1,
+        "source_line_end": 2250,
+        "non_empty_line_count": 1125,
+        "required_marker_line_count": 599,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "impact_analysis",
+        "source_line_start": 2251,
+        "source_line_end": 2646,
+        "non_empty_line_count": 198,
+        "required_marker_line_count": 114,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "research_planning",
+        "source_line_start": 2647,
+        "source_line_end": 3028,
+        "non_empty_line_count": 191,
+        "required_marker_line_count": 113,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "research",
+        "source_line_start": 3029,
+        "source_line_end": 3652,
+        "non_empty_line_count": 312,
+        "required_marker_line_count": 194,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "architecture_synthesis",
+        "source_line_start": 3653,
+        "source_line_end": 4138,
+        "non_empty_line_count": 243,
+        "required_marker_line_count": 113,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "implementation",
+        "source_line_start": 4139,
+        "source_line_end": 4564,
+        "non_empty_line_count": 213,
+        "required_marker_line_count": 115,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "validation",
+        "source_line_start": 4565,
+        "source_line_end": 4980,
+        "non_empty_line_count": 208,
+        "required_marker_line_count": 115,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "stage_id": "postmortem",
+        "source_line_start": 4981,
+        "source_line_end": 5405,
+        "non_empty_line_count": 213,
+        "required_marker_line_count": 131,
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      }
+    ]
+  },
+  "interdisciplinary_source_lists": {
+    "source_sha256": "c03a66bf5359c83696233b3abc20681eada471d30ba3f9191a2e20abd36f901a",
+    "no_interpretive_list_skips": true,
+    "evidence": [
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+    ],
+    "lists": [
+      {
+        "id": "council_interdisciplinary_disciplines",
+        "source_line_start": 797,
+        "source_line_end": 873,
+        "item_count": 37,
+        "items": [
+          "• mathematics;",
+          "• discrete mathematics;",
+          "• linear algebra;",
+          "• graph theory;",
+          "• probability theory;",
+          "• statistics;",
+          "• operations research;",
+          "• optimisation theory;",
+          "• game theory;",
+          "• information theory;",
+          "• control theory;",
+          "• complex systems theory;",
+          "• queueing theory;",
+          "• automata theory;",
+          "• category theory;",
+          "• logic;",
+          "• cryptography;",
+          "• physics;",
+          "• chemistry;",
+          "• biology;",
+          "• genetics;",
+          "• neuroscience;",
+          "• evolutionary biology;",
+          "• ecology;",
+          "• cognitive sciences;",
+          "• psychology;",
+          "• economics;",
+          "• sociology;",
+          "• organisation theory;",
+          "• distributed systems;",
+          "• network science;",
+          "• robotics;",
+          "• aerospace engineering;",
+          "• mechanics;",
+          "• systems engineering;",
+          "• reliability theory;",
+          "• any other disciplines"
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "council_fundamental_knowledge_items",
+        "source_line_start": 883,
+        "source_line_end": 927,
+        "item_count": 23,
+        "items": [
+          "• theories;",
+          "• models;",
+          "• mathematical frameworks;",
+          "• axioms;",
+          "• theorems;",
+          "• laws;",
+          "• invariants;",
+          "• patterns;",
+          "• heuristics;",
+          "• architectural principles;",
+          "• strategies;",
+          "• mechanisms;",
+          "• algorithms;",
+          "• ways of self‑organisation;",
+          "• ways of collective behaviour;",
+          "• ways of decision‑making;",
+          "• ways of learning;",
+          "• ways of recovery after failures;",
+          "• ways of ensuring stability;",
+          "• ways of balancing;",
+          "• ways of scaling;",
+          "• ways of localising errors;",
+          "• ways of minimising complexity."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_disciplines",
+        "source_line_start": 3161,
+        "source_line_end": 3229,
+        "item_count": 33,
+        "items": [
+          "• mathematics;",
+          "• discrete mathematics;",
+          "• linear algebra;",
+          "• graph theory;",
+          "• probability theory;",
+          "• statistics;",
+          "• operations research;",
+          "• optimisation theory;",
+          "• game theory;",
+          "• information theory;",
+          "• control theory;",
+          "• automata theory;",
+          "• category theory;",
+          "• cryptography;",
+          "• physics;",
+          "• chemistry;",
+          "• biology;",
+          "• genetics;",
+          "• neuroscience;",
+          "• ecology;",
+          "• evolutionary biology;",
+          "• cognitive sciences;",
+          "• psychology;",
+          "• economics;",
+          "• sociology;",
+          "• network science;",
+          "• distributed systems;",
+          "• robotics;",
+          "• aerospace engineering;",
+          "• mechanics;",
+          "• systems engineering;",
+          "• reliability theory;",
+          "• any other disciplines"
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_fundamental_items",
+        "source_line_start": 3237,
+        "source_line_end": 3295,
+        "item_count": 29,
+        "items": [
+          "• theories;",
+          "• mathematical models;",
+          "• axioms;",
+          "• theorems;",
+          "• laws;",
+          "• fundamental constraints;",
+          "• invariants;",
+          "• patterns;",
+          "• cause‑and‑effect relationships;",
+          "• heuristics;",
+          "• behaviour models;",
+          "• principles;",
+          "• architectural patterns;",
+          "• strategies;",
+          "• mechanisms;",
+          "• algorithms;",
+          "• optimisation methods;",
+          "• self‑organisation methods;",
+          "• adaptation methods;",
+          "• decision‑making methods;",
+          "• collective behaviour methods;",
+          "• learning methods;",
+          "• search methods;",
+          "• balancing methods;",
+          "• recovery after failure methods;",
+          "• error localisation methods;",
+          "• stability assurance methods;",
+          "• scaling methods;",
+          "• complexity reduction methods."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "knowledge_transfer_checks",
+        "source_line_start": 3307,
+        "source_line_end": 3323,
+        "item_count": 8,
+        "items": [
+          "• what fundamental properties make it successful;",
+          "• what invariants underlie it;",
+          "• what constraints are mandatory;",
+          "• which parts of the principle can be transferred;",
+          "• which parts cannot be transferred;",
+          "• what adaptations are necessary;",
+          "• what advantages the transfer will bring;",
+          "• what new risks the transfer creates."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "analogical_thinking_questions",
+        "source_line_start": 3415,
+        "source_line_end": 3451,
+        "item_count": 19,
+        "items": [
+          "• How would a mathematician solve this problem?",
+          "• How would a physicist solve it?",
+          "• How would a chemist solve it?",
+          "• How would a biologist solve it?",
+          "• How would evolution solve it?",
+          "• How would nature solve it?",
+          "• How would an information theorist solve it?",
+          "• How would a cryptographer solve it?",
+          "• How would a specialist in distributed systems solve it?",
+          "• How would an aerospace engineer solve it?",
+          "• How would a spacecraft engineer solve it?",
+          "• How would a systems engineering specialist solve it?",
+          "• How would a fault‑tolerance specialist solve it?",
+          "• How would an operations researcher solve it?",
+          "• How would an economist solve it?",
+          "• How would a specialist in collective behaviour solve it?",
+          "• What analogous problems have already been solved in other fields of science?",
+          "• What fundamental principles made those solutions successful?",
+          "• Which of these principles can be safely transferred to the current problem?"
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "found_idea_evaluation_criteria",
+        "source_line_start": 3457,
+        "source_line_end": 3481,
+        "item_count": 12,
+        "items": [
+          "• evidence base;",
+          "• maturity;",
+          "• fundamentality;",
+          "• universality;",
+          "• scalability;",
+          "• stability;",
+          "• implementation complexity;",
+          "• integration feasibility;",
+          "• compatibility with existing architecture;",
+          "• impact on invariants;",
+          "• potential risks;",
+          "• potential engineering gain."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      }
+    ]
+  }
+}

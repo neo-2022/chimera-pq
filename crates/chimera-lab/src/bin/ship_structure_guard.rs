@@ -62,6 +62,8 @@ fn main() {
         "runtime_forced_stop_rollback_smoke",
         "rust_no_hardcode_guard_selfcheck",
         "rust_no_hardcode_guard",
+        "workflow_attestation_guard_selfcheck",
+        "workflow_attestation_guard",
         "runtime_real_world_probe_smoke_selfcheck",
         "runtime_real_world_probe_smoke",
         "runtime_real_world_probe_schema_guard_selfcheck",
@@ -112,6 +114,8 @@ fn main() {
         "- Release readiness RU markdown: `true`",
         "- Report pack JSON: `true`",
         "- Report pack markdown: `true`",
+        "- Workflow attestation guard selfcheck: `true`",
+        "- Workflow attestation guard: `true`",
     ];
     let mut prev = 0usize;
     for item in checks {

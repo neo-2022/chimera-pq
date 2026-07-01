@@ -5,11 +5,24 @@ that weaves equal peer nodes together.
 
 Linux-first MVP workspace for CHIMERA-PQ WEAVE.
 
-Start with the parent workspace documents:
+Start every agent session with the parent workspace documents and process
+guards:
 
 1. `../AGENTS.md`
 2. `../CHIMERA-PQ_MVP_SPEC.md`
 3. `../Agent.md`
+4. `docs/EXECUTION_MODE_NO_TIMELINES.md`
+5. `docs/AI_ARCHITECT_LIFECYCLE_GUARD.md`
+6. `docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json`
+7. The newest `docs/MESH_SESSION_HANDOFF_*.md`
+8. Safe local process guard: `just session-process-guard`
+9. Safe handoff/process check: `just handoff-process-check`
+
+`just mvp-check`, `just handoff-check`, `just cleanroom-handoff-check`,
+`just ship-readiness`, `runtime-*`, `rollback-*`, `chimera up/down`,
+`gateway run`, and desktop/control start/stop are full/runtime targets. Do not
+use them as local safe process checks when local CHIMERA runtime/network actions
+are forbidden by `../AGENTS.md`.
 
 This repository intentionally starts small: a symmetric WEAVE node, secure
 session skeleton, carrier abstraction, policy routing, DNS binding, diagnostics
@@ -31,6 +44,19 @@ Current status:
   changes with rollback state.
 
 ## Commands
+
+Local process-only checks that do not start CHIMERA runtime and do not touch OS
+routes/DNS/firewall/proxy:
+
+```bash
+just session-process-guard
+just handoff-process-check
+```
+
+The command list below is a developer/reference catalog. Commands that start
+CHIMERA, apply DNS/routes, run rollback/runtime smoke, `mvp-check`,
+`handoff-check`, `cleanroom-handoff-check`, or `ship-readiness` are full/runtime
+or release checks, not local safe process-only checks.
 
 ```bash
 cargo check --workspace
@@ -317,18 +343,18 @@ The development machine currently has `just` and `cargo-deny` installed via
 
 English:
 
-1. Check build: `cargo check --workspace`
-2. Run tests: `cargo test --workspace`
-3. Quick local WEAVE smoke: `cargo run -p chimera-cli -- lab-smoke`
-4. Full MVP verification: `cargo run -p chimera-cli -- mvp-check`
-5. Full hardening check: `cargo run -p chimera-cli -- hardening-smoke`
+1. Safe process guard: `just session-process-guard`
+2. Safe handoff/process check: `just handoff-process-check`
+3. Check build only when local build checks are allowed: `cargo check --workspace`
+4. Run tests only when local build checks are allowed: `cargo test --workspace`
+5. Full runtime/release verification only in an allowed runtime contour: `just handoff-check`
 6. Russian output example: `cargo run -p chimera-cli -- --lang ru mvp-verify --text --out docs/MVP_VERIFY.txt`
 
 Русский:
 
-1. Проверка сборки: `cargo check --workspace`
-2. Запуск тестов: `cargo test --workspace`
-3. Быстрая локальная проверка WEAVE: `cargo run -p chimera-cli -- lab-smoke`
-4. Полная проверка MVP: `cargo run -p chimera-cli -- mvp-check`
-5. Полная проверка надежности: `cargo run -p chimera-cli -- hardening-smoke`
+1. Безопасная process-проверка: `just session-process-guard`
+2. Безопасная handoff/process-проверка: `just handoff-process-check`
+3. Проверка сборки только когда локальные build-проверки разрешены: `cargo check --workspace`
+4. Запуск тестов только когда локальные build-проверки разрешены: `cargo test --workspace`
+5. Полная runtime/release-проверка только в разрешенном runtime-контуре: `just handoff-check`
 6. Пример вывода на русском: `cargo run -p chimera-cli -- --lang ru mvp-verify --text --out docs/MVP_VERIFY.txt`

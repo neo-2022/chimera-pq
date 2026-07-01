@@ -1,0 +1,2765 @@
+{
+  "kind": "ai_architect_algorithm_coverage",
+  "schema_version": 1,
+  "source": {
+    "name": "deepseek_markdown_20260630_65bdd2.md",
+    "sha256": "c03a66bf5359c83696233b3abc20681eada471d30ba3f9191a2e20abd36f901a",
+    "line_count": 5405,
+    "newline_count": 5404
+  },
+  "coverage_policy": {
+    "no_interpretive_skips": true,
+    "all_structural_headings_required": true,
+    "all_prompt_stage_step_gate_headings_required": true,
+    "machine_guard_required": true,
+    "truth_boundary": "covers formal structural headings and required contract fields; does not prove subjective quality"
+  },
+  "required_item_count": 227,
+  "coverage_digest_fnv1a": "abdbad3e02da3a7a",
+  "required_items": [
+    {
+      "id": "ai_architect_algorithm",
+      "source_line": 1,
+      "title": "AI ARCHITECT ALGORITHM",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_01_project_lifecycle",
+      "source_line": 3,
+      "title": "PROMPT 01 — PROJECT LIFECYCLE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "role",
+      "source_line": 5,
+      "title": "ROLE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "general_principles",
+      "source_line": 43,
+      "title": "GENERAL PRINCIPLES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "main_development_principles",
+      "source_line": 89,
+      "title": "MAIN DEVELOPMENT PRINCIPLES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "architect_states",
+      "source_line": 103,
+      "title": "ARCHITECT STATES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "planning",
+      "source_line": 109,
+      "title": "PLANNING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "researching",
+      "source_line": 119,
+      "title": "RESEARCHING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "reviewing",
+      "source_line": 131,
+      "title": "REVIEWING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "implementing",
+      "source_line": 143,
+      "title": "IMPLEMENTING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "validating",
+      "source_line": 151,
+      "title": "VALIDATING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "done",
+      "source_line": 161,
+      "title": "DONE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "transition_rules",
+      "source_line": 169,
+      "title": "TRANSITION RULES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "project_lifecycle",
+      "source_line": 195,
+      "title": "PROJECT LIFECYCLE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "start",
+      "source_line": 203,
+      "title": "START",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_1_analyze",
+      "source_line": 207,
+      "title": "STAGE 1 — ANALYZE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_2_impact_analysis",
+      "source_line": 211,
+      "title": "STAGE 2 — IMPACT ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "gate_1",
+      "source_line": 215,
+      "title": "GATE 1",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_3_research_planning",
+      "source_line": 219,
+      "title": "STAGE 3 — RESEARCH PLANNING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_4_research",
+      "source_line": 223,
+      "title": "STAGE 4 — RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "gate_2",
+      "source_line": 227,
+      "title": "GATE 2",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_5_architecture_synthesis",
+      "source_line": 231,
+      "title": "STAGE 5 — ARCHITECTURE SYNTHESIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "gate_3",
+      "source_line": 235,
+      "title": "GATE 3",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_6_implementation",
+      "source_line": 239,
+      "title": "STAGE 6 — IMPLEMENTATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "gate_4",
+      "source_line": 243,
+      "title": "GATE 4",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_7_validation",
+      "source_line": 247,
+      "title": "STAGE 7 — VALIDATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "gate_5",
+      "source_line": 251,
+      "title": "GATE 5",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_8_postmortem",
+      "source_line": 255,
+      "title": "STAGE 8 — POSTMORTEM",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "done_2",
+      "source_line": 259,
+      "title": "DONE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "common_structure_of_each_stage",
+      "source_line": 261,
+      "title": "COMMON STRUCTURE OF EACH STAGE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "architect_responsibilities",
+      "source_line": 281,
+      "title": "ARCHITECT RESPONSIBILITIES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "general_research_rules",
+      "source_line": 307,
+      "title": "GENERAL RESEARCH RULES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "principle_of_continuous_improvement",
+      "source_line": 333,
+      "title": "PRINCIPLE OF CONTINUOUS IMPROVEMENT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "principle_of_doubt",
+      "source_line": 361,
+      "title": "PRINCIPLE OF DOUBT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "rules_for_transition_to_implementation",
+      "source_line": 391,
+      "title": "RULES FOR TRANSITION TO IMPLEMENTATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "rollback_rule",
+      "source_line": 415,
+      "title": "ROLLBACK RULE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "principle_of_evidence",
+      "source_line": 451,
+      "title": "PRINCIPLE OF EVIDENCE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "principle_of_simplicity",
+      "source_line": 479,
+      "title": "PRINCIPLE OF SIMPLICITY",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "principle_of_invariants",
+      "source_line": 499,
+      "title": "PRINCIPLE OF INVARIANTS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "project_completion_rule",
+      "source_line": 521,
+      "title": "PROJECT COMPLETION RULE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "main_principle_of_the_architect",
+      "source_line": 551,
+      "title": "MAIN PRINCIPLE OF THE ARCHITECT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_02_council_engine",
+      "source_line": 583,
+      "title": "PROMPT 02 — COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "purpose",
+      "source_line": 585,
+      "title": "PURPOSE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "mandatory_nature",
+      "source_line": 613,
+      "title": "MANDATORY NATURE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data",
+      "source_line": 623,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_forming_the_council",
+      "source_line": 643,
+      "title": "STEP 1 — FORMING THE COUNCIL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_task_allocation",
+      "source_line": 671,
+      "title": "STEP 2 — TASK ALLOCATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_independent_work",
+      "source_line": 683,
+      "title": "STEP 3 — INDEPENDENT WORK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_mandatory_research",
+      "source_line": 697,
+      "title": "STEP 4 — MANDATORY RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_conducting_research",
+      "source_line": 713,
+      "title": "STEP 5 — CONDUCTING RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "mandatory_search_for_known_approaches",
+      "source_line": 737,
+      "title": "MANDATORY SEARCH FOR KNOWN APPROACHES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "interdisciplinary_research",
+      "source_line": 779,
+      "title": "INTERDISCIPLINARY RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "what_to_look_for",
+      "source_line": 875,
+      "title": "WHAT TO LOOK FOR",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_knowledge_transfer",
+      "source_line": 937,
+      "title": "STEP 6 — KNOWLEDGE TRANSFER",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_search_for_invariants",
+      "source_line": 963,
+      "title": "STEP 7 — SEARCH FOR INVARIANTS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_search_for_the_opposite_architecture",
+      "source_line": 987,
+      "title": "STEP 8 — SEARCH FOR THE OPPOSITE ARCHITECTURE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_search_for_simplification",
+      "source_line": 1005,
+      "title": "STEP 9 — SEARCH FOR SIMPLIFICATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_analogical_thinking",
+      "source_line": 1025,
+      "title": "STEP 10 — ANALOGICAL THINKING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_individual_report",
+      "source_line": 1063,
+      "title": "STEP 11 — INDIVIDUAL REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_03_council_review_and_red_team",
+      "source_line": 1093,
+      "title": "PROMPT 03 — COUNCIL REVIEW & RED TEAM",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "purpose_2",
+      "source_line": 1095,
+      "title": "PURPOSE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_2",
+      "source_line": 1123,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_publication_of_independent_reports",
+      "source_line": 1143,
+      "title": "STEP 1 — PUBLICATION OF INDEPENDENT REPORTS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_cross_analysis",
+      "source_line": 1151,
+      "title": "STEP 2 — CROSS‑ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_red_team_mode",
+      "source_line": 1185,
+      "title": "STEP 3 — RED TEAM MODE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_generating_new_research_directions",
+      "source_line": 1233,
+      "title": "STEP 4 — GENERATING NEW RESEARCH DIRECTIONS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_additional_research",
+      "source_line": 1261,
+      "title": "STEP 5 — ADDITIONAL RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_repeated_review_cycles",
+      "source_line": 1287,
+      "title": "STEP 6 — REPEATED REVIEW CYCLES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_criteria_for_continuing_review",
+      "source_line": 1323,
+      "title": "STEP 7 — CRITERIA FOR CONTINUING REVIEW",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_criterion_for_completing_review",
+      "source_line": 1355,
+      "title": "STEP 8 — CRITERION FOR COMPLETING REVIEW",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_updating_individual_conclusions",
+      "source_line": 1387,
+      "title": "STEP 9 — UPDATING INDIVIDUAL CONCLUSIONS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_forming_the_council_report",
+      "source_line": 1413,
+      "title": "STEP 10 — FORMING THE COUNCIL REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_architects_decision",
+      "source_line": 1453,
+      "title": "STEP 11 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_conditions_for_transition_to_gate",
+      "source_line": 1487,
+      "title": "STEP 12 — CONDITIONS FOR TRANSITION TO GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_04_universal_gate_engine",
+      "source_line": 1513,
+      "title": "PROMPT 04 — UNIVERSAL GATE ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "purpose_3",
+      "source_line": 1515,
+      "title": "PURPOSE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "general_principles_2",
+      "source_line": 1535,
+      "title": "GENERAL PRINCIPLES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_3",
+      "source_line": 1555,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_completeness_check",
+      "source_line": 1577,
+      "title": "STEP 1 — COMPLETENESS CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_quality_check",
+      "source_line": 1601,
+      "title": "STEP 2 — QUALITY CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_risk_check",
+      "source_line": 1623,
+      "title": "STEP 3 — RISK CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_research_check",
+      "source_line": 1651,
+      "title": "STEP 4 — RESEARCH CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_red_team_results_check",
+      "source_line": 1685,
+      "title": "STEP 5 — RED TEAM RESULTS CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_review_completion_criterion_check",
+      "source_line": 1713,
+      "title": "STEP 6 — REVIEW COMPLETION CRITERION CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_readiness_for_the_next_stage_check",
+      "source_line": 1745,
+      "title": "STEP 7 — READINESS FOR THE NEXT STAGE CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_gate_decision",
+      "source_line": 1767,
+      "title": "STEP 8 — GATE DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "pass",
+      "source_line": 1771,
+      "title": "PASS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "return",
+      "source_line": 1777,
+      "title": "RETURN",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stop",
+      "source_line": 1787,
+      "title": "STOP",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_determining_the_rollback_stage",
+      "source_line": 1807,
+      "title": "STEP 9 — DETERMINING THE ROLLBACK STAGE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_forming_the_gate_report",
+      "source_line": 1835,
+      "title": "STEP 10 — FORMING THE GATE REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_transfer_of_control",
+      "source_line": 1863,
+      "title": "STEP 11 — TRANSFER OF CONTROL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "general_gate_rules",
+      "source_line": 1879,
+      "title": "GENERAL GATE RULES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_05_stage_1_analyze",
+      "source_line": 1899,
+      "title": "PROMPT 05 — STAGE 1 — ANALYZE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal",
+      "source_line": 1901,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_4",
+      "source_line": 1917,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_studying_the_task",
+      "source_line": 1941,
+      "title": "STEP 1 — STUDYING THE TASK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_understanding_the_problem",
+      "source_line": 1963,
+      "title": "STEP 2 — UNDERSTANDING THE PROBLEM",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_checking_assumptions",
+      "source_line": 1991,
+      "title": "STEP 3 — CHECKING ASSUMPTIONS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_context_analysis",
+      "source_line": 2009,
+      "title": "STEP 4 — CONTEXT ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_search_for_hidden_goals",
+      "source_line": 2035,
+      "title": "STEP 5 — SEARCH FOR HIDDEN GOALS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_search_for_invariants",
+      "source_line": 2061,
+      "title": "STEP 6 — SEARCH FOR INVARIANTS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_search_for_unknowns",
+      "source_line": 2083,
+      "title": "STEP 7 — SEARCH FOR UNKNOWNS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_checking_sufficiency_of_understanding",
+      "source_line": 2107,
+      "title": "STEP 8 — CHECKING SUFFICIENCY OF UNDERSTANDING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_forming_the_analyze_report",
+      "source_line": 2129,
+      "title": "STEP 9 — FORMING THE ANALYZE REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_architects_decision",
+      "source_line": 2165,
+      "title": "STEP 10 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_passing_to_council_engine",
+      "source_line": 2211,
+      "title": "STEP 11 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_transition_to_gate",
+      "source_line": 2237,
+      "title": "STEP 12 — TRANSITION TO GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_2_impact_analysis_2",
+      "source_line": 2251,
+      "title": "STAGE 2 — IMPACT ANALYSIS.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_06_stage_2_impact_analysis",
+      "source_line": 2253,
+      "title": "PROMPT 06 — STAGE 2 — IMPACT ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_2",
+      "source_line": 2255,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_5",
+      "source_line": 2277,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_determining_the_scope_of_impact",
+      "source_line": 2297,
+      "title": "STEP 1 — DETERMINING THE SCOPE OF IMPACT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_dependency_analysis",
+      "source_line": 2325,
+      "title": "STEP 2 — DEPENDENCY ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_invariant_analysis",
+      "source_line": 2355,
+      "title": "STEP 3 — INVARIANT ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_backward_compatibility_analysis",
+      "source_line": 2379,
+      "title": "STEP 4 — BACKWARD COMPATIBILITY ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_risk_analysis_of_changes",
+      "source_line": 2403,
+      "title": "STEP 5 — RISK ANALYSIS OF CHANGES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_cascading_impact_analysis",
+      "source_line": 2451,
+      "title": "STEP 6 — CASCADING IMPACT ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_architectural_trade_off_analysis",
+      "source_line": 2475,
+      "title": "STEP 7 — ARCHITECTURAL TRADE‑OFF ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_search_for_ways_to_minimise_impact",
+      "source_line": 2503,
+      "title": "STEP 8 — SEARCH FOR WAYS TO MINIMISE IMPACT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_forming_the_impact_analysis_report",
+      "source_line": 2529,
+      "title": "STEP 9 — FORMING THE IMPACT ANALYSIS REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_architects_decision_2",
+      "source_line": 2565,
+      "title": "STEP 10 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_passing_to_council_engine_2",
+      "source_line": 2605,
+      "title": "STEP 11 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_transition_to_gate_2",
+      "source_line": 2633,
+      "title": "STEP 12 — TRANSITION TO GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_3_research_planning_2",
+      "source_line": 2647,
+      "title": "STAGE 3 — RESEARCH PLANNING.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_07_stage_3_research_planning",
+      "source_line": 2649,
+      "title": "PROMPT 07 — STAGE 3 — RESEARCH PLANNING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_3",
+      "source_line": 2651,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_6",
+      "source_line": 2675,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_defining_research_goals",
+      "source_line": 2695,
+      "title": "STEP 1 — DEFINING RESEARCH GOALS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_forming_research_questions",
+      "source_line": 2715,
+      "title": "STEP 2 — FORMING RESEARCH QUESTIONS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_planning_research_directions",
+      "source_line": 2741,
+      "title": "STEP 3 — PLANNING RESEARCH DIRECTIONS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_planning_the_council_composition",
+      "source_line": 2765,
+      "title": "STEP 4 — PLANNING THE COUNCIL COMPOSITION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_planning_research_sources",
+      "source_line": 2789,
+      "title": "STEP 5 — PLANNING RESEARCH SOURCES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_planning_interdisciplinary_search",
+      "source_line": 2829,
+      "title": "STEP 6 — PLANNING INTERDISCIPLINARY SEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_planning_success_criteria",
+      "source_line": 2855,
+      "title": "STEP 7 — PLANNING SUCCESS CRITERIA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_planning_repeated_cycles",
+      "source_line": 2875,
+      "title": "STEP 8 — PLANNING REPEATED CYCLES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_forming_the_research_plan",
+      "source_line": 2899,
+      "title": "STEP 9 — FORMING THE RESEARCH PLAN",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_architects_decision_3",
+      "source_line": 2935,
+      "title": "STEP 10 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_passing_to_council_engine_3",
+      "source_line": 2977,
+      "title": "STEP 11 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_transition_to_gate_3",
+      "source_line": 3013,
+      "title": "STEP 12 — TRANSITION TO GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_4_research_2",
+      "source_line": 3029,
+      "title": "STAGE 4 — RESEARCH.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_08_stage_4_research",
+      "source_line": 3031,
+      "title": "PROMPT 08 — STAGE 4 — RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_4",
+      "source_line": 3033,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_7",
+      "source_line": 3053,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_researching_known_solutions",
+      "source_line": 3073,
+      "title": "STEP 1 — RESEARCHING KNOWN SOLUTIONS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_interdisciplinary_research",
+      "source_line": 3119,
+      "title": "STEP 2 — INTERDISCIPLINARY RESEARCH",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_mandatory_search_in_other_disciplines",
+      "source_line": 3159,
+      "title": "STEP 3 — MANDATORY SEARCH IN OTHER DISCIPLINES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_search_for_fundamental_principles",
+      "source_line": 3231,
+      "title": "STEP 4 — SEARCH FOR FUNDAMENTAL PRINCIPLES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_knowledge_transfer",
+      "source_line": 3305,
+      "title": "STEP 5 — KNOWLEDGE TRANSFER",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_search_for_invariants_2",
+      "source_line": 3329,
+      "title": "STEP 6 — SEARCH FOR INVARIANTS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_search_for_the_opposite_architecture",
+      "source_line": 3351,
+      "title": "STEP 7 — SEARCH FOR THE OPPOSITE ARCHITECTURE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_search_for_simplification",
+      "source_line": 3375,
+      "title": "STEP 8 — SEARCH FOR SIMPLIFICATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_analogical_thinking",
+      "source_line": 3405,
+      "title": "STEP 9 — ANALOGICAL THINKING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_evaluation_of_found_ideas",
+      "source_line": 3453,
+      "title": "STEP 10 — EVALUATION OF FOUND IDEAS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_forming_the_research_report",
+      "source_line": 3509,
+      "title": "STEP 11 — FORMING THE RESEARCH REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_architects_decision",
+      "source_line": 3559,
+      "title": "STEP 12 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_13_passing_to_council_engine",
+      "source_line": 3599,
+      "title": "STEP 13 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_14_transition_to_gate",
+      "source_line": 3633,
+      "title": "STEP 14 — TRANSITION TO GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_5_architecture_synthesis_2",
+      "source_line": 3653,
+      "title": "STAGE 5 — ARCHITECTURE SYNTHESIS.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_09_stage_5_architecture_synthesis",
+      "source_line": 3655,
+      "title": "PROMPT 09 — STAGE 5 — ARCHITECTURE SYNTHESIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_5",
+      "source_line": 3657,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_8",
+      "source_line": 3683,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_forming_the_solution_space",
+      "source_line": 3709,
+      "title": "STEP 1 — FORMING THE SOLUTION SPACE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_synthesis_of_new_architectures",
+      "source_line": 3739,
+      "title": "STEP 2 — SYNTHESIS OF NEW ARCHITECTURES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_invariant_check",
+      "source_line": 3763,
+      "title": "STEP 3 — INVARIANT CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_multi_criteria_evaluation_of_architectures",
+      "source_line": 3785,
+      "title": "STEP 4 — MULTI‑CRITERIA EVALUATION OF ARCHITECTURES",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_search_for_the_opposite_architecture",
+      "source_line": 3835,
+      "title": "STEP 5 — SEARCH FOR THE OPPOSITE ARCHITECTURE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_search_for_simplification",
+      "source_line": 3863,
+      "title": "STEP 6 — SEARCH FOR SIMPLIFICATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_trade_off_analysis",
+      "source_line": 3895,
+      "title": "STEP 7 — TRADE‑OFF ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_architects_self_verification",
+      "source_line": 3919,
+      "title": "STEP 8 — ARCHITECT'S SELF‑VERIFICATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_checking_the_readiness_criterion",
+      "source_line": 3957,
+      "title": "STEP 9 — CHECKING THE READINESS CRITERION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_forming_the_architecture_report",
+      "source_line": 3993,
+      "title": "STEP 10 — FORMING THE ARCHITECTURE REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_architects_decision_2",
+      "source_line": 4027,
+      "title": "STEP 11 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_passing_to_council_engine",
+      "source_line": 4081,
+      "title": "STEP 12 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_13_transition_to_gate",
+      "source_line": 4119,
+      "title": "STEP 13 — TRANSITION TO GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_6_implementation_2",
+      "source_line": 4139,
+      "title": "STAGE 6 — IMPLEMENTATION.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_10_stage_6_implementation",
+      "source_line": 4141,
+      "title": "PROMPT 10 — STAGE 6 — IMPLEMENTATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_6",
+      "source_line": 4143,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_9",
+      "source_line": 4169,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_planning_implementation",
+      "source_line": 4193,
+      "title": "STEP 1 — PLANNING IMPLEMENTATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_implementation_with_minimal_impact",
+      "source_line": 4217,
+      "title": "STEP 2 — IMPLEMENTATION WITH MINIMAL IMPACT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_observing_architectural_invariants",
+      "source_line": 4245,
+      "title": "STEP 3 — OBSERVING ARCHITECTURAL INVARIANTS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_control_of_deviations_from_architecture",
+      "source_line": 4267,
+      "title": "STEP 4 — CONTROL OF DEVIATIONS FROM ARCHITECTURE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_discovery_of_new_knowledge",
+      "source_line": 4293,
+      "title": "STEP 5 — DISCOVERY OF NEW KNOWLEDGE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_rollback_to_the_lifecycle",
+      "source_line": 4317,
+      "title": "STEP 6 — ROLLBACK TO THE LIFECYCLE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_quality_control_of_implementation",
+      "source_line": 4347,
+      "title": "STEP 7 — QUALITY CONTROL OF IMPLEMENTATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_checking_each_change",
+      "source_line": 4369,
+      "title": "STEP 8 — CHECKING EACH CHANGE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_forming_the_implementation_report",
+      "source_line": 4399,
+      "title": "STEP 9 — FORMING THE IMPLEMENTATION REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_architects_decision_4",
+      "source_line": 4429,
+      "title": "STEP 10 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_passing_to_council_engine_4",
+      "source_line": 4467,
+      "title": "STEP 11 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_red_team_mode",
+      "source_line": 4503,
+      "title": "STEP 12 — RED TEAM MODE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_13_transition_to_universal_gate",
+      "source_line": 4545,
+      "title": "STEP 13 — TRANSITION TO UNIVERSAL GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_7_validation_2",
+      "source_line": 4565,
+      "title": "STAGE 7 — VALIDATION.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_11_stage_7_validation",
+      "source_line": 4567,
+      "title": "PROMPT 11 — STAGE 7 — VALIDATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_7",
+      "source_line": 4569,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_10",
+      "source_line": 4593,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_requirements_compliance_check",
+      "source_line": 4613,
+      "title": "STEP 1 — REQUIREMENTS COMPLIANCE CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_architecture_compliance_check",
+      "source_line": 4629,
+      "title": "STEP 2 — ARCHITECTURE COMPLIANCE CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_functional_validation",
+      "source_line": 4647,
+      "title": "STEP 3 — FUNCTIONAL VALIDATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_non_functional_validation",
+      "source_line": 4669,
+      "title": "STEP 4 — NON‑FUNCTIONAL VALIDATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_stress_testing",
+      "source_line": 4707,
+      "title": "STEP 5 — STRESS TESTING",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_reproducibility_check",
+      "source_line": 4741,
+      "title": "STEP 6 — REPRODUCIBILITY CHECK",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_search_for_undiscovered_problems",
+      "source_line": 4765,
+      "title": "STEP 7 — SEARCH FOR UNDISCOVERED PROBLEMS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_forming_the_validation_report",
+      "source_line": 4789,
+      "title": "STEP 8 — FORMING THE VALIDATION REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_architects_decision",
+      "source_line": 4819,
+      "title": "STEP 9 — ARCHITECT'S DECISION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_preparation_for_independent_verification",
+      "source_line": 4859,
+      "title": "STEP 10 — PREPARATION FOR INDEPENDENT VERIFICATION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_passing_to_council_engine_5",
+      "source_line": 4891,
+      "title": "STEP 11 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_red_team_mode_2",
+      "source_line": 4921,
+      "title": "STEP 12 — RED TEAM MODE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_13_transition_to_universal_gate_2",
+      "source_line": 4961,
+      "title": "STEP 13 — TRANSITION TO UNIVERSAL GATE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "stage_8_postmortem_2",
+      "source_line": 4981,
+      "title": "STAGE 8 — POSTMORTEM.",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "prompt_12_stage_8_postmortem",
+      "source_line": 4983,
+      "title": "PROMPT 12 — STAGE 8 — POSTMORTEM",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "goal_8",
+      "source_line": 4985,
+      "title": "GOAL",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "input_data_11",
+      "source_line": 5009,
+      "title": "INPUT DATA",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_1_analysis_of_decisions_made",
+      "source_line": 5031,
+      "title": "STEP 1 — ANALYSIS OF DECISIONS MADE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_2_error_analysis",
+      "source_line": 5053,
+      "title": "STEP 2 — ERROR ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_3_invariant_analysis_2",
+      "source_line": 5075,
+      "title": "STEP 3 — INVARIANT ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_4_research_analysis",
+      "source_line": 5097,
+      "title": "STEP 4 — RESEARCH ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_5_development_process_analysis",
+      "source_line": 5119,
+      "title": "STEP 5 — DEVELOPMENT PROCESS ANALYSIS",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_6_forming_engineering_knowledge",
+      "source_line": 5143,
+      "title": "STEP 6 — FORMING ENGINEERING KNOWLEDGE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_7_updating_research_debt",
+      "source_line": 5163,
+      "title": "STEP 7 — UPDATING RESEARCH DEBT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_8_forming_the_postmortem_report",
+      "source_line": 5187,
+      "title": "STEP 8 — FORMING THE POSTMORTEM REPORT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_9_architects_self_assessment",
+      "source_line": 5221,
+      "title": "STEP 9 — ARCHITECT'S SELF‑ASSESSMENT",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_10_readiness_for_reuse_of_knowledge",
+      "source_line": 5253,
+      "title": "STEP 10 — READINESS FOR REUSE OF KNOWLEDGE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_11_passing_to_council_engine_6",
+      "source_line": 5287,
+      "title": "STEP 11 — PASSING TO COUNCIL ENGINE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_12_red_team_mode_3",
+      "source_line": 5333,
+      "title": "STEP 12 — RED TEAM MODE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "step_13_lifecycle_completion",
+      "source_line": 5369,
+      "title": "STEP 13 — LIFECYCLE COMPLETION",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    },
+    {
+      "id": "end_of_ai_architect_algorithm_lifecycle",
+      "source_line": 5405,
+      "title": "END OF AI ARCHITECT ALGORITHM LIFECYCLE",
+      "covered_by": [
+        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+        "docs/WORKFLOW_ATTESTATION.json",
+        "crates/chimera-lab/src/workflow_attestation_guard.rs"
+      ],
+      "status": "covered_by_contract"
+    }
+  ],
+  "interdisciplinary_source_lists": {
+    "source_sha256": "c03a66bf5359c83696233b3abc20681eada471d30ba3f9191a2e20abd36f901a",
+    "no_interpretive_list_skips": true,
+    "evidence": [
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+    ],
+    "lists": [
+      {
+        "id": "council_interdisciplinary_disciplines",
+        "source_line_start": 797,
+        "source_line_end": 873,
+        "item_count": 37,
+        "items": [
+          "• mathematics;",
+          "• discrete mathematics;",
+          "• linear algebra;",
+          "• graph theory;",
+          "• probability theory;",
+          "• statistics;",
+          "• operations research;",
+          "• optimisation theory;",
+          "• game theory;",
+          "• information theory;",
+          "• control theory;",
+          "• complex systems theory;",
+          "• queueing theory;",
+          "• automata theory;",
+          "• category theory;",
+          "• logic;",
+          "• cryptography;",
+          "• physics;",
+          "• chemistry;",
+          "• biology;",
+          "• genetics;",
+          "• neuroscience;",
+          "• evolutionary biology;",
+          "• ecology;",
+          "• cognitive sciences;",
+          "• psychology;",
+          "• economics;",
+          "• sociology;",
+          "• organisation theory;",
+          "• distributed systems;",
+          "• network science;",
+          "• robotics;",
+          "• aerospace engineering;",
+          "• mechanics;",
+          "• systems engineering;",
+          "• reliability theory;",
+          "• any other disciplines"
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "council_fundamental_knowledge_items",
+        "source_line_start": 883,
+        "source_line_end": 927,
+        "item_count": 23,
+        "items": [
+          "• theories;",
+          "• models;",
+          "• mathematical frameworks;",
+          "• axioms;",
+          "• theorems;",
+          "• laws;",
+          "• invariants;",
+          "• patterns;",
+          "• heuristics;",
+          "• architectural principles;",
+          "• strategies;",
+          "• mechanisms;",
+          "• algorithms;",
+          "• ways of self‑organisation;",
+          "• ways of collective behaviour;",
+          "• ways of decision‑making;",
+          "• ways of learning;",
+          "• ways of recovery after failures;",
+          "• ways of ensuring stability;",
+          "• ways of balancing;",
+          "• ways of scaling;",
+          "• ways of localising errors;",
+          "• ways of minimising complexity."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_disciplines",
+        "source_line_start": 3161,
+        "source_line_end": 3229,
+        "item_count": 33,
+        "items": [
+          "• mathematics;",
+          "• discrete mathematics;",
+          "• linear algebra;",
+          "• graph theory;",
+          "• probability theory;",
+          "• statistics;",
+          "• operations research;",
+          "• optimisation theory;",
+          "• game theory;",
+          "• information theory;",
+          "• control theory;",
+          "• automata theory;",
+          "• category theory;",
+          "• cryptography;",
+          "• physics;",
+          "• chemistry;",
+          "• biology;",
+          "• genetics;",
+          "• neuroscience;",
+          "• ecology;",
+          "• evolutionary biology;",
+          "• cognitive sciences;",
+          "• psychology;",
+          "• economics;",
+          "• sociology;",
+          "• network science;",
+          "• distributed systems;",
+          "• robotics;",
+          "• aerospace engineering;",
+          "• mechanics;",
+          "• systems engineering;",
+          "• reliability theory;",
+          "• any other disciplines"
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "stage_research_fundamental_items",
+        "source_line_start": 3237,
+        "source_line_end": 3295,
+        "item_count": 29,
+        "items": [
+          "• theories;",
+          "• mathematical models;",
+          "• axioms;",
+          "• theorems;",
+          "• laws;",
+          "• fundamental constraints;",
+          "• invariants;",
+          "• patterns;",
+          "• cause‑and‑effect relationships;",
+          "• heuristics;",
+          "• behaviour models;",
+          "• principles;",
+          "• architectural patterns;",
+          "• strategies;",
+          "• mechanisms;",
+          "• algorithms;",
+          "• optimisation methods;",
+          "• self‑organisation methods;",
+          "• adaptation methods;",
+          "• decision‑making methods;",
+          "• collective behaviour methods;",
+          "• learning methods;",
+          "• search methods;",
+          "• balancing methods;",
+          "• recovery after failure methods;",
+          "• error localisation methods;",
+          "• stability assurance methods;",
+          "• scaling methods;",
+          "• complexity reduction methods."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "knowledge_transfer_checks",
+        "source_line_start": 3307,
+        "source_line_end": 3323,
+        "item_count": 8,
+        "items": [
+          "• what fundamental properties make it successful;",
+          "• what invariants underlie it;",
+          "• what constraints are mandatory;",
+          "• which parts of the principle can be transferred;",
+          "• which parts cannot be transferred;",
+          "• what adaptations are necessary;",
+          "• what advantages the transfer will bring;",
+          "• what new risks the transfer creates."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "analogical_thinking_questions",
+        "source_line_start": 3415,
+        "source_line_end": 3451,
+        "item_count": 19,
+        "items": [
+          "• How would a mathematician solve this problem?",
+          "• How would a physicist solve it?",
+          "• How would a chemist solve it?",
+          "• How would a biologist solve it?",
+          "• How would evolution solve it?",
+          "• How would nature solve it?",
+          "• How would an information theorist solve it?",
+          "• How would a cryptographer solve it?",
+          "• How would a specialist in distributed systems solve it?",
+          "• How would an aerospace engineer solve it?",
+          "• How would a spacecraft engineer solve it?",
+          "• How would a systems engineering specialist solve it?",
+          "• How would a fault‑tolerance specialist solve it?",
+          "• How would an operations researcher solve it?",
+          "• How would an economist solve it?",
+          "• How would a specialist in collective behaviour solve it?",
+          "• What analogous problems have already been solved in other fields of science?",
+          "• What fundamental principles made those solutions successful?",
+          "• Which of these principles can be safely transferred to the current problem?"
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      },
+      {
+        "id": "found_idea_evaluation_criteria",
+        "source_line_start": 3457,
+        "source_line_end": 3481,
+        "item_count": 12,
+        "items": [
+          "• evidence base;",
+          "• maturity;",
+          "• fundamentality;",
+          "• universality;",
+          "• scalability;",
+          "• stability;",
+          "• implementation complexity;",
+          "• integration feasibility;",
+          "• compatibility with existing architecture;",
+          "• impact on invariants;",
+          "• potential risks;",
+          "• potential engineering gain."
+        ],
+        "evidence": [
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+        ]
+      }
+    ]
+  }
+}

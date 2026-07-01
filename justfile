@@ -772,8 +772,11 @@ ship-readiness-selfcheck:
     rg -q 'runtime_route_duplicate_cidr_validation_smoke' scripts/ship_readiness.sh
     rg -q 'just rust-no-hardcode-guard-selfcheck' scripts/ship_readiness.sh
     rg -q 'just rust-no-hardcode-guard' scripts/ship_readiness.sh
+    rg -q 'just workflow-attestation-guard-selfcheck' scripts/ship_readiness.sh
+    rg -q 'just workflow-attestation-guard' scripts/ship_readiness.sh
     rg -q 'just cef-phase1-smoke' scripts/ship_readiness.sh
     rg -q 'just benchmark-regression-check' scripts/ship_readiness.sh
+    line_git=$(grep -n '^just git-tree-hygiene-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_workflow_self=$(grep -n '^just workflow-attestation-guard-selfcheck$' scripts/ship_readiness.sh | cut -d: -f1); line_workflow=$(grep -n '^just workflow-attestation-guard$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); line_first_runtime=$(grep -n '^just runtime-' scripts/ship_readiness.sh | head -n 1 | cut -d: -f1); test -n "$line_git" && test -n "$line_workflow_self" && test -n "$line_workflow" && test -n "$line_cleanroom" && test -n "$line_first_runtime" && test "$line_git" -lt "$line_workflow_self" && test "$line_workflow_self" -lt "$line_workflow" && test "$line_workflow" -lt "$line_cleanroom" && test "$line_cleanroom" -lt "$line_first_runtime"
     line_bench=$(grep -n '^just benchmark-regression-check$' scripts/ship_readiness.sh | cut -d: -f1); line_baseline=$(grep -n '^just baseline-freeze$' scripts/ship_readiness.sh | cut -d: -f1); line_cleanroom=$(grep -n '^just cleanroom-handoff-check$' scripts/ship_readiness.sh | cut -d: -f1); test -n "$line_bench" && test -n "$line_baseline" && test -n "$line_cleanroom" && test "$line_bench" -lt "$line_baseline" && test "$line_baseline" -lt "$line_cleanroom"
     rg -q 'CHIMERA_ACCEPT_BENCHMARK_BASELINE_REFRESH' scripts/baseline_freeze.sh
     ! rg -q '^cp docs/benchmark_latest.json docs/benchmark_baseline.json$' scripts/baseline_freeze.sh
@@ -815,6 +818,8 @@ ship-readiness-selfcheck:
     rg -q '"runtime_apply_route_multi_cidr_smoke_ok":' scripts/ship_readiness.sh
     rg -q '"runtime_forced_stop_rollback_smoke_selfcheck":true' scripts/ship_readiness.sh
     rg -q '"runtime_forced_stop_rollback_smoke":true' scripts/ship_readiness.sh
+    rg -q '"workflow_attestation_guard_selfcheck":true' scripts/ship_readiness.sh
+    rg -q '"workflow_attestation_guard":true' scripts/ship_readiness.sh
     rg -q '"reality_ship_sync_guard_selfcheck":true' scripts/ship_readiness.sh
     rg -q '"reality_ship_sync_guard":true' scripts/ship_readiness.sh
     rg -q '^deny:' justfile
@@ -868,6 +873,8 @@ ship-readiness-selfcheck:
     rg -q 'ship-readiness-json-guard' justfile
     rg -q 'ship-readiness-freshness-guard-selfcheck' justfile
     rg -q 'ship-readiness-freshness-guard' justfile
+    rg -q 'workflow-attestation-guard-selfcheck' justfile
+    rg -q 'workflow-attestation-guard' justfile
     awk '/^ship-report-contract-check:/{in_recipe=1; next} /^[[:alnum:]_-]+:/{in_recipe=0} in_recipe && /just baseline-verify/{found=1} END{exit found ? 0 : 1}' justfile
     rg -q 'json-no-dupe-guard-selfcheck' justfile
     rg -q 'json-no-dupe-guard' justfile
@@ -1966,6 +1973,8 @@ ship-report-contract-check:
     just ship-readiness-json-guard
     just ship-readiness-freshness-guard-selfcheck
     just ship-readiness-freshness-guard
+    just workflow-attestation-guard-selfcheck
+    just workflow-attestation-guard
     just baseline-verify
     test -f docs/CEF_TRACK_REPORT.json
     test -f docs/benchmark_baseline.json
@@ -2063,6 +2072,8 @@ ship-report-contract-check:
     rg -q '"rust_no_hardcode_guard":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_smoke_selfcheck":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_smoke":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"workflow_attestation_guard_selfcheck":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"workflow_attestation_guard":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"freshness_check":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_apply_dns_verified":true' docs/RELEASE_READINESS_REPORT.json
     rg -q '"runtime_apply_route_verified":true' docs/RELEASE_READINESS_REPORT.json
@@ -2486,14 +2497,169 @@ mvp-check:
 handoff-check:
     just git-tree-hygiene-guard allow-no-git
     just baseline-verify
+    just workflow-attestation-guard-selfcheck
+    just workflow-attestation-guard
     just mvp-check
     just release-readiness-report-json
+
+session-process-guard:
+    just workflow-attestation-guard-selfcheck
+    just workflow-attestation-guard
+    just ai-architect-artifact-guard-selfcheck
+    just ai-architect-artifact-guard
+
+handoff-process-check:
+    just git-tree-hygiene-guard allow-no-git
+    just baseline-verify
+    just session-process-guard
 
 ship-readiness:
     just ship-readiness-selfcheck
     just cleanroom-handoff-selfcheck
     bash scripts/ship_readiness.sh
     just ship-report-contract-check
+
+workflow-attestation-guard attestation="docs/WORKFLOW_ATTESTATION.json":
+    bash scripts/workflow_attestation_guard.sh "{{attestation}}"
+
+ai-architect-artifact-guard:
+    bash scripts/ai_architect_artifact_guard.sh \
+      docs/AI_ARCHITECT_LIFECYCLE_GUARD.md \
+      docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json \
+      docs/WORKFLOW_ATTESTATION.json \
+      docs/RESEARCH_DEBT.md
+
+ai-architect-artifact-guard-selfcheck:
+    test -x scripts/ai_architect_artifact_guard.sh
+    bash -n scripts/ai_architect_artifact_guard.sh
+    test -f crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+    rg -q 'reject_sensitive_raw_text' crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+    rg -q 'AI architect artifact guard: PASS' crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+    rg -q 'docs/AI_ARCHITECT_LIFECYCLE_GUARD.md' crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+    rg -q 'docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json' crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+    rg -q 'docs/WORKFLOW_ATTESTATION.json' crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+    rg -q 'docs/RESEARCH_DEBT.md' crates/chimera-lab/src/bin/ai_architect_artifact_guard.rs
+
+workflow-attestation-guard-selfcheck:
+    test -x scripts/workflow_attestation_guard.sh
+    bash -n scripts/workflow_attestation_guard.sh
+    rg -q 'cargo run -q -p chimera-lab --bin workflow_attestation_guard --' scripts/workflow_attestation_guard.sh
+    test -f crates/chimera-lab/src/bin/workflow_attestation_guard.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_contract.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_coverage.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_council.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_final.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_redaction.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_source_lists.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_stage_flow.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_support.rs
+    test -f crates/chimera-lab/src/workflow_attestation_guard_stage_reports.rs
+    test -f docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json
+    rg -q 'algorithm_coverage' crates/chimera-lab/src/workflow_attestation_guard.rs
+    rg -q 'detailed_algorithm_contract' crates/chimera-lab/src/workflow_attestation_guard.rs
+    rg -q 'interdisciplinary_research' crates/chimera-lab/src/workflow_attestation_guard.rs
+    rg -q 'normative_requirement_coverage' crates/chimera-lab/src/workflow_attestation_guard.rs
+    rg -q 'source_coverage_ref' crates/chimera-lab/src/workflow_attestation_guard_contract.rs
+    rg -q 'source_text_coverage' crates/chimera-lab/src/workflow_attestation_guard_coverage.rs
+    rg -q 'interdisciplinary_source_lists' crates/chimera-lab/src/workflow_attestation_guard_coverage.rs
+    rg -q 'collect_and_validate_stage_coverage' crates/chimera-lab/src/workflow_attestation_guard_coverage.rs
+    rg -q 'interdisciplinary_findings' crates/chimera-lab/src/workflow_attestation_guard_council.rs
+    rg -q 'transfer_principles' crates/chimera-lab/src/workflow_attestation_guard_stage_reports.rs
+    rg -q 'rejected_irrelevant_analogies' crates/chimera-lab/src/workflow_attestation_guard_stage_reports.rs
+    rg -q 'validate_stage_specific_report' crates/chimera-lab/src/workflow_attestation_guard_stage_reports.rs
+    rg -q 'reject_sensitive_text' crates/chimera-lab/src/workflow_attestation_guard_redaction.rs
+    rg -q 'contains_public_ipv6_literal' crates/chimera-lab/src/workflow_attestation_guard_redaction.rs
+    rg -q 'contains_hostname_literal' crates/chimera-lab/src/workflow_attestation_guard_redaction.rs
+    rg -q 'contains_unlabeled_high_entropy_token' crates/chimera-lab/src/workflow_attestation_guard_redaction.rs
+    rg -q 'abdbad3e02da3a7a' crates/chimera-lab/src/workflow_attestation_guard_contract.rs
+    jq -e '.required_item_count == 227' docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json >/dev/null
+    jq -e '.source.line_count == 5405 and .source.newline_count == 5404' docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json >/dev/null
+    jq -e '.interdisciplinary_source_lists.lists | length == 7' docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json >/dev/null
+    jq -e '.coverage_digest_fnv1a == "abdbad3e02da3a7a"' docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json >/dev/null
+    jq -e '.required_items[0].id == "ai_architect_algorithm"' docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json >/dev/null
+    jq -e '.required_items[-1].id == "end_of_ai_architect_algorithm_lifecycle"' docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json >/dev/null
+    jq -e '([.stage_reports[] .covered_required_item_ids[]] | unique | length) == 227' docs/WORKFLOW_ATTESTATION.json >/dev/null
+    jq -e '.source_text_coverage.line_count == 5405 and .source_text_coverage.non_empty_line_count == 2703 and .source_text_coverage.required_marker_line_count == 1494' docs/WORKFLOW_ATTESTATION.json >/dev/null
+    jq -e '.interdisciplinary_source_lists.lists | map(.item_count) == [37,23,33,29,8,19,12]' docs/WORKFLOW_ATTESTATION.json >/dev/null
+    jq -e '.interdisciplinary_research.source_list_count == 7 and (.interdisciplinary_research.source_lists_checked | length == 7)' docs/WORKFLOW_ATTESTATION.json >/dev/null
+    jq -e '.final_decision.final_done_checklist | length == 10' docs/WORKFLOW_ATTESTATION.json >/dev/null
+    rg -q 'REQUIRED_STAGES' crates/chimera-lab/src/workflow_attestation_guard_stage_flow.rs
+    rg -q 'workflow attestation guard: PASS' crates/chimera-lab/src/bin/workflow_attestation_guard.rs
+    rg -q 'lab scope promoted to real-world/prod-ready' crates/chimera-lab/src/workflow_attestation_guard.rs
+    rg -q 'pass/done requires real council and red-team review' crates/chimera-lab/src/workflow_attestation_guard_council.rs
+    rg -q 'sensitive or stand-specific text found' crates/chimera-lab/src/workflow_attestation_guard_redaction.rs
+    test -f tests/fixtures/workflow_attestation_guard/pass/full_lifecycle.json
+    test -f tests/fixtures/workflow_attestation_guard/pass/stop_no_done.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_stage.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/pass_without_council.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/lab_promoted_to_real_world.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_stage_reports.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_council_detail.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_interdisciplinary_research.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/interdisciplinary_software_only.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/interdisciplinary_too_few_disciplines.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/validation_missing_stress_testing.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/postmortem_missing_research_debt_update.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/done_without_final_done_conditions.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_coverage_link.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/public_ip_literal.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/secret_marker.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_workline_id.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_source_coverage_ref.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_normative_requirement_coverage.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_per_role_interdisciplinary_fields.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_rejected_irrelevant_analogies.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/knowledge_transfer_without_risks_or_non_transferable_parts.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/final_decision_research_debt_updated_false.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/wrong_coverage_file.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/wrong_source_sha256.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/wrong_coverage_digest.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/broken_stage_report_ref.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/public_ipv6_literal.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/hostname_endpoint.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/root_at_host.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/url_endpoint.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/unlabeled_token.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/final_decision_log_not_updated.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/coverage_id_wrong_stage.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/duplicate_stage_coverage_id.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/nonexistent_evidence_ref.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/weak_transfer_principle.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/pass_gate_with_found_problem.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/single_label_user_at_host.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/single_label_host_port.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_source_text_coverage.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_final_done_checklist.json
+    test -f tests/fixtures/workflow_attestation_guard/fail/missing_interdisciplinary_source_lists.json
+    cargo test -q -p chimera-lab --bin workflow_attestation_guard
+    cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/pass/full_lifecycle.json
+    cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/pass/stop_no_done.json
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_stage.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/pass_without_council.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/lab_promoted_to_real_world.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_stage_reports.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_council_detail.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_interdisciplinary_research.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/interdisciplinary_software_only.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/interdisciplinary_too_few_disciplines.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/validation_missing_stress_testing.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/postmortem_missing_research_debt_update.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/done_without_final_done_conditions.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_coverage_link.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/public_ip_literal.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/secret_marker.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/final_decision_log_not_updated.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/coverage_id_wrong_stage.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/duplicate_stage_coverage_id.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/nonexistent_evidence_ref.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/weak_transfer_principle.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/pass_gate_with_found_problem.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/single_label_user_at_host.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/single_label_host_port.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_source_text_coverage.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_final_done_checklist.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin workflow_attestation_guard -- tests/fixtures/workflow_attestation_guard/fail/missing_interdisciplinary_source_lists.json >/dev/null 2>&1
 
 automation-debt-guard:
     bash scripts/automation_debt_guard.sh docs/AUTOMATION_DEBT_REGISTER.md

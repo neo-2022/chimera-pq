@@ -11,12 +11,20 @@ DNS only to a test file in `/tmp` and then rolls it back.
 2. Install `just` (optional, but recommended).
 3. Open repository root: `chimera-pq/`.
 
-## 2) Fast Gate (Single Command)
+## 2) Safe Process Gate (No Runtime/Network)
 
-1. Run: `just handoff-check`
+1. Run: `just handoff-process-check`
+2. Expected: exit code `0` (runs git tree hygiene + baseline integrity +
+   AI-architect workflow/artifact guards only).
+3. This is the safe local process check when local CHIMERA runtime/network
+   actions are forbidden.
+
+## 2.1) Full Gate (Runtime/Release Scope)
+
+1. Run: `just handoff-check` only in a contour where full MVP/runtime checks are allowed.
 2. Expected: exit code `0` (runs git tree hygiene + baseline integrity + full MVP check + release readiness JSON).
-3. For isolated reproducibility check (no manual setup), run: `just cleanroom-handoff-check`.
-4. For full final packaging in one command, run: `just ship-readiness`.
+3. For isolated reproducibility check (no manual setup), run: `just cleanroom-handoff-check` only when full checks are allowed.
+4. For full final packaging in one command, run: `just ship-readiness` only when full checks are allowed.
 5. Performance gate script integrity is verified inside `just mvp-check` via
    `just benchmark-regression-selfcheck` before benchmark regression check.
 6. Truth-first report consistency can be checked explicitly:
