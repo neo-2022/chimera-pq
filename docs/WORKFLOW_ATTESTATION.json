@@ -5,6 +5,22 @@
   "task_id": "ai-architect-lifecycle-guard-2026-06-30",
   "scope": "process_guard_tooling",
   "algorithm_source": "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
+  "related_worklines": [
+    {
+      "workline_id": "github-release-runtime-gate-v0.1.138-2026-07-01",
+      "scope": "github_latest_release_runtime_slice",
+      "status": "pass_for_slice",
+      "evidence": [
+        "docs/WORKFLOW_ATTESTATION_GITHUB_RELEASE_RUNTIME_GATE_V0_1_138_2026-07-01.md",
+        "docs/MESH_SESSION_HANDOFF_2026-07-01_GITHUB_RELEASE_RUNTIME_GATE_V0_1_138.md"
+      ],
+      "truth_boundary": {
+        "full_mvp_pass": false,
+        "prod_ready": false,
+        "real_world_datapath_closed": false
+      }
+    }
+  ],
   "truth_boundary": {
     "lab_scope_only": true,
     "real_world_datapath_closed": false,
