@@ -10,8 +10,10 @@ use crate::mesh_cli::nodes_inventory::extract_flag_value;
 
 use super::json::escape_json;
 
+const DEFAULT_GUARD_LISTEN_BIND: &str = "0.0.0.0:0";
+
 pub(super) fn guard_listen(args: &[String]) -> i32 {
-    let bind = extract_flag_value(args, "--bind").unwrap_or("0.0.0.0:8443");
+    let bind = extract_flag_value(args, "--bind").unwrap_or(DEFAULT_GUARD_LISTEN_BIND);
     let pq_strict = proof_pq_strict_enabled(args);
     let proof_key_id = extract_flag_value(args, "--proof-key-id")
         .unwrap_or("mesh-shared-v1")
@@ -47,7 +49,11 @@ pub(super) fn guard_listen(args: &[String]) -> i32 {
             return 2;
         }
     };
-    println!("guard_listen=ready bind={bind} once={once}");
+    let resolved_bind = listener
+        .local_addr()
+        .map(|addr| addr.to_string())
+        .unwrap_or_else(|_| bind.to_string());
+    println!("guard_listen=ready bind={bind} resolved_bind={resolved_bind} once={once}");
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
@@ -309,5 +315,15 @@ pub(crate) fn proof_pq_strict_enabled(args: &[String]) -> bool {
             !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
         }
         Err(_) => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_GUARD_LISTEN_BIND;
+
+    #[test]
+    fn guard_listen_default_uses_os_selected_port() {
+        assert_eq!(DEFAULT_GUARD_LISTEN_BIND, "0.0.0.0:0");
     }
 }
