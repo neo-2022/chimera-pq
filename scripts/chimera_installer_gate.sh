@@ -562,6 +562,7 @@ rg -n 'datapath_proof=ok' "$ROOT_DIR/scripts/release_bundle_install_contract_smo
 rg -n 'datapath_flow_proof=ok' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_flow_ok_assert"
 rg -n 'installed_gitvers_bootstrap_sources_missing' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_gitvers_sources_check"
 rg -n 'installed_gitvers_bootstrap_sources_mode' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_gitvers_sources_mode_check"
+rg -n 'bootstrap_install_version_tracks_bundle_not_script_version' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_bootstrap_version_contract"
 rg -n '\$installed_home/scripts/chimera\.sh" -uninstall' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_bootstrap_uninstall_path"
 rg -n 'legacy runtime bug where the installed control path reports' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_legacy_uninstall_regression_case"
 rg -n 'datapath_apply=\$systemd_datapath_apply_status' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_systemd_apply_status_output"

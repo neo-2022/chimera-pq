@@ -401,6 +401,7 @@ install_release_archive() {
   local prepared_release
   local backup_home=""
   local had_previous=0
+  local installed_release_version=""
   extract_parent="$(dirname "$chimera_home")"
 
   mkdir -p "$extract_parent"
@@ -432,7 +433,8 @@ install_release_archive() {
     return 1
   fi
 
-  CHIMERA_RELEASE_VERSION="${VERSION}"
+  installed_release_version="$(tr -d '[:space:]' < "$chimera_home/.chimera_release_version" 2>/dev/null || true)"
+  CHIMERA_RELEASE_VERSION="${installed_release_version:-$VERSION}"
   export CHIMERA_RELEASE_VERSION
   local install_rc=0
   bash "$chimera_home/scripts/install_desktop_control.sh" || install_rc=$?
@@ -456,7 +458,7 @@ install_release_archive() {
     rm -rf "$backup_home"
   fi
 
-  echo "chimera_install=ok version=$VERSION home=$chimera_home"
+  echo "chimera_install=ok version=${CHIMERA_RELEASE_VERSION:-$VERSION} home=$chimera_home"
 }
 
 bootstrap_metadata_from_script() {

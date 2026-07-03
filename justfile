@@ -2604,6 +2604,7 @@ release-bundle-install-contract-smoke-selfcheck:
     rg -q 'install_without_cargo_ok=true' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'installed_mesh_bootstrap_env_upstream_credentials' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'installed_mesh_bootstrap_env_peer_token_leak' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'bootstrap_install_version_tracks_bundle_not_script_version' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'node_help_missing_node_commands' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'node_help_legacy_gateway_wording' scripts/release_bundle_install_contract_smoke.sh
     ! rg -q 'CHIMERA_SINGBOX_RUNTIME_DIR=' scripts/release_bundle_install_contract_smoke.sh

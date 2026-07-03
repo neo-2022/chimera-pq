@@ -298,6 +298,50 @@ do
   [[ -x "$executable" ]] || fail "not_executable:${executable##*/}"
 done
 
+bootstrap_install_version_tracks_bundle_not_script_version() {
+  local bootstrap_home="$tmp_dir/bootstrap-version-home"
+  local bootstrap_local_bin="$tmp_dir/bootstrap-version-bin"
+  local bootstrap_cache="$tmp_dir/bootstrap-version-cache"
+  local bootstrap_config="$tmp_dir/bootstrap-version-config"
+  local bootstrap_data="$tmp_dir/bootstrap-version-data"
+  local bootstrap_runtime="$tmp_dir/bootstrap-version-runtime"
+  local bootstrap_script="$tmp_dir/bootstrap-version-bootstrap.sh"
+  local bootstrap_log="$tmp_dir/bootstrap-version-install.log"
+  local installed_version=""
+
+  cp "$installed_home/scripts/chimera.sh" "$bootstrap_script"
+  sed -i 's/^VERSION=\"[^\"]*\"$/VERSION=\"9.9.9\"/' "$bootstrap_script"
+  chmod +x "$bootstrap_script"
+  mkdir -p "$bootstrap_home" "$bootstrap_local_bin" "$bootstrap_cache" "$bootstrap_config" "$bootstrap_data" "$bootstrap_runtime"
+
+  set +e
+  PATH="$fake_bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  HOME="$home" \
+  XDG_CACHE_HOME="$bootstrap_cache" \
+  XDG_CONFIG_HOME="$bootstrap_config" \
+  XDG_DATA_HOME="$bootstrap_data" \
+  XDG_RUNTIME_DIR="$bootstrap_runtime" \
+  CHIMERA_HOME="$bootstrap_home" \
+  CHIMERA_LOCAL_BIN="$bootstrap_local_bin" \
+  CHIMERA_RELEASE_ARCHIVE_URL="file://$ARCHIVE" \
+  CHIMERA_RELEASE_CHECKSUM_URL="file://$CHECKSUM" \
+    timeout 60s bash "$bootstrap_script" -install >"$bootstrap_log" 2>&1
+  bootstrap_rc=$?
+  set -e
+
+  [[ "$bootstrap_rc" -eq 0 ]] || {
+    cat "$bootstrap_log" >&2
+    fail "bootstrap_install_version_tracks_bundle_not_script_version_failed"
+  }
+
+  installed_version="$(tr -d '[:space:]' < "$bootstrap_home/.chimera_release_version")"
+  [[ "$installed_version" == "$expected_version" ]] || fail "bootstrap_install_version_tracks_script_not_bundle"
+  rg -q "^chimera_install=ok version=${expected_version} " "$bootstrap_log" \
+    || fail "bootstrap_install_output_version_not_from_bundle"
+}
+
+bootstrap_install_version_tracks_bundle_not_script_version
+
 node_help="$tmp_dir/chimera-node-help.txt"
 "$installed_home/bin/chimera-node" --help >"$node_help" 2>&1 || fail "node_help_failed"
 rg -q '^Команды chimera-node:' "$node_help" || fail "node_help_missing_node_commands"
