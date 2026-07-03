@@ -85,13 +85,18 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera-sh -start` returns non-zero if either node or transparent runtime
      service fails its active check;
    - false `start_status=ok` is a release-blocking regression.
-13. Smoke-test the install flow on external proof nodes only through the GitHub
-   one-command bootstrap.
+13. Smoke-test the public install flow on external proof nodes only through the
+   published one-command bootstrap sources.
+   - GitHub bootstrap and GitVerse bootstrap are separate proof paths; each
+     path must be checked explicitly
    - the command must be wrapped with `bash -o pipefail -c`
    - the outer bootstrap download must use `curl --disable -fsSL --retry 3
      --connect-timeout 10 --max-time 60`
+   - before each first-install proof, run the same public bootstrap with
+     `-uninstall` and verify that release root, launcher links, user units,
+     desktop entries, config and cache traces are absent
    - first install must not loop on self-update
-   - start/status must work
+   - start/status/stop/uninstall must work
    - if the smoke fails, fix the root cause and rebuild from step 2
 
 Non-goals:

@@ -6,6 +6,11 @@ ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/down
 CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz.sha256"
 GITVERS_BOOTSTRAP_URLS_DEFAULT="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_DEFAULT:-https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh}"
 GITVERS_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_gitvers_bootstrap_urls.list}"
+NODE_SERVICE_UNIT="${CHIMERA_NODE_SERVICE_UNIT:-chimera-node.service}"
+DATAPATH_SERVICE_UNIT="${CHIMERA_DATAPATH_SERVICE_UNIT:-chimera-datapath.service}"
+LEGACY_NODE_COMPAT_SERVICE_UNIT="${LEGACY_NODE_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_NODE_SERVICE_UNIT:-chimera-gateway.service}}"
+LEGACY_DATAPATH_COMPAT_SERVICE_UNIT="${LEGACY_DATAPATH_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_DATAPATH_SERVICE_UNIT:-chimera-client.service}}"
+INSTALL_LOCAL_BIN_FILE=".chimera_install_local_bin"
 
 resolve_self() {
   local src="${BASH_SOURCE[0]}"
@@ -168,6 +173,172 @@ load_gitvers_bootstrap_urls() {
   } | awk 'NF && !seen[$0]++'
 }
 
+path_exists_or_link() {
+  [[ -e "${1:?path_required}" || -L "${1:?path_required}" ]]
+}
+
+remove_path_if_present() {
+  local path="${1:?path_required}"
+  path_exists_or_link "$path" || return 0
+  rm -rf "$path"
+}
+
+remove_link_if_points_to_root() {
+  local path="${1:?path_required}"
+  local root_dir="${2:?root_dir_required}"
+  local resolved=""
+  [[ -L "$path" ]] || return 0
+  resolved="$(readlink -f "$path" 2>/dev/null || true)"
+  [[ -n "$resolved" && "$resolved" == "$root_dir/"* ]] || return 0
+  rm -f "$path"
+}
+
+systemd_user_ready() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl --user show-environment >/dev/null 2>&1
+}
+
+detect_embedded_chimera_home() {
+  local script_dir candidate
+  script_dir="$(resolve_self)"
+  candidate="$(cd "$script_dir/.." && pwd)"
+  if [[ -f "$candidate/scripts/chimera.sh" && -f "$candidate/scripts/install_desktop_control.sh" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+resolve_chimera_home() {
+  local embedded_chimera_home=""
+  embedded_chimera_home="$(detect_embedded_chimera_home || true)"
+  if [[ -n "$embedded_chimera_home" ]]; then
+    printf '%s\n' "$embedded_chimera_home"
+    return 0
+  fi
+  printf '%s\n' "${CHIMERA_HOME:-$HOME/.local/share/chimera}"
+}
+
+read_install_local_bin() {
+  local chimera_home="${1:?chimera_home_required}"
+  local recorded_local_bin_file="${chimera_home}/${INSTALL_LOCAL_BIN_FILE}"
+  if [[ -f "$recorded_local_bin_file" ]]; then
+    local recorded_local_bin
+    recorded_local_bin="$(tr -d '\r' <"$recorded_local_bin_file" 2>/dev/null | head -n 1 | tr -d '\n' || true)"
+    if [[ -n "$recorded_local_bin" ]]; then
+      printf '%s\n' "$recorded_local_bin"
+      return 0
+    fi
+  fi
+  printf '%s\n' "${CHIMERA_LOCAL_BIN:-$HOME/.local/bin}"
+}
+
+remove_previous_release_backups() {
+  local release_parent="${1:?release_parent_required}"
+  local backup_path=""
+  shopt -s nullglob
+  for backup_path in "$release_parent"/.chimera-previous.*; do
+    if rm -rf "$backup_path" 2>/dev/null; then
+      continue
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+      CHIMERA_FAKE_SUDO_CALL=1 sudo -n rm -rf "$backup_path" 2>/dev/null || true
+    fi
+  done
+  shopt -u nullglob
+}
+
+bootstrap_uninstall_release_tree() {
+  local chimera_home="${1:?chimera_home_required}"
+  local local_bin="${2:?local_bin_required}"
+  local systemd_user_dir="${3:?systemd_user_dir_required}"
+  local applications_dir="${4:?applications_dir_required}"
+  local chimera_config_dir="${5:?chimera_config_dir_required}"
+  local chimera_cache_dir="${6:?chimera_cache_dir_required}"
+  local release_parent=""
+  release_parent="$(dirname "$chimera_home")"
+  remove_link_if_points_to_root "$local_bin/chimera" "$chimera_home"
+  remove_link_if_points_to_root "$local_bin/chimera.sh" "$chimera_home"
+  remove_link_if_points_to_root "$local_bin/chimera-sh" "$chimera_home"
+  remove_path_if_present "$systemd_user_dir/$NODE_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/$DATAPATH_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/$LEGACY_NODE_COMPAT_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT"
+  remove_path_if_present "$applications_dir/chimera-control-gui.desktop"
+  remove_path_if_present "$applications_dir/chimera-control.desktop"
+  remove_path_if_present "$chimera_config_dir"
+  remove_path_if_present "$chimera_cache_dir"
+  remove_path_if_present "$chimera_home"
+  remove_previous_release_backups "$release_parent"
+}
+
+bootstrap_uninstall_current_installation() {
+  local chimera_home=""
+  local local_bin systemd_user_dir applications_dir chimera_config_dir chimera_cache_dir
+  local control_script=""
+  local traces_remaining=0
+  local trace_path=""
+
+  chimera_home="$(resolve_chimera_home)"
+  local_bin="$(read_install_local_bin "$chimera_home")"
+  systemd_user_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  chimera_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/chimera"
+  chimera_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
+  control_script="$chimera_home/scripts/chimera-control.sh"
+
+  if [[ -x "$control_script" ]]; then
+    "$control_script" stop >/dev/null 2>&1 || true
+  fi
+  if systemd_user_ready; then
+    systemctl --user disable --now \
+      "$NODE_SERVICE_UNIT" \
+      "$DATAPATH_SERVICE_UNIT" \
+      "$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
+      "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
+  fi
+  bootstrap_uninstall_release_tree \
+    "$chimera_home" \
+    "$local_bin" \
+    "$systemd_user_dir" \
+    "$applications_dir" \
+    "$chimera_config_dir" \
+    "$chimera_cache_dir" || {
+      echo "uninstall_status=fail reason=cleanup_failed"
+      return 1
+    }
+  if systemd_user_ready; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+  fi
+
+  for trace_path in \
+    "$chimera_home" \
+    "$local_bin/chimera" \
+    "$local_bin/chimera.sh" \
+    "$local_bin/chimera-sh" \
+    "$systemd_user_dir/$NODE_SERVICE_UNIT" \
+    "$systemd_user_dir/$DATAPATH_SERVICE_UNIT" \
+    "$systemd_user_dir/$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
+    "$systemd_user_dir/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" \
+    "$applications_dir/chimera-control-gui.desktop" \
+    "$applications_dir/chimera-control.desktop" \
+    "$chimera_config_dir" \
+    "$chimera_cache_dir"
+  do
+    if path_exists_or_link "$trace_path"; then
+      traces_remaining=1
+      break
+    fi
+  done
+
+  if [[ "$traces_remaining" -ne 0 ]]; then
+    echo "uninstall_status=fail reason=traces_remain"
+    return 1
+  fi
+
+  echo "uninstall_status=ok"
+}
+
 sha256_file() {
   local file="${1:?file_required}"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -280,6 +451,7 @@ install_release_archive() {
     fi
     return 1
   fi
+  printf '%s\n' "$local_bin" > "$chimera_home/$INSTALL_LOCAL_BIN_FILE"
   if [[ -n "$backup_home" ]]; then
     rm -rf "$backup_home"
   fi
@@ -421,6 +593,9 @@ LOCAL_SH="$SCRIPT_DIR/chimera-sh"
 case "${1:-}" in
   -install|install)
     bootstrap_install_from_configured_sources
+    ;;
+  -uninstall|uninstall)
+    bootstrap_uninstall_current_installation
     ;;
   "")
     if [[ -x "$LOCAL_SH" ]]; then

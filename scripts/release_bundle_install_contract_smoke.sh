@@ -548,6 +548,26 @@ rg -q '"network_state":"not_modified"' "$installed_home/docs/doctor_latest.json"
 [[ -d "$config/chimera" ]] || fail "installed_config_dir_missing_before_uninstall"
 [[ -d "$cache/chimera" ]] || fail "installed_cache_dir_missing_before_uninstall"
 
+# Simulate the legacy runtime bug where the installed control path reports
+# uninstall success without removing the release tree. The bootstrap script must
+# still perform a full cleanup.
+cat >"$installed_home/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  stop)
+    exit 0
+    ;;
+  uninstall)
+    echo "uninstall_status=ok"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+chmod +x "$installed_home/scripts/chimera-control.sh"
+
 uninstall_log="$tmp_dir/uninstall.log"
 set +e
 PATH="$fake_bin:/usr/sbin:/usr/bin:/sbin:/bin" \
@@ -558,7 +578,7 @@ XDG_DATA_HOME="$data" \
 XDG_RUNTIME_DIR="$runtime" \
 NFT_BIN="$fake_bin/nft" \
 CHIMERA_ALLOW_TEST_NFT_BIN=1 \
-  timeout 20s "$installed_home/scripts/chimera-sh" -uninstall >"$uninstall_log" 2>&1
+  timeout 20s "$installed_home/scripts/chimera.sh" -uninstall >"$uninstall_log" 2>&1
 uninstall_rc=$?
 set -e
 

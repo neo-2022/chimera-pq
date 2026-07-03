@@ -452,6 +452,8 @@ rg -n 'curl --disable .*--retry 3 .*--connect-timeout 10 .*--max-time 60' "$ROOT
 rg -n 'GITVERS_BOOTSTRAP_URLS_DEFAULT=' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_gitvers_default_source"
 rg -n 'GITVERS_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_gitvers_source_file"
 rg -n 'bootstrap_install_from_bootstrap_source "gitvers"' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_gitvers_fallback"
+rg -n 'bootstrap_uninstall_current_installation' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_self_uninstall"
+rg -n 'INSTALL_LOCAL_BIN_FILE=' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_install_local_bin_contract"
 rg -n "bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 .*chimera\\.sh \\| bash -s -- -install'" "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_usage_not_pipefail_bounded"
 rg -n "bash -o pipefail -lc 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 .*\\\$bootstrap_url.* \\| bash -s -- -install'" "$ROOT_DIR/scripts/chimera_remote_cycle_smoke.sh" >/dev/null || fail "remote_cycle_bootstrap_not_pipefail_bounded"
 if ! bash -lc 'false | bash -s -- -install'; then
@@ -560,6 +562,8 @@ rg -n 'datapath_proof=ok' "$ROOT_DIR/scripts/release_bundle_install_contract_smo
 rg -n 'datapath_flow_proof=ok' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_flow_ok_assert"
 rg -n 'installed_gitvers_bootstrap_sources_missing' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_gitvers_sources_check"
 rg -n 'installed_gitvers_bootstrap_sources_mode' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_gitvers_sources_mode_check"
+rg -n '\$installed_home/scripts/chimera\.sh" -uninstall' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_bootstrap_uninstall_path"
+rg -n 'legacy runtime bug where the installed control path reports' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_legacy_uninstall_regression_case"
 rg -n 'datapath_apply=\$systemd_datapath_apply_status' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_systemd_apply_status_output"
 rg -n 'datapath_apply=\$direct_datapath_apply_status' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_apply_status_output"
 rg -n 'GITVERS_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_gitvers_sources_file"
