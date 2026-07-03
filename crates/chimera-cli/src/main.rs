@@ -14,7 +14,7 @@ use chimera_capture::{
 use chimera_carrier::CarrierEndpoint;
 use chimera_carrier_quic::{QuicCarrier, QuicCarrierConfig};
 use chimera_carrier_tls::{TlsCarrier, TlsCarrierConfig};
-use chimera_config::{ConfigCaptureMode, ConfigCarrierProfile, parse_client_config_text};
+use chimera_config::{ConfigCaptureMode, ConfigCarrierProfile, parse_node_config_text};
 use chimera_dns::{DnsBinding, DnsBindingStore};
 use chimera_policy::{
     FlowContext, OutboundMode, Policy, PolicySummary, Protocol, RouteDecision, RouteExplainTrace,
@@ -111,6 +111,14 @@ struct RollbackOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct StateProofOptions {
+    state_path: String,
+    flow_path: Option<String>,
+    require_flow: bool,
+    max_flow_age_sec: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ProbeOptions {
     urls: Vec<String>,
     url_file: Option<String>,
@@ -122,12 +130,12 @@ struct ProbeOptions {
     out_path: Option<String>,
 }
 
-const STATUS_USAGE_EN: &str = "usage: chimera [--lang en|ru] status [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
-const STATUS_USAGE_RU: &str = "использование: chimera [--lang en|ru] status [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
-const HEALTH_USAGE_EN: &str = "usage: chimera [--lang en|ru] health [--config <client_config_file>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
-const HEALTH_USAGE_RU: &str = "использование: chimera [--lang en|ru] health [--config <файл_client_config>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
-const DOCTOR_USAGE_EN: &str = "usage: chimera [--lang en|ru] doctor [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]";
-const DOCTOR_USAGE_RU: &str = "использование: chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]";
+const STATUS_USAGE_EN: &str = "usage: chimera [--lang en|ru] status [--config <node_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
+const STATUS_USAGE_RU: &str = "использование: chimera [--lang en|ru] status [--config <файл_node_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
+const HEALTH_USAGE_EN: &str = "usage: chimera [--lang en|ru] health [--config <node_config_file>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]";
+const HEALTH_USAGE_RU: &str = "использование: chimera [--lang en|ru] health [--config <файл_node_config>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]";
+const DOCTOR_USAGE_EN: &str = "usage: chimera [--lang en|ru] doctor [--config <node_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]";
+const DOCTOR_USAGE_RU: &str = "использование: chimera [--lang en|ru] doctor [--config <файл_node_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]";
 const ROUTE_USAGE_EN: &str = "usage: chimera [--lang en|ru] route explain [domain] [--domain <domain>] [--policy <policy_file>] [--ip <ipv4|ipv6>] [--proto <tcp|udp|icmp>] [--port <n>] [--dns-bind-domain <domain>] [--dns-bind-ip <ipv4|ipv6>] [--show-all-matches] [--json] [--out <file>]";
 const ROUTE_USAGE_RU: &str = "использование: chimera [--lang en|ru] route explain [домен] [--domain <домен>] [--policy <файл_policy>] [--ip <ipv4|ipv6>] [--proto <tcp|udp|icmp>] [--port <число>] [--dns-bind-domain <домен>] [--dns-bind-ip <ipv4|ipv6>] [--show-all-matches] [--json] [--out <файл>]";
 const MESH_USAGE_EN: &str = "usage: chimera [--lang en|ru] mesh <nodes|contracts|route-explain|connect-probe|launch-preflight|launch-preflight-verify> ...";
@@ -136,18 +144,21 @@ const DIAG_REKEY_USAGE_EN: &str =
     "usage: chimera [--lang en|ru] diag rekey <age_sec> <packets_sent>";
 const DIAG_REKEY_USAGE_RU: &str =
     "использование: chimera [--lang en|ru] diag rekey <секунды_возраста> <пакеты>";
-const DIAG_EXPORT_USAGE_EN: &str = "usage: chimera [--lang en|ru] diag export [--config <client_config_file>] [--age <seconds>] [--packets <count>] [--out <file>]";
-const DIAG_EXPORT_USAGE_RU: &str = "использование: chimera [--lang en|ru] diag export [--config <файл_client_config>] [--age <секунды>] [--packets <число>] [--out <файл>]";
+const DIAG_EXPORT_USAGE_EN: &str = "usage: chimera [--lang en|ru] diag export [--config <node_config_file>] [--age <seconds>] [--packets <count>] [--out <file>]";
+const DIAG_EXPORT_USAGE_RU: &str = "использование: chimera [--lang en|ru] diag export [--config <файл_node_config>] [--age <секунды>] [--packets <число>] [--out <файл>]";
 const POLICY_USAGE_EN: &str = "usage: chimera [--lang en|ru] policy validate <policy_file>";
 const POLICY_USAGE_RU: &str = "использование: chimera [--lang en|ru] policy validate <файл_policy>";
-const UP_USAGE_EN: &str = "usage: chimera [--lang en|ru] up [--state-file <file>] [--config <client_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
-const UP_USAGE_RU: &str = "использование: chimera [--lang en|ru] up [--state-file <файл>] [--config <файл_client_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
-const DOWN_USAGE_EN: &str = "usage: chimera [--lang en|ru] down [--state-file <file>] [--config <client_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
-const DOWN_USAGE_RU: &str = "использование: chimera [--lang en|ru] down [--state-file <файл>] [--config <файл_client_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
+const UP_USAGE_EN: &str = "usage: chimera [--lang en|ru] up [--state-file <file>] [--config <node_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
+const UP_USAGE_RU: &str = "использование: chimera [--lang en|ru] up [--state-file <файл>] [--config <файл_node_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
+const DOWN_USAGE_EN: &str = "usage: chimera [--lang en|ru] down [--state-file <file>] [--config <node_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
+const DOWN_USAGE_RU: &str = "использование: chimera [--lang en|ru] down [--state-file <файл>] [--config <файл_node_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
 const ROLLBACK_USAGE_EN: &str = "usage: chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <file>] [--json] [--out <file>]";
 const ROLLBACK_USAGE_RU: &str = "использование: chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <файл>] [--json] [--out <файл>]";
+const STATE_USAGE_EN: &str = "usage: chimera [--lang en|ru] state proof [--state-file <file>] [--flow-file <file>] [--require-flow <true|false>] [--max-flow-age-sec <seconds>]";
+const STATE_USAGE_RU: &str = "использование: chimera [--lang en|ru] state proof [--state-file <файл>] [--flow-file <файл>] [--require-flow <true|false>] [--max-flow-age-sec <секунды>]";
 const PROBE_USAGE_EN: &str = "usage: chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]";
 const PROBE_USAGE_RU: &str = "использование: chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]";
+const PROBE_CI_SNAPSHOT_HOST: &str = "chimera-ci-snapshot.local";
 const LAB_USAGE_EN: &str = "usage: chimera [--lang en|ru] lab <smoke|doctor|config-smoke|fuzz-smoke|perf-smoke|net-sim|benchmark-report|benchmark-regression-check|hardening-smoke|mvp-spec-check|mvp-spec-report|m5-artifacts-report|m6-artifacts-report|release-readiness-report|report-pack|artifact-audit|mvp-snapshot|mvp-verify|mvp-check> [extra args for chimera-lab]";
 const LAB_USAGE_RU: &str = "использование: chimera [--lang en|ru] lab <smoke|doctor|config-smoke|fuzz-smoke|perf-smoke|net-sim|benchmark-report|benchmark-regression-check|hardening-smoke|mvp-spec-check|mvp-spec-report|m5-artifacts-report|m6-artifacts-report|release-readiness-report|report-pack|artifact-audit|mvp-snapshot|mvp-verify|mvp-check> [доп. аргументы для chimera-lab]";
 
@@ -225,6 +236,13 @@ fn rollback_usage(lang: Language) -> &'static str {
     match lang {
         Language::En => ROLLBACK_USAGE_EN,
         Language::Ru => ROLLBACK_USAGE_RU,
+    }
+}
+
+fn state_usage(lang: Language) -> &'static str {
+    match lang {
+        Language::En => STATE_USAGE_EN,
+        Language::Ru => STATE_USAGE_RU,
     }
 }
 
@@ -346,6 +364,11 @@ fn main() {
         "up" => up_command(lang, args_tail(&args, command_index + 1)),
         "down" => down_command(lang, args_tail(&args, command_index + 1)),
         "rollback" => rollback_command(lang, args_tail(&args, command_index + 1)),
+        "state" => state_command(
+            lang,
+            args.get(command_index + 1).map(String::as_str),
+            args_tail(&args, command_index + 2),
+        ),
         "probe" => probe_command(
             lang,
             args.get(command_index + 1).map(String::as_str),
@@ -453,8 +476,18 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
     let mut direct_ok_total = 0usize;
     let mut unreachable_total = 0usize;
     let mut policy_apply_failed_total = 0usize;
+    let target_profile = if urls
+        .iter()
+        .all(|url| probe_url_matches_host(url, PROBE_CI_SNAPSHOT_HOST))
+    {
+        "ci_snapshot"
+    } else {
+        "live"
+    };
     for url in &urls {
         total += 1;
+        let target_ref = probe_target_ref(total);
+        let policy_rule_ref = probe_policy_rule_ref(total);
         let direct_ok = run_curl_probe(url, options.timeout_seconds).unwrap_or(false);
         if direct_ok {
             direct_ok_total += 1;
@@ -464,19 +497,17 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
             unreachable_total += 1;
         }
         let suggested_domain = extract_domain_from_url(url);
-        let policy_hint = suggested_domain
-            .as_deref()
-            .map(|domain| format!("domain_exact={domain} outbound={recommendation}"))
-            .unwrap_or_else(|| format!("outbound={recommendation}"));
+        let policy_hint = redacted_probe_policy_hint(suggested_domain.as_deref(), recommendation);
         let mut policy_apply_result = "not_requested".to_string();
         let mut policy_rule_id = String::new();
         let mut policy_verify_ok = false;
         let mut policy_verify_outbound = String::new();
         let mut target_error = String::new();
+        let mut failover_override_failed = false;
         if direct_ok && let Some(domain) = suggested_domain.as_deref() {
             let flow_key = flow_key_for(domain, Protocol::Tcp, 443);
-            if let Err(error) = update_failover_override_key(&flow_key, false) {
-                target_error = format!("failover_override_update_error:{error}");
+            if update_failover_override_key(&flow_key, false).is_err() {
+                failover_override_failed = true;
             }
         }
         if let Some(path) = options.apply_policy_path.as_deref() {
@@ -484,20 +515,19 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                 policy_apply_failed_total += 1;
                 policy_apply_result = "failed".to_string();
                 target_error = "domain_extract_failed".to_string();
-                rows.push(format!(
-                    "{{\"url\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
-                    escape_json(url),
-                    if direct_ok { "true" } else { "false" },
+                rows.push(render_probe_access_row(
+                    &target_ref,
+                    direct_ok,
                     recommendation,
-                    escape_json(&policy_hint),
-                    escape_json(&policy_apply_result),
-                    escape_json(&policy_rule_id),
-                    if policy_verify_ok { "true" } else { "false" },
-                    escape_json(&policy_verify_outbound),
-                    escape_json(&target_error),
+                    &policy_hint,
+                    &policy_apply_result,
+                    "",
+                    policy_verify_ok,
+                    &policy_verify_outbound,
+                    &target_error,
                 ));
                 plain_lines.push(format!(
-                    "URL: {url} | direct={} | route={} | policy={} | error={}",
+                    "Target: {target_ref} | direct={} | route={} | policy={} | error={}",
                     if direct_ok { "ok" } else { "fail" },
                     recommendation,
                     policy_apply_result,
@@ -509,20 +539,19 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                 policy_apply_failed_total += 1;
                 policy_apply_result = "failed".to_string();
                 target_error = "policy_domain_ip_literal_not_supported".to_string();
-                rows.push(format!(
-                    "{{\"url\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
-                    escape_json(url),
-                    if direct_ok { "true" } else { "false" },
+                rows.push(render_probe_access_row(
+                    &target_ref,
+                    direct_ok,
                     recommendation,
-                    escape_json(&policy_hint),
-                    escape_json(&policy_apply_result),
-                    escape_json(&policy_rule_id),
-                    if policy_verify_ok { "true" } else { "false" },
-                    escape_json(&policy_verify_outbound),
-                    escape_json(&target_error),
+                    &policy_hint,
+                    &policy_apply_result,
+                    "",
+                    policy_verify_ok,
+                    &policy_verify_outbound,
+                    &target_error,
                 ));
                 plain_lines.push(format!(
-                    "URL: {url} | direct={} | route={} | policy={} | error={}",
+                    "Target: {target_ref} | direct={} | route={} | policy={} | error={}",
                     if direct_ok { "ok" } else { "fail" },
                     recommendation,
                     policy_apply_result,
@@ -567,20 +596,32 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
                 policy_apply_result = "skipped_unknown_recommendation".to_string();
             }
         }
-        rows.push(format!(
-            "{{\"url\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_id\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
-            escape_json(url),
-            if direct_ok { "true" } else { "false" },
+        if failover_override_failed && policy_apply_result != "failed" {
+            policy_apply_failed_total += 1;
+            policy_apply_result = "failed".to_string();
+            policy_verify_ok = false;
+            policy_rule_id.clear();
+            policy_verify_outbound.clear();
+            target_error = "failover_override_update_error".to_string();
+        }
+        let public_rule_ref = if policy_rule_id.is_empty() {
+            ""
+        } else {
+            policy_rule_ref.as_str()
+        };
+        rows.push(render_probe_access_row(
+            &target_ref,
+            direct_ok,
             recommendation,
-            escape_json(&policy_hint),
-            escape_json(&policy_apply_result),
-            escape_json(&policy_rule_id),
-            if policy_verify_ok { "true" } else { "false" },
-            escape_json(&policy_verify_outbound),
-            escape_json(&target_error)
+            &policy_hint,
+            &policy_apply_result,
+            public_rule_ref,
+            policy_verify_ok,
+            &policy_verify_outbound,
+            &target_error,
         ));
         plain_lines.push(format!(
-            "URL: {url} | direct={} | route={} | policy={}{}",
+            "Target: {target_ref} | direct={} | route={} | policy={}{}",
             if direct_ok { "ok" } else { "fail" },
             recommendation,
             policy_apply_result,
@@ -596,7 +637,8 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
 
     if options.json_output {
         let report = format!(
-            "{{\"status\":\"ok\",\"kind\":\"probe_access\",\"totals\":{{\"all\":{},\"direct_ok\":{},\"unreachable\":{},\"policy_apply_failed\":{},\"failed_total\":{},\"fail_threshold\":{},\"threshold_exceeded\":{}}},\"targets\":[{}],\"network_state\":\"not_modified\"}}\n",
+            "{{\"status\":\"ok\",\"kind\":\"probe_access\",\"redaction\":\"raw_targets_redacted\",\"target_profile\":\"{}\",\"totals\":{{\"all\":{},\"direct_ok\":{},\"unreachable\":{},\"policy_apply_failed\":{},\"failed_total\":{},\"fail_threshold\":{},\"threshold_exceeded\":{}}},\"targets\":[{}],\"network_state\":\"not_modified\"}}\n",
+            target_profile,
             total,
             direct_ok_total,
             unreachable_total,
@@ -631,6 +673,50 @@ fn probe_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i
         }
     }
     if threshold_exceeded { 1 } else { 0 }
+}
+
+fn probe_target_ref(index: usize) -> String {
+    format!("target#{index}")
+}
+
+fn probe_policy_rule_ref(index: usize) -> String {
+    format!("rule#{index}")
+}
+
+fn redacted_probe_policy_hint(domain: Option<&str>, recommendation: &str) -> String {
+    let target_kind = match domain {
+        Some(value) if is_ip_literal(value) => "ip_literal",
+        Some(_) => "domain_exact_present",
+        None => "domain_absent",
+    };
+    format!("target_kind={target_kind} outbound={recommendation}")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_probe_access_row(
+    target_ref: &str,
+    direct_ok: bool,
+    recommendation: &str,
+    policy_hint: &str,
+    policy_apply_result: &str,
+    policy_rule_ref: &str,
+    policy_verify_ok: bool,
+    policy_verify_outbound: &str,
+    target_error: &str,
+) -> String {
+    format!(
+        "{{\"url\":\"{}\",\"target_ref\":\"{}\",\"direct_ok\":{},\"recommended_route\":\"{}\",\"policy_hint\":\"{}\",\"policy_apply_result\":\"{}\",\"policy_rule_ref\":\"{}\",\"policy_verify_ok\":{},\"policy_verify_outbound\":\"{}\",\"target_error\":\"{}\"}}",
+        escape_json(target_ref),
+        escape_json(target_ref),
+        if direct_ok { "true" } else { "false" },
+        recommendation,
+        escape_json(policy_hint),
+        escape_json(policy_apply_result),
+        escape_json(policy_rule_ref),
+        if policy_verify_ok { "true" } else { "false" },
+        escape_json(policy_verify_outbound),
+        escape_json(target_error),
+    )
 }
 
 fn parse_probe_options(args: &[String]) -> Result<ProbeOptions, ()> {
@@ -728,9 +814,9 @@ fn collect_probe_urls(options: &ProbeOptions) -> Result<Vec<String>, String> {
     if deduped.is_empty() {
         return Err("no urls provided after normalization".to_string());
     }
-    for url in &deduped {
+    for (idx, url) in deduped.iter().enumerate() {
         if !is_supported_probe_url(url) {
-            return Err(format!("invalid url: {url}"));
+            return Err(format!("invalid url at {}", probe_target_ref(idx + 1)));
         }
     }
     Ok(deduped)
@@ -813,6 +899,10 @@ fn extract_domain_from_url(url: &str) -> Option<String> {
     } else {
         Some(normalized)
     }
+}
+
+fn probe_url_matches_host(url: &str, expected_host: &str) -> bool {
+    extract_domain_from_url(url).is_some_and(|host| host == expected_host)
 }
 
 fn outbound_to_policy_token(outbound: OutboundMode) -> &'static str {
@@ -1172,7 +1262,7 @@ fn route_command(
         let config_flags = if let Some(path) = options.config_path.as_deref() {
             std::fs::read_to_string(path)
                 .ok()
-                .and_then(|text| parse_client_config_text(&text).ok())
+                .and_then(|text| parse_node_config_text(&text).ok())
                 .map(|cfg| {
                     (
                         cfg.split_tunnel_default,
@@ -2307,7 +2397,7 @@ fn apply_status_config_overrides(mut options: StatusOptions) -> Result<StatusOpt
     };
     let file_content = std::fs::read_to_string(path)
         .map_err(|error| format!("cannot read config file: {error}"))?;
-    let config = parse_client_config_text(&file_content).map_err(|error| error.to_string())?;
+    let config = parse_node_config_text(&file_content).map_err(|error| error.to_string())?;
 
     options.carrier_profile = match config.carrier_profile {
         ConfigCarrierProfile::InMemory => CarrierProfile::InMemory,
@@ -2610,9 +2700,9 @@ fn render_health_block(
     match lang {
         Language::En => {
             out.push_str(if ready {
-                "Client check: ok\n"
+                "Node check: ok\n"
             } else {
-                "Client check: fail-closed\n"
+                "Node check: fail-closed\n"
             });
             out.push_str("Checks:\n");
             out.push_str("  - Config parse: ok\n");
@@ -2639,9 +2729,9 @@ fn render_health_block(
         }
         Language::Ru => {
             out.push_str(if ready {
-                "Проверка клиента: ok\n"
+                "Проверка узла: ok\n"
             } else {
-                "Проверка клиента: fail-closed\n"
+                "Проверка узла: fail-closed\n"
             });
             out.push_str("Проверки:\n");
             out.push_str("  - Чтение конфига: ok\n");
@@ -2825,9 +2915,9 @@ fn render_help_text(lang: Language) -> String {
         Language::En => {
             out.push_str("Chimera CLI (simple mode)\n");
             out.push_str("Commands:\n");
-            out.push_str("  chimera [--lang en|ru] status [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
-            out.push_str("  chimera [--lang en|ru] health [--config <client_config_file>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
-            out.push_str("  chimera [--lang en|ru] doctor [--config <client_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]\n");
+            out.push_str("  chimera [--lang en|ru] status [--config <node_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
+            out.push_str("  chimera [--lang en|ru] health [--config <node_config_file>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>]\n");
+            out.push_str("  chimera [--lang en|ru] doctor [--config <node_config_file>] [--mock-traffic <packets> --age <seconds> --max-age <seconds> --max-packets <count>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <host:port>] [--server-name <name>] [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] up\n");
             out.push_str("  chimera [--lang en|ru] down\n");
             out.push_str("  chimera [--lang en|ru] mvp-check\n");
@@ -2853,6 +2943,7 @@ fn render_help_text(lang: Language) -> String {
             out.push_str(
                 "  chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <file>] [--json] [--out <file>]\n",
             );
+            out.push_str("  chimera [--lang en|ru] state proof [--state-file <file>] [--flow-file <file>] [--require-flow <true|false>] [--max-flow-age-sec <seconds>]\n");
             out.push_str(
                 "  chimera [--lang en|ru] lab <smoke|doctor|config-smoke|fuzz-smoke|perf-smoke|net-sim|benchmark-report|benchmark-regression-check|hardening-smoke|mvp-spec-check|mvp-spec-report|m5-artifacts-report|m6-artifacts-report|release-readiness-report|report-pack|artifact-audit|mvp-snapshot|mvp-verify|mvp-check> [extra args for chimera-lab]\n",
             );
@@ -2866,14 +2957,14 @@ fn render_help_text(lang: Language) -> String {
             out.push_str("  chimera [--lang en|ru] policy validate <policy_file>\n");
             out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <file>] [--timeout-sec <n>] [--apply-policy <file>] [--rule-id-prefix <prefix>] [--fail-threshold <n>] [--json] [--out <file>]\n");
             out.push_str("  chimera [--lang en|ru] diag rekey <age_sec> <packets_sent>\n");
-            out.push_str("  chimera [--lang en|ru] diag export [--config <client_config_file>] [--age <seconds>] [--packets <count>] [--out <file>]\n");
+            out.push_str("  chimera [--lang en|ru] diag export [--config <node_config_file>] [--age <seconds>] [--packets <count>] [--out <file>]\n");
         }
         Language::Ru => {
             out.push_str("Chimera CLI (простой режим)\n");
             out.push_str("Команды:\n");
-            out.push_str("  chimera [--lang en|ru] status [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
-            out.push_str("  chimera [--lang en|ru] health [--config <файл_client_config>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
-            out.push_str("  chimera [--lang en|ru] doctor [--config <файл_client_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]\n");
+            out.push_str("  chimera [--lang en|ru] status [--config <файл_node_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
+            out.push_str("  chimera [--lang en|ru] health [--config <файл_node_config>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>]\n");
+            out.push_str("  chimera [--lang en|ru] doctor [--config <файл_node_config>] [--mock-traffic <пакеты> --age <секунды> --max-age <секунды> --max-packets <число>] [--capture <auto|tun>] [--tun-supported <true|false>] [--carrier <in-memory|tls|quic>] [--carrier-addr <хост:порт>] [--server-name <имя>] [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] up\n");
             out.push_str("  chimera [--lang en|ru] down\n");
             out.push_str("  chimera [--lang en|ru] mvp-check\n");
@@ -2899,6 +2990,7 @@ fn render_help_text(lang: Language) -> String {
             out.push_str(
                 "  chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <файл>] [--json] [--out <файл>]\n",
             );
+            out.push_str("  chimera [--lang en|ru] state proof [--state-file <файл>] [--flow-file <файл>] [--require-flow <true|false>] [--max-flow-age-sec <секунды>]\n");
             out.push_str(
                 "  chimera [--lang en|ru] lab <smoke|doctor|config-smoke|fuzz-smoke|perf-smoke|net-sim|benchmark-report|benchmark-regression-check|hardening-smoke|mvp-spec-check|mvp-spec-report|m5-artifacts-report|m6-artifacts-report|release-readiness-report|report-pack|artifact-audit|mvp-snapshot|mvp-verify|mvp-check> [доп. аргументы для chimera-lab]\n",
             );
@@ -2912,7 +3004,7 @@ fn render_help_text(lang: Language) -> String {
             out.push_str("  chimera [--lang en|ru] policy validate <файл_policy>\n");
             out.push_str("  chimera [--lang en|ru] probe access --url <http|https_url> [--url-file <файл>] [--timeout-sec <n>] [--apply-policy <файл>] [--rule-id-prefix <префикс>] [--fail-threshold <n>] [--json] [--out <файл>]\n");
             out.push_str("  chimera [--lang en|ru] diag rekey <секунды> <пакеты>\n");
-            out.push_str("  chimera [--lang en|ru] diag export [--config <файл_client_config>] [--age <секунды>] [--packets <число>] [--out <файл>]\n");
+            out.push_str("  chimera [--lang en|ru] diag export [--config <файл_node_config>] [--age <секунды>] [--packets <число>] [--out <файл>]\n");
         }
     }
     out
@@ -3071,6 +3163,55 @@ fn parse_rollback_options(args: &[String]) -> Result<RollbackOptions, ()> {
         json_output,
         out_path,
     })
+}
+
+fn parse_state_proof_options(args: &[String]) -> Result<StateProofOptions, ()> {
+    let mut state_path = "docs/runtime_state_latest.json".to_string();
+    let mut flow_path = None;
+    let mut require_flow = false;
+    let mut max_flow_age_sec = 300_u64;
+    let mut index = 0usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--state-file" => {
+                state_path = args.get(index + 1).cloned().ok_or(())?;
+                index += 2;
+            }
+            "--flow-file" => {
+                flow_path = Some(args.get(index + 1).cloned().ok_or(())?);
+                index += 2;
+            }
+            "--require-flow" => {
+                let raw = args.get(index + 1).cloned().ok_or(())?;
+                require_flow = parse_bool_flag(&raw).ok_or(())?;
+                index += 2;
+            }
+            "--max-flow-age-sec" => {
+                let raw = args.get(index + 1).cloned().ok_or(())?;
+                let parsed = raw.parse::<u64>().map_err(|_| ())?;
+                if parsed == 0 {
+                    return Err(());
+                }
+                max_flow_age_sec = parsed;
+                index += 2;
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(StateProofOptions {
+        state_path,
+        flow_path,
+        require_flow,
+        max_flow_age_sec,
+    })
+}
+
+fn parse_bool_flag(raw: &str) -> Option<bool> {
+    match raw {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
 }
 
 fn up_command(lang: Language, args: &[String]) -> i32 {
@@ -3453,7 +3594,10 @@ fn is_self_loop_carrier_target(carrier_addr: &str) -> Result<bool, String> {
 }
 
 fn resolve_first_socket_addr(addr: &str) -> Result<SocketAddr, String> {
-    addr.to_socket_addrs()
+    let endpoint =
+        CarrierEndpoint::parse(addr).map_err(|e| format!("carrier addr invalid: {e}"))?;
+    format!("{}:{}", endpoint.host, endpoint.port)
+        .to_socket_addrs()
         .map_err(|error| {
             format!(
                 "carrier address resolve failed for <redacted> target_state={}: {error}",
@@ -3826,6 +3970,198 @@ fn parse_state_json(state_json: &str) -> Option<serde_json::Value> {
     serde_json::from_str::<serde_json::Value>(state_json).ok()
 }
 
+fn parse_json_string_at(input: &str, start: usize) -> Option<(String, usize)> {
+    if input.as_bytes().get(start) != Some(&b'"') {
+        return None;
+    }
+    let mut index = start + 1;
+    let mut escaped = false;
+    let mut raw = String::new();
+    while index < input.len() {
+        let ch = input[index..].chars().next()?;
+        index += ch.len_utf8();
+        if escaped {
+            raw.push('\\');
+            raw.push(ch);
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '"' => return unescape_json_string(&raw).map(|decoded| (decoded, index)),
+            c => raw.push(c),
+        }
+    }
+    None
+}
+
+fn top_level_json_key_count(input: &str, target: &str) -> usize {
+    let mut index = 0usize;
+    let mut depth = 0usize;
+    let mut count = 0usize;
+    while index < input.len() {
+        let Some(ch) = input[index..].chars().next() else {
+            break;
+        };
+        match ch {
+            '"' => {
+                if let Some((key, next_index)) = parse_json_string_at(input, index) {
+                    let rest = input[next_index..].trim_start();
+                    if depth == 1 && rest.starts_with(':') && key == target {
+                        count += 1;
+                    }
+                    index = next_index;
+                    continue;
+                }
+                break;
+            }
+            '{' | '[' => depth = depth.saturating_add(1),
+            '}' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        index += ch.len_utf8();
+    }
+    count
+}
+
+fn state_required_key_status(state_text: &str, field: &str) -> Result<(), &'static str> {
+    match top_level_json_key_count(state_text, field) {
+        0 => Err("missing_field"),
+        1 => Ok(()),
+        _ => Err("duplicate_field"),
+    }
+}
+
+fn validate_datapath_state_proof(state_path: &Path) -> Result<(), &'static str> {
+    let state_text = match std::fs::read_to_string(state_path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err("missing_state");
+        }
+        Err(_) => return Err("state_unreadable"),
+    };
+    let Some(value) = parse_state_json(&state_text) else {
+        return Err("state_invalid_json");
+    };
+    if !value.is_object() {
+        return Err("state_not_object");
+    }
+    for field in [
+        "status",
+        "network_state",
+        "rollback_ready",
+        "tun_applied",
+        "route_applied",
+        "dns_applied",
+    ] {
+        state_required_key_status(&state_text, field)?;
+    }
+    if extract_state_string_field_from_value(&value, "status").as_deref() != Some("up") {
+        return Err("status_not_up");
+    }
+    if extract_state_string_field_from_value(&value, "network_state").as_deref() != Some("modified")
+    {
+        return Err("network_not_modified");
+    }
+    if extract_state_bool_field_from_value(&value, "rollback_ready") != Some(true) {
+        return Err("rollback_not_ready");
+    }
+    if extract_state_bool_field_from_value(&value, "tun_applied") != Some(true) {
+        return Err("tun_not_applied");
+    }
+    if extract_state_bool_field_from_value(&value, "route_applied") != Some(true) {
+        return Err("route_not_applied");
+    }
+    if extract_state_bool_field_from_value(&value, "dns_applied") != Some(true) {
+        return Err("dns_not_applied");
+    }
+    Ok(())
+}
+
+fn default_flow_proof_path(state_path: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.flow.json", state_path.display()))
+}
+
+fn validate_datapath_flow_proof(
+    flow_path: &Path,
+    max_flow_age_sec: u64,
+) -> Result<(), &'static str> {
+    let flow_text = match std::fs::read_to_string(flow_path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err("missing_flow_proof");
+        }
+        Err(_) => return Err("flow_file_unreadable"),
+    };
+    let metadata = std::fs::metadata(flow_path).map_err(|_| "flow_file_unreadable")?;
+    let age = metadata
+        .modified()
+        .map_err(|_| "flow_file_unreadable")?
+        .elapsed()
+        .map_err(|_| "flow_file_unreadable")?;
+    if age > Duration::from_secs(max_flow_age_sec) {
+        return Err("flow_stale");
+    }
+    let Some(value) = parse_state_json(&flow_text) else {
+        return Err("flow_invalid_json");
+    };
+    if !value.is_object() {
+        return Err("flow_not_object");
+    }
+    for field in [
+        "status",
+        "kind",
+        "flow_id",
+        "path_kind",
+        "transparent_flow_observed",
+        "counter_delta_ok",
+        "secure_peer_egress_observed",
+        "secure_peer_bytes_delta_ok",
+        "network_state",
+    ] {
+        match state_required_key_status(&flow_text, field) {
+            Ok(()) => {}
+            Err("duplicate_field") => return Err("flow_duplicate_field"),
+            Err(_) => return Err("flow_missing_field"),
+        }
+    }
+    if extract_state_string_field_from_value(&value, "status").as_deref() != Some("ok") {
+        return Err("flow_status_not_ok");
+    }
+    if extract_state_string_field_from_value(&value, "kind").as_deref()
+        != Some("chimera_datapath_flow_proof")
+    {
+        return Err("flow_kind_invalid");
+    }
+    if extract_state_string_field_from_value(&value, "flow_id")
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        return Err("flow_id_missing");
+    }
+    if extract_state_string_field_from_value(&value, "path_kind")
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        return Err("flow_path_kind_missing");
+    }
+    if extract_state_bool_field_from_value(&value, "transparent_flow_observed") != Some(true) {
+        return Err("flow_not_observed");
+    }
+    if extract_state_bool_field_from_value(&value, "counter_delta_ok") != Some(true) {
+        return Err("flow_counter_delta_not_ok");
+    }
+    if extract_state_bool_field_from_value(&value, "secure_peer_egress_observed") != Some(true) {
+        return Err("flow_secure_peer_not_observed");
+    }
+    if extract_state_bool_field_from_value(&value, "secure_peer_bytes_delta_ok") != Some(true) {
+        return Err("flow_secure_peer_bytes_not_ok");
+    }
+    if extract_state_string_field_from_value(&value, "network_state").as_deref() != Some("modified")
+    {
+        return Err("flow_network_not_modified");
+    }
+    Ok(())
+}
+
 fn extract_state_string_field_from_value(value: &serde_json::Value, field: &str) -> Option<String> {
     value
         .get(field)
@@ -4061,6 +4397,54 @@ fn rollback_command(lang: Language, args: &[String]) -> i32 {
             eprintln!("{}", rollback_usage(lang));
             2
         }
+    }
+}
+
+fn state_command(lang: Language, subcommand: Option<&str>, args: &[String]) -> i32 {
+    match subcommand {
+        Some("proof") => state_proof_command(lang, args),
+        _ => {
+            eprintln!("{}", state_usage(lang));
+            2
+        }
+    }
+}
+
+fn state_proof_command(lang: Language, args: &[String]) -> i32 {
+    let options = match parse_state_proof_options(args) {
+        Ok(options) => options,
+        Err(()) => {
+            eprintln!("{}", state_usage(lang));
+            return 2;
+        }
+    };
+    let state_path = Path::new(&options.state_path);
+    match validate_datapath_state_proof(state_path) {
+        Ok(()) => {}
+        Err(reason) => {
+            println!("datapath_proof={reason}");
+            return 1;
+        }
+    };
+    if options.require_flow {
+        let flow_path_buf = options
+            .flow_path
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| default_flow_proof_path(state_path));
+        match validate_datapath_flow_proof(&flow_path_buf, options.max_flow_age_sec) {
+            Ok(()) => {
+                println!("datapath_proof=ok");
+                0
+            }
+            Err(reason) => {
+                println!("datapath_proof={reason}");
+                1
+            }
+        }
+    } else {
+        println!("datapath_proof=ok");
+        0
     }
 }
 
@@ -4352,7 +4736,7 @@ mod tests {
         render_diag_export_json, render_diag_rekey_block, render_doctor_block, render_doctor_json,
         render_health_block, render_help_text, render_policy_validate_block,
         render_route_explain_block, render_route_explain_json, render_status_rekey_block,
-        rollback_command, route_command, up_command,
+        resolve_first_socket_addr, rollback_command, route_command, up_command,
     };
     use chimera_policy::{
         FlowContext, OutboundMode, Policy, PolicySummary, Protocol, RouteDecision,
@@ -4518,6 +4902,34 @@ mod tests {
     }
 
     #[test]
+    fn status_runtime_profile_redacts_tcp_scheme_carrier_endpoint() {
+        let options = StatusOptions {
+            config_path: None,
+            mock_packets: 2,
+            mock_age_seconds: 10,
+            max_age_seconds: 300,
+            max_packets_per_key: 10_000,
+            capture_preference: CapturePreference::Tun,
+            tun_supported: true,
+            carrier_profile: CarrierProfile::Tls,
+            carrier_addr: "tcp://198.51.100.10:9443".to_string(),
+            carrier_server_name: "gw.example.org".to_string(),
+        };
+        let plan = crate::status_capture_plan(&options);
+        let rendered = crate::render_status_runtime_profile(Language::En, &options, &plan);
+        assert!(rendered.contains("Carrier target: <redacted>, target_state=placeholder"));
+        assert!(!rendered.contains("tcp://198.51.100.10:9443"));
+    }
+
+    #[test]
+    fn resolve_first_socket_addr_accepts_tcp_scheme() {
+        let addr = resolve_first_socket_addr("tcp://127.0.0.1:9443")
+            .unwrap_or_else(|error| unreachable!("tcp scheme should resolve: {error}"));
+        assert_eq!(addr.port(), 9443);
+        assert_eq!(addr.ip().to_string(), "127.0.0.1");
+    }
+
+    #[test]
     fn parse_status_options_rejects_local_proxy_capture() {
         let args = vec![
             "--mock-traffic".to_string(),
@@ -4532,12 +4944,12 @@ mod tests {
 
     #[test]
     fn parse_status_options_with_config_path_only() {
-        let args = vec!["--config".to_string(), "client.toml".to_string()];
+        let args = vec!["--config".to_string(), "node.toml".to_string()];
         let parsed = match parse_status_options(&args) {
             Ok(parsed) => parsed,
             Err(()) => unreachable!("config-only args should parse"),
         };
-        assert_eq!(parsed.config_path, Some("client.toml".to_string()));
+        assert_eq!(parsed.config_path, Some("node.toml".to_string()));
         assert_eq!(parsed.mock_packets, 1);
     }
 
@@ -4776,9 +5188,9 @@ mod tests {
     fn help_render_snapshot_contains_key_commands() {
         let rendered = render_help_text(Language::En);
         assert!(rendered.contains("Chimera CLI (simple mode)"));
-        assert!(rendered.contains("status [--config <client_config_file>]"));
-        assert!(rendered.contains("health [--config <client_config_file>]"));
-        assert!(rendered.contains("doctor [--config <client_config_file>]"));
+        assert!(rendered.contains("status [--config <node_config_file>]"));
+        assert!(rendered.contains("health [--config <node_config_file>]"));
+        assert!(rendered.contains("doctor [--config <node_config_file>]"));
         assert!(rendered.contains("--capture <auto|tun>"));
         assert!(!rendered.contains("--capture <auto|tun|local-proxy>"));
         assert!(rendered.contains("--carrier <in-memory|tls|quic>"));
@@ -4791,7 +5203,8 @@ mod tests {
         assert!(rendered.contains("--dns-bind-ip <ipv4|ipv6>"));
         assert!(rendered.contains("--show-all-matches"));
         assert!(rendered.contains("diag rekey <age_sec> <packets_sent>"));
-        assert!(rendered.contains("diag export [--config <client_config_file>]"));
+        assert!(rendered.contains("diag export [--config <node_config_file>]"));
+        assert!(!rendered.contains("client_config_file"));
         assert!(rendered.contains("probe access --url <http|https_url>"));
         assert!(rendered.contains("--url-file <file>"));
         assert!(rendered.contains("--fail-threshold <n>"));
@@ -4821,9 +5234,9 @@ mod tests {
     fn help_render_ru_snapshot_contains_key_commands() {
         let rendered = render_help_text(Language::Ru);
         assert!(rendered.contains("Chimera CLI (простой режим)"));
-        assert!(rendered.contains("status [--config <файл_client_config>]"));
-        assert!(rendered.contains("health [--config <файл_client_config>]"));
-        assert!(rendered.contains("doctor [--config <файл_client_config>]"));
+        assert!(rendered.contains("status [--config <файл_node_config>]"));
+        assert!(rendered.contains("health [--config <файл_node_config>]"));
+        assert!(rendered.contains("doctor [--config <файл_node_config>]"));
         assert!(rendered.contains("--capture <auto|tun>"));
         assert!(!rendered.contains("--capture <auto|tun|local-proxy>"));
         assert!(rendered.contains("--carrier <in-memory|tls|quic>"));
@@ -4836,7 +5249,8 @@ mod tests {
         assert!(rendered.contains("--dns-bind-ip <ipv4|ipv6>"));
         assert!(rendered.contains("--show-all-matches"));
         assert!(rendered.contains("diag rekey <секунды> <пакеты>"));
-        assert!(rendered.contains("diag export [--config <файл_client_config>]"));
+        assert!(rendered.contains("diag export [--config <файл_node_config>]"));
+        assert!(!rendered.contains("файл_client_config"));
         assert!(rendered.contains("probe access --url <http|https_url>"));
         assert!(rendered.contains("--url-file <файл>"));
         assert!(rendered.contains("--fail-threshold <n>"));
@@ -4901,7 +5315,7 @@ mod tests {
         };
         let plan = crate::status_capture_plan(&options);
         let rendered = render_health_block(Language::Ru, &options, &plan);
-        assert!(rendered.contains("Проверка клиента: ok"));
+        assert!(rendered.contains("Проверка узла: ok"));
         assert!(rendered.contains("capture=tun, carrier=tls-tcp"));
         assert!(rendered.contains("target=<redacted>, target_state=placeholder"));
         assert!(!rendered.contains("203.0.113.10:443"));
@@ -4945,7 +5359,7 @@ mod tests {
     fn parse_diag_export_options_full() {
         let args = vec![
             "--config".to_string(),
-            "client.conf".to_string(),
+            "node.conf".to_string(),
             "--age".to_string(),
             "15".to_string(),
             "--packets".to_string(),
@@ -4957,7 +5371,7 @@ mod tests {
             Ok(parsed) => parsed,
             Err(()) => unreachable!("full diag export options should parse"),
         };
-        assert_eq!(parsed.config_path, Some("client.conf".to_string()));
+        assert_eq!(parsed.config_path, Some("node.conf".to_string()));
         assert_eq!(parsed.age_seconds, 15);
         assert_eq!(parsed.packets, 20);
         assert_eq!(parsed.out_path, Some("diag.json".to_string()));
@@ -4979,7 +5393,7 @@ mod tests {
     fn parse_doctor_options_full() {
         let args = vec![
             "--config".to_string(),
-            "client.conf".to_string(),
+            "node.conf".to_string(),
             "--mock-traffic".to_string(),
             "50".to_string(),
             "--age".to_string(),
@@ -4992,7 +5406,7 @@ mod tests {
             Ok(parsed) => parsed,
             Err(()) => unreachable!("full doctor options should parse"),
         };
-        assert_eq!(parsed.status.config_path, Some("client.conf".to_string()));
+        assert_eq!(parsed.status.config_path, Some("node.conf".to_string()));
         assert_eq!(parsed.status.mock_packets, 50);
         assert_eq!(parsed.status.mock_age_seconds, 20);
         assert!(parsed.json_output);
@@ -5033,7 +5447,7 @@ mod tests {
             "--state-file".to_string(),
             "tmp/state.json".to_string(),
             "--config".to_string(),
-            "configs/client.example.conf".to_string(),
+            "configs/mesh-node.example.conf".to_string(),
         ];
         let parsed = match parse_up_down_options(&args) {
             Ok(parsed) => parsed,
@@ -5042,7 +5456,7 @@ mod tests {
         assert_eq!(parsed.state_path, "tmp/state.json");
         assert_eq!(
             parsed.config_path,
-            Some("configs/client.example.conf".to_string())
+            Some("configs/mesh-node.example.conf".to_string())
         );
         assert!(!parsed.skip_connect_check);
 
@@ -5593,6 +6007,172 @@ yt = exact:www.youtube.com => direct\n";
     }
 
     #[test]
+    fn datapath_state_proof_accepts_valid_state() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_datapath_state_proof_valid.json");
+        std::fs::write(
+            &path,
+            r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
+        )
+        .unwrap();
+        assert_eq!(crate::validate_datapath_state_proof(&path), Ok(()));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn datapath_state_proof_rejects_missing_invalid_and_weak_state() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_datapath_state_proof_invalid.json");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(
+            crate::validate_datapath_state_proof(&path),
+            Err("missing_state")
+        );
+        std::fs::write(&path, "{not json").unwrap();
+        assert_eq!(
+            crate::validate_datapath_state_proof(&path),
+            Err("state_invalid_json")
+        );
+        std::fs::write(
+            &path,
+            r#"{"status":"up","network_state":"not_modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            crate::validate_datapath_state_proof(&path),
+            Err("network_not_modified")
+        );
+        std::fs::write(
+            &path,
+            r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":false}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            crate::validate_datapath_state_proof(&path),
+            Err("dns_not_applied")
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn datapath_state_proof_rejects_duplicate_required_keys() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_datapath_state_proof_duplicate.json");
+        std::fs::write(
+            &path,
+            r#"{"status":"down","status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            crate::validate_datapath_state_proof(&path),
+            Err("duplicate_field")
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn datapath_flow_proof_requires_fresh_valid_sidecar() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_datapath_flow_proof_valid.json");
+        std::fs::write(
+            &path,
+            r#"{"status":"ok","kind":"chimera_datapath_flow_proof","flow_id":"flow#1","path_kind":"local_egress_via_secure_peer","transparent_flow_observed":true,"counter_delta_ok":true,"secure_peer_egress_observed":true,"secure_peer_bytes_delta_ok":true,"network_state":"modified"}"#,
+        )
+        .unwrap();
+        assert_eq!(crate::validate_datapath_flow_proof(&path, 300), Ok(()));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn datapath_flow_proof_rejects_missing_file() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_datapath_flow_proof_missing.json");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(
+            crate::validate_datapath_flow_proof(&path, 300),
+            Err("missing_flow_proof")
+        );
+    }
+
+    #[test]
+    fn datapath_flow_proof_rejects_duplicate_required_keys() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_datapath_flow_proof_duplicate.json");
+        std::fs::write(
+            &path,
+            r#"{"status":"ok","kind":"chimera_datapath_flow_proof","flow_id":"flow#1","path_kind":"local_egress_via_secure_peer","transparent_flow_observed":true,"counter_delta_ok":true,"secure_peer_egress_observed":true,"secure_peer_bytes_delta_ok":true,"network_state":"modified","network_state":"modified"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            crate::validate_datapath_flow_proof(&path, 300),
+            Err("flow_duplicate_field")
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn state_proof_command_requires_flow_when_requested() {
+        let mut state_path = std::env::temp_dir();
+        state_path.push("chimera_cli_state_proof_command_flow.json");
+        let flow_path = std::path::PathBuf::from(format!("{}.flow.json", state_path.display()));
+        let _ = std::fs::remove_file(&state_path);
+        let _ = std::fs::remove_file(&flow_path);
+        std::fs::write(
+            &state_path,
+            r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
+        )
+        .unwrap();
+        let args = vec![
+            "proof".to_string(),
+            "--state-file".to_string(),
+            state_path.to_string_lossy().to_string(),
+            "--require-flow".to_string(),
+            "true".to_string(),
+        ];
+        assert_eq!(
+            crate::state_command(Language::En, Some("proof"), &args[1..]),
+            1
+        );
+        std::fs::write(
+            &flow_path,
+            r#"{"status":"ok","kind":"chimera_datapath_flow_proof","flow_id":"flow#1","path_kind":"local_egress_via_secure_peer","transparent_flow_observed":true,"counter_delta_ok":true,"secure_peer_egress_observed":true,"secure_peer_bytes_delta_ok":true,"network_state":"modified"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            crate::state_command(Language::En, Some("proof"), &args[1..]),
+            0
+        );
+        let _ = std::fs::remove_file(state_path);
+        let _ = std::fs::remove_file(flow_path);
+    }
+
+    #[test]
+    fn state_proof_command_returns_nonzero_without_valid_state() {
+        let mut path = std::env::temp_dir();
+        path.push("chimera_cli_state_proof_command.json");
+        let _ = std::fs::remove_file(&path);
+        let args = vec![
+            "proof".to_string(),
+            "--state-file".to_string(),
+            path.to_string_lossy().to_string(),
+        ];
+        assert_eq!(
+            crate::state_command(Language::En, Some("proof"), &args[1..]),
+            1
+        );
+        std::fs::write(
+            &path,
+            r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            crate::state_command(Language::En, Some("proof"), &args[1..]),
+            0
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn validate_route_cidrs_accepts_multi_value() {
         assert!(crate::validate_route_cidrs("203.0.113.0/24,198.51.100.0/24").is_ok());
         assert!(crate::validate_route_cidrs("2001:db8::/64,203.0.113.0/24").is_ok());
@@ -5790,7 +6370,7 @@ yt = exact:www.youtube.com => direct\n";
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_runtime_state_test.json");
         let path_text = path.to_string_lossy().to_string();
-        let config_path = test_client_config_path();
+        let config_path = test_node_config_path();
         let up_args = vec![
             "--state-file".to_string(),
             path_text.clone(),
@@ -5814,7 +6394,7 @@ yt = exact:www.youtube.com => direct\n";
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_runtime_state_rollback_test.json");
         let path_text = path.to_string_lossy().to_string();
-        let config_path = test_client_config_path();
+        let config_path = test_node_config_path();
         let up_args = vec![
             "--state-file".to_string(),
             path_text.clone(),
@@ -5847,7 +6427,7 @@ yt = exact:www.youtube.com => direct\n";
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_runtime_state_recover_test.json");
         let path_text = path.to_string_lossy().to_string();
-        let config_path = test_client_config_path();
+        let config_path = test_node_config_path();
         let up_args = vec![
             "--state-file".to_string(),
             path_text.clone(),
@@ -5874,7 +6454,7 @@ yt = exact:www.youtube.com => direct\n";
         let mut state_path = std::env::temp_dir();
         state_path.push("chimera_cli_runtime_state_json_test.json");
         let state_text = state_path.to_string_lossy().to_string();
-        let config_path = test_client_config_path();
+        let config_path = test_node_config_path();
         let up_args = vec![
             "--state-file".to_string(),
             state_text.clone(),
@@ -5926,7 +6506,7 @@ yt = exact:www.youtube.com => direct\n";
         let state_text = state_path.to_string_lossy().to_string();
         let state_json = format!(
             "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"node.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"/tmp/chimera_resolv_test.conf\",\"dns_backup_path\":\"/tmp/chimera_resolv_test.conf.chimera.bak\"}}\n",
-            test_client_carrier_addr()
+            test_node_carrier_addr()
         );
         let write_result = std::fs::write(&state_text, state_json);
         assert!(write_result.is_ok());
@@ -5968,7 +6548,7 @@ yt = exact:www.youtube.com => direct\n";
         let mut state_path = std::env::temp_dir();
         state_path.push("chimera_cli_rollback_clean_prestate.json");
         let state_text = state_path.to_string_lossy().to_string();
-        let carrier_addr = test_client_carrier_addr();
+        let carrier_addr = test_node_carrier_addr();
         let state_json = format!(
             "{{\"status\":\"up\",\"network_state\":\"modified\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"tun\",\"capture_reason\":\"forced\",\"carrier_profile\":\"tls-tcp\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"node.local\",\"tun_applied\":false,\"tun_device\":\"chimera0\",\"tun_local_cidr\":\"10.201.0.2/30\",\"tun_peer_cidr\":\"10.201.0.1/30\",\"route_applied\":false,\"route_cidr\":\"0.0.0.0/1\",\"route_cidrs_applied\":\"0.0.0.0/1\",\"dns_applied\":true,\"dns_server\":\"9.9.9.9\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
             carrier_addr, resolv_text, backup_path
@@ -6469,17 +7049,17 @@ yt = exact:www.youtube.com => direct\n";
         assert_eq!(detect_language_from_lang_value(None), Language::En);
     }
 
-    fn test_client_config_path() -> PathBuf {
+    fn test_node_config_path() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("..")
             .join("configs")
-            .join("client.example.conf")
+            .join("mesh-node.example.conf")
     }
 
-    fn test_client_carrier_addr() -> String {
-        let text = std::fs::read_to_string(test_client_config_path())
-            .unwrap_or_else(|err| unreachable!("read client.example.conf failed: {err}"));
+    fn test_node_carrier_addr() -> String {
+        let text = std::fs::read_to_string(test_node_config_path())
+            .unwrap_or_else(|err| unreachable!("read mesh-node.example.conf failed: {err}"));
         for line in text.lines() {
             let line = line.trim();
             if let Some(value) = line.strip_prefix("carrier.addr = ") {
@@ -6489,6 +7069,6 @@ yt = exact:www.youtube.com => direct\n";
                 }
             }
         }
-        unreachable!("carrier.addr not found in client.example.conf")
+        unreachable!("carrier.addr not found in mesh-node.example.conf")
     }
 }

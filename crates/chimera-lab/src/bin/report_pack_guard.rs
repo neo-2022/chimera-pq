@@ -23,18 +23,37 @@ fn main() {
     let md = read_text(pack_md);
     let reality = read_obj(reality_json);
 
-    require_str(&pack, "status", "ok");
     require_str(&pack, "kind", "report_pack");
+    let real_world_datapath_closed = reality
+        .get("real_world_datapath_closed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let github_release_ssh_runtime_slice_proven = reality
+        .get("github_release_ssh_runtime_slice_proven")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if pack.get("status").and_then(Value::as_str) == Some("ok") && !real_world_datapath_closed {
+        fail("report pack guard: status ok requires real-world datapath closure");
+    }
     for key in [
         "mvp_spec_report",
         "m5_artifacts_report",
         "m6_artifacts_report",
-        "release_readiness_report",
         "cef_phase1_smoke",
         "mesh_route_explain",
     ] {
         require_bool(&pack, key, true);
     }
+    require_bool(
+        &pack,
+        "release_readiness_report",
+        real_world_datapath_closed,
+    );
+    require_bool(
+        &pack,
+        "github_release_ssh_runtime_slice_proven",
+        github_release_ssh_runtime_slice_proven,
+    );
     let gate = get_obj(
         &pack,
         "release_gate",
@@ -55,7 +74,11 @@ fn main() {
     }
 
     require_md_line(&md, "# Report Pack");
-    require_md_line(&md, "Status: **PASS**");
+    if real_world_datapath_closed {
+        require_md_line(&md, "Status: **PASS**");
+    } else {
+        require_md_line(&md, "Status: **FAIL**");
+    }
     require_md_line(&md, "Included reports:");
     require_md_line(&md, "Truth boundary:");
     require_md_line(
@@ -63,11 +86,25 @@ fn main() {
         "Network safety: no OS route/DNS/firewall/proxy changes in this report path.",
     );
 
+    let release_line = if real_world_datapath_closed {
+        "- Release readiness: `true` (`docs/RELEASE_READINESS_REPORT.md`)"
+    } else {
+        "- Release readiness: `false` (`docs/RELEASE_READINESS_REPORT.md`)"
+    };
+    let github_slice_line = format!(
+        "- GitHub release -> SSH runtime slice: `{}` (`docs/WORKFLOW_ATTESTATION_GITHUB_RELEASE_RUNTIME_GATE_*.md`)",
+        if github_release_ssh_runtime_slice_proven {
+            "true"
+        } else {
+            "false"
+        }
+    );
     let items = [
         "- MVP spec coverage: `true` (`docs/MVP_SPEC_COVERAGE.md`)",
         "- M5 artifacts: `true` (`docs/M5_ARTIFACTS_REPORT.md`)",
         "- M6 artifacts: `true` (`docs/M6_ARTIFACTS_REPORT.md`)",
-        "- Release readiness: `true` (`docs/RELEASE_READINESS_REPORT.md`)",
+        release_line,
+        &github_slice_line,
         "- CEF phase1 smoke: `true` (`docs/CEF_PHASE1_SMOKE.json`)",
         "- Mesh route explain: `true` (`docs/MESH_ROUTE_EXPLAIN.json`)",
     ];

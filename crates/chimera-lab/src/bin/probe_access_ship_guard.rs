@@ -6,8 +6,10 @@ use std::fs;
 
 #[path = "probe_access_ship_guard/contract.rs"]
 mod probe_access_contract;
+#[path = "probe_access_ship_guard/redaction.rs"]
+mod redaction;
 
-use probe_access_contract::{url_has_host, validate_probe_contract};
+use probe_access_contract::validate_probe_contract;
 
 const CI_SNAPSHOT_HOST: &str = "chimera-ci-snapshot.local";
 
@@ -74,7 +76,7 @@ fn validate_mode_flags(
                         .to_string(),
                 );
             }
-            if !targets_all_match_host(probe, CI_SNAPSHOT_HOST) {
+            if get_str(probe, "target_profile") != "ci_snapshot" {
                 return Err(
                     "probe access ship guard: ci_snapshot probe access target mismatch".to_string(),
                 );
@@ -86,31 +88,10 @@ fn validate_mode_flags(
 }
 
 fn infer_probe_mode(probe: &serde_json::Map<String, Value>) -> &'static str {
-    if targets_all_match_host_obj(probe, CI_SNAPSHOT_HOST) {
-        "ci_snapshot"
-    } else {
-        "live"
+    match get_str(probe, "target_profile") {
+        "ci_snapshot" => "ci_snapshot",
+        _ => "live",
     }
-}
-
-fn targets_all_match_host_obj(probe: &serde_json::Map<String, Value>, host: &str) -> bool {
-    probe
-        .get("targets")
-        .and_then(Value::as_array)
-        .map(|targets| {
-            !targets.is_empty()
-                && targets.iter().all(|target| {
-                    target
-                        .get("url")
-                        .and_then(Value::as_str)
-                        .is_some_and(|url| url_has_host(url, host))
-                })
-        })
-        .unwrap_or(false)
-}
-
-fn targets_all_match_host(probe: &serde_json::Map<String, Value>, host: &str) -> bool {
-    targets_all_match_host_obj(probe, host)
 }
 
 fn get_str<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {
@@ -139,9 +120,10 @@ mod tests {
     use super::{infer_probe_mode, validate_mode_flags};
     use serde_json::{Map, Value, json};
 
-    fn probe_with(url: &str) -> Map<String, Value> {
+    fn probe_with(profile: &str) -> Map<String, Value> {
         let mut probe = Map::new();
-        probe.insert("targets".to_string(), json!([{ "url": url }]));
+        probe.insert("target_profile".to_string(), json!(profile));
+        probe.insert("targets".to_string(), json!([{ "url": "target#1" }]));
         probe
     }
 
@@ -163,29 +145,29 @@ mod tests {
     }
 
     #[test]
-    fn infers_ci_snapshot_from_snapshot_host() {
-        let probe = probe_with("https://chimera-ci-snapshot.local/ok");
+    fn infers_ci_snapshot_from_redacted_profile() {
+        let probe = probe_with("ci_snapshot");
         assert_eq!(infer_probe_mode(&probe), "ci_snapshot");
     }
 
     #[test]
     fn accepts_live_contract() {
         let ship = ship_flags(true, false, false);
-        let probe = probe_with("https://example.org");
+        let probe = probe_with("live");
         assert!(validate_mode_flags(&ship, &probe, "live").is_ok());
     }
 
     #[test]
     fn accepts_ci_snapshot_contract() {
         let ship = ship_flags(false, true, true);
-        let probe = probe_with("https://chimera-ci-snapshot.local/ok");
+        let probe = probe_with("ci_snapshot");
         assert!(validate_mode_flags(&ship, &probe, "ci_snapshot").is_ok());
     }
 
     #[test]
     fn rejects_ci_snapshot_without_safe_targets() {
         let ship = ship_flags(false, true, false);
-        let probe = probe_with("https://chimera-ci-snapshot.local/ok");
+        let probe = probe_with("ci_snapshot");
         let res = validate_mode_flags(&ship, &probe, "ci_snapshot");
         assert!(res.is_err());
         assert!(
@@ -197,7 +179,7 @@ mod tests {
     #[test]
     fn rejects_ci_snapshot_with_external_targets() {
         let ship = ship_flags(false, true, true);
-        let probe = probe_with("https://example.org");
+        let probe = probe_with("live");
         let res = validate_mode_flags(&ship, &probe, "ci_snapshot");
         assert!(res.is_err());
         assert!(res.err().is_some_and(|e| e.contains("target mismatch")));

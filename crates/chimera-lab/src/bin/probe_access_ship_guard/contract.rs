@@ -1,3 +1,4 @@
+use super::redaction::validate_public_probe_text_fields;
 use serde_json::Value;
 
 pub(crate) fn validate_probe_contract(
@@ -10,6 +11,12 @@ pub(crate) fn validate_probe_contract(
     if get_str(probe, "kind") != "probe_access" {
         return Err("probe access ship guard: probe kind mismatch".to_string());
     }
+    if get_str(probe, "redaction") != "raw_targets_redacted" {
+        return Err("probe access ship guard: probe redaction marker missing".to_string());
+    }
+    if !matches!(get_str(probe, "target_profile"), "live" | "ci_snapshot") {
+        return Err("probe access ship guard: invalid probe target_profile".to_string());
+    }
     if get_str(probe, "network_state") != "not_modified" {
         return Err("probe access ship guard: probe network_state mismatch".to_string());
     }
@@ -20,8 +27,9 @@ pub(crate) fn validate_probe_contract(
     if targets.is_empty() {
         return Err("probe access ship guard: probe targets empty".to_string());
     }
-    let snapshot_targets = count_targets_with_host(targets, ci_snapshot_host)?;
-    if snapshot_targets > 0 && snapshot_targets < targets.len() {
+    let target_profile = get_str(probe, "target_profile");
+    let has_snapshot_refs = targets_have_snapshot_refs(targets, ci_snapshot_host)?;
+    if has_snapshot_refs && target_profile != "ci_snapshot" {
         return Err(
             "probe access ship guard: mixed ci_snapshot and live probe targets".to_string(),
         );
@@ -79,24 +87,6 @@ pub(crate) fn validate_probe_contract(
     Ok(())
 }
 
-pub(crate) fn url_has_host(url: &str, expected_host: &str) -> bool {
-    let Some((scheme, rest)) = url.split_once("://") else {
-        return false;
-    };
-    let authority = extract_authority(rest);
-    if !is_supported_probe_scheme(scheme) || !authority_has_non_empty_host(authority) {
-        return false;
-    }
-    let host_port = authority.rsplit('@').next().unwrap_or(authority).trim();
-    let host = host_port
-        .split(':')
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
-    host == expected_host
-}
-
 struct TargetRowCounts {
     direct_ok: i64,
     unreachable: i64,
@@ -107,7 +97,7 @@ fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
     let mut direct_ok = 0i64;
     let mut unreachable = 0i64;
     let mut policy_apply_failed = 0i64;
-    for target in targets {
+    for (idx, target) in targets.iter().enumerate() {
         let obj = target
             .as_object()
             .ok_or_else(|| "probe access ship guard: target row is not object".to_string())?;
@@ -115,8 +105,16 @@ fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
             .get("url")
             .and_then(Value::as_str)
             .ok_or_else(|| "probe access ship guard: target url missing".to_string())?;
-        if !is_supported_probe_url(row_url) {
-            return Err("probe access ship guard: target url scheme mismatch".to_string());
+        let expected_ref = redacted_target_ref(idx + 1);
+        if row_url != expected_ref {
+            return Err("probe access ship guard: target url must be redacted ref".to_string());
+        }
+        let target_ref = obj
+            .get("target_ref")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "probe access ship guard: target target_ref missing".to_string())?;
+        if target_ref != expected_ref {
+            return Err("probe access ship guard: target_ref mismatch".to_string());
         }
         let row_direct_ok = obj
             .get("direct_ok")
@@ -150,10 +148,21 @@ fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
             .ok_or_else(|| {
                 "probe access ship guard: target policy_verify_ok missing".to_string()
             })?;
-        let policy_rule_id = get_target_str(obj, "policy_rule_id")?;
+        if obj.contains_key("policy_rule_id") {
+            return Err("probe access ship guard: raw policy_rule_id field forbidden".to_string());
+        }
+        let policy_rule_ref = get_target_str(obj, "policy_rule_ref")?;
         let policy_verify_outbound = get_target_str(obj, "policy_verify_outbound")?;
         let target_error = get_target_str(obj, "target_error")?;
-        get_target_str(obj, "policy_hint")?;
+        let policy_hint = get_target_str(obj, "policy_hint")?;
+        validate_public_probe_text_fields(&[
+            ("target_ref", target_ref),
+            ("policy_hint", policy_hint),
+            ("policy_rule_ref", policy_rule_ref),
+            ("policy_verify_outbound", policy_verify_outbound),
+            ("target_error", target_error),
+        ])?;
+        validate_redacted_policy_hint(policy_hint, recommended_route)?;
         if policy_apply_result != "failed" && !target_error.is_empty() {
             return Err("probe access ship guard: target_error requires failed policy".to_string());
         }
@@ -164,7 +173,10 @@ fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
                         "probe access ship guard: applied policy must verify ok".to_string()
                     );
                 }
-                if policy_rule_id.is_empty() || policy_verify_outbound != recommended_route {
+                if policy_rule_ref.is_empty()
+                    || !is_redacted_rule_ref(policy_rule_ref)
+                    || policy_verify_outbound != recommended_route
+                {
                     return Err(
                         "probe access ship guard: applied policy verification mismatch".to_string(),
                     );
@@ -179,7 +191,7 @@ fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
             }
             "not_requested" | "skipped_unknown_recommendation" => {
                 if policy_verify_ok
-                    || !policy_rule_id.is_empty()
+                    || !policy_rule_ref.is_empty()
                     || !policy_verify_outbound.is_empty()
                 {
                     return Err(
@@ -206,78 +218,46 @@ fn count_target_rows(targets: &[Value]) -> Result<TargetRowCounts, String> {
     })
 }
 
-fn count_targets_with_host(targets: &[Value], host: &str) -> Result<usize, String> {
-    let mut count = 0usize;
+fn targets_have_snapshot_refs(targets: &[Value], _host: &str) -> Result<bool, String> {
     for target in targets {
         let obj = target
             .as_object()
             .ok_or_else(|| "probe access ship guard: target row is not object".to_string())?;
-        let url = obj
-            .get("url")
+        let target_ref = obj
+            .get("target_ref")
             .and_then(Value::as_str)
-            .ok_or_else(|| "probe access ship guard: target url missing".to_string())?;
-        if url_has_host(url, host) {
-            count += 1;
+            .ok_or_else(|| "probe access ship guard: target target_ref missing".to_string())?;
+        if target_ref.starts_with("ci_snapshot#") {
+            return Ok(true);
         }
     }
-    Ok(count)
+    Ok(false)
 }
 
-fn is_supported_probe_url(value: &str) -> bool {
-    let Some((scheme, rest)) = value.split_once("://") else {
-        return false;
-    };
-    let authority = extract_authority(rest);
-    is_supported_probe_scheme(scheme)
-        && !value.chars().any(char::is_control)
-        && !authority.trim().is_empty()
-        && !authority.chars().any(char::is_whitespace)
-        && authority_has_non_empty_host(authority)
+fn redacted_target_ref(index: usize) -> String {
+    format!("target#{index}")
 }
 
-fn is_supported_probe_scheme(value: &str) -> bool {
-    let scheme_lc = value.to_ascii_lowercase();
-    matches!(scheme_lc.as_str(), "http" | "https") && is_valid_scheme_token(value)
+fn is_redacted_rule_ref(value: &str) -> bool {
+    value
+        .strip_prefix("rule#")
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .is_some_and(|index| index > 0)
 }
 
-fn extract_authority(rest: &str) -> &str {
-    rest.split(['/', '?', '#']).next().unwrap_or(rest)
-}
-
-fn is_valid_scheme_token(value: &str) -> bool {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !first.is_ascii_alphabetic() {
-        return false;
+fn validate_redacted_policy_hint(value: &str, recommended_route: &str) -> Result<(), String> {
+    let valid_kind = [
+        "target_kind=domain_exact_present",
+        "target_kind=ip_literal",
+        "target_kind=domain_absent",
+    ]
+    .iter()
+    .any(|prefix| value.starts_with(prefix));
+    let valid_route = value.ends_with(&format!(" outbound={recommended_route}"));
+    if !valid_kind || !valid_route {
+        return Err("probe access ship guard: target policy_hint must be redacted".to_string());
     }
-    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
-}
-
-fn authority_has_non_empty_host(authority: &str) -> bool {
-    let host_port = authority.rsplit('@').next().unwrap_or(authority).trim();
-    if host_port.is_empty() {
-        return false;
-    }
-    if let Some(inner) = host_port.strip_prefix('[') {
-        let Some((host, _rem)) = inner.split_once(']') else {
-            return false;
-        };
-        return !host.trim().is_empty();
-    }
-    if let Some((h, p)) = host_port.rsplit_once(':')
-        && h.is_empty()
-        && !p.is_empty()
-    {
-        return false;
-    }
-    let host = match host_port.rsplit_once(':') {
-        Some((h, p)) if !h.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => h,
-        Some((_h, _p)) => return false,
-        _ => host_port,
-    };
-    !host.trim().is_empty()
+    Ok(())
 }
 
 fn checked_total(left: i64, right: i64, label: &str) -> Result<i64, String> {

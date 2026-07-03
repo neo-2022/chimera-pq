@@ -7,6 +7,13 @@ fail() {
   exit 1
 }
 
+write_gitvers_bootstrap_template() {
+  local dest="${1:?dest_required}"
+  cat >"$dest" <<'EOF'
+https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh
+EOF
+}
+
 run_installer_env_contract_smoke() {
   local tmp_dir install_root fake_bin env_file output rc
   tmp_dir="$(mktemp -d)"
@@ -48,8 +55,7 @@ EOF
     chimera-control-tray.sh \
     chimera-sh \
     chimera-update.sh \
-    chimera.sh \
-    chimera_runtime_bootstrap.sh
+    chimera.sh
   do
     cat >"$install_root/scripts/$script" <<'EOF'
 #!/usr/bin/env bash
@@ -80,14 +86,15 @@ exit 0
 EOF
   chmod +x "$fake_bin/systemctl"
 
-  cat >"$install_root/configs/client.example.conf" <<'EOF'
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = 127.0.0.1:1
 carrier.server_name = node.local
 EOF
-  cat >"$install_root/configs/upstream_proxy.env.example" <<'EOF'
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
 CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000
 EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
   cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
 [Desktop Entry]
 Name=CHIMERA
@@ -95,8 +102,8 @@ Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
 Type=Application
 EOF
   touch \
-    "$install_root/deploy/systemd-user/chimera-client.service" \
-    "$install_root/deploy/systemd-user/chimera-gateway.service"
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
 
   set +e
   output="$(
@@ -131,8 +138,8 @@ EOF
   rm -rf "$tmp_dir"
 }
 
-run_installer_unconfigured_client_template_smoke() {
-  local tmp_dir install_root fake_bin output rc client_conf
+run_installer_configured_node_materialization_smoke() {
+  local tmp_dir install_root fake_bin output rc node_conf endpoint_file
   tmp_dir="$(mktemp -d)"
   install_root="$tmp_dir/chimera-release"
   fake_bin="$tmp_dir/bin"
@@ -172,8 +179,135 @@ EOF
     chimera-control-tray.sh \
     chimera-sh \
     chimera-update.sh \
-    chimera.sh \
-    chimera_runtime_bootstrap.sh
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = tls
+carrier.addr = ${CHIMERA_NODE_PEER_ENDPOINT}
+carrier.server_name = ${CHIMERA_NODE_SERVER_NAME}
+capture.mode = auto
+capture.tun_supported = true
+peer.listen_addr = ${CHIMERA_NODE_LISTEN_ADDR}
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_REMOTE_ENDPOINT=node.mesh.invalid:18142 \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || {
+    echo "$output" >&2
+    fail "installer_configured_node_materialization_smoke_failed"
+  }
+
+  node_conf="$install_root/configs/mesh-node.conf"
+  endpoint_file="$install_root/configs/chimera_runtime_endpoint.txt"
+  [[ -f "$node_conf" ]] || fail "installer_missing_configured_node_conf"
+  rg -q '^node\.mode = mesh-node$' "$node_conf" || fail "installer_configured_node_mode_missing"
+  rg -q '^carrier\.addr = tcp://node\.mesh\.invalid:18142$' "$node_conf" || fail "installer_configured_node_carrier_addr_not_tcp"
+  rg -q '^carrier\.server_name = node\.mesh\.invalid$' "$node_conf" || fail "installer_configured_node_server_name_not_materialized"
+  rg -q '^peer\.listen_addr = auto$' "$node_conf" || fail "installer_configured_node_listen_addr_not_materialized"
+  ! rg -q '\$\{CHIMERA_NODE_SERVER_NAME\}|\$\{CHIMERA_NODE_LISTEN_ADDR\}' "$node_conf" || fail "installer_configured_node_conf_kept_template_placeholders"
+  [[ -f "$endpoint_file" ]] || fail "installer_missing_runtime_endpoint_file"
+  grep -qx 'node.mesh.invalid:18142' "$endpoint_file" || fail "installer_runtime_endpoint_file_not_raw_host_port"
+  rm -rf "$tmp_dir"
+}
+
+run_installer_unconfigured_node_template_smoke() {
+  local tmp_dir install_root fake_bin output rc node_conf
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
   do
     cat >"$install_root/scripts/$script" <<'EOF'
 #!/usr/bin/env bash
@@ -211,18 +345,19 @@ exit 0
 EOF
   chmod +x "$fake_bin/systemctl"
 
-  cat >"$install_root/configs/client.example.conf" <<'EOF'
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = 203.0.113.10:443
-carrier.server_name = gateway.local
+carrier.server_name = node.local
 capture.mode = auto
 capture.tun_supported = true
 rekey.max_age_seconds = 300
 rekey.max_packets_per_key = 10000
 EOF
-  cat >"$install_root/configs/upstream_proxy.env.example" <<'EOF'
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
 CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000
 EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
   cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
 [Desktop Entry]
 Name=CHIMERA
@@ -230,8 +365,8 @@ Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
 Type=Application
 EOF
   touch \
-    "$install_root/deploy/systemd-user/chimera-client.service" \
-    "$install_root/deploy/systemd-user/chimera-gateway.service"
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
 
   set +e
   output="$(
@@ -248,37 +383,37 @@ EOF
   set -e
   [[ "$rc" -eq 0 ]] || {
     echo "$output" >&2
-    fail "installer_unconfigured_client_template_smoke_failed"
+    fail "installer_unconfigured_node_template_smoke_failed"
   }
   [[ "$output" == *"peer_config_node_endpoint=none"* ]] || fail "installer_missing_unconfigured_endpoint_diagnostic"
-  client_conf="$install_root/configs/client.conf"
-  [[ -f "$client_conf" ]] || fail "installer_missing_unconfigured_client_conf"
-  rg -q '^carrier\.addr = 203\.0\.113\.10:443$' "$client_conf" || fail "installer_client_conf_not_inert_placeholder"
+  node_conf="$install_root/configs/mesh-node.conf"
+  [[ -f "$node_conf" ]] || fail "installer_missing_unconfigured_node_conf"
+  rg -q '^carrier\.addr = 203\.0\.113\.10:443$' "$node_conf" || fail "installer_node_conf_not_inert_placeholder"
   rm -rf "$tmp_dir"
 }
 
-rg -n "installer_gate_prepare_upstream_env|transparent runtime|transparent runtime" \
+rg -n "installer_gate_prepare_bootstrap_env|transparent runtime|transparent runtime" \
   "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transparent_bootstrap"
 
 rg -n "datapath-status|transparent_runtime|split-transparent" \
   "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_transparent_runtime"
-rg -n '^GATEWAY_LOG="\$\{GATEWAY_LOG:-\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/chimera_gateway\.service\.log\}"' \
-  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_gateway_log_not_user_cache"
-rg -n '^CLIENT_LOG="\$\{CLIENT_LOG:-\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/chimera_client\.service\.log\}"' \
-  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_client_log_not_user_cache"
+rg -n '^NODE_LOG="\$\{NODE_LOG:-\$\{GATEWAY_LOG:-\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/chimera_node\.service\.log\}\}"' \
+  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_node_log_not_user_cache"
+rg -n '^DATAPATH_LOG="\$\{DATAPATH_LOG:-\$\{CLIENT_LOG:-\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/chimera_datapath\.service\.log\}\}"' \
+  "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_datapath_log_not_user_cache"
 rg -n '^ensure_runtime_log_paths\(\) \{$' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation_helper"
 rg -n '^  ensure_runtime_log_paths$' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation_call"
 if rg -n '^Standard(Output|Error)=append:__CHIMERA_ROOT__' "$ROOT_DIR/deploy/systemd-user"/*.service >/dev/null; then
   fail "systemd_unit_logs_under_release_root"
 fi
-rg -n '^StandardOutput=append:%h/\.cache/chimera/chimera_gateway\.service\.log$' \
-  "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >/dev/null || fail "gateway_unit_stdout_not_user_cache"
-rg -n '^StandardError=append:%h/\.cache/chimera/chimera_gateway\.service\.log$' \
-  "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >/dev/null || fail "gateway_unit_stderr_not_user_cache"
-rg -n '^StandardOutput=append:%h/\.cache/chimera/chimera_client\.service\.log$' \
-  "$ROOT_DIR/deploy/systemd-user/chimera-client.service" >/dev/null || fail "client_unit_stdout_not_user_cache"
-rg -n '^StandardError=append:%h/\.cache/chimera/chimera_client\.service\.log$' \
-  "$ROOT_DIR/deploy/systemd-user/chimera-client.service" >/dev/null || fail "client_unit_stderr_not_user_cache"
+rg -n '^StandardOutput=append:%h/\.cache/chimera/chimera_node\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-node.service" >/dev/null || fail "node_unit_stdout_not_user_cache"
+rg -n '^StandardError=append:%h/\.cache/chimera/chimera_node\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-node.service" >/dev/null || fail "node_unit_stderr_not_user_cache"
+rg -n '^StandardOutput=append:%h/\.cache/chimera/chimera_datapath\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-datapath.service" >/dev/null || fail "datapath_unit_stdout_not_user_cache"
+rg -n '^StandardError=append:%h/\.cache/chimera/chimera_datapath\.service\.log$' \
+  "$ROOT_DIR/deploy/systemd-user/chimera-datapath.service" >/dev/null || fail "datapath_unit_stderr_not_user_cache"
 rg -n 'reason=node_service_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_does_not_fail_failed_node"
 rg -n 'reason=transparent_service_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_does_not_fail_failed_transparent"
 rg -n 'ensure_runtime_log_paths' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_runtime_log_preparation"
@@ -301,6 +436,9 @@ rg -n 'reason=missing_update_module' "$ROOT_DIR/scripts/chimera-sh" >/dev/null |
 rg -n 'CHIMERA_UPDATE_FIRST_CHECKED=1 exec "\$CONTROL" start' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_start_missing_update_first_marker"
 rg -n 'CHIMERA_UPDATE_FIRST_CHECKED=1 exec "\$CONTROL" mesh' "$ROOT_DIR/scripts/chimera-sh" >/dev/null || fail "launcher_mesh_missing_update_first_marker"
 rg -n 'CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_peer_update_bootstrap_urls"
+rg -n 'CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_gitvers_update_bootstrap_urls"
+rg -n 'UPDATE_GITVERS_BOOTSTRAP_URLS_DEFAULT=' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_gitvers_update_default_source"
+rg -n 'UPDATE_GITVERS_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_gitvers_update_bootstrap_url_file"
 rg -n 'UPDATE_PEER_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_peer_update_bootstrap_url_file"
 rg -n 'CHIMERA_UPDATE_DOWNLOAD_CONNECT_TIMEOUT_SEC' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_update_connect_timeout"
 rg -n 'CHIMERA_UPDATE_DOWNLOAD_MAX_TIME_SEC' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_update_max_time"
@@ -311,6 +449,9 @@ rg -n 'CHIMERA_BOOTSTRAP_DOWNLOAD_TIMEOUT_SEC' "$ROOT_DIR/scripts/chimera-update
 rg -n 'wget --no-config .*--tries=1 .*--timeout="\$connect_timeout_sec" .*--read-timeout="\$max_time_sec"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_wget_download_not_bounded"
 rg -n 'curl --disable .*--retry "\$retries" .*--connect-timeout "\$connect_timeout_sec" .*--max-time "\$max_time_sec"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_curl_download_not_bounded"
 rg -n 'curl --disable .*--retry 3 .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_curl_rcfile_not_disabled"
+rg -n 'GITVERS_BOOTSTRAP_URLS_DEFAULT=' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_gitvers_default_source"
+rg -n 'GITVERS_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_gitvers_source_file"
+rg -n 'bootstrap_install_from_bootstrap_source "gitvers"' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_missing_gitvers_fallback"
 rg -n "bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 .*chimera\\.sh \\| bash -s -- -install'" "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_usage_not_pipefail_bounded"
 rg -n "bash -o pipefail -lc 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 .*\\\$bootstrap_url.* \\| bash -s -- -install'" "$ROOT_DIR/scripts/chimera_remote_cycle_smoke.sh" >/dev/null || fail "remote_cycle_bootstrap_not_pipefail_bounded"
 if ! bash -lc 'false | bash -s -- -install'; then
@@ -322,23 +463,38 @@ fi
 rg -n 'wget --no-config .*--tries=3 .*--timeout=10 .*--dns-timeout=10 .*--connect-timeout=10 .*--read-timeout=60 .*--waitretry=1 .*-qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera.sh" >/dev/null || fail "bootstrap_wget_download_not_bounded"
 rg -n 'curl --disable .*--retry 3 .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_curl_rcfile_not_disabled"
 rg -n 'wget --no-config .*--tries=3 .*--timeout=10 .*--dns-timeout=10 .*--connect-timeout=10 .*--read-timeout=60 .*--waitretry=1 .*-qO "\$dest" "\$url"' "$ROOT_DIR/scripts/install_release.sh" >/dev/null || fail "install_release_wget_download_not_bounded"
-rg -n 'curl --disable .*--connect-timeout 10 .*--max-time 60' "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" >/dev/null || fail "runtime_bootstrap_curl_rcfile_not_disabled"
-rg -n 'wget --no-config .*--tries=3 .*--timeout=10 .*--dns-timeout=10 .*--connect-timeout=10 .*--read-timeout=60 .*--waitretry=1 .*-qO "\$dest" "\$url"' "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" >/dev/null || fail "runtime_bootstrap_wget_download_not_bounded"
+if rg -n 'RUNTIME_BOOTSTRAP_SCRIPT|ensure-singbox|SINGBOX_BIN|singbox-split\.json|chimera-singbox\.pid' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null; then
+  fail "control_start_uses_legacy_third_party_runtime_bootstrap"
+fi
+if rg -n 'chimera_runtime_bootstrap\.sh' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
+  fail "installer_chmods_legacy_third_party_runtime_bootstrap"
+fi
 rg -n 'curl disable rcfile flag missing' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_curl_disable_contract"
 rg -n 'try_update_from_bootstrap_source "peer"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_peer_update_fallback"
+rg -n 'try_update_from_bootstrap_source "gitvers"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_gitvers_update_fallback"
 rg -n 'parse-peer-metadata' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_peer_metadata_not_rust_parsed"
 rg -n 'chimera_peer_update_metadata' "$ROOT_DIR/crates/chimera-bootstrap/src/peer_update/metadata.rs" >/dev/null || fail "launcher_missing_peer_metadata_kind_check"
 rg -n 'metadata_checksum_mismatch' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_peer_metadata_sha_binding"
 rg -n 'load_update_peer_bootstrap_urls_for_args "\$\{original_args\[@\]\}"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_connect_specific_peer_update_sources"
 rg -n 'case_github_invalid_bootstrap_parse_does_not_try_peer_fallback' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_github_invalid_fail_closed_contract"
+rg -n 'case_gitverse_default_source_loads_without_operator_config' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_gitvers_default_load_contract"
+rg -n 'case_github_unavailable_gitvers_newer_updates_before_peer' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_gitvers_success_contract"
+rg -n 'case_github_unavailable_default_gitvers_newer_updates_without_operator_config' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_default_gitvers_update_contract"
+rg -n 'case_github_unavailable_gitvers_unavailable_falls_back_to_peer' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_gitvers_outage_peer_contract"
+rg -n 'case_github_unavailable_gitvers_invalid_does_not_try_peer' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_gitvers_invalid_fail_closed_contract"
 rg -n 'remote_archive_sha256 "\$remote_archive_url" "\$remote_checksum_url"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_peer_update_checksum_not_bound"
 rg -n 'reason=same_version_checksum_mismatch' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_same_version_checksum_mismatch_not_fail_closed"
 rg -n 'case_same_version_checksum_mismatch_blocks' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_same_version_checksum_mismatch_contract"
 rg -n 'reason=local_checksum_missing' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_same_version_missing_checksum_not_fail_closed"
 rg -n 'case_same_version_missing_local_checksum_blocks' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_same_version_local_checksum_contract"
 rg -n 'reason=source_not_newer' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_not_newer_source_continue_diagnostic"
-rg -n 'case_github_current_does_not_block_peer_newer_update' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_stale_github_peer_fallback_contract"
-rg -n 'case_github_stale_does_not_block_peer_newer_update' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_stale_github_peer_newer_contract"
+rg -n 'case_github_current_stops_before_peer_newer_update' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_verified_github_current_ceiling_contract"
+rg -n 'case_github_stale_stops_before_peer_newer_update' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_verified_github_stale_ceiling_contract"
+rg -n 'case_github_unavailable_gitvers_current_stops_before_peer_newer_update' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_verified_gitvers_current_ceiling_contract"
+rg -n 'case_github_install_source_unavailable_blocks_peer_newer_release' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_divergent_peer_release_block_contract"
+rg -n 'case_github_install_source_unavailable_blocks_peer_checksum_divergence' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "launcher_missing_divergent_peer_checksum_block_contract"
+rg -n 'reason=trusted_version_divergence' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_trusted_version_divergence_block"
+rg -n 'reason=trusted_checksum_divergence' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_trusted_checksum_divergence_block"
 rg -n 'source "\$ROOT_DIR/scripts/chimera-update-runtime-state\.sh"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "launcher_missing_runtime_state_helper"
 rg -n 'read_local_runtime_bundle_sha' "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" >/dev/null || fail "launcher_missing_runtime_state_bundle_reader"
 rg -n 'sha256_file' "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" >/dev/null || fail "launcher_missing_runtime_state_sha_helper"
@@ -359,6 +515,55 @@ rg -n 'sudo_execution_failure_fails_stop' "$ROOT_DIR/scripts/chimera_stop_contra
 rg -n 'run_rejects_non_nft_override_case' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_nft_override_guard"
 rg -n 'restart_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_restart_failure_guard"
 rg -n 'uninstall_does_not_hide_cleanup_failure' "$ROOT_DIR/scripts/chimera_stop_contract_smoke.sh" >/dev/null || fail "stop_contract_missing_uninstall_failure_guard"
+rg -n 'systemd_datapath_apply_failure' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_systemd_datapath_apply_failure"
+rg -n 'systemd_apply_rc0_state_missing' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_rc0_state_missing"
+rg -n 'systemd_apply_rc0_network_not_modified' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_rc0_network_not_modified"
+rg -n 'systemd_apply_rc0_valid_state_allows_ok' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_valid_state_positive_case"
+rg -n 'route_status_without_proof' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_route_status_without_proof_case"
+rg -n 'direct_datapath_apply_failure' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_direct_datapath_apply_failure"
+rg -n 'reason=datapath_apply_failed' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_apply_failure_reason"
+rg -n 'reason=datapath_proof_failed' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_proof_failure_reason"
+rg -n 'datapath_rollback=ok' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_apply_failure_rollback_assert"
+rg -n 'partial runtime state was not removed by rollback' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_partial_state_cleanup_assert"
+rg -n 'node/datapath units were not stopped after apply failure' "$ROOT_DIR/scripts/chimera_start_contract_smoke.sh" >/dev/null || fail "start_contract_missing_systemd_apply_failure_stop_assert"
+rg -n 'datapath_apply_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_apply_failure_contract"
+rg -n 'datapath_proof_failed' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_proof_failure_contract"
+rg -n 'rollback recover' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_apply_failure_recover"
+rg -n 'datapath_apply_proof_state' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_proof_validator_call"
+rg -n 'state_proof_command' "$ROOT_DIR/crates/chimera-cli/src/main.rs" >/dev/null || fail "cli_missing_state_proof_command"
+rg -n 'validate_datapath_state_proof' "$ROOT_DIR/crates/chimera-cli/src/main.rs" >/dev/null || fail "cli_missing_datapath_state_proof_validator"
+rg -n 'duplicate_field' "$ROOT_DIR/crates/chimera-cli/src/main.rs" >/dev/null || fail "cli_missing_duplicate_key_state_proof_guard"
+rg -n 'unverified' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_unverified_apply_status"
+rg -n 'datapath_mode="unknown"' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_route_status_missing_unknown_mode"
+rg -n 'installed_state_proof_missing_state' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_missing_state_check"
+rg -n 'installed_state_proof_invalid_not_rejected' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_invalid_check"
+rg -n 'installed_state_proof_duplicate_field' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_duplicate_check"
+rg -n 'installed_state_proof_network_not_modified' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_network_check"
+rg -n 'installed_state_proof_tun_not_applied' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_tun_check"
+rg -n 'installed_state_proof_route_not_applied' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_route_check"
+rg -n 'installed_state_proof_dns_not_applied' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_dns_check"
+rg -n 'installed_state_proof_valid_not_accepted' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_state_proof_valid_check"
+rg -n 'installed_route_status_without_proof' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_without_proof_check"
+rg -n 'installed_route_status_duplicate_field' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_duplicate_check"
+rg -n 'installed_route_status_network_not_modified' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_network_check"
+rg -n 'installed_route_status_tun_not_applied' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_tun_check"
+rg -n 'installed_route_status_route_not_applied' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_route_check"
+rg -n 'installed_route_status_dns_not_applied' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_dns_check"
+rg -n 'installed_route_status_valid_apply_without_flow_proof' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_valid_apply_without_flow_proof_check"
+rg -n 'installed_route_status_stale_flow_proof' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_stale_flow_proof_check"
+rg -n 'installed_route_status_valid_flow_proof' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_valid_flow_proof_check"
+rg -n 'datapath_apply=unverified' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_unverified_assert"
+rg -n 'datapath_flow_proof=missing_flow_proof' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_missing_flow_proof_assert"
+rg -n 'datapath_flow_proof=flow_stale' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_flow_stale_assert"
+rg -n 'datapath_mode=transparent' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_transparent_assert"
+rg -n 'datapath_proof=ok' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_ok_assert"
+rg -n 'datapath_flow_proof=ok' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_installed_route_status_flow_ok_assert"
+rg -n 'installed_gitvers_bootstrap_sources_missing' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_gitvers_sources_check"
+rg -n 'installed_gitvers_bootstrap_sources_mode' "$ROOT_DIR/scripts/release_bundle_install_contract_smoke.sh" >/dev/null || fail "release_bundle_missing_gitvers_sources_mode_check"
+rg -n 'datapath_apply=\$systemd_datapath_apply_status' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_systemd_apply_status_output"
+rg -n 'datapath_apply=\$direct_datapath_apply_status' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_start_missing_apply_status_output"
+rg -n 'GITVERS_BOOTSTRAP_URLS_FILE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_gitvers_sources_file"
+rg -n 'installer_gate_prepare_gitvers_bootstrap_sources' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_gitvers_sources_seed"
 rg -n 'CHIMERA_NFT_PRIVILEGE_MODE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_nft_privilege_mode"
 rg -n 'local peer_listen="\$\{CHIMERA_PEER_EGRESS_PEER_LISTEN:-\$\{4:-0\.0\.0\.0:0\}\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_peer_listen_env_not_respected"
 rg -n 'local local_listen="\$\{CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-\$\{5:-127\.0\.0\.1:0\}\}"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_local_listen_env_not_respected"
@@ -425,9 +630,30 @@ if rg -n 'scripts/chimera-update\.sh.*\|\| true|scripts/chimera-sh.*\|\| true|sc
   fail "release_build_optional_required_update_scripts"
 fi
 rg -n 'chimera-release/bin/chimera-bootstrap' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_bootstrap_binary_content_guard"
+rg -n 'chimera-release/bin/chimera-node' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_binary_content_guard"
 rg -n 'chimera-release/scripts/install_release\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_installer_content_guard"
 rg -n 'chimera-release/scripts/chimera-update\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_module_content_guard"
 rg -n 'mesh_control_plane_env_from_preflight\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_control_plane_env_writer"
+rg -n 'mesh_bootstrap\\.env\\.example' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_bootstrap_example_guard"
+rg -n -F 'mesh-node\.example\.conf' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_node_example_guard"
+rg -n -F 'chimera-node.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_unit_guard"
+rg -n -F 'chimera-datapath.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_datapath_unit_guard"
+rg -n -F 'build_bin chimera-gateway chimera-node' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_binary_build_guard"
+rg -n -F 'target/release/chimera-node' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_binary_source_guard"
+! rg -n -F 'target/release/chimera-gateway' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_uses_legacy_gateway_binary_source"
+rg -n -F 'chimera-client\.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_client_unit_exclusion_guard"
+rg -n -F 'chimera-gateway\.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_gateway_unit_exclusion_guard"
+rg -n -F 'chimera-release/bin/chimera-gateway' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_gateway_binary_exclusion_guard"
+rg -n -F 'chimera-release/scripts/chimera_runtime_bootstrap' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_third_party_bootstrap_exclusion_guard"
+if rg -n 'cp -p .*\$\{ROOT_DIR\}/scripts/chimera_runtime_bootstrap\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null; then
+  fail "release_build_copies_legacy_third_party_runtime_bootstrap"
+fi
+rg -n -F 'upstream_proxy.env.example' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_proxy_exclusion_guard"
+rg -n -F 'client.example.conf' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_client_exclusion_guard"
+rg -n -F 'gateway.example.conf' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_legacy_gateway_exclusion_guard"
+rg -n -F 'chimera-app-routes.example.conf' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_app_route_exclusion_guard"
+rg -n -F 'mesh_launch_preflight.side_a.env.example' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_side_a_fixture_exclusion_guard"
+rg -n -F 'mesh_launch_preflight.side_b.env.example' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_side_b_fixture_exclusion_guard"
 rg -n '^[[:space:]]*--listen 0\.0\.0\.0:0' "$ROOT_DIR/docs/OPERATIONS.md" >/dev/null || fail "operations_missing_peer_release_auto_port_example"
 rg -n '^[[:space:]]*--base-url http://node\.example' "$ROOT_DIR/docs/OPERATIONS.md" >/dev/null || fail "operations_missing_peer_release_base_url_example"
 rg -n '^[[:space:]]*--state-file "\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/chimera/peer-update\.state\.json"' "$ROOT_DIR/docs/OPERATIONS.md" >/dev/null || fail "operations_missing_peer_release_state_file_example"
@@ -447,14 +673,35 @@ rg -n 'target/chimera\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null 
 rg -n 'target/chimera-pq-release\.tar\.gz' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_archive_asset"
 rg -n 'target/chimera-pq-release\.tar\.gz\.sha256' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_checksum_asset"
 rg -n 'chimera-release/bin/chimera-bootstrap' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_bootstrap_binary_bundle_guard"
+rg -n 'chimera-release/bin/chimera-node' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_node_binary_bundle_guard"
+rg -n 'chimera-release/scripts/chimera-control\\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_control_script_bundle_guard"
+rg -n 'chimera-release/scripts/chimera-runner\\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_runner_script_bundle_guard"
 rg -n -F 'chimera-release/scripts/install_release\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_update_installer_bundle_guard"
 rg -n 'chimera-release/scripts/chimera-update\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_update_module_bundle_guard"
 rg -n -F 'chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_mesh_control_plane_env_writer_bundle_guard"
+rg -n -F 'chimera-release/configs/mesh-node\.example\.conf' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_mesh_node_example_bundle_guard"
+rg -n -F 'chimera-release/deploy/systemd-user/chimera-node\.service' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_node_unit_bundle_guard"
+rg -n -F 'chimera-release/deploy/systemd-user/chimera-datapath\.service' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_datapath_unit_bundle_guard"
+rg -n -F 'chimera-release/configs/client\.example\.conf' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_legacy_client_exclusion_guard"
+rg -n -F 'chimera-release/configs/gateway\.example\.conf' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_legacy_gateway_exclusion_guard"
+rg -n -F 'chimera-release/deploy/systemd-user/chimera-client\.service' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_legacy_client_unit_exclusion_guard"
+rg -n -F 'chimera-release/deploy/systemd-user/chimera-gateway\.service' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_legacy_gateway_unit_exclusion_guard"
+rg -n -F 'chimera-release/bin/chimera-gateway' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_legacy_gateway_binary_exclusion_guard"
+rg -n -F 'chimera-release/scripts/chimera_runtime_bootstrap\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_legacy_third_party_bootstrap_exclusion_guard"
+rg -n 'bash scripts/product_language_guard\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_product_language_guard"
+rg -n 'git verify-tag --raw -v "\$\{release_tag\}"' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_gpg_tag_verification"
+rg -n 'CHIMERA_RELEASE_GPG_PUBLIC_KEY' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_gpg_public_key_import"
+rg -n 'CHIMERA_RELEASE_GPG_FINGERPRINT' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_gpg_fingerprint_check"
+rg -n 'immutable release policy forbids asset replacement' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_immutable_asset_guard"
+if rg -n 'delete-asset|--clobber' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null; then
+  fail "github_release_mutable_asset_path_present"
+fi
 rg -n 'gh release view --json tagName' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_latest_verification_missing"
 rg -n 'release assets do not match required set' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_asset_set_guard_missing"
 rg -n 'configure_peer_egress_env "node"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_not_weave_node_first"
 rg -n 'INSTALL_NODE_ROLE="\$\(normalize_install_node_role "\$\{CHIMERA_INSTALL_NODE_ROLE:-node\}"\)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_default_role_not_normalized_node"
 rg -n 'normalize_install_role "\$\(tr -d' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "update_install_role_file_not_normalized"
+rg -n -F 'client|server|gateway) echo "node"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null || fail "update_legacy_roles_not_normalized_to_node"
 rg -n 'CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transit_lane_bindings_env"
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_shell_safe_env_writer"
 rg -n 'shell_quote_env_value' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_missing_shell_safe_env_writer"
@@ -468,6 +715,11 @@ rg -n 'validate_mesh_control_plane_env_file_for_source' "$ROOT_DIR/scripts/chime
 rg -n 'mesh_control_plane_env_smoke' "$ROOT_DIR/justfile" >/dev/null || fail "justfile_missing_mesh_control_plane_env_smoke"
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_upsert_env_not_shell_safe"
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_upsert_env_not_shell_safe"
+rg -n '^normalize_node_connect_addr\(\) \{$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_connect_normalizer"
+rg -n '^materialize_node_runtime_config\(\) \{$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_config_materializer"
+rg -n 'CHIMERA_NODE_SERVER_NAME' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_server_name_override"
+rg -n 'CHIMERA_NODE_LISTEN_ADDR' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_listen_addr_override"
+rg -n 'tcp://node\\\.mesh\\\.invalid:18142' "$ROOT_DIR/scripts/chimera_installer_gate.sh" >/dev/null || fail "installer_gate_missing_tcp_materialization_contract"
 if rg -n 'awk -v .*quoted_value|awk -v .*line=' "$ROOT_DIR/scripts/install_desktop_control.sh" "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null; then
   fail "shell_quoted_env_writer_uses_awk_v"
 fi
@@ -475,7 +727,7 @@ rg -n 'case_auto_update_preserves_bound_transit_env' "$ROOT_DIR/scripts/chimera_
 rg -n 'case_peer_egress_env_shell_quotes_lane_bindings_path' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_peer_env_shell_quote_case"
 rg -n 'case_auto_update_preserves_quoted_lane_bindings_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_quoted_lane_bindings_preservation_case"
 rg -n 'case_peer_token_stays_in_private_peer_env' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_private_peer_token_case"
-rg -n 'upstream env leaked peer token' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_upstream_token_leak_guard"
+rg -n 'mesh bootstrap env leaked peer token' "$ROOT_DIR/scripts/chimera_update_contract_smoke.sh" >/dev/null || fail "update_smoke_missing_bootstrap_token_leak_guard"
 if rg -n 'configure_peer_egress_env "(side_a|side_b)"' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
   fail "installer_writes_legacy_peer_egress_role"
 fi
@@ -503,7 +755,8 @@ if rg -n 'neo-2022/chimera/main/chimera\.sh|raw\.githubusercontent\.com/neo-2022
   "$ROOT_DIR/scripts/chimera.sh" "$ROOT_DIR/scripts/chimera-sh" "$ROOT_DIR/scripts/chimera_remote_cycle_smoke.sh" "$ROOT_DIR/scripts/install_release.sh" >/dev/null; then
   fail "legacy_wrong_repo_bootstrap_reference"
 fi
-run_installer_unconfigured_client_template_smoke
+run_installer_configured_node_materialization_smoke
+run_installer_unconfigured_node_template_smoke
 run_installer_env_contract_smoke
 
 echo "installer_gate=pass"

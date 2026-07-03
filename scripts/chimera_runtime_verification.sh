@@ -17,11 +17,11 @@ if [[ ! -f "$APP_ROUTES_FILE" ]]; then
 fi
 
 if [[ "$QUIET" != "1" ]]; then echo "chimera runtime verification: start"; fi
-if systemctl --user list-unit-files 2>/dev/null | rg -q '^chimera-gateway\.service|^chimera-client\.service'; then
+if systemctl --user list-unit-files 2>/dev/null | rg -q '^chimera-node\.service|^chimera-datapath\.service'; then
   bash "$CONTROL" start || true
 else
   if [[ "$QUIET" != "1" ]]; then
-    echo "chimera runtime verification: systemd user units missing (chimera-gateway.service/chimera-client.service)"
+    echo "chimera runtime verification: systemd user units missing (chimera-node.service/chimera-datapath.service)"
   fi
 fi
 sleep 2

@@ -1,7 +1,7 @@
 {
   "kind": "current_workline_attestation",
   "schema_version": 1,
-  "status": "pass",
+  "status": "partial",
   "current_workline_id": "ai-architect-guard-hardening-2026-07-01",
   "updated_at_utc": "2026-07-01T13:04:39Z",
   "canonical_only_not_sufficient": true,
@@ -443,7 +443,10 @@
       "global interdisciplinary boolean is enough",
       "path-only workline artifact binding is enough"
     ],
-    "open_blockers": []
+    "open_blockers": [
+      "security_engineer verdict PARTIAL: proxy/lab evidence and endpoint redaction risks require follow-up guard work before process can be marked pass",
+      "critic_skeptic verdict PARTIAL: semantic interdisciplinary quality and fake-trace bypass risk require follow-up guard work before process can be marked pass"
+    ]
   },
   "gap_resolution": {
     "old_canonical_pass_bypass_blocked": true,

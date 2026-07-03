@@ -21,6 +21,23 @@ pub struct CapturePlan {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForbiddenManualProxyProtocol {
+    HttpConnect,
+    HttpAbsoluteForm,
+    Socks5Connect,
+}
+
+impl ForbiddenManualProxyProtocol {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::HttpConnect => "http_connect",
+            Self::HttpAbsoluteForm => "http_absolute_form",
+            Self::Socks5Connect => "socks5_connect",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DatapathRoute {
     Direct,
     Transit,
@@ -156,10 +173,9 @@ impl TransparentFailoverEngine {
             };
         }
         DatapathDecision {
-            route: DatapathRoute::Direct,
-            reason:
-                "direct path failed but transit path not verified; keep direct to avoid false hijack"
-                    .to_string(),
+            route: DatapathRoute::Block,
+            reason: "direct path failed and CHIMERA transit path is not verified; fail closed"
+                .to_string(),
         }
     }
 
@@ -213,12 +229,60 @@ pub fn parse_capture_mode(value: &str) -> ChimeraResult<CaptureMode> {
     }
 }
 
+pub fn detect_forbidden_manual_proxy_protocol(
+    initial: &[u8],
+) -> Option<ForbiddenManualProxyProtocol> {
+    if initial.starts_with(b"CONNECT ") {
+        return Some(ForbiddenManualProxyProtocol::HttpConnect);
+    }
+    if starts_with_http_absolute_form(initial) {
+        return Some(ForbiddenManualProxyProtocol::HttpAbsoluteForm);
+    }
+    if is_socks5_connect_request(initial) {
+        return Some(ForbiddenManualProxyProtocol::Socks5Connect);
+    }
+    None
+}
+
+fn starts_with_http_absolute_form(initial: &[u8]) -> bool {
+    const METHODS: &[&[u8]] = &[
+        b"GET http://",
+        b"GET https://",
+        b"POST http://",
+        b"POST https://",
+        b"HEAD http://",
+        b"HEAD https://",
+        b"PUT http://",
+        b"PUT https://",
+        b"DELETE http://",
+        b"DELETE https://",
+        b"OPTIONS http://",
+        b"OPTIONS https://",
+        b"PATCH http://",
+        b"PATCH https://",
+    ];
+    METHODS.iter().any(|prefix| initial.starts_with(prefix))
+}
+
+fn is_socks5_connect_request(initial: &[u8]) -> bool {
+    const SOCKS5_VERSION: u8 = 5;
+    const SOCKS5_CONNECT: u8 = 1;
+    if initial.len() < 4 {
+        return false;
+    }
+    initial[0] == SOCKS5_VERSION
+        && initial[1] == SOCKS5_CONNECT
+        && initial[2] == 0
+        && matches!(initial[3], 1 | 3 | 4)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         CaptureMode, DatapathRoute, DirectFailureSignal, DirectPathObservation,
-        TransparentFailoverConfig, TransparentFailoverEngine, detect_tun_support,
-        parse_capture_mode, plan_capture_mode,
+        ForbiddenManualProxyProtocol, TransparentFailoverConfig, TransparentFailoverEngine,
+        detect_forbidden_manual_proxy_protocol, detect_tun_support, parse_capture_mode,
+        plan_capture_mode,
     };
     use chimera_core::ChimeraResult;
 
@@ -254,6 +318,52 @@ mod tests {
     #[test]
     fn parse_rejects_local_proxy_mode() -> ChimeraResult<()> {
         assert!(parse_capture_mode("local-proxy").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn detects_manual_proxy_protocols_before_transparent_routing() -> ChimeraResult<()> {
+        let socks_connect_ipv4 = [5, 1, 0, 1, 203, 0, 113, 7, 1, 187];
+        let cases = [
+            (
+                b"CONNECT example.org:443 HTTP/1.1\r\n\r\n".as_slice(),
+                ForbiddenManualProxyProtocol::HttpConnect,
+            ),
+            (
+                b"GET http://example.org/path HTTP/1.1\r\n\r\n".as_slice(),
+                ForbiddenManualProxyProtocol::HttpAbsoluteForm,
+            ),
+            (
+                b"POST https://example.org/path HTTP/1.1\r\n\r\n".as_slice(),
+                ForbiddenManualProxyProtocol::HttpAbsoluteForm,
+            ),
+            (
+                socks_connect_ipv4.as_slice(),
+                ForbiddenManualProxyProtocol::Socks5Connect,
+            ),
+        ];
+
+        for (payload, expected) in cases {
+            assert_eq!(
+                detect_forbidden_manual_proxy_protocol(payload),
+                Some(expected)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn ordinary_transparent_payload_is_not_marked_as_manual_proxy() -> ChimeraResult<()> {
+        let cases = [
+            b"GET /path HTTP/1.1\r\nHost: example.org\r\n\r\n".as_slice(),
+            b"\x16\x03\x01\x00\x2aopaque tls bytes".as_slice(),
+            b"CHIMERA-LOCAL/1\n".as_slice(),
+            b"".as_slice(),
+        ];
+
+        for payload in cases {
+            assert_eq!(detect_forbidden_manual_proxy_protocol(payload), None);
+        }
         Ok(())
     }
 
@@ -326,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn observation_switches_to_transit_only_when_transit_verified() -> ChimeraResult<()> {
+    fn observation_fails_closed_when_transit_is_not_verified() -> ChimeraResult<()> {
         let mut engine = test_engine(3)?;
         let key = "resource.example.invalid:443/tcp";
 
@@ -336,7 +446,8 @@ mod tests {
             transit_ok: false,
             failure_signal: Some(DirectFailureSignal::Timeout),
         });
-        assert_eq!(unverified.route, DatapathRoute::Direct);
+        assert_eq!(unverified.route, DatapathRoute::Block);
+        assert!(unverified.reason.contains("fail closed"));
 
         let verified = engine.observe_direct_path(&DirectPathObservation {
             flow_key: key.to_string(),

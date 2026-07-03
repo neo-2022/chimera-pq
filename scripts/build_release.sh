@@ -29,7 +29,7 @@ build_bin() {
 
 echo "build_release: building release binaries"
 build_bin chimera-cli chimera-cli
-build_bin chimera-gateway chimera-gateway
+build_bin chimera-gateway chimera-node
 build_bin chimera-carrier chimera-peer-egress
 build_bin chimera-capture chimera-transparent-runtime
 build_bin chimera-capture chimera-transparent-tcp
@@ -46,26 +46,31 @@ mkdir -p "${RELEASE_DIR}/scripts"
 
 echo "build_release: copying binaries"
 cp -p "${ROOT_DIR}/target/release/chimera-cli" "${ROOT_DIR}/bin/"
-cp -p "${ROOT_DIR}/target/release/chimera-gateway" "${ROOT_DIR}/bin/"
+cp -p "${ROOT_DIR}/target/release/chimera-node" "${ROOT_DIR}/bin/chimera-node"
 cp -p "${ROOT_DIR}/target/release/chimera-peer-egress" "${ROOT_DIR}/bin/"
 cp -p "${ROOT_DIR}/target/release/chimera-transparent-runtime" "${ROOT_DIR}/bin/"
 cp -p "${ROOT_DIR}/target/release/chimera-transparent-tcp" "${ROOT_DIR}/bin/"
 cp -p "${ROOT_DIR}/target/release/chimera-bootstrap" "${ROOT_DIR}/bin/"
 cp -p "${ROOT_DIR}/bin/chimera-cli" "${RELEASE_DIR}/bin/"
-cp -p "${ROOT_DIR}/bin/chimera-gateway" "${RELEASE_DIR}/bin/"
+cp -p "${ROOT_DIR}/bin/chimera-node" "${RELEASE_DIR}/bin/"
 cp -p "${ROOT_DIR}/bin/chimera-peer-egress" "${RELEASE_DIR}/bin/"
 cp -p "${ROOT_DIR}/bin/chimera-transparent-runtime" "${RELEASE_DIR}/bin/"
 cp -p "${ROOT_DIR}/bin/chimera-transparent-tcp" "${RELEASE_DIR}/bin/"
 cp -p "${ROOT_DIR}/bin/chimera-bootstrap" "${RELEASE_DIR}/bin/"
 
 echo "build_release: copying configs"
-cp -p "${ROOT_DIR}/configs"/*.example.* "${RELEASE_DIR}/configs/" 2>/dev/null || true
-cp -p "${ROOT_DIR}/configs"/*.env.example "${RELEASE_DIR}/configs/" 2>/dev/null || true
-cp -p "${ROOT_DIR}/configs"/*.conf "${RELEASE_DIR}/configs/" 2>/dev/null || true
+find "${ROOT_DIR}/configs" -maxdepth 1 -type f \( -name '*.example.*' -o -name '*.env.example' \) \
+  ! -name 'upstream_proxy.env.example' \
+  ! -name 'client.example.conf' \
+  ! -name 'gateway.example.conf' \
+  ! -name 'chimera-app-routes.example.conf' \
+  ! -name 'mesh_launch_preflight.side_a.env.example' \
+  ! -name 'mesh_launch_preflight.side_b.env.example' \
+  -exec cp -p {} "${RELEASE_DIR}/configs/" \;
 
 echo "build_release: copying deploy units"
-cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-client.service" "${RELEASE_DIR}/deploy/systemd-user/"
-cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-gateway.service" "${RELEASE_DIR}/deploy/systemd-user/"
+cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-node.service" "${RELEASE_DIR}/deploy/systemd-user/"
+cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-datapath.service" "${RELEASE_DIR}/deploy/systemd-user/"
 cp -p "${ROOT_DIR}/deploy/desktop/chimera-control-gui.desktop" "${RELEASE_DIR}/deploy/desktop/"
 
 echo "build_release: copying scripts"
@@ -74,7 +79,6 @@ cp -p "${ROOT_DIR}/scripts/install_release.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control-tray.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-control-launcher.sh" "${RELEASE_DIR}/scripts/"
-cp -p "${ROOT_DIR}/scripts/chimera_runtime_bootstrap.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-runner.sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-sh" "${RELEASE_DIR}/scripts/"
 cp -p "${ROOT_DIR}/scripts/chimera-update.sh" "${RELEASE_DIR}/scripts/"
@@ -102,14 +106,32 @@ cp -p "${ROOT_DIR}/target/${LATEST_CHECKSUM_NAME}" "${ROOT_DIR}/target/chimera-r
 (cd "${ROOT_DIR}/target" && sha256sum -c "${LATEST_CHECKSUM_NAME}")
 tar -tzf "${ROOT_DIR}/target/${LATEST_ARCHIVE_NAME}" > "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/bin/chimera-bootstrap$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/bin/chimera-node$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/install_release\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/chimera-control\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/scripts/chimera-runner\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-update\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-update-runtime-state\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-update-rerun\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
-grep -q '^chimera-release/configs/upstream_proxy\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/configs/mesh_bootstrap\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/configs/mesh-node\.example\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/configs/update_gitvers_bootstrap_urls\.example\.list$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/deploy/systemd-user/chimera-node\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/deploy/systemd-user/chimera-datapath\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/upstream_proxy\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/bin/chimera-gateway$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/client\.example\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/gateway\.example\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/deploy/systemd-user/chimera-client\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/deploy/systemd-user/chimera-gateway\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/policy\.runtime\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/chimera-app-routes\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/chimera-app-routes\.example\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/configs/mesh_launch_preflight\.side_[ab]\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+! grep -q '^chimera-release/scripts/chimera_runtime_bootstrap\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 
 echo "build_release: done"
 echo "  archive:   target/${ARCHIVE_NAME}"

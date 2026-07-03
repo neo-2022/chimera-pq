@@ -56,11 +56,6 @@ fn validate_root(root: &Map<String, Value>) -> Result<(), String> {
     require_str(root, "kind", "current_workline_attestation")?;
     require_i64(root, "schema_version", 1)?;
     let status = require_enum(root, "status", &["pass", "partial", "blocked", "not_done"])?;
-    if status != "pass" {
-        return Err(
-            "current workline attestation guard: current workline status must be pass".to_string(),
-        );
-    }
     require_bool(root, "canonical_only_not_sufficient", true)?;
     require_bool(root, "requires_current_workline_attestation", true)?;
     require_bool(root, "requires_real_subagent_trace", true)?;
@@ -332,9 +327,6 @@ fn validate_subagent_execution_trace_artifact(
 }
 
 fn validate_subagent_execution_log(items: &[Value], status: &str) -> Result<(), String> {
-    if status != "pass" {
-        return Ok(());
-    }
     if items.len() != REQUIRED_ROLES.len() {
         return Err(
             "current workline attestation guard: subagent_execution_log role count mismatch"
@@ -355,7 +347,19 @@ fn validate_subagent_execution_log(items: &[Value], status: &str) -> Result<(), 
         validate_agent_id(require_non_empty_str(obj, "agent_id")?)?;
         require_str(obj, "tool", "multi_agent_v1.spawn_agent")?;
         require_str(obj, "status", "completed")?;
-        require_enum(obj, "verdict", &["PASS", "PARTIAL", "FAIL"])?;
+        let verdict = require_enum(obj, "verdict", &["PASS", "PARTIAL", "FAIL"])?;
+        if status == "pass" && verdict != "PASS" {
+            return Err(
+                "current workline attestation guard: pass requires all subagent verdicts PASS"
+                    .to_string(),
+            );
+        }
+        if verdict == "FAIL" && !["blocked", "not_done"].contains(&status) {
+            return Err(
+                "current workline attestation guard: FAIL subagent verdict requires blocked/not_done status"
+                    .to_string(),
+            );
+        }
         let started_at = require_non_empty_str(obj, "started_at_utc")?;
         let completed_at = require_non_empty_str(obj, "completed_at_utc")?;
         validate_timestamp(started_at, "started_at_utc")?;
@@ -424,6 +428,12 @@ fn validate_review_results(review: &Map<String, Value>, status: &str) -> Result<
     let blockers = require_array(review, "open_blockers")?;
     if status == "pass" && !blockers.is_empty() {
         return Err("current workline attestation guard: pass with open blockers".to_string());
+    }
+    if status != "pass" && blockers.is_empty() {
+        return Err(
+            "current workline attestation guard: non-pass status requires open blockers"
+                .to_string(),
+        );
     }
     Ok(())
 }
@@ -764,6 +774,46 @@ mod tests {
         let err = result.err().unwrap_or_default();
         assert!(
             err.contains("invalid agent_id format"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_pass_with_partial_subagent_verdict() -> Result<(), String> {
+        let mut root = valid_root()?;
+        root.insert("status".to_string(), Value::String("pass".to_string()));
+        let first_agent = root
+            .get_mut("subagent_execution_log")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| items.first_mut())
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| "missing first subagent".to_string())?;
+        first_agent.insert("verdict".to_string(), Value::String("PARTIAL".to_string()));
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected partial verdict failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("pass requires all subagent verdicts PASS"),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_non_pass_without_open_blockers() -> Result<(), String> {
+        let mut root = valid_root()?;
+        root.insert("status".to_string(), Value::String("partial".to_string()));
+        let review = root
+            .get_mut("review_results")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| "missing review_results".to_string())?;
+        review.insert("open_blockers".to_string(), Value::Array(Vec::new()));
+        let result = validate_root(&root);
+        assert!(result.is_err(), "expected missing blocker failure");
+        let err = result.err().unwrap_or_default();
+        assert!(
+            err.contains("non-pass status requires open blockers"),
             "unexpected error: {err}"
         );
         Ok(())

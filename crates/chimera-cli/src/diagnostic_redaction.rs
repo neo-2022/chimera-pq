@@ -11,7 +11,7 @@ pub(crate) fn redacted_server_name() -> &'static str {
 }
 
 pub(crate) fn endpoint_state(endpoint: &str) -> &'static str {
-    let value = endpoint.trim();
+    let value = normalize_endpoint_label(endpoint);
     if value.is_empty() {
         return "unconfigured";
     }
@@ -52,6 +52,10 @@ fn is_local_or_wildcard_endpoint(endpoint: &str) -> bool {
         || endpoint.starts_with("[::1]:")
 }
 
+fn normalize_endpoint_label(endpoint: &str) -> &str {
+    endpoint.trim().strip_prefix("tcp://").unwrap_or(endpoint.trim())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{endpoint_state, redacted_endpoint, redacted_server_name, server_name_state};
@@ -61,7 +65,9 @@ mod tests {
         assert_eq!(endpoint_state("203.0.113.10:443"), "placeholder");
         assert_eq!(endpoint_state("198.51.100.10:443"), "placeholder");
         assert_eq!(endpoint_state("192.0.2.10:443"), "placeholder");
+        assert_eq!(endpoint_state("tcp://203.0.113.10:443"), "placeholder");
         assert_eq!(endpoint_state("127.0.0.1:443"), "placeholder");
+        assert_eq!(endpoint_state("tcp://127.0.0.1:443"), "placeholder");
         assert_eq!(endpoint_state("127.0.0.1:8443"), "placeholder");
         assert_eq!(endpoint_state("localhost:9443"), "placeholder");
         assert_eq!(endpoint_state("0.0.0.0:9443"), "placeholder");
@@ -72,6 +78,7 @@ mod tests {
     fn endpoint_state_keeps_only_aggregate_config_status() {
         assert_eq!(endpoint_state(""), "unconfigured");
         assert_eq!(endpoint_state("node.mesh.invalid:443"), "configured");
+        assert_eq!(endpoint_state("tcp://node.mesh.invalid:443"), "configured");
         assert_eq!(redacted_endpoint(), "<redacted>");
     }
 

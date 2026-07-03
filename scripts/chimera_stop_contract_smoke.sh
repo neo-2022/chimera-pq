@@ -13,8 +13,7 @@ make_install_root() {
   mkdir -p "$install_root/scripts" "$install_root/bin" "$install_root/configs" "$install_root/deploy/systemd-user" "$install_root/deploy/desktop"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
   cp "$ROOT_DIR/scripts/chimera-runner.sh" "$install_root/scripts/chimera-runner.sh"
-  cp "$ROOT_DIR/configs/client.example.conf" "$install_root/configs/client.example.conf"
-  cp "$ROOT_DIR/configs/gateway.example.conf" "$install_root/configs/gateway.example.conf"
+  cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
 }
 
 write_fake_systemctl() {

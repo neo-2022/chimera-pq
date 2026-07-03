@@ -5,18 +5,36 @@ use std::{
     time::Duration,
 };
 
+use chimera_config::RawConfig;
 use chimera_mesh::{MeshNode, MeshNodeCountry};
 
 use super::MeshNodesInventory;
 use super::parse::build_node;
 
-pub(super) fn load_upstream_bootstrap_nodes() -> Result<Vec<MeshNode>, String> {
-    let last_endpoint = read_last_upstream_endpoint();
-    let mut endpoints = Vec::new();
-    if let Some(endpoint) = last_endpoint.clone() {
-        endpoints.push(endpoint);
-    }
-    endpoints.extend(read_upstream_endpoints_csv());
+const BOOTSTRAP_ENDPOINT_KEYS: [&str; 3] = [
+    "CHIMERA_NODE_ENDPOINT",
+    "CHIMERA_PEER_ENDPOINT",
+    "CHIMERA_MESH_REMOTE_ENDPOINT",
+];
+
+pub(super) fn load_mesh_bootstrap_nodes() -> Result<Vec<MeshNode>, String> {
+    let endpoints = read_mesh_bootstrap_endpoints();
+    mesh_bootstrap_nodes_from_endpoints(endpoints)
+}
+
+#[cfg(test)]
+pub(crate) fn load_mesh_bootstrap_nodes_from_text(input: &str) -> Result<Vec<MeshNode>, String> {
+    let raw = RawConfig::parse(input).map_err(|error| error.to_string())?;
+    mesh_bootstrap_nodes_from_endpoints(read_mesh_bootstrap_endpoints_from_raw(&raw))
+}
+
+#[cfg(test)]
+pub(crate) fn bootstrap_env_value_from_text(input: &str, key: &str) -> Option<String> {
+    let raw = RawConfig::parse(input).ok()?;
+    raw.get(key).and_then(non_empty_env_value)
+}
+
+fn mesh_bootstrap_nodes_from_endpoints(endpoints: Vec<String>) -> Result<Vec<MeshNode>, String> {
     if endpoints.is_empty() {
         return Ok(Vec::new());
     }
@@ -33,13 +51,13 @@ pub(super) fn load_upstream_bootstrap_nodes() -> Result<Vec<MeshNode>, String> {
     let mut out = Vec::new();
     for (index, (_host, endpoint)) in host_to_endpoint.into_iter().enumerate() {
         let node = build_node(
-            &format!("upstream-{}", index + 1),
+            &format!("bootstrap-{}", index + 1),
             &endpoint,
             MeshNodeCountry::UNKNOWN_CODE,
             MeshNodeCountry::UNKNOWN_NAME,
-            "geoip",
+            "operator_override",
             "low",
-            "upstream_bootstrap",
+            "mesh_bootstrap",
             "86400",
             "false",
             None,
@@ -54,48 +72,73 @@ pub(super) fn load_upstream_bootstrap_nodes() -> Result<Vec<MeshNode>, String> {
             None,
             None,
             None,
-            "upstream_bootstrap",
+            "mesh_bootstrap",
         )?;
         out.push(node);
     }
     Ok(out)
 }
 
-fn read_last_upstream_endpoint() -> Option<String> {
-    let path = format!(
-        "{}/chimera/last_upstream_endpoint",
-        env::var("XDG_CACHE_HOME")
-            .ok()
-            .unwrap_or_else(|| format!("{}/.cache", env::var("HOME").unwrap_or_default()))
-    );
-    let text = fs::read_to_string(path).ok()?;
-    let endpoint = text
-        .lines()
-        .next()
-        .unwrap_or_default()
-        .split('|')
-        .next()
-        .unwrap_or_default()
-        .trim();
-    normalize_endpoint(endpoint)
+pub(super) fn bootstrap_env_value(key: &str) -> Option<String> {
+    env::var(key)
+        .ok()
+        .and_then(|value| non_empty_env_value(&value))
+        .or_else(|| {
+            let raw = read_bootstrap_env_config()?;
+            raw.get(key).and_then(non_empty_env_value)
+        })
 }
 
-fn read_upstream_endpoints_csv() -> Vec<String> {
-    let path = format!(
-        "{}/chimera/upstream_proxy.env",
-        env::var("XDG_CONFIG_HOME")
-            .ok()
-            .unwrap_or_else(|| format!("{}/.config", env::var("HOME").unwrap_or_default()))
-    );
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(_) => return Vec::new(),
+pub(super) fn read_bootstrap_env_config() -> Option<RawConfig> {
+    let path = bootstrap_env_path()?;
+    let text = fs::read_to_string(path).ok()?;
+    RawConfig::parse(&text).ok()
+}
+
+fn read_mesh_bootstrap_endpoints() -> Vec<String> {
+    let env_endpoints = BOOTSTRAP_ENDPOINT_KEYS
+        .iter()
+        .filter_map(|key| env::var(key).ok())
+        .filter_map(|value| normalize_endpoint(&value))
+        .collect::<Vec<_>>();
+    if !env_endpoints.is_empty() {
+        return env_endpoints;
+    }
+    let Some(raw) = read_bootstrap_env_config() else {
+        return Vec::new();
     };
-    text.lines()
-        .filter_map(|line| line.trim().strip_prefix("CHIMERA_UPSTREAM_ENDPOINTS_CSV="))
-        .flat_map(|value| value.split(','))
+    read_mesh_bootstrap_endpoints_from_raw(&raw)
+}
+
+fn read_mesh_bootstrap_endpoints_from_raw(raw: &RawConfig) -> Vec<String> {
+    BOOTSTRAP_ENDPOINT_KEYS
+        .iter()
+        .filter_map(|key| raw.get(key))
         .filter_map(normalize_endpoint)
         .collect()
+}
+
+fn bootstrap_env_path() -> Option<String> {
+    if let Ok(path) = env::var("CHIMERA_BOOTSTRAP_ENV_FILE")
+        && !path.trim().is_empty()
+    {
+        return Some(path);
+    }
+    let home = env::var("HOME").ok()?;
+    let config_home = env::var("XDG_CONFIG_HOME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| format!("{home}/.config"));
+    Some(format!("{config_home}/chimera/mesh_bootstrap.env"))
+}
+
+fn non_empty_env_value(value: &str) -> Option<String> {
+    let trimmed = value.trim().trim_matches('"');
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 fn normalize_endpoint(value: &str) -> Option<String> {
@@ -126,7 +169,7 @@ fn endpoint_host(endpoint: &str) -> Option<String> {
     Some(host.to_string())
 }
 
-pub(super) fn should_bootstrap_from_upstream(args: &[String], config_path: Option<&str>) -> bool {
+pub(super) fn should_bootstrap_from_mesh_env(args: &[String], config_path: Option<&str>) -> bool {
     if config_path.is_some() {
         return false;
     }

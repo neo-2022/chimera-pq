@@ -109,6 +109,21 @@ fn has_banned_runtime_bin_url_literal(text: &str) -> bool {
     .any(|needle| text.contains(needle))
 }
 
+fn has_banned_transparent_tcp_payload_destination(text: &str) -> bool {
+    [
+        "parse_proxy_destination",
+        "GET http://",
+        "GET https://",
+        "POST http://",
+        "POST https://",
+        "strip_prefix(\"CONNECT \")",
+        "strip_prefix(\"GET http://\")",
+        "strip_prefix(\"POST http://\")",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
 fn has_banned_machine_resource_literal(text: &str) -> bool {
     let text_without_private_cidr = text.replace("192.168.0.0/16", "");
     if text_without_private_cidr.contains("192.168.") {
@@ -454,6 +469,159 @@ fn main() {
         }
     }
 
+    let transparent_tcp_rs = Path::new("crates/chimera-capture/src/bin/chimera-transparent-tcp.rs");
+    if !transparent_tcp_rs.is_file() {
+        fail("rust/no-hardcode guard: missing chimera-transparent-tcp.rs");
+    }
+    let transparent_tcp_text = read_to_string(transparent_tcp_rs);
+    if has_banned_transparent_tcp_payload_destination(&transparent_tcp_text) {
+        fail(
+            "rust/no-hardcode guard: transparent TCP must not derive destination from manual proxy payload",
+        );
+    }
+    for banned in [
+        "--static-destination",
+        "CHIMERA_TRANSPARENT_TCP_STATIC_DESTINATION",
+        "DirectMode::Auto",
+        "connect_direct(",
+        "transparent_direct_failed",
+        "route=direct destination_state=resolved",
+    ] {
+        if transparent_tcp_text.contains(banned) {
+            fail(&format!(
+                "rust/no-hardcode guard: transparent TCP product direct/proxy-style bypass is forbidden: {banned}"
+            ));
+        }
+    }
+    for required in [
+        "detect_forbidden_manual_proxy_protocol(initial)",
+        "manual_proxy_ingress_forbidden",
+        "original_destination(client)",
+    ] {
+        if !transparent_tcp_text.contains(required) {
+            fail(&format!(
+                "rust/no-hardcode guard: missing transparent TCP fail-closed marker: {required}"
+            ));
+        }
+    }
+    for path in [
+        transparent_tcp_rs,
+        Path::new("crates/chimera-capture/src/bin/chimera-transparent-runtime.rs"),
+    ] {
+        let text = read_to_string(path);
+        for banned in [
+            "--first-response-timeout-ms",
+            "CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS",
+            "first_response_timeout_ms",
+        ] {
+            if text.contains(banned) {
+                fail(&format!(
+                    "rust/no-hardcode guard: transparent path must not probe by sending payload before final route selection: {} contains {banned}",
+                    path.display()
+                ));
+            }
+        }
+    }
+    for (path, required) in [
+        (transparent_tcp_rs, "unwrap_or(DirectMode::Disabled)"),
+        (
+            Path::new("crates/chimera-capture/src/bin/chimera-transparent-runtime.rs"),
+            "unwrap_or_else(|| \"disabled\".to_string())",
+        ),
+        (
+            Path::new("scripts/install_desktop_control.sh"),
+            "CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-disabled",
+        ),
+        (transparent_tcp_rs, "direct-mode auto is forbidden"),
+        (
+            Path::new("crates/chimera-capture/src/bin/chimera-transparent-runtime.rs"),
+            "direct-mode auto is forbidden",
+        ),
+    ] {
+        let text = read_to_string(path);
+        if !text.contains(required) {
+            fail(&format!(
+                "rust/no-hardcode guard: transparent direct path must fail closed by default: {} missing {required}",
+                path.display()
+            ));
+        }
+        for banned in [
+            "unwrap_or(DirectMode::Auto)",
+            "unwrap_or_else(|| \"auto\".to_string())",
+            "CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-auto",
+        ] {
+            if text.contains(banned) {
+                fail(&format!(
+                    "rust/no-hardcode guard: transparent direct-mode auto default is forbidden: {} contains {banned}",
+                    path.display()
+                ));
+            }
+        }
+    }
+    for path in [
+        Path::new("configs/adaptive_domains.txt"),
+        Path::new("configs/auto_failover_seeds.txt"),
+        Path::new("configs/manual_transit_domains.txt"),
+        Path::new("configs/manual_gateway_domains.txt"),
+    ] {
+        let text = read_to_string(path);
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            fail(&format!(
+                "rust/no-hardcode guard: release default route/adaptive domain list must be empty: {}",
+                path.display()
+            ));
+        }
+    }
+    let runtime_policy_text = read_to_string(Path::new("configs/policy.runtime.conf"));
+    for line in runtime_policy_text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        fail("rust/no-hardcode guard: runtime policy default must not contain baked route rules");
+    }
+    let autofix_text = read_to_string(Path::new("scripts/chimera-autofix.sh"));
+    for banned in [
+        "default-transit = default => transit",
+        "youtube.com",
+        "googlevideo.com",
+        "ytimg.com",
+        "gstatic.com",
+    ] {
+        if autofix_text.contains(banned) {
+            fail(&format!(
+                "rust/no-hardcode guard: autofix must not bake public domains or default transit: {banned}"
+            ));
+        }
+    }
+    let capture_lib = Path::new("crates/chimera-capture/src/lib.rs");
+    let capture_lib_text = read_to_string(capture_lib);
+    for banned in [
+        "keep direct to avoid false hijack",
+        "direct path failed but transit path not verified; keep direct",
+    ] {
+        if capture_lib_text.contains(banned) {
+            fail(&format!(
+                "rust/no-hardcode guard: transparent failover must fail closed when CHIMERA transit is not verified: {banned}"
+            ));
+        }
+    }
+    for required in [
+        "route: DatapathRoute::Block",
+        "CHIMERA transit path is not verified; fail closed",
+        "observation_fails_closed_when_transit_is_not_verified",
+    ] {
+        if !capture_lib_text.contains(required) {
+            fail(&format!(
+                "rust/no-hardcode guard: missing transparent fail-closed evidence: {required}"
+            ));
+        }
+    }
+
     let mut ambiguous_hits = Vec::new();
     for path in &all_files {
         let is_target = path.file_name().and_then(|v| v.to_str()) == Some("justfile")
@@ -521,6 +689,22 @@ mod tests {
         assert!(has_banned_runtime_bin_url_literal("wss://x"));
         assert!(has_banned_runtime_bin_url_literal("socks5://x"));
         assert!(!has_banned_runtime_bin_url_literal("example.org"));
+    }
+
+    #[test]
+    fn banned_transparent_tcp_payload_destination_detection_works() {
+        assert!(has_banned_transparent_tcp_payload_destination(
+            "fn parse_proxy_destination() {}"
+        ));
+        assert!(has_banned_transparent_tcp_payload_destination(
+            "text.strip_prefix(\"CONNECT \")"
+        ));
+        assert!(has_banned_transparent_tcp_payload_destination(
+            "GET http://example.invalid"
+        ));
+        assert!(!has_banned_transparent_tcp_payload_destination(
+            "detect_forbidden_manual_proxy_protocol(initial)"
+        ));
     }
 
     #[test]

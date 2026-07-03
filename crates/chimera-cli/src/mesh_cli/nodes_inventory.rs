@@ -8,9 +8,11 @@ use std::{collections::BTreeSet, env, fs};
 use chimera_config::RawConfig;
 use chimera_mesh::{MeshNode, MeshPublishedEndpointUpdate};
 
+#[cfg(test)]
+pub(crate) use bootstrap::{bootstrap_env_value_from_text, load_mesh_bootstrap_nodes_from_text};
 use bootstrap::{
-    load_upstream_bootstrap_nodes, merge_cli_nodes, retain_reachable_nodes,
-    should_bootstrap_from_upstream,
+    load_mesh_bootstrap_nodes, merge_cli_nodes, retain_reachable_nodes,
+    should_bootstrap_from_mesh_env,
 };
 pub(crate) use discovery::build_discovery_signature_message;
 use discovery::{
@@ -101,8 +103,8 @@ pub(crate) fn load_mesh_nodes_inventory(args: &[String]) -> Result<MeshNodesInve
             _ => MeshNodesInventorySource::Cli,
         };
     }
-    if inventory.nodes.is_empty() && should_bootstrap_from_upstream(args, config_path.as_deref()) {
-        let fallback_nodes = load_upstream_bootstrap_nodes()?;
+    if inventory.nodes.is_empty() && should_bootstrap_from_mesh_env(args, config_path.as_deref()) {
+        let fallback_nodes = load_mesh_bootstrap_nodes()?;
         if !fallback_nodes.is_empty() {
             merge_cli_nodes(&mut inventory, fallback_nodes)?;
             inventory.source = match inventory.source {

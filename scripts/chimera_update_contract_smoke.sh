@@ -10,6 +10,42 @@ fail() {
 
 source "$ROOT_DIR/scripts/chimera-sh"
 
+case_gitverse_repo_root_normalizes_to_raw_bootstrap() (
+  local expected
+  expected="https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh"
+  [[ "$(normalize_update_bootstrap_url "https://gitverse.ru/ArtReg/chimera")" == "$expected" ]] \
+    || fail "update bootstrap did not normalize GitVerse repo root"
+)
+
+case_gitverse_content_viewer_normalizes_to_raw_bootstrap() (
+  local expected
+  expected="https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh"
+  [[ "$(normalize_update_bootstrap_url "https://gitverse.ru/ArtReg/chimera/content/main/chimera.sh")" == "$expected" ]] \
+    || fail "update bootstrap did not normalize GitVerse viewer URL"
+)
+
+case_gitverse_archive_viewer_normalizes_to_raw_bootstrap() (
+  local expected
+  expected="https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh"
+  [[ "$(normalize_update_bootstrap_url "https://gitverse.ru/ArtReg/chimera/content/main/chimera-pq-release.tar.gz.sha256")" == "$expected" ]] \
+    || fail "update bootstrap did not normalize GitVerse checksum viewer URL"
+)
+
+case_gitverse_default_source_loads_without_operator_config() (
+  local tmp_dir expected output
+  tmp_dir="$(mktemp -d)"
+  expected="http://gitvers-default.invalid/chimera.sh"
+  unset CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URL CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS
+  HOME="$tmp_dir/home"
+  XDG_CONFIG_HOME="$tmp_dir/xdg-config"
+  UPDATE_GITVERS_BOOTSTRAP_URLS_FILE="$tmp_dir/missing.list"
+  UPDATE_GITVERS_BOOTSTRAP_URLS_DEFAULT="$expected"
+
+  output="$(load_update_gitvers_bootstrap_urls)"
+  [[ "$output" == "$expected" ]] || fail "gitvers default source did not load without operator config"
+  rm -rf "$tmp_dir"
+)
+
 case_update_sources_unreachable_continues() (
   read_local_runtime_version() { printf '%s\n' 0.1.0; }
   read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
@@ -430,6 +466,877 @@ case_github_invalid_bootstrap_parse_does_not_try_peer_fallback() (
   rm -rf "$tmp_dir"
 )
 
+case_github_unavailable_gitvers_newer_updates_before_peer() (
+  local tmp_dir test_root old_root calls rerun_args output rc expected_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  rerun_args="$tmp_dir/rerun_args"
+  expected_sha="9999999999999999999999999999999999999999999999999999999999999999"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:gitvers >>"$calls"
+touch "$tmp_dir/gitvers_installed"
+exit 0
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() {
+    if [[ -f "$tmp_dir/gitvers_installed" ]]; then
+      printf '%s\n' 0.1.200
+    else
+      printf '%s\n' 0.1.100
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$tmp_dir/gitvers_installed" ]]; then
+      printf '%s\n' "$expected_sha"
+    else
+      printf '%s\n' deadbeef
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        return 2
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.200 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.201 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$expected_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "$*" >"$rerun_args"
+    printf '%s\n' "rerun:$*" >>"$calls"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "github outage should allow gitvers update, got rc=$rc"
+  [[ "$output" == *"chimera_update=available source=gitvers"* ]] || fail "missing gitvers update diagnostic"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "gitvers update did not rerun original command"
+  [[ "$(cat "$calls")" == $'meta:github\nmeta:gitvers\ninstall:gitvers\nrerun:-restart' ]] || fail "peer was used before gitvers or call order changed"
+  rm -rf "$tmp_dir"
+)
+
+case_github_unavailable_default_gitvers_newer_updates_without_operator_config() (
+  local tmp_dir test_root old_root calls rerun_args output rc expected_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  rerun_args="$tmp_dir/rerun_args"
+  expected_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:gitvers >>"$calls"
+touch "$tmp_dir/gitvers_installed"
+exit 0
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  unset CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URL CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS
+  UPDATE_GITVERS_BOOTSTRAP_URLS_FILE="$tmp_dir/missing.list"
+  CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_DEFAULT="http://gitvers-default.invalid/chimera.sh"
+  read_local_runtime_version() {
+    if [[ -f "$tmp_dir/gitvers_installed" ]]; then
+      printf '%s\n' 0.1.200
+    else
+      printf '%s\n' 0.1.100
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$tmp_dir/gitvers_installed" ]]; then
+      printf '%s\n' "$expected_sha"
+    else
+      printf '%s\n' deadbeef
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        return 2
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.200 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.201 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$expected_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "$*" >"$rerun_args"
+    printf '%s\n' "rerun:$*" >>"$calls"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "default gitvers source should update after github outage, got rc=$rc"
+  [[ "$output" == *"chimera_update=available source=gitvers"* ]] || fail "missing default gitvers update diagnostic"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "default gitvers update did not rerun original command"
+  [[ "$(cat "$calls")" == $'meta:github\nmeta:gitvers\ninstall:gitvers\nrerun:-restart' ]] || fail "default gitvers source order changed or peer was consulted"
+  rm -rf "$tmp_dir"
+)
+
+case_github_unavailable_gitvers_unavailable_falls_back_to_peer() (
+  local tmp_dir test_root old_root calls rerun_args output rc expected_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  rerun_args="$tmp_dir/rerun_args"
+  expected_sha="7777777777777777777777777777777777777777777777777777777777777777"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:peer >>"$calls"
+touch "$tmp_dir/peer_installed"
+exit 0
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() {
+    if [[ -f "$tmp_dir/peer_installed" ]]; then
+      printf '%s\n' 0.1.201
+    else
+      printf '%s\n' 0.1.100
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$tmp_dir/peer_installed" ]]; then
+      printf '%s\n' "$expected_sha"
+    else
+      printf '%s\n' deadbeef
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        return 2
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        return 2
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.201 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$expected_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "$*" >"$rerun_args"
+    printf '%s\n' "rerun:$*" >>"$calls"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "gitvers outage should fall back to peer, got rc=$rc"
+  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "missing peer update diagnostic after gitvers outage"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "peer update did not rerun original command"
+  [[ "$(cat "$calls")" == $'meta:github\nmeta:gitvers\nmeta:peer\ninstall:peer\nrerun:-restart' ]] || fail "unexpected source order through gitvers outage"
+  rm -rf "$tmp_dir"
+)
+
+case_github_unavailable_gitvers_current_stops_before_peer_newer_update() (
+  local tmp_dir test_root old_root calls output rc current_sha peer_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  current_sha="5656565656565656565656565656565656565656565656565656565656565656"
+  peer_sha="7878787878787878787878787878787878787878787878787878787878787878"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:unexpected >>"$calls"
+exit 1
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() { printf '%s\n' 0.1.141; }
+  read_local_runtime_bundle_sha() { printf '%s\n' "$current_sha"; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        return 2
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$current_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  output="$(auto_update_if_needed -restart 2>&1)"
+  rc=$?
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "verified gitvers current result should stop lower-trust newer peer update, got rc=$rc"
+  [[ "$output" == *"chimera_update=source_current source=gitvers"* ]] || fail "missing gitvers current diagnostic before stop"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.141 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic after verified gitvers current result"
+  [[ "$output" != *"source=peer"* ]] || fail "peer should not be consulted after verified gitvers current result"
+  [[ "$(cat "$calls")" == $'meta:github\nmeta:gitvers' ]] || fail "unexpected lower-trust activity after verified gitvers current result"
+  rm -rf "$tmp_dir"
+)
+
+case_github_unavailable_gitvers_invalid_does_not_try_peer() (
+  local tmp_dir calls output rc
+  tmp_dir="$(mktemp -d)"
+  calls="$tmp_dir/calls"
+  read_local_runtime_version() { printf '%s\n' 0.1.0; }
+  read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' github >>"$calls"
+        return 2
+        ;;
+      gitvers)
+        printf '%s\n' gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          invalid-version \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.2 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+
+  set +e
+  output="$(auto_update_if_needed -start 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 ]] || fail "invalid gitvers metadata should fail closed"
+  [[ "$output" == *"chimera_update=source_invalid source=gitvers"* ]] || fail "missing invalid gitvers diagnostic"
+  [[ "$(tr '\n' ',' <"$calls" | sed 's/,$//')" == "github,gitvers" ]] || fail "peer fallback was attempted after invalid gitvers metadata"
+  rm -rf "$tmp_dir"
+)
+
+case_github_stale_gitvers_newer_updates_before_peer() (
+  local tmp_dir test_root old_root calls rerun_args output rc expected_sha github_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  rerun_args="$tmp_dir/rerun_args"
+  expected_sha="abababababababababababababababababababababababababababababababab"
+  github_sha="cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:gitvers >>"$calls"
+touch "$tmp_dir/gitvers_installed"
+exit 0
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() {
+    if [[ -f "$tmp_dir/gitvers_installed" ]]; then
+      printf '%s\n' 0.1.141
+    else
+      printf '%s\n' 0.1.140
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$tmp_dir/gitvers_installed" ]]; then
+      printf '%s\n' "$expected_sha"
+    else
+      printf '%s\n' deadbeef
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.139 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$github_sha"
+        ;;
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$expected_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "$*" >"$rerun_args"
+    printf '%s\n' "rerun:$*" >>"$calls"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "verified github stale result should stop lower-trust newer update, got rc=$rc"
+  [[ "$output" == *"chimera_update=source_stale source=github"* ]] || fail "missing stale github diagnostic before stop"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.140 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic after verified github stale result"
+  [[ "$output" != *"source=gitvers"* ]] || fail "gitvers should not be consulted after verified github stale result"
+  [[ "$(cat "$calls")" == $'meta:github' ]] || fail "unexpected lower-trust activity after verified github stale result"
+  rm -rf "$tmp_dir"
+)
+
+case_github_stale_gitvers_current_reports_no_newer_release() (
+  local tmp_dir test_root old_root calls output rc current_sha github_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  current_sha="1212121212121212121212121212121212121212121212121212121212121212"
+  github_sha="3434343434343434343434343434343434343434343434343434343434343434"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:unexpected >>"$calls"
+exit 1
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() { printf '%s\n' 0.1.141; }
+  read_local_runtime_bundle_sha() { printf '%s\n' "$current_sha"; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.140 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() { return 0; }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$github_sha"
+        ;;
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$current_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "verified github stale result should stop before gitvers corroboration, got rc=$rc"
+  [[ "$output" == *"chimera_update=source_stale source=github"* ]] || fail "missing stale github diagnostic in verified-stop path"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.141 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic"
+  [[ "$output" != *"chimera_update=unavailable"* ]] || fail "no-newer-release path was misreported as source outage"
+  [[ "$output" != *"source=gitvers"* ]] || fail "gitvers should not be consulted after verified github stale result"
+  [[ "$(cat "$calls")" == $'meta:github' ]] || fail "unexpected install or lower-trust usage in verified-stop path"
+  rm -rf "$tmp_dir"
+)
+
+case_github_current_gitvers_current_peer_newer_updates_from_peer() (
+  local tmp_dir test_root old_root calls rerun_args output rc current_sha peer_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  rerun_args="$tmp_dir/rerun_args"
+  current_sha="5656565656565656565656565656565656565656565656565656565656565656"
+  peer_sha="7878787878787878787878787878787878787878787878787878787878787878"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+archive="\${1:-}"
+case "\$archive" in
+  *peer.invalid*)
+    printf '%s\n' install:peer >>"$calls"
+    touch "$tmp_dir/peer_installed"
+    exit 0
+    ;;
+  *)
+    printf '%s\n' install:unexpected >>"$calls"
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() {
+    if [[ -f "$tmp_dir/peer_installed" ]]; then
+      printf '%s\n' 0.1.142
+    else
+      printf '%s\n' 0.1.141
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$tmp_dir/peer_installed" ]]; then
+      printf '%s\n' "$peer_sha"
+    else
+      printf '%s\n' "$current_sha"
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz|http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$current_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "rerun:$*" >>"$calls"
+    printf '%s\n' "$*" >"$rerun_args"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -restart 2>&1)"
+  rc=$?
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "verified github current result should stop lower-trust newer update, got rc=$rc"
+  [[ "$output" == *"chimera_update=source_current source=github"* ]] || fail "missing github current diagnostic before stop"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.141 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic after verified github current result"
+  [[ "$output" != *"source=gitvers"* && "$output" != *"source=peer"* ]] || fail "lower-trust sources should not be consulted after verified github current result"
+  [[ "$(cat "$calls")" == $'meta:github' ]] || fail "unexpected lower-trust activity after verified github current result"
+  rm -rf "$tmp_dir"
+)
+
+case_github_stale_gitvers_stale_peer_newer_updates_from_peer() (
+  local tmp_dir test_root old_root calls rerun_args output rc github_sha gitvers_sha local_sha peer_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  rerun_args="$tmp_dir/rerun_args"
+  github_sha="9191919191919191919191919191919191919191919191919191919191919191"
+  gitvers_sha="9292929292929292929292929292929292929292929292929292929292929292"
+  local_sha="9393939393939393939393939393939393939393939393939393939393939393"
+  peer_sha="9494949494949494949494949494949494949494949494949494949494949494"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+archive="\${1:-}"
+case "\$archive" in
+  *peer.invalid*)
+    printf '%s\n' install:peer >>"$calls"
+    touch "$tmp_dir/peer_installed"
+    exit 0
+    ;;
+  *)
+    printf '%s\n' install:unexpected >>"$calls"
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() {
+    if [[ -f "$tmp_dir/peer_installed" ]]; then
+      printf '%s\n' 0.1.142
+    else
+      printf '%s\n' 0.1.141
+    fi
+  }
+  read_local_runtime_bundle_sha() {
+    if [[ -f "$tmp_dir/peer_installed" ]]; then
+      printf '%s\n' "$peer_sha"
+    else
+      printf '%s\n' "$local_sha"
+    fi
+  }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.140 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.139 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$github_sha"
+        ;;
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$gitvers_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "rerun:$*" >>"$calls"
+    printf '%s\n' "$*" >"$rerun_args"
+    return 0
+  }
+
+  output="$(auto_update_if_needed -restart 2>&1)"
+  rc=$?
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "verified github stale result should stop lower-trust newer update, got rc=$rc"
+  [[ "$output" == *"chimera_update=source_stale source=github"* ]] || fail "missing stale github diagnostic before stop"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.141 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic after verified github stale result"
+  [[ "$output" != *"source=gitvers"* && "$output" != *"source=peer"* ]] || fail "lower-trust sources should not be consulted after verified github stale result"
+  [[ "$(cat "$calls")" == $'meta:github' ]] || fail "unexpected lower-trust activity after verified github stale result"
+  rm -rf "$tmp_dir"
+)
+
+case_github_unavailable_gitvers_same_version_checksum_mismatch_blocks_before_peer() (
+  local tmp_dir test_root old_root calls output rc current_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  current_sha="abababababababababababababababababababababababababababababababab"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' install:unexpected >>"$calls"
+exit 1
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() { printf '%s\n' 0.1.141; }
+  read_local_runtime_bundle_sha() { printf '%s\n' "$current_sha"; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n' meta:github >>"$calls"
+        return 2
+        ;;
+      gitvers)
+        printf '%s\n' meta:gitvers >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://gitvers.invalid/chimera-pq-release.tar.gz \
+          http://gitvers.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n' meta:peer >>"$calls"
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://gitvers.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -ne 0 ]] || fail "same-version checksum mismatch on gitvers should block before peer"
+  [[ "$output" == *"chimera_update=source_inconsistent source=gitvers"* ]] || fail "missing gitvers same-version mismatch diagnostic"
+  [[ "$output" == *"reason=same_version_checksum_mismatch"* ]] || fail "missing gitvers mismatch reason"
+  [[ "$(cat "$calls")" == $'meta:github\nmeta:gitvers' ]] || fail "peer fallback was attempted after invalid gitvers same-version mismatch"
+  rm -rf "$tmp_dir"
+)
+
 case_missing_local_version_blocks_when_update_unavailable() (
   read_local_runtime_version() { printf '\n'; }
   read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
@@ -472,13 +1379,15 @@ make_fake_release_archive() {
   local version="${2:?version_required}"
   local installer_body="${3:?installer_body_required}"
   local release_dir="$out_dir/chimera-release"
-  mkdir -p "$release_dir/bin" "$release_dir/scripts"
+  mkdir -p "$release_dir/bin" "$release_dir/configs" "$release_dir/scripts"
   printf '%s\n' "$version" >"$release_dir/.chimera_release_version"
   printf '#!/usr/bin/env bash\n%s\n' "$installer_body" >"$release_dir/scripts/install_desktop_control.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$release_dir/scripts/chimera.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$release_dir/scripts/chimera-sh"
   printf '#!/usr/bin/env bash\nreturn 0 2>/dev/null || exit 0\n' >"$release_dir/scripts/chimera-update.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$release_dir/bin/chimera-bootstrap"
+  printf '%s\n' 'https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh' \
+    >"$release_dir/configs/update_gitvers_bootstrap_urls.example.list"
   chmod +x "$release_dir/scripts/"*.sh "$release_dir/bin/chimera-bootstrap"
   tar -czf "$out_dir/chimera-pq-release.tar.gz" -C "$out_dir" chimera-release
   (cd "$out_dir" && sha256sum chimera-pq-release.tar.gz > chimera-pq-release.tar.gz.sha256)
@@ -520,10 +1429,6 @@ EOF
 #!/usr/bin/env bash
 return 0 2>/dev/null || exit 0
 EOF
-  cat >"$release_dir/scripts/chimera_runtime_bootstrap.sh" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
   cat >"$release_dir/scripts/chimera-control-tray.sh" <<'EOF'
 #!/usr/bin/env bash
 exit 0
@@ -542,16 +1447,18 @@ Type=Application
 Name=CHIMERA
 Exec=__CHIMERA_ROOT__/scripts/chimera-sh
 EOF
-  cat >"$release_dir/deploy/systemd-user/chimera-gateway.service" <<'EOF'
+  cat >"$release_dir/deploy/systemd-user/chimera-node.service" <<'EOF'
 [Service]
 ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
 EOF
-  cat >"$release_dir/deploy/systemd-user/chimera-client.service" <<'EOF'
+  cat >"$release_dir/deploy/systemd-user/chimera-datapath.service" <<'EOF'
 [Service]
 ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
 EOF
   printf '%s\n' 'CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000' \
-    >"$release_dir/configs/upstream_proxy.env.example"
+    >"$release_dir/configs/mesh_bootstrap.env.example"
+  printf '%s\n' 'https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh' \
+    >"$release_dir/configs/update_gitvers_bootstrap_urls.example.list"
   chmod +x "$release_dir/scripts/"*.sh "$release_dir/bin/chimera-bootstrap"
   tar -czf "$out_dir/chimera-pq-release.tar.gz" -C "$out_dir" chimera-release
   (cd "$out_dir" && sha256sum chimera-pq-release.tar.gz > chimera-pq-release.tar.gz.sha256)
@@ -590,7 +1497,7 @@ EOF
 
   set +e
   output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
-    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_INSTALL_NODE_ROLE=node \
     CHIMERA_HOME="$old_home" \
     CHIMERA_LOCAL_BIN="$local_bin" \
     HOME="$tmp_dir/home/user" \
@@ -645,7 +1552,7 @@ EOF
 
   set +e
   output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
-    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_INSTALL_NODE_ROLE=node \
     CHIMERA_HOME="$old_home" \
     CHIMERA_LOCAL_BIN="$local_bin" \
     HOME="$tmp_dir/home/user" \
@@ -711,7 +1618,7 @@ EOF
 
   set +e
   output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
-    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_INSTALL_NODE_ROLE=node \
     CHIMERA_HOME="$old_home" \
     CHIMERA_LOCAL_BIN="$local_bin" \
     HOME="$tmp_dir/home/user" \
@@ -741,7 +1648,7 @@ EOF
 )
 
 case_peer_token_stays_in_private_peer_env() (
-  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum upstream_env peer_env injected_token marker output rc peer_env_mode upstream_env_mode
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum bootstrap_env peer_env injected_token marker output rc peer_env_mode bootstrap_env_mode
   tmp_dir="$(mktemp -d)"
   old_home="$tmp_dir/home/chimera"
   xdg_config="$tmp_dir/xdg-config"
@@ -749,7 +1656,7 @@ case_peer_token_stays_in_private_peer_env() (
   xdg_data="$tmp_dir/xdg-data"
   local_bin="$tmp_dir/bin"
   fake_bin="$tmp_dir/fake-bin"
-  upstream_env="$xdg_config/chimera/upstream_proxy.env"
+  bootstrap_env="$xdg_config/chimera/mesh_bootstrap.env"
   peer_env="$xdg_config/chimera/peer-egress.env"
   marker="$tmp_dir/upstream-token-injection-ran"
   injected_token="test-token;touch $marker"
@@ -772,7 +1679,7 @@ EOF
 
   set +e
   output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
-    CHIMERA_INSTALL_NODE_ROLE=server \
+    CHIMERA_INSTALL_NODE_ROLE=node \
     CHIMERA_HOME="$old_home" \
     CHIMERA_LOCAL_BIN="$local_bin" \
     HOME="$tmp_dir/home/user" \
@@ -785,14 +1692,14 @@ EOF
   rc=$?
   set -e
 
-  [[ "$rc" -eq 0 ]] || fail "upstream env shell quoting install failed: $output"
+  [[ "$rc" -eq 0 ]] || fail "mesh bootstrap env shell quoting install failed: $output"
   [[ ! -f "$marker" ]] || fail "peer token injection executed during install"
-  ! grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$upstream_env" \
-    || fail "upstream env leaked peer token"
+  ! grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$bootstrap_env" \
+    || fail "mesh bootstrap env leaked peer token"
   grep -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$peer_env" \
     || fail "peer env did not receive peer token"
-  upstream_env_mode="$(stat -c '%a' "$upstream_env")"
-  [[ "$upstream_env_mode" == "600" ]] || fail "upstream env mode was not private"
+  bootstrap_env_mode="$(stat -c '%a' "$bootstrap_env")"
+  [[ "$bootstrap_env_mode" == "600" ]] || fail "mesh bootstrap env mode was not private"
   peer_env_mode="$(stat -c '%a' "$peer_env")"
   [[ "$peer_env_mode" == "600" ]] || fail "peer env mode was not private"
   set -a
@@ -1138,7 +2045,7 @@ EOF
   rm -rf "$tmp_dir"
 )
 
-case_github_current_does_not_block_peer_newer_update() (
+case_github_current_stops_before_peer_newer_update() (
   local tmp_dir test_root old_root calls rerun_args output rc github_sha peer_sha
   tmp_dir="$(mktemp -d)"
   test_root="$tmp_dir/root"
@@ -1228,16 +2135,15 @@ EOF
   output="$(auto_update_if_needed -start 2>&1)"
   rc=$?
   ROOT_DIR="$old_root"
-  [[ "$rc" -eq 0 ]] || fail "github current should not block peer newer update, got rc=$rc"
-  [[ "$output" == *"source=github"* ]] || fail "missing github current diagnostic"
-  [[ "$output" == *"reason=source_not_newer"* ]] || fail "missing not-newer diagnostic"
-  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "missing peer update diagnostic"
-  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after peer update"
-  [[ "$(cat "$calls")" == $'meta:github\nmeta:peer\ninstall:peer\nrerun:-restart' ]] || fail "unexpected peer update call order"
+  [[ "$rc" -eq 0 ]] || fail "verified github current result should stop lower-trust newer update, got rc=$rc"
+  [[ "$output" == *"chimera_update=source_current source=github"* ]] || fail "missing github current diagnostic"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.99 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic"
+  [[ "$output" != *"source=peer"* ]] || fail "peer should not be consulted after verified github current result"
+  [[ "$(cat "$calls")" == $'meta:github' ]] || fail "unexpected lower-trust activity after verified github current result"
   rm -rf "$tmp_dir"
 )
 
-case_github_stale_does_not_block_peer_newer_update() (
+case_github_stale_stops_before_peer_newer_update() (
   local tmp_dir test_root old_root calls rerun_args output rc github_sha local_sha peer_sha
   tmp_dir="$(mktemp -d)"
   test_root="$tmp_dir/root"
@@ -1328,13 +2234,11 @@ EOF
   output="$(auto_update_if_needed -start 2>&1)"
   rc=$?
   ROOT_DIR="$old_root"
-  [[ "$rc" -eq 0 ]] || fail "github stale should not block peer newer update, got rc=$rc"
-  [[ "$output" == *"source=github"* ]] || fail "missing github stale diagnostic"
+  [[ "$rc" -eq 0 ]] || fail "verified github stale result should stop lower-trust newer update, got rc=$rc"
   [[ "$output" == *"chimera_update=source_stale source=github"* ]] || fail "missing stale github diagnostic"
-  [[ "$output" == *"reason=source_not_newer"* ]] || fail "missing not-newer diagnostic"
-  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "missing peer update diagnostic"
-  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after peer update"
-  [[ "$(cat "$calls")" == $'meta:github\nmeta:peer\ninstall:peer\nrerun:-restart' ]] || fail "unexpected stale peer update call order"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.100 action=continue reason=highest_available_not_newer"* ]] || fail "missing final no-newer-release diagnostic"
+  [[ "$output" != *"source=peer"* ]] || fail "peer should not be consulted after verified github stale result"
+  [[ "$(cat "$calls")" == $'meta:github' ]] || fail "unexpected lower-trust activity after verified github stale result"
   rm -rf "$tmp_dir"
 )
 
@@ -1457,7 +2361,170 @@ EOF
     case "${1:-}" in
       github)
         printf '%s\n%s\n%s\n' \
-          0.1.99 \
+          0.1.100 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n%s\n%s\n' \
+          0.1.100 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  rerun_after_update() {
+    printf '%s\n' "$*" >"$rerun_args"
+    return 0
+  }
+
+  output="$(CHIMERA_HOME="$CHIMERA_HOME" CHIMERA_LOCAL_BIN="$CHIMERA_LOCAL_BIN" HOME="$HOME" auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  [[ "$rc" -eq 0 ]] || fail "github install source unavailable should fall back to same verified peer release, got rc=$rc"
+  [[ "$output" == *"reason=install_source_unavailable"* ]] || fail "missing github install source unavailable diagnostic"
+  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "peer fallback was not reached after github install source unavailable"
+  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after peer fallback"
+  [[ "$(cat "$CHIMERA_HOME/.chimera_release_version")" == "0.1.100" ]] || fail "peer fallback did not install expected version"
+  [[ "$(cat "$CHIMERA_HOME/.chimera_release_bundle.sha256")" == "$(awk '{print $1}' "$peer_checksum")" ]] || fail "peer fallback did not install expected checksum"
+  rm -rf "$tmp_dir"
+)
+
+case_github_install_source_unavailable_blocks_peer_newer_release() (
+  local tmp_dir test_root old_root calls output rc github_sha peer_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  github_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  peer_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+archive="\${1:-}"
+case "\$archive" in
+  *github.invalid*)
+    printf '%s\n' install:github >>"$calls"
+    exit 2
+    ;;
+  *peer.invalid*)
+    printf '%s\n' install:peer >>"$calls"
+    exit 0
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() { printf '%s\n' 0.1.0; }
+  read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n%s\n%s\n' \
+          0.1.100 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer)
+        printf '%s\n%s\n%s\n' \
+          0.1.101 \
+          http://peer.invalid/chimera-pq-release.tar.gz \
+          http://peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$github_sha"
+        ;;
+      http://peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$peer_sha"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -ne 0 ]] || fail "divergent peer release should block after github install source outage"
+  [[ "$output" == *"reason=install_source_unavailable"* ]] || fail "missing install source unavailable diagnostic before divergence block"
+  [[ "$output" == *"reason=trusted_version_divergence"* ]] || fail "missing trusted version divergence block"
+  [[ "$(cat "$calls")" == $'install:github' ]] || fail "peer install should not run after divergent version block"
+  rm -rf "$tmp_dir"
+)
+
+case_github_install_source_unavailable_blocks_peer_checksum_divergence() (
+  local tmp_dir test_root old_root calls output rc github_sha peer_sha
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  calls="$tmp_dir/calls"
+  github_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  peer_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  mkdir -p "$test_root/scripts"
+
+  cat >"$test_root/scripts/install_release.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+archive="\${1:-}"
+case "\$archive" in
+  *github.invalid*)
+    printf '%s\n' install:github >>"$calls"
+    exit 2
+    ;;
+  *peer.invalid*)
+    printf '%s\n' install:peer >>"$calls"
+    exit 0
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$test_root/scripts/install_release.sh"
+
+  ROOT_DIR="$test_root"
+  read_local_runtime_version() { printf '%s\n' 0.1.0; }
+  read_local_runtime_bundle_sha() { printf '%s\n' deadbeef; }
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n%s\n%s\n' \
+          0.1.100 \
           http://github.invalid/chimera-pq-release.tar.gz \
           http://github.invalid/chimera-pq-release.tar.gz.sha256
         ;;
@@ -1488,19 +2555,14 @@ EOF
         ;;
     esac
   }
-  rerun_after_update() {
-    printf '%s\n' "$*" >"$rerun_args"
-    return 0
-  }
 
-  output="$(CHIMERA_HOME="$CHIMERA_HOME" CHIMERA_LOCAL_BIN="$CHIMERA_LOCAL_BIN" HOME="$HOME" auto_update_if_needed -start 2>&1)" || rc=$?
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
   rc="${rc:-0}"
-  [[ "$rc" -eq 0 ]] || fail "github install source unavailable should fall back to peer, got rc=$rc"
-  [[ "$output" == *"reason=install_source_unavailable"* ]] || fail "missing github install source unavailable diagnostic"
-  [[ "$output" == *"chimera_update=available source=peer"* ]] || fail "peer fallback was not reached after github install source unavailable"
-  [[ "$(cat "$rerun_args")" == "-restart" ]] || fail "original command was not restarted after peer fallback"
-  [[ "$(cat "$CHIMERA_HOME/.chimera_release_version")" == "0.1.100" ]] || fail "peer fallback did not install expected version"
-  [[ "$(cat "$CHIMERA_HOME/.chimera_release_bundle.sha256")" == "$(awk '{print $1}' "$peer_checksum")" ]] || fail "peer fallback did not install expected checksum"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -ne 0 ]] || fail "peer checksum divergence should block after github install source outage"
+  [[ "$output" == *"reason=install_source_unavailable"* ]] || fail "missing install source unavailable diagnostic before checksum divergence block"
+  [[ "$output" == *"reason=trusted_checksum_divergence"* ]] || fail "missing trusted checksum divergence block"
+  [[ "$(cat "$calls")" == $'install:github' ]] || fail "peer install should not run after divergent checksum block"
   rm -rf "$tmp_dir"
 )
 
@@ -1594,6 +2656,10 @@ EOF
 )
 
 case_update_sources_unreachable_continues
+case_gitverse_repo_root_normalizes_to_raw_bootstrap
+case_gitverse_content_viewer_normalizes_to_raw_bootstrap
+case_gitverse_archive_viewer_normalizes_to_raw_bootstrap
+case_gitverse_default_source_loads_without_operator_config
 case_update_download_uses_bounded_bootstrap_timeouts
 case_update_download_uses_bounded_curl_args
 case_update_download_timeout_bounds_slow_helper
@@ -1605,6 +2671,16 @@ case_peer_confirmed_update_failure_blocks_start
 case_github_install_failure_is_not_masked_by_peer_noop
 case_github_invalid_does_not_try_peer_fallback
 case_github_invalid_bootstrap_parse_does_not_try_peer_fallback
+case_github_unavailable_gitvers_newer_updates_before_peer
+case_github_unavailable_default_gitvers_newer_updates_without_operator_config
+case_github_unavailable_gitvers_unavailable_falls_back_to_peer
+case_github_unavailable_gitvers_current_stops_before_peer_newer_update
+case_github_unavailable_gitvers_invalid_does_not_try_peer
+case_github_stale_gitvers_newer_updates_before_peer
+case_github_stale_gitvers_current_reports_no_newer_release
+case_github_current_gitvers_current_peer_newer_updates_from_peer
+case_github_stale_gitvers_stale_peer_newer_updates_from_peer
+case_github_unavailable_gitvers_same_version_checksum_mismatch_blocks_before_peer
 case_missing_local_version_blocks_when_update_unavailable
 case_missing_local_version_uses_update_repair
 case_semver_update_order
@@ -1621,9 +2697,11 @@ case_same_version_missing_local_checksum_blocks
 case_missing_root_checksum_self_heals_from_released_bundle
 case_chimera_sh_sources_update_runtime_state_helper
 case_github_unavailable_peer_newer_updates_and_reruns
-case_github_current_does_not_block_peer_newer_update
-case_github_stale_does_not_block_peer_newer_update
+case_github_current_stops_before_peer_newer_update
+case_github_stale_stops_before_peer_newer_update
 case_github_install_source_unavailable_falls_back_to_peer
+case_github_install_source_unavailable_blocks_peer_newer_release
+case_github_install_source_unavailable_blocks_peer_checksum_divergence
 case_connect_peer_update_url_does_not_use_general_peer_list
 case_connect_peer_update_url_precedes_general_peer_list
 case_update_bootstrap_url_rejects_userinfo

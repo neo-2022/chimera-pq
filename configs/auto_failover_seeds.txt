@@ -4,11 +4,5 @@
 # Rules:
 # - one domain per line
 # - comments start with '#'
-# - leave empty if you want to rely only on adaptive DB + manual list + app routes
-
-www.youtube.com
-youtube.com
-chatgpt.com
-openai.com
-discord.com
-x.com
+# - product defaults must stay empty; use operator-private config for real
+#   domains.

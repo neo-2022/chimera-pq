@@ -4,8 +4,6 @@ use serde_json::Value;
 use std::env;
 use std::fs;
 
-const CI_SNAPSHOT_HOST: &str = "chimera-ci-snapshot.local";
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -64,15 +62,12 @@ fn render_exports(parsed: &Value) -> Vec<String> {
         .unwrap_or(0);
     let mode = resolve_probe_mode(parsed);
     let ci_snapshot = mode == "ci_snapshot";
-    let ci_snapshot_targets_ok = if ci_snapshot {
-        targets_all_match_host(parsed, CI_SNAPSHOT_HOST)
-    } else {
-        false
-    };
+    let ci_snapshot_targets_ok = ci_snapshot && redaction_marker_ok(parsed);
 
     let smoke_ok = kind_ok
         && status_ok
         && network_ok
+        && redaction_marker_ok(parsed)
         && has_targets
         && all_total > 0
         && failed_total >= 0
@@ -113,50 +108,17 @@ fn render_exports(parsed: &Value) -> Vec<String> {
 }
 
 fn resolve_probe_mode(parsed: &Value) -> &'static str {
-    if targets_all_match_host(parsed, CI_SNAPSHOT_HOST) {
-        "ci_snapshot"
-    } else {
-        "live"
+    match parsed.get("target_profile").and_then(Value::as_str) {
+        Some("ci_snapshot") => "ci_snapshot",
+        _ => "live",
     }
 }
 
-fn targets_all_match_host(parsed: &Value, host: &str) -> bool {
+fn redaction_marker_ok(parsed: &Value) -> bool {
     parsed
-        .get("targets")
-        .and_then(Value::as_array)
-        .map(|targets| {
-            !targets.is_empty()
-                && targets.iter().all(|target| {
-                    target
-                        .get("url")
-                        .and_then(Value::as_str)
-                        .is_some_and(|url| url_has_host(url, host))
-                })
-        })
-        .unwrap_or(false)
-}
-
-fn url_has_host(url: &str, expected_host: &str) -> bool {
-    let Some((scheme, rest)) = url.split_once("://") else {
-        return false;
-    };
-    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
-        return false;
-    }
-    let authority = rest
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or_default()
-        .rsplit('@')
-        .next()
-        .unwrap_or_default();
-    let host = authority
-        .split(':')
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
-    host == expected_host
+        .get("redaction")
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "raw_targets_redacted")
 }
 
 #[cfg(test)]
@@ -169,9 +131,11 @@ mod tests {
         let got = render_exports(&json!({
             "status":"ok",
             "kind":"probe_access",
+            "redaction":"raw_targets_redacted",
+            "target_profile":"live",
             "network_state":"not_modified",
             "totals":{"all":2,"failed_total":0,"fail_threshold":1,"threshold_exceeded":false},
-            "targets":[{"url":"https://example.org"}]
+            "targets":[{"url":"target#1"}]
         }));
         assert!(
             got.iter()
@@ -197,11 +161,13 @@ mod tests {
         let got = render_exports(&json!({
             "status":"ok",
             "kind":"probe_access",
+            "redaction":"raw_targets_redacted",
+            "target_profile":"ci_snapshot",
             "network_state":"not_modified",
             "totals":{"all":2,"failed_total":0,"fail_threshold":0,"threshold_exceeded":false},
             "targets":[
-                {"url":"https://chimera-ci-snapshot.local/ok"},
-                {"url":"http://chimera-ci-snapshot.local/failover"}
+                {"url":"target#1"},
+                {"url":"target#2"}
             ]
         }));
         assert!(
@@ -231,9 +197,11 @@ mod tests {
         let got = render_exports(&json!({
             "status":"ok",
             "kind":"probe_access",
+            "redaction":"raw_targets_redacted",
+            "target_profile":"live",
             "network_state":"not_modified",
             "totals":{"all":2,"failed_total":2,"fail_threshold":0,"threshold_exceeded":true},
-            "targets":[{"url":"https://example.org"}]
+            "targets":[{"url":"target#1"}]
         }));
         assert!(
             got.iter()

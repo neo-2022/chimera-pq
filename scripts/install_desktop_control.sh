@@ -6,7 +6,8 @@ INSTALL_NODE_ROLE_FILE="$ROOT_DIR/.chimera_install_role"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
-UPSTREAM_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env"
+BOOTSTRAP_ENV_FILE="${CHIMERA_BOOTSTRAP_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh_bootstrap.env}"
+GITVERS_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_gitvers_bootstrap_urls.list}"
 PEER_EGRESS_ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"
 PEER_EGRESS_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state"
 PEER_UPDATE_STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json"
@@ -15,7 +16,7 @@ CHIMERA_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
 
 normalize_install_node_role() {
   case "${1:-node}" in
-    node|weave-node|client|server) printf '%s\n' "$1" ;;
+    node|weave-node|client|server) printf '%s\n' "node" ;;
     *) printf '%s\n' "node" ;;
   esac
 }
@@ -167,26 +168,42 @@ generate_runtime_token() {
   head -c 24 /dev/urandom | base64 | tr -d '=+/\n'
 }
 
-installer_gate_prepare_upstream_env() {
-  mkdir -p "$(dirname "$UPSTREAM_ENV_FILE")"
-  touch "$UPSTREAM_ENV_FILE"
-  remove_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"
-  if [[ -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
+installer_gate_prepare_bootstrap_env() {
+  mkdir -p "$(dirname "$BOOTSTRAP_ENV_FILE")"
+  touch "$BOOTSTRAP_ENV_FILE"
+  remove_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"
+  if [[ -f "$ROOT_DIR/configs/mesh_bootstrap.env.example" ]]; then
     local discovery_url discovery_pubkey discovery_probe_timeout
-    discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
-    discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
-    discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
+    discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
+    discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
+    discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     if [[ -n "$discovery_url" ]]; then
-      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
     fi
     if [[ -n "$discovery_pubkey" ]]; then
-      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
     fi
     if [[ -n "$discovery_probe_timeout" ]]; then
-      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
     fi
   fi
-  chmod 600 "$UPSTREAM_ENV_FILE"
+  chmod 600 "$BOOTSTRAP_ENV_FILE"
+}
+
+installer_gate_prepare_gitvers_bootstrap_sources() {
+  mkdir -p "$(dirname "$GITVERS_BOOTSTRAP_URLS_FILE")"
+  if [[ -s "$GITVERS_BOOTSTRAP_URLS_FILE" ]]; then
+    chmod 600 "$GITVERS_BOOTSTRAP_URLS_FILE"
+    echo "gitvers_bootstrap_sources_seeded=false"
+    return 0
+  fi
+  if [[ ! -f "$ROOT_DIR/configs/update_gitvers_bootstrap_urls.example.list" ]]; then
+    echo "error: missing GitVers bootstrap sources template" >&2
+    exit 2
+  fi
+  cp "$ROOT_DIR/configs/update_gitvers_bootstrap_urls.example.list" "$GITVERS_BOOTSTRAP_URLS_FILE"
+  chmod 600 "$GITVERS_BOOTSTRAP_URLS_FILE"
+  echo "gitvers_bootstrap_sources_seeded=true"
 }
 
 run_chimera_cli() {
@@ -257,19 +274,111 @@ auto_fix_runtime_permissions() {
   install_pkg_if_missing nft nftables
 }
 
-configure_client_target() {
-  if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
-    CONFIGURED_CLIENT_ENDPOINT=""
-    echo "peer_config_carrier_addr=none mode=peer_only"
-    return 0
+upsert_node_config_kv() {
+  local file="${1:?file_required}"
+  local key="${2:?key_required}"
+  local value="${3:-}"
+  local key_re tmp_file replaced=0 line
+  if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    echo "error: invalid control character in node config value: $key" >&2
+    exit 2
   fi
-  local client_conf="$ROOT_DIR/configs/client.conf"
+  key_re="${key//./\\.}"
+  mkdir -p "$(dirname "$file")"
+  touch "$file"
+  tmp_file="$(mktemp)"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^[[:space:]]*$key_re[[:space:]]*= ]]; then
+      if [[ "$replaced" -eq 0 ]]; then
+        printf '%s = %s\n' "$key" "$value"
+        replaced=1
+      fi
+      continue
+    fi
+    printf '%s\n' "$line"
+  done <"$file" >"$tmp_file"
+  if [[ "$replaced" -eq 0 ]]; then
+    printf '%s = %s\n' "$key" "$value" >>"$tmp_file"
+  fi
+  cat "$tmp_file" >"$file"
+  rm -f "$tmp_file"
+}
+
+normalize_node_connect_addr() {
+  local endpoint="${1:?endpoint_required}"
+  case "$endpoint" in
+    tcp://*)
+      printf '%s\n' "$endpoint"
+      ;;
+    tcp@*)
+      printf 'tcp://%s\n' "${endpoint#tcp@}"
+      ;;
+    *@*)
+      echo "error: unsupported CHIMERA node endpoint transport" >&2
+      exit 2
+      ;;
+    *)
+      printf 'tcp://%s\n' "$endpoint"
+      ;;
+  esac
+}
+
+raw_node_endpoint_host_port() {
+  local endpoint="${1:?endpoint_required}"
+  case "$endpoint" in
+    tcp://*)
+      printf '%s\n' "${endpoint#tcp://}"
+      ;;
+    tcp@*)
+      printf '%s\n' "${endpoint#tcp@}"
+      ;;
+    *)
+      printf '%s\n' "$endpoint"
+      ;;
+  esac
+}
+
+derive_node_server_name() {
+  local host_part="${1:?host_part_required}"
+  local server_name="${CHIMERA_NODE_SERVER_NAME:-${CHIMERA_CARRIER_SERVER_NAME:-${CHIMERA_MESH_REMOTE_SERVER_NAME:-$host_part}}}"
+  server_name="${server_name#[}"
+  server_name="${server_name%]}"
+  if [[ -z "$server_name" ]]; then
+    echo "error: CHIMERA node server name is empty" >&2
+    exit 2
+  fi
+  printf '%s\n' "$server_name"
+}
+
+desired_node_listen_addr() {
+  local listen_addr="${CHIMERA_NODE_LISTEN_ADDR:-${CHIMERA_NODE_PEER_LISTEN_ADDR:-auto}}"
+  if [[ -z "$listen_addr" ]]; then
+    listen_addr="auto"
+  fi
+  printf '%s\n' "$listen_addr"
+}
+
+materialize_node_runtime_config() {
+  local node_conf="${1:?node_conf_required}"
+  local connect_addr="${2:?connect_addr_required}"
+  local host_part="${3:?host_part_required}"
+  local server_name listen_addr
+  server_name="$(derive_node_server_name "$host_part")"
+  listen_addr="$(desired_node_listen_addr)"
+  upsert_node_config_kv "$node_conf" "node.mode" "mesh-node"
+  upsert_node_config_kv "$node_conf" "carrier.addr" "$connect_addr"
+  upsert_node_config_kv "$node_conf" "carrier.server_name" "$server_name"
+  upsert_node_config_kv "$node_conf" "peer.listen_addr" "$listen_addr"
+}
+
+configure_node_peer_target() {
+  local node_conf="$ROOT_DIR/configs/mesh-node.conf"
   local candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}}"
   local -a mesh_nodes_args=()
   if [[ -z "$candidate" ]]; then
-    if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
+    if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
       # shellcheck disable=SC1090
-      source "$UPSTREAM_ENV_FILE"
+      source "$BOOTSTRAP_ENV_FILE"
     fi
     if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" ]]; then
       mesh_nodes_args+=(--discovery-url "$CHIMERA_MESH_NODES_DISCOVERY_URL")
@@ -291,43 +400,43 @@ configure_client_target() {
     fi
   fi
   if [[ -z "$candidate" ]]; then
-    if [[ ! -f "$client_conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
-      cp "$ROOT_DIR/configs/client.example.conf" "$client_conf"
+    if [[ ! -f "$node_conf" && -f "$ROOT_DIR/configs/mesh-node.example.conf" ]]; then
+      cp "$ROOT_DIR/configs/mesh-node.example.conf" "$node_conf"
     fi
-    CONFIGURED_CLIENT_ENDPOINT=""
+    CONFIGURED_PEER_ENDPOINT=""
     echo "peer_config_node_endpoint=none"
     echo "peer_config_carrier_addr=none mode=peer_only"
     return 0
   fi
-  if [[ "$candidate" != *:* ]]; then
-    echo "error: invalid CHIMERA node endpoint: $candidate" >&2
+  local raw_candidate connect_addr
+  raw_candidate="$(raw_node_endpoint_host_port "$candidate")"
+  connect_addr="$(normalize_node_connect_addr "$candidate")"
+  if [[ "$raw_candidate" != *:* ]]; then
+    echo "error: invalid CHIMERA node endpoint" >&2
     exit 2
   fi
-  local host_part="${candidate%:*}"
-  local port_part="${candidate##*:}"
+  local host_part="${raw_candidate%:*}"
+  local port_part="${raw_candidate##*:}"
   if [[ -z "$host_part" || ! "$port_part" =~ ^[0-9]+$ || "$port_part" -lt 1 || "$port_part" -gt 65535 ]]; then
-    echo "error: invalid CHIMERA node endpoint: $candidate" >&2
+    echo "error: invalid CHIMERA node endpoint" >&2
     exit 2
   fi
-  if [[ ! -f "$client_conf" && -f "$ROOT_DIR/configs/client.example.conf" ]]; then
-    cp "$ROOT_DIR/configs/client.example.conf" "$client_conf"
+  if [[ ! -f "$node_conf" && -f "$ROOT_DIR/configs/mesh-node.example.conf" ]]; then
+    cp "$ROOT_DIR/configs/mesh-node.example.conf" "$node_conf"
   fi
-  if [[ -f "$client_conf" ]]; then
-    if grep -q '^carrier.addr =' "$client_conf"; then
-      sed -i "s#^carrier.addr = .*#carrier.addr = ${candidate}#" "$client_conf"
-    else
-      printf '\ncarrier.addr = %s\n' "$candidate" >> "$client_conf"
-    fi
+  if [[ -f "$node_conf" ]]; then
+    materialize_node_runtime_config "$node_conf" "$connect_addr" "$host_part"
   fi
-  printf '%s\n' "$candidate" > "$ROOT_DIR/configs/chimera_runtime_endpoint.txt"
-  CONFIGURED_CLIENT_ENDPOINT="$candidate"
-  echo "peer_config_node_endpoint=$candidate"
-  echo "peer_config_carrier_addr=$candidate"
+  printf '%s\n' "$raw_candidate" > "$ROOT_DIR/configs/chimera_runtime_endpoint.txt"
+  CONFIGURED_PEER_ENDPOINT="$raw_candidate"
+  echo "peer_config_node_endpoint_present=true"
+  echo "peer_config_node_endpoint=<redacted>"
+  echo "peer_config_carrier_addr_present=true"
 }
 
 configure_peer_egress_env() {
   local mode="${1:?mode_required}"
-  local server="${2:-}"
+  local peer_endpoint="${2:-}"
   local invite_token="${3:-}"
   local peer_listen="${CHIMERA_PEER_EGRESS_PEER_LISTEN:-${4:-0.0.0.0:0}}"
   local local_listen="${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-${5:-127.0.0.1:0}}"
@@ -369,8 +478,8 @@ configure_peer_egress_env() {
     write_env_kv 'CHIMERA_PEER_EGRESS_STATE_FILE' "$PEER_EGRESS_STATE_FILE"
     write_env_kv 'CHIMERA_MESH_PEER_EGRESS_STATE_PATH' "$PEER_EGRESS_STATE_FILE"
     write_env_kv 'CHIMERA_PEER_UPDATE_STATE_FILE' "$PEER_UPDATE_STATE_FILE"
-    if [[ -n "$server" ]]; then
-      write_env_kv 'CHIMERA_PEER_EGRESS_SERVER' "$server"
+    if [[ -n "$peer_endpoint" ]]; then
+      write_env_kv 'CHIMERA_PEER_EGRESS_SERVER' "$peer_endpoint"
     fi
     write_env_kv 'CHIMERA_PEER_EGRESS_TOKEN' "$invite_token"
     write_env_kv 'CHIMERA_PEER_EGRESS_POOL' "$pool"
@@ -392,8 +501,9 @@ configure_peer_egress_env() {
   if [[ -n "$transit_lane_bindings_file" ]]; then
     echo "peer_egress_transit_lane_bindings_file_configured=true"
   fi
-  if [[ -n "$server" ]]; then
-    echo "peer_egress_server=$server"
+  if [[ -n "$peer_endpoint" ]]; then
+    echo "peer_egress_peer_endpoint_present=true"
+    echo "peer_egress_peer_endpoint=<redacted>"
   fi
   echo "peer_egress_token_set=true"
 }
@@ -410,9 +520,8 @@ configure_transparent_runtime_env() {
     write_env_kv 'CHIMERA_TRANSPARENT_BIN' "${CHIMERA_TRANSPARENT_BIN:-$ROOT_DIR/bin/chimera-transparent-tcp}"
     write_env_kv 'CHIMERA_TRANSPARENT_TCP_LISTEN' "$listen"
     write_env_kv 'CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL' "$transit_local"
-    write_env_kv 'CHIMERA_TRANSPARENT_TCP_DIRECT_MODE' "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-auto}"
+    write_env_kv 'CHIMERA_TRANSPARENT_TCP_DIRECT_MODE' "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-disabled}"
     write_env_kv 'CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS' "${CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS:-1200}"
-    write_env_kv 'CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS' "${CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS:-1800}"
     write_env_kv 'CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS' "${CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS:-500}"
     write_env_kv 'CHIMERA_REDIRECT_TABLE' "${CHIMERA_REDIRECT_TABLE:-chimera_redirect}"
     write_env_kv 'CHIMERA_REDIRECT_CHAIN' "${CHIMERA_REDIRECT_CHAIN:-output}"
@@ -434,27 +543,27 @@ fi
 
 mkdir -p "$SYSTEMD_USER_DIR" "$APPLICATIONS_DIR"
 mkdir -p "$CHIMERA_CACHE_DIR"
-installer_gate_prepare_upstream_env
+installer_gate_prepare_bootstrap_env
+installer_gate_prepare_gitvers_bootstrap_sources
 auto_fix_runtime_permissions
 run_install_permissions_preflight
-configure_client_target
-if [[ "$INSTALL_NODE_ROLE" == "server" ]]; then
+configure_node_peer_target
+node_peer_listen="${CHIMERA_NODE_PEER_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}}"
+if [[ -n "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
-elif [[ -n "${CONFIGURED_CLIENT_ENDPOINT:-}" ]]; then
-  selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "$CONFIGURED_CLIENT_ENDPOINT" "$selected_invite_token" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
+  configure_peer_egress_env "node" "$CONFIGURED_PEER_ENDPOINT" "$selected_invite_token" "$node_peer_listen" "127.0.0.1:0"
 else
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}" "127.0.0.1:0"
+  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "$node_peer_listen" "127.0.0.1:0"
 fi
 configure_transparent_runtime_env
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \
-    "$ROOT_DIR/deploy/systemd-user/chimera-gateway.service" >"$SYSTEMD_USER_DIR/chimera-gateway.service"
+    "$ROOT_DIR/deploy/systemd-user/chimera-node.service" >"$SYSTEMD_USER_DIR/chimera-node.service"
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \
-    "$ROOT_DIR/deploy/systemd-user/chimera-client.service" >"$SYSTEMD_USER_DIR/chimera-client.service"
-  chmod 0644 "$SYSTEMD_USER_DIR/chimera-gateway.service" "$SYSTEMD_USER_DIR/chimera-client.service"
+    "$ROOT_DIR/deploy/systemd-user/chimera-datapath.service" >"$SYSTEMD_USER_DIR/chimera-datapath.service"
+  rm -f "$SYSTEMD_USER_DIR/chimera-gateway.service" "$SYSTEMD_USER_DIR/chimera-client.service"
+  chmod 0644 "$SYSTEMD_USER_DIR/chimera-node.service" "$SYSTEMD_USER_DIR/chimera-datapath.service"
 fi
 install -m 0644 "$ROOT_DIR/deploy/desktop/chimera-control-gui.desktop" "$APPLICATIONS_DIR/chimera-control-gui.desktop"
 sed -i "s|__CHIMERA_ROOT__|$ROOT_DIR|g" "$APPLICATIONS_DIR/chimera-control-gui.desktop"
@@ -465,13 +574,12 @@ chmod +x \
   "$ROOT_DIR/scripts/chimera-sh" \
   "$ROOT_DIR/scripts/chimera-update.sh" \
   "$ROOT_DIR/scripts/chimera.sh" \
-  "$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh" \
   "$ROOT_DIR/scripts/chimera-control-tray.sh" \
   "$ROOT_DIR/scripts/chimera-control-launcher.sh"
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   install -d -m 0700 "$CHIMERA_CACHE_DIR"
-  touch "$CHIMERA_CACHE_DIR/chimera_gateway.service.log" "$CHIMERA_CACHE_DIR/chimera_client.service.log"
+  touch "$CHIMERA_CACHE_DIR/chimera_node.service.log" "$CHIMERA_CACHE_DIR/chimera_datapath.service.log"
 fi
 
 if [[ -n "${CHIMERA_RELEASE_VERSION:-}" ]]; then
@@ -496,7 +604,7 @@ echo
 echo "CHIMERA desktop control installed."
 echo "Desktop entry: $APPLICATIONS_DIR/chimera-control-gui.desktop"
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
-  echo "User units: $SYSTEMD_USER_DIR/chimera-gateway.service, $SYSTEMD_USER_DIR/chimera-client.service"
+  echo "User units: $SYSTEMD_USER_DIR/chimera-node.service, $SYSTEMD_USER_DIR/chimera-datapath.service"
 else
   echo "User units: skipped (systemd --user is unavailable in this session)"
 fi

@@ -1,7 +1,15 @@
 # MESH First Launch Execution Gate
 
-Status: closed on 2026-05-21
+Status: superseded historical record
+Release evidence status: invalid_for_release
+Evidence class: historical_proxy_evidence_only
 Owner: CHIMERA-PQ mesh workline
+
+Superseded note:
+- the close report below used historical proxy/SOCKS-era path evidence;
+- it is preserved for audit history only;
+- it must not be used to claim current CHIMERA/WEAVE datapath closure, MVP
+  closure, release readiness, or production readiness.
 
 ## Objective (strict)
 

@@ -20,14 +20,14 @@ guards:
 
 `just mvp-check`, `just handoff-check`, `just cleanroom-handoff-check`,
 `just ship-readiness`, `runtime-*`, `rollback-*`, `chimera up/down`,
-`gateway run`, and desktop/control start/stop are full/runtime targets. Do not
+legacy node-wrapper run commands, and desktop/control start/stop are full/runtime targets. Do not
 use them as local safe process checks when local CHIMERA runtime/network actions
 are forbidden by `../AGENTS.md`.
 
 This repository intentionally starts small: a symmetric WEAVE node, secure
 session skeleton, carrier abstraction, policy routing, DNS binding, diagnostics
 and tests. Legacy `client` and `gateway` names remain only as transitional
-binary/config names. CHIMERA-NOVA CEF features such as DHT, DPS, ZK complaints,
+binary names or compatibility aliases, not as the product model. CHIMERA-NOVA CEF features such as DHT, DPS, ZK complaints,
 relay economy and emergency carriers are post-MVP.
 
 Current status:
@@ -63,12 +63,12 @@ cargo check --workspace
 cargo test --workspace
 cargo deny check
 cargo run -p chimera-cli -- status
-cargo run -p chimera-cli -- status --config configs/client.example.conf
-cargo run -p chimera-cli -- health --config configs/client.example.conf
-cargo run -p chimera-cli -- doctor --config configs/client.example.conf
+cargo run -p chimera-cli -- status --config configs/mesh-node.example.conf
+cargo run -p chimera-cli -- health --config configs/mesh-node.example.conf
+cargo run -p chimera-cli -- doctor --config configs/mesh-node.example.conf
 cargo run -p chimera-cli -- --lang ru status
-cargo run -p chimera-cli -- --lang ru health --config configs/client.example.conf
-cargo run -p chimera-cli -- --lang ru doctor --config configs/client.example.conf --json --out docs/doctor_latest.json
+cargo run -p chimera-cli -- --lang ru health --config configs/mesh-node.example.conf
+cargo run -p chimera-cli -- --lang ru doctor --config configs/mesh-node.example.conf --json --out docs/doctor_latest.json
 cargo run -p chimera-cli -- route explain example.org --json --out docs/route_explain_latest.json
 cargo run -p chimera-lab -- datapath-report --json --out docs/datapath_latest.json
 cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json
@@ -79,7 +79,7 @@ cargo run -p chimera-cli -- rollback clean --state-file docs/runtime_state_lates
 cargo run -p chimera-cli -- rollback recover --state-file docs/runtime_state_latest.json
 cargo run -p chimera-cli -- rollback status --state-file docs/runtime_state_latest.json --json --out docs/rollback_status_latest.json
 cargo run -p chimera-cli -- rollback recover --state-file docs/runtime_state_latest.json --json --out docs/rollback_recover_latest.json
-cargo run -p chimera-cli -- diag export --config configs/client.example.conf --age 120 --packets 1 --out docs/diag_export_latest.json
+cargo run -p chimera-cli -- diag export --config configs/mesh-node.example.conf --age 120 --packets 1 --out docs/diag_export_latest.json
 cargo run -p chimera-cli -- lab smoke
 cargo run -p chimera-cli -- lab doctor --json --out docs/lab_doctor_latest.json
 cargo run -p chimera-cli -- lab hardening-smoke
@@ -119,12 +119,11 @@ cargo run -p chimera-cli -- lab perf-smoke
 cargo run -p chimera-cli -- lab net-sim
 cargo run -p chimera-cli -- lab benchmark-report --out docs/benchmark_latest.json
 cargo run -p chimera-cli -- lab benchmark-regression-check
-cargo run -p chimera-gateway -- run --config configs/gateway.example.conf
-cargo run -p chimera-gateway -- health --config configs/gateway.example.conf
-cargo run -p chimera-gateway -- doctor --config configs/gateway.example.conf
-cargo run -p chimera-gateway -- --lang ru run --config configs/gateway.example.conf
-cargo run -p chimera-gateway -- --lang ru health --config configs/gateway.example.conf
-cargo run -p chimera-gateway -- --lang ru doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json
+# The old chimera-gateway crate-level commands are legacy compatibility checks,
+# not the normal CHIMERA/WEAVE product workflow.
+./scripts/chimera-control.sh status
+./scripts/chimera-control.sh datapath-status
+./scripts/chimera-control.sh route-status
 cargo run -p chimera-lab -- smoke
 cargo run -p chimera-lab -- doctor
 cargo run -p chimera-lab -- mvp-spec-check --json --out docs/mvp_spec_check_latest.json
@@ -216,8 +215,8 @@ cd ~/chimera-pq
 ```
 
 Installed files:
-- `~/.config/systemd/user/chimera-gateway.service`
-- `~/.config/systemd/user/chimera-client.service`
+- `~/.config/systemd/user/chimera-node.service`
+- `~/.config/systemd/user/chimera-datapath.service`
 - `~/.local/share/applications/chimera-control.desktop`
 
 Control commands:

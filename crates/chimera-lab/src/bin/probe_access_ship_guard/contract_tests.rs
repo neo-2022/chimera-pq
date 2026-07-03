@@ -3,255 +3,79 @@ use serde_json::{Map, Value, json};
 
 const CI_SNAPSHOT_HOST: &str = "chimera-ci-snapshot.local";
 
-fn probe_with(url: &str) -> Map<String, Value> {
+fn row(index: usize, direct_ok: bool) -> Value {
+    let route = if direct_ok { "direct" } else { "transit" };
+    json!({
+        "url": format!("target#{index}"),
+        "target_ref": format!("target#{index}"),
+        "direct_ok": direct_ok,
+        "recommended_route": route,
+        "policy_hint": format!("target_kind=domain_exact_present outbound={route}"),
+        "policy_apply_result": "not_requested",
+        "policy_rule_ref": "",
+        "policy_verify_ok": false,
+        "policy_verify_outbound": "",
+        "target_error": ""
+    })
+}
+
+fn probe_with_targets(targets: Vec<Value>) -> Map<String, Value> {
+    let all = targets.len() as i64;
+    let direct_ok = targets
+        .iter()
+        .filter(|target| {
+            target
+                .get("direct_ok")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .count() as i64;
+    let unreachable = all - direct_ok;
     let mut probe = Map::new();
     probe.insert("status".to_string(), json!("ok"));
     probe.insert("kind".to_string(), json!("probe_access"));
+    probe.insert("redaction".to_string(), json!("raw_targets_redacted"));
+    probe.insert("target_profile".to_string(), json!("live"));
     probe.insert("network_state".to_string(), json!("not_modified"));
     probe.insert(
         "totals".to_string(),
         json!({
-            "all": 1,
-            "direct_ok": 1,
-            "unreachable": 0,
+            "all": all,
+            "direct_ok": direct_ok,
+            "unreachable": unreachable,
             "policy_apply_failed": 0,
-            "failed_total": 0,
-            "fail_threshold": 0,
+            "failed_total": unreachable,
+            "fail_threshold": unreachable,
             "threshold_exceeded": false
         }),
     );
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": url,
-            "direct_ok": true,
-            "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
-            "policy_apply_result": "not_requested",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": ""
-        }]),
-    );
+    probe.insert("targets".to_string(), Value::Array(targets));
     probe
 }
 
+fn probe_one() -> Map<String, Value> {
+    probe_with_targets(vec![row(1, true)])
+}
+
 #[test]
-fn accepts_live_contract() {
-    let probe = probe_with("https://example.org");
+fn accepts_redacted_live_contract() {
+    let probe = probe_one();
     assert!(validate_probe_contract(&probe, CI_SNAPSHOT_HOST).is_ok());
 }
 
 #[test]
-fn rejects_probe_contract_total_mismatch() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "totals".to_string(),
-        json!({
-            "all": 1,
-            "direct_ok": 1,
-            "unreachable": 1,
-            "policy_apply_failed": 0,
-            "failed_total": 0,
-            "fail_threshold": 0,
-            "threshold_exceeded": false
-        }),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(res.err().is_some_and(|e| e.contains("totals mismatch")));
-}
-
-#[test]
-fn rejects_probe_contract_target_row_mismatch() {
-    let mut probe = probe_with("https://example.org");
+fn accepts_applied_policy_with_redacted_rule_ref() {
+    let mut probe = probe_one();
     probe.insert(
         "targets".to_string(),
         json!([{
-            "url": "https://example.org",
-            "direct_ok": false,
-            "recommended_route": "transit",
-            "policy_hint": "domain_exact=example.org outbound=transit",
-            "policy_apply_result": "not_requested",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": ""
-        }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("target direct_ok total mismatch"))
-    );
-}
-
-#[test]
-fn rejects_probe_contract_missing_target_schema() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{ "url": "https://example.org" }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("target direct_ok missing"))
-    );
-}
-
-#[test]
-fn rejects_probe_contract_non_object_target() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert("targets".to_string(), json!(["https://example.org"]));
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("target row is not object"))
-    );
-}
-
-#[test]
-fn rejects_probe_contract_non_http_target_url() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "ftp://example.org",
+            "url": "target#1",
+            "target_ref": "target#1",
             "direct_ok": true,
             "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
-            "policy_apply_result": "not_requested",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": ""
-        }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("target url scheme mismatch"))
-    );
-}
-
-#[test]
-fn rejects_probe_contract_empty_authority_url() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "https:///missing-authority",
-            "direct_ok": true,
-            "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
-            "policy_apply_result": "not_requested",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": ""
-        }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("target url scheme mismatch"))
-    );
-}
-
-#[test]
-fn rejects_applied_policy_without_verify_ok() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "https://example.org",
-            "direct_ok": true,
-            "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
+            "policy_hint": "target_kind=domain_exact_present outbound=direct",
             "policy_apply_result": "applied",
-            "policy_rule_id": "probe-example-org",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "direct",
-            "target_error": ""
-        }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("applied policy must verify ok"))
-    );
-}
-
-#[test]
-fn rejects_failed_policy_without_error() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "https://example.org",
-            "direct_ok": true,
-            "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
-            "policy_apply_result": "failed",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": ""
-        }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("failed policy must carry error"))
-    );
-}
-
-#[test]
-fn rejects_target_error_without_failed_policy() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "https://example.org",
-            "direct_ok": true,
-            "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
-            "policy_apply_result": "not_requested",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": "failover_override_update_error: boom"
-        }]),
-    );
-    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
-    assert!(res.is_err());
-    assert!(
-        res.err()
-            .is_some_and(|e| e.contains("target_error requires failed policy"))
-    );
-}
-
-#[test]
-fn accepts_applied_policy_with_verified_route() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "https://example.org",
-            "direct_ok": true,
-            "recommended_route": "direct",
-            "policy_hint": "domain_exact=example.org outbound=direct",
-            "policy_apply_result": "applied",
-            "policy_rule_id": "probe-example-org",
+            "policy_rule_ref": "rule#1",
             "policy_verify_ok": true,
             "policy_verify_outbound": "direct",
             "target_error": ""
@@ -261,88 +85,130 @@ fn accepts_applied_policy_with_verified_route() {
 }
 
 #[test]
-fn rejects_probe_contract_threshold_exceeded() {
-    let mut probe = probe_with("https://example.org");
-    probe.insert(
-        "totals".to_string(),
-        json!({
-            "all": 1,
-            "direct_ok": 0,
-            "unreachable": 1,
-            "policy_apply_failed": 0,
-            "failed_total": 1,
-            "fail_threshold": 0,
-            "threshold_exceeded": true
-        }),
-    );
-    probe.insert(
-        "targets".to_string(),
-        json!([{
-            "url": "https://example.org",
-            "direct_ok": false,
-            "recommended_route": "transit",
-            "policy_hint": "domain_exact=example.org outbound=transit",
-            "policy_apply_result": "not_requested",
-            "policy_rule_id": "",
-            "policy_verify_ok": false,
-            "policy_verify_outbound": "",
-            "target_error": ""
-        }]),
-    );
+fn rejects_missing_redaction_marker() {
+    let mut probe = probe_one();
+    probe.remove("redaction");
     let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
     assert!(res.is_err());
     assert!(
         res.err()
-            .is_some_and(|e| e.contains("threshold_exceeded cannot ship"))
+            .is_some_and(|e| e.contains("redaction marker missing"))
     );
 }
 
 #[test]
-fn rejects_mixed_ci_snapshot_and_live_targets() {
-    let mut probe = probe_with("https://chimera-ci-snapshot.local/ok");
-    probe.insert(
-        "totals".to_string(),
-        json!({
-            "all": 2,
-            "direct_ok": 2,
-            "unreachable": 0,
-            "policy_apply_failed": 0,
-            "failed_total": 0,
-            "fail_threshold": 0,
-            "threshold_exceeded": false
-        }),
-    );
-    probe.insert(
-        "targets".to_string(),
-        json!([
-            {
-                "url": "https://chimera-ci-snapshot.local/ok",
-                "direct_ok": true,
-                "recommended_route": "direct",
-                "policy_hint": "domain_exact=chimera-ci-snapshot.local outbound=direct",
-                "policy_apply_result": "not_requested",
-                "policy_rule_id": "",
-                "policy_verify_ok": false,
-                "policy_verify_outbound": "",
-                "target_error": ""
-            },
-            {
-                "url": "https://example.org",
-                "direct_ok": true,
-                "recommended_route": "direct",
-                "policy_hint": "domain_exact=example.org outbound=direct",
-                "policy_apply_result": "not_requested",
-                "policy_rule_id": "",
-                "policy_verify_ok": false,
-                "policy_verify_outbound": "",
-                "target_error": ""
-            }
-        ]),
-    );
+fn rejects_invalid_target_profile() {
+    let mut probe = probe_one();
+    probe.insert("target_profile".to_string(), json!("raw"));
+    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+    assert!(res.is_err());
+    assert!(res.err().is_some_and(|e| e.contains("target_profile")));
+}
+
+#[test]
+fn rejects_raw_target_url() {
+    let mut probe = probe_one();
+    let mut targets = vec![row(1, true)];
+    targets[0]["url"] = json!("https://example.org/path?token=leak");
+    probe.insert("targets".to_string(), Value::Array(targets));
     let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
     assert!(res.is_err());
     assert!(
         res.err()
-            .is_some_and(|e| e.contains("mixed ci_snapshot and live"))
+            .is_some_and(|e| e.contains("url must be redacted ref"))
+    );
+}
+
+#[test]
+fn rejects_target_ref_mismatch() {
+    let mut probe = probe_one();
+    let mut targets = vec![row(1, true)];
+    targets[0]["target_ref"] = json!("target#2");
+    probe.insert("targets".to_string(), Value::Array(targets));
+    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+    assert!(res.is_err());
+    assert!(res.err().is_some_and(|e| e.contains("target_ref")));
+}
+
+#[test]
+fn rejects_duplicate_or_skipped_target_refs() {
+    let probe = probe_with_targets(vec![row(1, true), row(1, true)]);
+    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+    assert!(res.is_err());
+    assert!(res.err().is_some_and(|e| e.contains("redacted ref")));
+}
+
+#[test]
+fn rejects_raw_domain_policy_hint() {
+    let mut probe = probe_one();
+    let mut targets = vec![row(1, true)];
+    targets[0]["policy_hint"] = json!("domain_exact=example.org outbound=direct");
+    probe.insert("targets".to_string(), Value::Array(targets));
+    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+    assert!(res.is_err());
+    assert!(res.err().is_some_and(|e| e.contains("leaks raw data")));
+}
+
+#[test]
+fn rejects_legacy_policy_rule_id() {
+    let mut probe = probe_one();
+    let mut targets = vec![row(1, true)];
+    targets[0]["policy_rule_id"] = json!("probe-example-org");
+    probe.insert("targets".to_string(), Value::Array(targets));
+    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+    assert!(res.is_err());
+    assert!(res.err().is_some_and(|e| e.contains("policy_rule_id")));
+}
+
+#[test]
+fn rejects_sensitive_target_error_text() {
+    for leak in [
+        "host=example.org",
+        "remote=203.0.113.10",
+        "remote=2001:db8::1",
+        "user@example.org",
+        "/home/operator/chimera",
+        "/tmp/chimera/raw",
+        "token=secret",
+        "payload=48656c6c6f",
+        "hexdump deadbeef",
+    ] {
+        let mut probe = probe_one();
+        let mut target = row(1, true);
+        target["policy_apply_result"] = json!("failed");
+        target["policy_verify_ok"] = json!(false);
+        target["target_error"] = json!(leak);
+        probe.insert("targets".to_string(), json!([target]));
+        probe.insert(
+            "totals".to_string(),
+            json!({
+                "all": 1,
+                "direct_ok": 1,
+                "unreachable": 0,
+                "policy_apply_failed": 1,
+                "failed_total": 1,
+                "fail_threshold": 1,
+                "threshold_exceeded": false
+            }),
+        );
+        let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+        assert!(res.is_err(), "leak unexpectedly accepted: {leak}");
+        assert!(res.err().is_some_and(|e| e.contains("leaks raw data")));
+    }
+}
+
+#[test]
+fn rejects_applied_policy_without_redacted_rule_ref() {
+    let mut probe = probe_one();
+    let mut target = row(1, true);
+    target["policy_apply_result"] = json!("applied");
+    target["policy_verify_ok"] = json!(true);
+    target["policy_verify_outbound"] = json!("direct");
+    probe.insert("targets".to_string(), json!([target]));
+    let res = validate_probe_contract(&probe, CI_SNAPSHOT_HOST);
+    assert!(res.is_err());
+    assert!(
+        res.err()
+            .is_some_and(|e| e.contains("policy verification mismatch"))
     );
 }

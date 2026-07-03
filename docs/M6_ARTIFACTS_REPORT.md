@@ -2,6 +2,8 @@
 
 Status: **PASS**
 
+Scope: lab/report artifact coverage only; not release/prod closure.
+
 Checks:
 - Benchmark artifact: `true`
 - MVP spec check artifact (M6): `true`

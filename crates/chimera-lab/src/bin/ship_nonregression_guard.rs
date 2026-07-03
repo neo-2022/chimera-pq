@@ -46,6 +46,15 @@ fn main() {
     if get_bool(&ship, "release_ok") != get_bool(&release, "release_ok") {
         fail("ship nonregression guard: release_ok mismatch");
     }
+    if get_bool(&ship, "github_release_ssh_runtime_slice_proven")
+        != get_bool(&release, "github_release_ssh_runtime_slice_proven")
+        || get_bool(&ship, "github_release_ssh_runtime_slice_proven")
+            != get_bool(&pack, "github_release_ssh_runtime_slice_proven")
+        || get_bool(&ship, "github_release_ssh_runtime_slice_proven")
+            != get_bool(&reality, "github_release_ssh_runtime_slice_proven")
+    {
+        fail("ship nonregression guard: GitHub SSH runtime slice proof mismatch");
+    }
 
     if get_bool(&ship, "runtime_apply_smoke_modified") {
         require_field(&rt_dns, "status", "ok");
@@ -89,79 +98,119 @@ fn main() {
             fail("ship nonregression guard: forced-stop skipped_no_tun is not releasable");
         }
     }
-    if get_bool(&ship, "runtime_real_world_probe_smoke_ok") {
-        require_field(&rt_probe, "status", "ok");
-        require_field(&rt_probe, "kind", "runtime_real_world_probe_smoke");
-        require_field(&rt_probe, "network_state", "not_modified");
-        eq_str_cross(
-            &ship,
-            "runtime_real_world_probe_mode",
-            &rt_probe,
-            "probe_mode",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_live_external_probe",
-            &rt_probe,
-            "live_external_probe",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_ssh_stand_required_for_live_probe",
-            &rt_probe,
-            "ssh_stand_required_for_live_probe",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_datapath_probe_attempted",
-            &rt_probe,
-            "datapath_probe_attempted",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_datapath_probe_ok",
-            &rt_probe,
-            "datapath_probe_ok",
-        );
-        eq_str_cross(
-            &ship,
-            "runtime_real_world_datapath_probe_error",
-            &rt_probe,
-            "datapath_probe_error",
-        );
-        eq_i64_cross(
-            &ship,
-            "runtime_real_world_datapath_targets_total",
-            &rt_probe,
-            "datapath_targets_total",
-        );
-        eq_i64_cross(
-            &ship,
-            "runtime_real_world_datapath_targets_ok",
-            &rt_probe,
-            "datapath_targets_ok",
-        );
-        eq_i64_cross(
-            &ship,
-            "runtime_real_world_datapath_targets_failed",
-            &rt_probe,
-            "datapath_targets_failed",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_direct_probe_ok",
-            &rt_probe,
-            "direct_probe_ok",
-        );
-        eq_bool_cross(
-            &ship,
-            "runtime_real_world_skipped_no_curl",
-            &rt_probe,
-            "skipped_no_curl",
-        );
-        validate_datapath_logic(&ship)
-            .unwrap_or_else(|msg| fail(&format!("ship nonregression guard: {msg}")));
-    }
+    require_field(&rt_probe, "status", "ok");
+    require_field(&rt_probe, "kind", "runtime_real_world_probe_smoke");
+    require_field(&rt_probe, "network_state", "not_modified");
+    eq_str_cross(
+        &ship,
+        "runtime_real_world_probe_mode",
+        &rt_probe,
+        "probe_mode",
+    );
+    eq_str_cross(
+        &ship,
+        "runtime_real_world_evidence_kind",
+        &rt_probe,
+        "evidence_kind",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_chimera_datapath_evidence",
+        &rt_probe,
+        "chimera_datapath_evidence",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_live_external_probe",
+        &rt_probe,
+        "live_external_probe",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_ssh_stand_required_for_live_probe",
+        &rt_probe,
+        "ssh_stand_required_for_live_probe",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_datapath_probe_attempted",
+        &rt_probe,
+        "datapath_probe_attempted",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_datapath_probe_ok",
+        &rt_probe,
+        "datapath_probe_ok",
+    );
+    eq_str_cross(
+        &ship,
+        "runtime_real_world_datapath_probe_error",
+        &rt_probe,
+        "datapath_probe_error",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_datapath_targets_total",
+        &rt_probe,
+        "datapath_targets_total",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_datapath_targets_ok",
+        &rt_probe,
+        "datapath_targets_ok",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_datapath_targets_failed",
+        &rt_probe,
+        "datapath_targets_failed",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_direct_probe_ok",
+        &rt_probe,
+        "direct_probe_ok",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_skipped_no_curl",
+        &rt_probe,
+        "skipped_no_curl",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_external_reachability_probe_attempted",
+        &rt_probe,
+        "external_reachability_probe_attempted",
+    );
+    eq_bool_cross(
+        &ship,
+        "runtime_real_world_external_reachability_probe_ok",
+        &rt_probe,
+        "external_reachability_probe_ok",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_external_reachability_targets_total",
+        &rt_probe,
+        "external_reachability_targets_total",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_external_reachability_targets_ok",
+        &rt_probe,
+        "external_reachability_targets_ok",
+    );
+    eq_i64_cross(
+        &ship,
+        "runtime_real_world_external_reachability_targets_failed",
+        &rt_probe,
+        "external_reachability_targets_failed",
+    );
+    validate_datapath_logic(&ship)
+        .unwrap_or_else(|msg| fail(&format!("ship nonregression guard: {msg}")));
 
     require_step_true(&ship, "report_pack_json");
     require_step_true(&ship, "report_pack_md");
@@ -266,6 +315,9 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
         && !ship.contains_key("runtime_real_world_datapath_targets_total")
         && !ship.contains_key("runtime_real_world_datapath_targets_ok")
         && !ship.contains_key("runtime_real_world_datapath_targets_failed");
+    if legacy_mode {
+        return Err("legacy proxy runtime proof is not releasable".to_string());
+    }
 
     let attempted = if legacy_mode {
         get_bool(ship, "runtime_real_world_proxy_probe_attempted")
@@ -302,6 +354,12 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
     } else {
         get_i64(ship, "runtime_real_world_datapath_targets_failed")
     };
+    let evidence_kind = get_str(ship, "runtime_real_world_evidence_kind");
+    let chimera_evidence = get_bool(ship, "runtime_real_world_chimera_datapath_evidence");
+    let datapath_release_ok = ship
+        .get("runtime_real_world_datapath_release_ok")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| "invalid runtime_real_world_datapath_release_ok".to_string())?;
     if legacy_mode {
         if !["none", "proxy_listener_not_found", "unknown"].contains(&error) {
             return Err("datapath error value is invalid".to_string());
@@ -310,6 +368,7 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "chimera_datapath_evidence_missing",
         "ci_snapshot",
         "unknown",
     ]
@@ -319,6 +378,36 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
     }
     if ok + failed != total {
         return Err("datapath totals mismatch".to_string());
+    }
+    if !legacy_mode
+        && ![
+            "external_reachability_without_system_proxy",
+            "ci_snapshot_contract",
+            "chimera_transparent_datapath",
+        ]
+        .contains(&evidence_kind)
+    {
+        return Err("evidence kind value is invalid".to_string());
+    }
+    if ok_flag && !legacy_mode && !chimera_evidence {
+        return Err("datapath ok without CHIMERA evidence".to_string());
+    }
+    let external_attempted = get_bool(
+        ship,
+        "runtime_real_world_external_reachability_probe_attempted",
+    );
+    let external_ok_flag = get_bool(ship, "runtime_real_world_external_reachability_probe_ok");
+    let external_total = get_i64(
+        ship,
+        "runtime_real_world_external_reachability_targets_total",
+    );
+    let external_ok = get_i64(ship, "runtime_real_world_external_reachability_targets_ok");
+    let external_failed = get_i64(
+        ship,
+        "runtime_real_world_external_reachability_targets_failed",
+    );
+    if !legacy_mode && external_ok + external_failed != external_total {
+        return Err("external reachability totals mismatch".to_string());
     }
     let probe_mode = get_str(ship, "runtime_real_world_probe_mode");
     if !["live", "ci_snapshot"].contains(&probe_mode) {
@@ -331,15 +420,33 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
     if get_bool(ship, "runtime_real_world_ssh_stand_required_for_live_probe") != ci_snapshot {
         return Err("ssh stand required flag mismatch".to_string());
     }
+    let expected_datapath_release_ok = !ci_snapshot
+        && evidence_kind == "chimera_transparent_datapath"
+        && chimera_evidence
+        && attempted
+        && ok_flag
+        && !skipped_no_curl
+        && total > 0
+        && ok == total
+        && failed == 0;
+    if datapath_release_ok != expected_datapath_release_ok {
+        return Err("datapath release flag does not match CHIMERA evidence".to_string());
+    }
+    if get_str(ship, "status") == "ok" && !datapath_release_ok {
+        return Err("status ok requires CHIMERA datapath release evidence".to_string());
+    }
     if ci_snapshot {
-        if attempted || ok_flag || skipped_no_curl {
+        if attempted || ok_flag || skipped_no_curl || external_attempted || external_ok_flag {
             return Err("ci_snapshot cannot report live probe attempt".to_string());
         }
-        if total != 0 || ok != 0 || failed != 0 {
-            return Err("ci_snapshot must have zero datapath totals".to_string());
+        if total != 0 || ok != 0 || failed != 0 || external_total != 0 {
+            return Err("ci_snapshot must have zero probe totals".to_string());
         }
         if error != "ci_snapshot" {
             return Err("ci_snapshot requires ci_snapshot error marker".to_string());
+        }
+        if !legacy_mode && (evidence_kind != "ci_snapshot_contract" || chimera_evidence) {
+            return Err("ci_snapshot evidence fields mismatch".to_string());
         }
         if get_bool(ship, "runtime_real_world_direct_probe_ok") {
             return Err("ci_snapshot cannot report direct probe success".to_string());
@@ -349,8 +456,30 @@ fn validate_datapath_logic(ship: &serde_json::Map<String, Value>) -> Result<(), 
     if skipped_no_curl && attempted {
         return Err("no curl but datapath attempted".to_string());
     }
+    if !legacy_mode && evidence_kind == "external_reachability_without_system_proxy" {
+        if chimera_evidence || attempted || ok_flag {
+            return Err("external reachability must not masquerade as datapath".to_string());
+        }
+        if !skipped_no_curl && !external_attempted {
+            return Err(
+                "external reachability must be attempted when curl is available".to_string(),
+            );
+        }
+        if external_attempted && external_total <= 0 {
+            return Err("external reachability attempted with empty target totals".to_string());
+        }
+        if external_ok_flag && external_failed != 0 {
+            return Err("external reachability ok with failed targets".to_string());
+        }
+        if !skipped_no_curl && error != "chimera_datapath_evidence_missing" {
+            return Err(
+                "external reachability requires missing datapath evidence marker".to_string(),
+            );
+        }
+        return Ok(());
+    }
     if !skipped_no_curl && !attempted {
-        return Err("datapath must be attempted when curl is available".to_string());
+        return Err("datapath must be attempted when CHIMERA evidence is available".to_string());
     }
     if attempted && total <= 0 {
         return Err("datapath attempted with empty target totals".to_string());

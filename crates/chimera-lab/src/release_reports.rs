@@ -2,7 +2,8 @@ use crate::{Language, MvpSpecCheckResult, ReleaseGateChecklist, ReleaseReadiness
 
 pub(crate) fn render_release_readiness_report_markdown(
     lang: Language,
-    release_ok: bool,
+    lab_release_ok: bool,
+    github_release_ssh_runtime_slice_proven: bool,
     real_world_datapath_closed: bool,
     result: MvpSpecCheckResult,
     checklist: ReleaseGateChecklist,
@@ -15,9 +16,9 @@ Status: **{}**\n\n\
 Simple meaning: if status is PASS, MVP is ready for wider lab validation only (not a real-world datapath closure claim).\n\n\
 Release gate (spec section 11):\n\
 - Clean clone builds: `{}`\n\
-- Client and gateway run on Linux: `{}`\n\
+- WEAVE mesh node runs on Linux: `{}`\n\
 - Encrypted tunnel carries traffic: `{}`\n\
-- Policy routing works (direct/gateway/block): `{}`\n\
+- Policy routing works (direct/peer-transit/block): `{}`\n\
 - DNS binding works: `{}`\n\
 - Route explain works: `{}`\n\
 - Shutdown restores network state: `{}`\n\
@@ -49,12 +50,21 @@ Artifacts:\n\
 Truth boundary:\n\
 - Lab/proof/report contour only: `true`\n\
 - Real OS-level datapath closure (strict M4/M5): `{}`\n\n\
+Separately proven remote slice:\n\
+- GitHub release -> approved SSH stand -> runtime lifecycle slice: `{}`\n\
+- Boundary: install/update without cargo, lifecycle, rebind/reconnect, rollback and redacted diagnostics only.\n\n\
 Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
-            if release_ok { "PASS" } else { "FAIL" },
+            if lab_release_ok && real_world_datapath_closed {
+                "PASS"
+            } else if lab_release_ok {
+                "FAIL (LAB ONLY)"
+            } else {
+                "FAIL"
+            },
             checklist.clean_clone_builds,
-            checklist.client_gateway_run_linux,
+            checklist.mesh_node_runs_linux,
             checklist.encrypted_tunnel_carries_traffic,
-            checklist.policy_routing_direct_gateway_block,
+            checklist.policy_routing_direct_peer_transit_block,
             checklist.dns_binding_works,
             checklist.route_explain_works,
             checklist.shutdown_restores_network_state,
@@ -81,7 +91,8 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
             artifacts.cef_phase1_smoke_ok,
             artifacts.mesh_route_explain_ok,
             artifacts.mesh_auto_adaptive_ok,
-            real_world_datapath_closed
+            real_world_datapath_closed,
+            github_release_ssh_runtime_slice_proven
         ),
         Language::Ru => format!(
             "# Отчет Готовности Релиза\n\n\
@@ -89,9 +100,9 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
 Просто: если статус PASS, MVP готов только к расширенным лабораторным тестам (это не означает закрытие real-world datapath).\n\n\
 Release gate (раздел 11 спеки):\n\
 - Чистая копия репозитория собирается: `{}`\n\
-- Клиент и gateway запускаются на Linux: `{}`\n\
+- WEAVE mesh-node запускается на Linux: `{}`\n\
 - Зашифрованный tunnel передает трафик: `{}`\n\
-- Policy routing работает (direct/gateway/block): `{}`\n\
+- Policy routing работает (direct/peer-transit/block): `{}`\n\
 - DNS binding работает: `{}`\n\
 - Route explain работает: `{}`\n\
 - Shutdown восстанавливает состояние сети: `{}`\n\
@@ -123,12 +134,21 @@ Release gate (раздел 11 спеки):\n\
 Граница истины:\n\
 - Контур lab/proof/report: `true`\n\
 - Real OS-level datapath closure (strict M4/M5): `{}`\n\n\
+Отдельно уже доказано:\n\
+- Узкий GitHub release -> разрешенный SSH-стенд -> runtime lifecycle slice: `{}`\n\
+- Граница этого доказательства: install/update без cargo, lifecycle, rebind/reconnect, rollback и redacted diagnostics.\n\n\
 Безопасность сети: в этом отчете мы не меняем маршруты/DNS/firewall/proxy ОС.\n",
-            if release_ok { "PASS" } else { "FAIL" },
+            if lab_release_ok && real_world_datapath_closed {
+                "PASS"
+            } else if lab_release_ok {
+                "FAIL (ТОЛЬКО ЛАБОРАТОРНО)"
+            } else {
+                "FAIL"
+            },
             checklist.clean_clone_builds,
-            checklist.client_gateway_run_linux,
+            checklist.mesh_node_runs_linux,
             checklist.encrypted_tunnel_carries_traffic,
-            checklist.policy_routing_direct_gateway_block,
+            checklist.policy_routing_direct_peer_transit_block,
             checklist.dns_binding_works,
             checklist.route_explain_works,
             checklist.shutdown_restores_network_state,
@@ -155,22 +175,30 @@ Release gate (раздел 11 спеки):\n\
             artifacts.cef_phase1_smoke_ok,
             artifacts.mesh_route_explain_ok,
             artifacts.mesh_auto_adaptive_ok,
-            real_world_datapath_closed
+            real_world_datapath_closed,
+            github_release_ssh_runtime_slice_proven
         ),
     }
 }
 
 pub(crate) fn render_release_readiness_report_json(
-    release_ok: bool,
+    lab_release_ok: bool,
+    github_release_ssh_runtime_slice_proven: bool,
     real_world_datapath_closed: bool,
     result: MvpSpecCheckResult,
     checklist: ReleaseGateChecklist,
     artifacts: ReleaseReadinessArtifacts,
 ) -> String {
     format!(
-        "{{\"status\":\"{}\",\"kind\":\"release_readiness_report\",\"message_en\":\"Release readiness check finished.\",\"message_ru\":\"Проверка готовности релиза завершена.\",\"release_ok\":{},\"truth_boundary\":{{\"lab_scope_only\":true,\"real_world_datapath_closed\":{}}},\"milestones\":{{\"m0_workspace\":{},\"m1_local_tunnel\":{},\"m2_crypto_session\":{},\"m3_carrier_validation\":{},\"m4_routing_determinism\":{},\"m5_doctor_and_config\":{},\"m6_hardening\":{}}},\"release_gate\":{{\"clean_clone_builds\":{},\"client_gateway_run_linux\":{},\"encrypted_tunnel_carries_traffic\":{},\"policy_routing_direct_gateway_block\":{},\"dns_binding_works\":{},\"route_explain_works\":{},\"shutdown_restores_network_state\":{},\"security_tests_pass\":{},\"parser_fuzz_smoke_passes\":{},\"no_raw_secrets_in_logs\":{},\"benchmark_report_exists\":{},\"operations_guide_exists\":{},\"runtime_apply_dns_verified\":{},\"runtime_apply_route_verified\":{},\"runtime_route_policy_validation_verified\":{},\"runtime_tun_name_validation_verified\":{},\"runtime_forced_stop_rollback_verified\":{}}},\"artifacts\":{{\"m5_report\":{},\"m6_report\":{},\"benchmark\":{},\"cef_phase1_smoke\":{},\"mesh_route_explain\":{},\"mesh_auto_adaptive_trace\":{}}},\"network_state\":\"not_modified\"}}",
-        if release_ok { "ok" } else { "fail" },
-        release_ok,
+        "{{\"status\":\"{}\",\"kind\":\"release_readiness_report\",\"message_en\":\"Release readiness check finished.\",\"message_ru\":\"Проверка готовности релиза завершена.\",\"release_ok\":{},\"lab_release_ok\":{},\"github_release_ssh_runtime_slice_proven\":{},\"truth_boundary\":{{\"lab_scope_only\":true,\"real_world_datapath_closed\":{}}},\"milestones\":{{\"m0_workspace\":{},\"m1_local_tunnel\":{},\"m2_crypto_session\":{},\"m3_carrier_validation\":{},\"m4_routing_determinism\":{},\"m5_doctor_and_config\":{},\"m6_hardening\":{}}},\"release_gate\":{{\"clean_clone_builds\":{},\"mesh_node_runs_linux\":{},\"encrypted_tunnel_carries_traffic\":{},\"policy_routing_direct_peer_transit_block\":{},\"dns_binding_works\":{},\"route_explain_works\":{},\"shutdown_restores_network_state\":{},\"security_tests_pass\":{},\"parser_fuzz_smoke_passes\":{},\"no_raw_secrets_in_logs\":{},\"benchmark_report_exists\":{},\"operations_guide_exists\":{},\"runtime_apply_dns_verified\":{},\"runtime_apply_route_verified\":{},\"runtime_route_policy_validation_verified\":{},\"runtime_tun_name_validation_verified\":{},\"runtime_forced_stop_rollback_verified\":{}}},\"artifacts\":{{\"m5_report\":{},\"m6_report\":{},\"benchmark\":{},\"cef_phase1_smoke\":{},\"mesh_route_explain\":{},\"mesh_auto_adaptive_trace\":{}}},\"network_state\":\"not_modified\"}}",
+        if lab_release_ok && real_world_datapath_closed {
+            "ok"
+        } else {
+            "fail"
+        },
+        lab_release_ok && real_world_datapath_closed,
+        lab_release_ok,
+        github_release_ssh_runtime_slice_proven,
         real_world_datapath_closed,
         result.m0_workspace,
         result.m1_local_tunnel,
@@ -180,9 +208,9 @@ pub(crate) fn render_release_readiness_report_json(
         result.m5_doctor_and_config,
         result.m6_hardening,
         checklist.clean_clone_builds,
-        checklist.client_gateway_run_linux,
+        checklist.mesh_node_runs_linux,
         checklist.encrypted_tunnel_carries_traffic,
-        checklist.policy_routing_direct_gateway_block,
+        checklist.policy_routing_direct_peer_transit_block,
         checklist.dns_binding_works,
         checklist.route_explain_works,
         checklist.shutdown_restores_network_state,

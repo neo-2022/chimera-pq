@@ -1,14 +1,14 @@
 # Release Readiness Report
 
-Status: **PASS**
+Status: **FAIL (LAB ONLY)**
 
 Simple meaning: if status is PASS, MVP is ready for wider lab validation only (not a real-world datapath closure claim).
 
 Release gate (spec section 11):
 - Clean clone builds: `true`
-- Client and gateway run on Linux: `true`
+- WEAVE mesh node runs on Linux: `true`
 - Encrypted tunnel carries traffic: `true`
-- Policy routing works (direct/gateway/block): `true`
+- Policy routing works (direct/peer-transit/block): `true`
 - DNS binding works: `true`
 - Route explain works: `true`
 - Shutdown restores network state: `true`
@@ -43,5 +43,9 @@ Artifacts:
 Truth boundary:
 - Lab/proof/report contour only: `true`
 - Real OS-level datapath closure (strict M4/M5): `false`
+
+Separately proven remote slice:
+- GitHub release -> approved SSH stand -> runtime lifecycle slice: `false`
+- Boundary: install/update without cargo, lifecycle, rebind/reconnect, rollback and redacted diagnostics only.
 
 Network safety: no OS route/DNS/firewall/proxy changes in this report path.

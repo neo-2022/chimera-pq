@@ -4,6 +4,8 @@ set -euo pipefail
 VERSION="0.0.0-dev"
 ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz"
 CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz.sha256"
+GITVERS_BOOTSTRAP_URLS_DEFAULT="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_DEFAULT:-https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh}"
+GITVERS_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_gitvers_bootstrap_urls.list}"
 
 resolve_self() {
   local src="${BASH_SOURCE[0]}"
@@ -39,6 +41,131 @@ download_url_to_file() {
   fi
   echo "error: missing downloader: curl or wget" >&2
   return 1
+}
+
+trim_ascii() {
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+split_bootstrap_candidates() {
+  local raw="${1:-}"
+  raw="${raw//$'\r'/ }"
+  raw="${raw//$'\n'/ }"
+  raw="${raw//,/ }"
+  local candidate
+  for candidate in $raw; do
+    candidate="$(trim_ascii "$candidate")"
+    [[ -n "$candidate" ]] || continue
+    printf '%s\n' "$candidate"
+  done
+}
+
+validate_bootstrap_url() {
+  local url="${1:-}"
+  if [[ -z "$url" || ( "$url" != http://* && "$url" != https://* ) ]]; then
+    return 1
+  fi
+  case "$url" in
+    *\"*|*"'"*|*\`*|*\$*|*\\*|*\?*|*"#"*|*@*|*$'\r'*|*$'\n'*|*$'\t'*)
+      return 1
+      ;;
+  esac
+  [[ "$url" =~ [[:space:]] ]] && return 1
+  return 0
+}
+
+normalize_bootstrap_url() {
+  local candidate="${1:-}"
+  candidate="$(trim_ascii "$candidate")"
+  candidate="${candidate%/}"
+  candidate="$(normalize_gitverse_bootstrap_candidate "$candidate")"
+  case "$candidate" in
+    */chimera.sh)
+      ;;
+    */metadata.json)
+      candidate="${candidate%/metadata.json}/chimera.sh"
+      ;;
+    */chimera-pq-release.tar.gz)
+      candidate="${candidate%/chimera-pq-release.tar.gz}/chimera.sh"
+      ;;
+    */chimera-pq-release.tar.gz.sha256)
+      candidate="${candidate%/chimera-pq-release.tar.gz.sha256}/chimera.sh"
+      ;;
+    *)
+      candidate="${candidate}/chimera.sh"
+      ;;
+  esac
+  validate_bootstrap_url "$candidate" || return 1
+  printf '%s\n' "$candidate"
+}
+
+normalize_gitverse_bootstrap_candidate() {
+  local candidate="${1:-}" scheme path path_no_query trimmed owner repo ref remainder
+  local -a parts=()
+  case "$candidate" in
+    http://gitverse.ru/*|https://gitverse.ru/*)
+      ;;
+    *)
+      printf '%s\n' "$candidate"
+      return 0
+      ;;
+  esac
+
+  scheme="${candidate%%://*}"
+  path="${candidate#${scheme}://gitverse.ru}"
+  path_no_query="${path%%\?*}"
+  path_no_query="${path_no_query%/}"
+
+  case "$path_no_query" in
+    /api/repos/*/raw/branch/*)
+      printf '%s://gitverse.ru%s\n' "$scheme" "$path_no_query"
+      return 0
+      ;;
+  esac
+
+  trimmed="${path_no_query#/}"
+  IFS='/' read -r -a parts <<<"$trimmed"
+  if [[ "${#parts[@]}" -eq 2 ]]; then
+    owner="${parts[0]}"
+    repo="${parts[1]}"
+    printf '%s://gitverse.ru/api/repos/%s/%s/raw/branch/main\n' "$scheme" "$owner" "$repo"
+    return 0
+  fi
+  if [[ "${#parts[@]}" -ge 4 && "${parts[2]}" == "content" ]]; then
+    owner="${parts[0]}"
+    repo="${parts[1]}"
+    ref="${parts[3]}"
+    remainder="${path_no_query#/${owner}/${repo}/content/${ref}}"
+    if [[ -z "$remainder" ]]; then
+      printf '%s://gitverse.ru/api/repos/%s/%s/raw/branch/%s\n' "$scheme" "$owner" "$repo" "$ref"
+    else
+      printf '%s://gitverse.ru/api/repos/%s/%s/raw/branch/%s%s\n' "$scheme" "$owner" "$repo" "$ref" "$remainder"
+    fi
+    return 0
+  fi
+
+  printf '%s\n' "$candidate"
+}
+
+load_gitvers_bootstrap_urls() {
+  {
+    if [[ -n "${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URL:-}" ]]; then
+      split_bootstrap_candidates "$CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URL"
+    fi
+    if [[ -n "${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS:-}" ]]; then
+      split_bootstrap_candidates "$CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS"
+    fi
+    if [[ -f "$GITVERS_BOOTSTRAP_URLS_FILE" ]]; then
+      while IFS= read -r line; do
+        line="${line%%#*}"
+        split_bootstrap_candidates "$line"
+      done < "$GITVERS_BOOTSTRAP_URLS_FILE"
+    fi
+    split_bootstrap_candidates "$GITVERS_BOOTSTRAP_URLS_DEFAULT"
+  } | awk 'NF && !seen[$0]++'
 }
 
 sha256_file() {
@@ -160,9 +287,22 @@ install_release_archive() {
   echo "chimera_install=ok version=$VERSION home=$chimera_home"
 }
 
-bootstrap_install_from_github() {
-  local archive_url="${CHIMERA_RELEASE_ARCHIVE_URL:-$ARCHIVE_URL_DEFAULT}"
-  local checksum_url="${CHIMERA_RELEASE_CHECKSUM_URL:-$CHECKSUM_URL_DEFAULT}"
+bootstrap_metadata_from_script() {
+  local script_file="${1:?script_file_required}"
+  local release_version archive_url checksum_url
+  release_version="$(grep -m1 '^VERSION="' "$script_file" | cut -d'"' -f2 | tr -d '[:space:]')"
+  archive_url="$(grep -m1 '^ARCHIVE_URL_DEFAULT="' "$script_file" | cut -d'"' -f2 | tr -d '[:space:]')"
+  checksum_url="$(grep -m1 '^CHECKSUM_URL_DEFAULT="' "$script_file" | cut -d'"' -f2 | tr -d '[:space:]')"
+  [[ -n "$release_version" && -n "$archive_url" && -n "$checksum_url" ]] || return 1
+  validate_bootstrap_url "$archive_url" || return 1
+  validate_bootstrap_url "$checksum_url" || return 1
+  printf '%s\n%s\n%s\n' "$release_version" "$archive_url" "$checksum_url"
+}
+
+bootstrap_install_from_archive_urls() {
+  local source_name="${1:?source_name_required}"
+  local archive_url="${2:?archive_url_required}"
+  local checksum_url="${3:?checksum_url_required}"
   local tmp_dir archive checksum
   local cleanup_tmp_dir
 
@@ -177,11 +317,102 @@ bootstrap_install_from_github() {
   checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
   trap "rm -rf -- ${cleanup_tmp_dir}" RETURN
 
-  echo "chimera_bootstrap=download archive=$archive_url"
-  download_url_to_file "$archive_url" "$archive"
-  download_url_to_file "$checksum_url" "$checksum"
-  verify_archive_checksum "$archive" "$checksum"
-  install_release_archive "$archive" "$checksum"
+  echo "chimera_bootstrap=download source=$source_name archive=$archive_url"
+  if ! download_url_to_file "$archive_url" "$archive"; then
+    echo "error: release archive download unavailable from $source_name" >&2
+    return 2
+  fi
+  if ! download_url_to_file "$checksum_url" "$checksum"; then
+    echo "error: release checksum download unavailable from $source_name" >&2
+    return 2
+  fi
+  verify_archive_checksum "$archive" "$checksum" || return 3
+  install_release_archive "$archive" "$checksum" || return 3
+}
+
+bootstrap_install_from_bootstrap_source() {
+  local source_name="${1:?source_name_required}"
+  local bootstrap_url="${2:?bootstrap_url_required}"
+  local normalized_bootstrap_url tmp_dir bootstrap_file cleanup_tmp_dir metadata=()
+  local remote_version archive_url checksum_url
+
+  normalized_bootstrap_url="$(normalize_bootstrap_url "$bootstrap_url")" || {
+    echo "error: invalid bootstrap source url for $source_name" >&2
+    return 3
+  }
+
+  tmp_dir="$(mktemp -d)"
+  cleanup_tmp_dir="$(printf '%q' "$tmp_dir")"
+  bootstrap_file="$tmp_dir/chimera.sh"
+  trap "rm -rf -- ${cleanup_tmp_dir}" RETURN
+
+  echo "chimera_bootstrap=metadata source=$source_name bootstrap=$normalized_bootstrap_url"
+  if ! download_url_to_file "$normalized_bootstrap_url" "$bootstrap_file"; then
+    echo "error: bootstrap metadata download unavailable from $source_name" >&2
+    return 2
+  fi
+  if ! mapfile -t metadata < <(bootstrap_metadata_from_script "$bootstrap_file"); then
+    echo "error: invalid bootstrap metadata from $source_name" >&2
+    return 3
+  fi
+  remote_version="${metadata[0]:-}"
+  archive_url="${metadata[1]:-}"
+  checksum_url="${metadata[2]:-}"
+  [[ -n "$remote_version" && -n "$archive_url" && -n "$checksum_url" ]] || {
+    echo "error: incomplete bootstrap metadata from $source_name" >&2
+    return 3
+  }
+  bootstrap_install_from_archive_urls "$source_name" "$archive_url" "$checksum_url"
+}
+
+bootstrap_install_from_configured_sources() {
+  local archive_url="${CHIMERA_RELEASE_ARCHIVE_URL:-$ARCHIVE_URL_DEFAULT}"
+  local checksum_url="${CHIMERA_RELEASE_CHECKSUM_URL:-$CHECKSUM_URL_DEFAULT}"
+  local explicit_archive_override="${CHIMERA_RELEASE_ARCHIVE_URL:-}"
+  local explicit_checksum_override="${CHIMERA_RELEASE_CHECKSUM_URL:-}"
+  local gitvers_bootstrap_url normalized_gitvers_url rc
+
+  if [[ -n "$explicit_archive_override" || -n "$explicit_checksum_override" ]]; then
+    bootstrap_install_from_archive_urls "explicit" "$archive_url" "$checksum_url"
+    return $?
+  fi
+
+  set +e
+  bootstrap_install_from_archive_urls "github" "$archive_url" "$checksum_url"
+  rc=$?
+  set -e
+  case "$rc" in
+    0)
+      return 0
+      ;;
+    2)
+      ;;
+    *)
+      return "$rc"
+      ;;
+  esac
+
+  while IFS= read -r gitvers_bootstrap_url; do
+    normalized_gitvers_url="$(normalize_bootstrap_url "$gitvers_bootstrap_url" || true)"
+    [[ -n "$normalized_gitvers_url" ]] || continue
+    set +e
+    bootstrap_install_from_bootstrap_source "gitvers" "$normalized_gitvers_url"
+    rc=$?
+    set -e
+    case "$rc" in
+      0)
+        return 0
+        ;;
+      2)
+        ;;
+      *)
+        return "$rc"
+        ;;
+    esac
+  done < <(load_gitvers_bootstrap_urls)
+
+  echo "error: release sources unavailable (github and gitvers)" >&2
+  return 2
 }
 
 SCRIPT_DIR="$(resolve_self)"
@@ -189,7 +420,7 @@ LOCAL_SH="$SCRIPT_DIR/chimera-sh"
 
 case "${1:-}" in
   -install|install)
-    bootstrap_install_from_github
+    bootstrap_install_from_configured_sources
     ;;
   "")
     if [[ -x "$LOCAL_SH" ]]; then
@@ -202,7 +433,7 @@ case "${1:-}" in
     if [[ -x "$LOCAL_SH" ]]; then
       exec "$LOCAL_SH" "$@"
     fi
-    echo "error: CHIMERA is not installed. Run GitHub one-command install first." >&2
+    echo "error: CHIMERA is not installed. Run the GitHub one-command install or a configured Gitvers bootstrap mirror first." >&2
     echo "usage: bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install'" >&2
     exit 2
     ;;

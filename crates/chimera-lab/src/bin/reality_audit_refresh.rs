@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+#[path = "../release_runtime_slice.rs"]
+mod release_runtime_slice;
+
 use serde_json::Value;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +33,8 @@ fn main() {
     let runtime_probe_live_external_probe = probe_bool(&probe, "live_external_probe");
     let runtime_probe_ssh_stand_required_for_live_probe =
         probe_bool(&probe, "ssh_stand_required_for_live_probe");
+    let runtime_probe_chimera_datapath_evidence = probe_bool(&probe, "chimera_datapath_evidence");
+    let runtime_probe_evidence_kind = probe_str(&probe, "evidence_kind");
     let runtime_probe_direct_ok = probe_bool(&probe, "direct_probe_ok");
     let runtime_probe_datapath_ok = probe_bool(&probe, "datapath_probe_ok");
     let runtime_probe_datapath_attempted = probe_bool(&probe, "datapath_probe_attempted");
@@ -59,8 +64,12 @@ fn main() {
         .as_ref()
         .and_then(|r| r.get("down_state_clean").and_then(Value::as_bool))
         .unwrap_or(false);
+    let github_release_ssh_runtime_slice_proven =
+        release_runtime_slice::detect_github_release_ssh_runtime_slice_proven();
 
     let runtime_probe_path_ok = runtime_probe_mode == "live"
+        && runtime_probe_chimera_datapath_evidence
+        && runtime_probe_evidence_kind == "chimera_transparent_datapath"
         && runtime_probe_live_external_probe
         && !runtime_probe_ssh_stand_required_for_live_probe
         && runtime_probe_direct_ok
@@ -82,6 +91,7 @@ fn main() {
       "message_en":"Reality audit snapshot refreshed.",
       "message_ru":"Снимок reality audit обновлен.",
       "real_world_datapath_closed":closed,
+      "github_release_ssh_runtime_slice_proven":github_release_ssh_runtime_slice_proven,
       "source_markdown":src_md,
       "source_status":source_status,
       "md_claim_closed":md_claim_closed,
@@ -90,6 +100,8 @@ fn main() {
       "runtime_probe_mode":runtime_probe_mode,
       "runtime_probe_live_external_probe":runtime_probe_live_external_probe,
       "runtime_probe_ssh_stand_required_for_live_probe":runtime_probe_ssh_stand_required_for_live_probe,
+      "runtime_probe_chimera_datapath_evidence":runtime_probe_chimera_datapath_evidence,
+      "runtime_probe_evidence_kind":runtime_probe_evidence_kind,
       "runtime_probe_direct_ok":runtime_probe_direct_ok,
       "runtime_probe_datapath_ok":runtime_probe_datapath_ok,
       "runtime_probe_datapath_attempted":runtime_probe_datapath_attempted,

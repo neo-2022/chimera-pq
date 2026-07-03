@@ -4,25 +4,43 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 STATE_FILE="${STATE_FILE:-$ROOT_DIR/docs/runtime_state_latest.json}"
-GATEWAY_LOG="${GATEWAY_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_gateway.service.log}"
-CLIENT_LOG="${CLIENT_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_client.service.log}"
+INSTALL_LOCAL_BIN_FILE="${INSTALL_LOCAL_BIN_FILE:-$ROOT_DIR/.chimera_install_local_bin}"
+SYSTEMD_USER_DIR="${SYSTEMD_USER_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user}"
+APPLICATIONS_DIR="${APPLICATIONS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/applications}"
+CHIMERA_CONFIG_DIR="${CHIMERA_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera}"
+CHIMERA_CACHE_DIR="${CHIMERA_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera}"
+DEFAULT_LOCAL_BIN_DIR="${HOME}/.local/bin"
+if [[ -f "$INSTALL_LOCAL_BIN_FILE" ]]; then
+  stored_local_bin_dir="$(tr -d '\r\n' <"$INSTALL_LOCAL_BIN_FILE" 2>/dev/null || true)"
+  if [[ -n "${stored_local_bin_dir:-}" ]]; then
+    DEFAULT_LOCAL_BIN_DIR="$stored_local_bin_dir"
+  fi
+fi
+LOCAL_BIN_DIR="${LOCAL_BIN_DIR:-${CHIMERA_LOCAL_BIN:-$DEFAULT_LOCAL_BIN_DIR}}"
+NODE_SERVICE_UNIT="${CHIMERA_NODE_SERVICE_UNIT:-chimera-node.service}"
+DATAPATH_SERVICE_UNIT="${CHIMERA_DATAPATH_SERVICE_UNIT:-chimera-datapath.service}"
+LEGACY_NODE_COMPAT_SERVICE_UNIT="${LEGACY_NODE_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_NODE_SERVICE_UNIT:-chimera-gateway.service}}"
+LEGACY_DATAPATH_COMPAT_SERVICE_UNIT="${LEGACY_DATAPATH_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_DATAPATH_SERVICE_UNIT:-chimera-client.service}}"
+NODE_LOG="${NODE_LOG:-${GATEWAY_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_node.service.log}}"
+DATAPATH_LOG="${DATAPATH_LOG:-${CLIENT_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_datapath.service.log}}"
 UI_MODE_FILE="${UI_MODE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/ui_mode}"
-UPSTREAM_ENV_FILE="${UPSTREAM_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env}"
+BOOTSTRAP_ENV_FILE="${CHIMERA_BOOTSTRAP_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh_bootstrap.env}"
+LEGACY_UPSTREAM_ENV_FILE="${LEGACY_UPSTREAM_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/legacy_upstream_probe.env}"
+LEGACY_UPSTREAM_ENV_COMPAT_FILE="${LEGACY_UPSTREAM_ENV_COMPAT_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env}"
+UPSTREAM_ENV_FILE="${UPSTREAM_ENV_FILE:-$BOOTSTRAP_ENV_FILE}"
 CHIMERA_PROTECTED_PORTS_CSV="${CHIMERA_PROTECTED_PORTS_CSV:-11080,22180}"
 CHIMERA_SAFE_HOST_LOCK="${CHIMERA_SAFE_HOST_LOCK:-1}"
 CHIMERA_ALLOW_LOCAL_NETWORK_MUTATION="${CHIMERA_ALLOW_LOCAL_NETWORK_MUTATION:-0}"
 POLICY_FILE="${POLICY_FILE:-$ROOT_DIR/configs/policy.runtime.conf}"
 MANUAL_TRANSIT_DOMAINS_FILE="${MANUAL_TRANSIT_DOMAINS_FILE:-$ROOT_DIR/configs/manual_transit_domains.txt}"
-MANUAL_GATEWAY_DOMAINS_FILE="${MANUAL_GATEWAY_DOMAINS_FILE:-$ROOT_DIR/configs/manual_gateway_domains.txt}"
+LEGACY_MANUAL_COMPAT_DOMAINS_FILE="${LEGACY_MANUAL_COMPAT_DOMAINS_FILE:-${MANUAL_GATEWAY_DOMAINS_FILE:-$ROOT_DIR/configs/manual_gateway_domains.txt}}"
 ADAPTIVE_DOMAINS_FILE="${ADAPTIVE_DOMAINS_FILE:-$ROOT_DIR/configs/adaptive_domains.txt}"
 APP_ROUTES_FILE="${APP_ROUTES_FILE:-$ROOT_DIR/configs/chimera-app-routes.conf}"
 SERVICE_ROUTE_OVERRIDES_FILE="${SERVICE_ROUTE_OVERRIDES_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/service_route_overrides.conf}"
 ROUTE_MODE_FILE="${ROUTE_MODE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/route_mode}"
 SPLIT_LIST_MODE_FILE="${SPLIT_LIST_MODE_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/split_list_mode}"
 AUTOFIX_SCRIPT="$ROOT_DIR/scripts/chimera-autofix.sh"
-UPSTREAM_AUTOBOOTSTRAP_SCRIPT="${UPSTREAM_AUTOBOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_upstream_autobootstrap.sh}"
 AUTOFIX_TIMEOUT="${CHIMERA_AUTOFIX_MAX_TIME:-25}"
-UPSTREAM_SSH_KEY_FILE="${CHIMERA_UPSTREAM_SSH_KEY_FILE:-$HOME/.ssh/id_ed25519}"
 CHIMERA_ALLOW_PGREP_KILL="${CHIMERA_ALLOW_PGREP_KILL:-0}"
 AUTO_RESTART_CHROMIUM="${CHIMERA_AUTO_RESTART_CHROMIUM:-0}"
 CHIMERA_SYSTEM_INTEGRATION="${CHIMERA_SYSTEM_INTEGRATION:-0}"
@@ -43,11 +61,9 @@ SITE_FAILBACK_DIRECT_THRESHOLD="${SITE_FAILBACK_DIRECT_THRESHOLD:-3}"
 SITE_ADAPTIVE_ENTRY_TTL_SEC="${SITE_ADAPTIVE_ENTRY_TTL_SEC:-86400}"
 AUTOFIX_LOG_FILE="${AUTOFIX_LOG_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/autofix.log}"
 CHIMERA_CLI_BIN="${CHIMERA_CLI_BIN:-$ROOT_DIR/bin/chimera-cli}"
-CHIMERA_GATEWAY_BIN="${CHIMERA_GATEWAY_BIN:-$ROOT_DIR/bin/chimera-gateway}"
+CHIMERA_NODE_BIN="${CHIMERA_NODE_BIN:-${CHIMERA_GATEWAY_BIN:-$ROOT_DIR/bin/chimera-node}}"
 CHIMERA_RUNNER="${CHIMERA_RUNNER:-$ROOT_DIR/scripts/chimera-runner.sh}"
-RUNTIME_BOOTSTRAP_SCRIPT="${RUNTIME_BOOTSTRAP_SCRIPT:-$ROOT_DIR/scripts/chimera_runtime_bootstrap.sh}"
-SINGBOX_BIN="${SINGBOX_BIN:-${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box}"
-CLIENT_CONFIG_FILE="${CLIENT_CONFIG_FILE:-$ROOT_DIR/configs/client.conf}"
+NODE_CONFIG_FILE="${NODE_CONFIG_FILE:-$ROOT_DIR/configs/mesh-node.conf}"
 PEER_EGRESS_ENV_FILE="${PEER_EGRESS_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env}"
 PEER_EGRESS_STATE_FILE="${PEER_EGRESS_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state}"
 PEER_UPDATE_STATE_FILE="${PEER_UPDATE_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json}"
@@ -60,9 +76,9 @@ SPLIT_TRANSPARENT_TUN_NAME="${SPLIT_TRANSPARENT_TUN_NAME:-chimera-tun}"
 SPLIT_TRANSPARENT_TUN_ADDR="${SPLIT_TRANSPARENT_TUN_ADDR:-172.19.0.1/30}"
 SPLIT_TRANSPARENT_TUN_ADDR6="${SPLIT_TRANSPARENT_TUN_ADDR6:-fd5a:7c0a:1::1/126}"
 SPLIT_TRANSPARENT_AUTO_REDIRECT="${SPLIT_TRANSPARENT_AUTO_REDIRECT:-1}"
-SPLIT_TRANSPARENT_CONFIG_FILE="${SPLIT_TRANSPARENT_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/singbox-split.json}"
-SPLIT_TRANSPARENT_PID_FILE="${SPLIT_TRANSPARENT_PID_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera-singbox.pid}"
-SPLIT_TRANSPARENT_LOG_FILE="${SPLIT_TRANSPARENT_LOG_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/singbox-split.log}"
+SPLIT_TRANSPARENT_CONFIG_FILE="${SPLIT_TRANSPARENT_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.json}"
+SPLIT_TRANSPARENT_PID_FILE="${SPLIT_TRANSPARENT_PID_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera-transparent-runtime.pid}"
+SPLIT_TRANSPARENT_LOG_FILE="${SPLIT_TRANSPARENT_LOG_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/transparent-runtime.log}"
 SPLIT_TRANSPARENT_LOG_LEVEL="${SPLIT_TRANSPARENT_LOG_LEVEL:-warn}"
 SPLIT_TRANSPARENT_DNS_STRATEGY="${SPLIT_TRANSPARENT_DNS_STRATEGY:-prefer_ipv4}"
 SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera-split-watchdog.pid}"
@@ -70,6 +86,7 @@ CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
 CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER="${CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER:-1}"
 CHIMERA_STRICT_FAILOVER_GATE="${CHIMERA_STRICT_FAILOVER_GATE:-1}"
+CHIMERA_FLOW_PROOF_MAX_AGE_SEC="${CHIMERA_FLOW_PROOF_MAX_AGE_SEC:-300}"
 NFT_BIN="${NFT_BIN:-}"
 
 find_matching_tunnel_port() {
@@ -205,7 +222,7 @@ publish_mesh_discovery_snapshot() {
   if [[ -z "$self_node_id" && -f "$UPSTREAM_ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$UPSTREAM_ENV_FILE"
-    self_node_id="${CHIMERA_MESH_SELF_NODE_ID:-${CHIMERA_UPSTREAM_NODE_ID:-}}"
+    self_node_id="${CHIMERA_MESH_SELF_NODE_ID:-}"
   fi
   self_node_id="${self_node_id:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)}"
   if wait_for_file "$state_path" 5; then
@@ -448,63 +465,23 @@ mesh_bind_control_plane() {
   publish_peer_egress_transit_lane_bindings_from_control_plane "$([[ "$strict" == "1" ]] && echo strict || echo best-effort)"
 }
 
-ensure_upstream_env_bootstrapped() {
-  count_candidates_csv() {
-    local raw="${1:-}"
-    local count=0 item
-    IFS=',' read -r -a arr <<<"$raw"
-    for item in "${arr[@]}"; do
-      item="$(trim_ascii "$item")"
-      [[ -z "$item" ]] && continue
-      count=$((count + 1))
-    done
-    echo "$count"
-  }
-
-  local need_bootstrap="1"
-  local existing_user="" existing_pass="" existing_candidates_csv=""
-  if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$UPSTREAM_ENV_FILE"
-    existing_user="${CHIMERA_UPSTREAM_USER:-}"
-    existing_pass="${CHIMERA_UPSTREAM_PASS:-}"
-    existing_candidates_csv="${CHIMERA_UPSTREAM_ENDPOINTS_CSV:-}"
-    if [[ -n "${CHIMERA_UPSTREAM_USER:-}" && -n "${CHIMERA_UPSTREAM_HOST:-}" && -n "${CHIMERA_UPSTREAM_PASS:-}" ]] \
-      && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_USER:-}" \
-      && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_HOST:-}" \
-      && ! is_placeholder_upstream_value "${CHIMERA_UPSTREAM_PASS:-}"
-    then
-      need_bootstrap="0"
-    fi
-  fi
-
-  local candidate_count="0"
-  candidate_count="$(count_candidates_csv "$existing_candidates_csv")"
-  # Force re-bootstrap when we have only a single egress candidate.
-  if [[ "$need_bootstrap" == "0" && "$candidate_count" =~ ^[0-9]+$ && "$candidate_count" -lt 2 ]]; then
-    need_bootstrap="1"
-  fi
-
-  if [[ "$need_bootstrap" == "1" && -x "$UPSTREAM_AUTOBOOTSTRAP_SCRIPT" ]]; then
-    CHIMERA_UPSTREAM_POOL_USER="${CHIMERA_UPSTREAM_POOL_USER:-$existing_user}" \
-    CHIMERA_UPSTREAM_POOL_PASS="${CHIMERA_UPSTREAM_POOL_PASS:-$existing_pass}" \
-    UPSTREAM_ENV_FILE="$UPSTREAM_ENV_FILE" \
-    "$UPSTREAM_AUTOBOOTSTRAP_SCRIPT" >/dev/null 2>&1 || true
-  fi
-
-  if [[ -f "$ROOT_DIR/configs/upstream_proxy.env.example" ]]; then
+ensure_mesh_bootstrap_env() {
+  mkdir -p "$(dirname "$BOOTSTRAP_ENV_FILE")"
+  touch "$BOOTSTRAP_ENV_FILE"
+  chmod 600 "$BOOTSTRAP_ENV_FILE" 2>/dev/null || true
+  if [[ -f "$ROOT_DIR/configs/mesh_bootstrap.env.example" ]]; then
     local discovery_url discovery_pubkey discovery_probe_timeout
-    discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
-    discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
-    discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/upstream_proxy.env.example" 2>/dev/null || true)"
+    discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
+    discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
+    discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     if [[ -n "$discovery_url" ]]; then
-      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
     fi
     if [[ -n "$discovery_pubkey" ]]; then
-      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
     fi
     if [[ -n "$discovery_probe_timeout" ]]; then
-      upsert_env_kv "$UPSTREAM_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
     fi
   fi
 }
@@ -531,11 +508,11 @@ Commands:
   verify-cmd <command...>
                 Verify any command/binary under the transparent runtime
   service-route-enable [service...]
-                Retired legacy command; transparent runtime is the default
+                Retired lab-only command; not product datapath evidence
   service-route-disable [service...]
-                Retired legacy command; transparent runtime is the default
+                Retired lab-only command; not product datapath evidence
   verify-service <service...>
-                Retired legacy command; transparent runtime is the default
+                Retired lab-only command; not product datapath evidence
   route-mode [show|full|split|off]
                 Set/get CHIMERA routing mode
   split-list-mode [show|allow|deny]
@@ -579,11 +556,11 @@ Commands:
   mesh <args...>
                 Pass through to chimera-cli mesh <args...>
   app-route-add <app_id> <command>
-                Add/update app route entry in config
+                Retired lab-only command; not product datapath evidence
   app-route-add-running <process_name...>
-                Add running processes as app routes automatically
+                Retired lab-only command; not product datapath evidence
   service-route-enable-running [service...]
-                Enable CHIMERA route override for running user services
+                Retired lab-only command; not product datapath evidence
   uninstall      Full uninstall + OS/network settings cleanup (best-effort, idempotent)
   ui-mode        Show or set UI mode override: auto|tray|dialog|cli
 
@@ -643,11 +620,11 @@ ensure_base_path() {
 }
 
 ensure_runtime_log_paths() {
-  local gateway_log="${GATEWAY_LOG:-}"
-  local client_log="${CLIENT_LOG:-}"
+  local node_log="${NODE_LOG:-}"
+  local datapath_log="${DATAPATH_LOG:-}"
   local state_log="${AUTOFIX_LOG_FILE:-}"
-  [[ -n "$gateway_log" ]] && ensure_parent_dir "$gateway_log" && touch "$gateway_log"
-  [[ -n "$client_log" ]] && ensure_parent_dir "$client_log" && touch "$client_log"
+  [[ -n "$node_log" ]] && ensure_parent_dir "$node_log" && touch "$node_log"
+  [[ -n "$datapath_log" ]] && ensure_parent_dir "$datapath_log" && touch "$datapath_log"
   [[ -n "$state_log" ]] && ensure_parent_dir "$state_log" && touch "$state_log"
 }
 
@@ -685,17 +662,17 @@ wait_for_systemd_unit_stable_active() {
   return 0
 }
 
-client_config_path() {
-  if [[ -f "$CLIENT_CONFIG_FILE" ]]; then
-    echo "$CLIENT_CONFIG_FILE"
+node_config_path() {
+  if [[ -f "$NODE_CONFIG_FILE" ]]; then
+    echo "$NODE_CONFIG_FILE"
     return 0
   fi
-  echo "$ROOT_DIR/configs/client.example.conf"
+  echo "$ROOT_DIR/configs/mesh-node.example.conf"
 }
 
-client_config_ready() {
+node_config_ready() {
   local config_path addr
-  config_path="$(client_config_path)"
+  config_path="$(node_config_path)"
   [[ -f "$config_path" ]] || return 1
   addr="$(awk -F'=' '
     $1 ~ /^[[:space:]]*carrier\.addr[[:space:]]*$/ {
@@ -704,13 +681,124 @@ client_config_ready() {
       exit
     }
   ' "$config_path" 2>/dev/null || true)"
+  addr="${addr#tcp://}"
   case "$addr" in
-    ""|127.0.0.1:443|192.0.2.*|198.51.100.*|203.0.113.*) return 1 ;;
+    ""|\$\{*\}|*CHIMERA_NODE_PEER_ENDPOINT*|127.0.0.1:443|192.0.2.*|198.51.100.*|203.0.113.*|*.invalid:*) return 1 ;;
     *) return 0 ;;
   esac
 }
 
+node_config_carrier_addr() {
+  local config_path
+  config_path="$(node_config_path)"
+  [[ -f "$config_path" ]] || return 1
+  awk -F'=' '
+    $1 ~ /^[[:space:]]*carrier\.addr[[:space:]]*$/ {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2);
+      print $2;
+      exit
+    }
+  ' "$config_path" 2>/dev/null || true
+}
+
+carrier_addr_host() {
+  local addr="${1:-}"
+  addr="${addr#tcp://}"
+  addr="${addr#tcp@}"
+  if [[ "$addr" == \[*\]:* ]]; then
+    addr="${addr#[}"
+    printf '%s\n' "${addr%%]:*}"
+    return 0
+  fi
+  if [[ "$addr" == *:* ]]; then
+    printf '%s\n' "${addr%:*}"
+    return 0
+  fi
+  printf '%s\n' "$addr"
+}
+
+local_host_address_candidates() {
+  printf '%s\n' "127.0.0.1" "::1" "localhost"
+  if command -v hostname >/dev/null 2>&1; then
+    hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF { print $1 }'
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    ip -o addr show up scope global 2>/dev/null | awk '{split($4, parts, "/"); if (parts[1] != "") print parts[1]}'
+    ip route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}'
+  fi
+}
+
+node_config_self_loop_target() {
+  local carrier_addr carrier_host candidate
+  carrier_addr="$(node_config_carrier_addr)"
+  [[ -n "$carrier_addr" ]] || return 1
+  carrier_host="$(carrier_addr_host "$carrier_addr")"
+  carrier_host="${carrier_host#[}"
+  carrier_host="${carrier_host%]}"
+  [[ -n "$carrier_host" ]] || return 1
+  while IFS= read -r candidate; do
+    candidate="$(trim_ascii_line "$candidate")"
+    [[ -n "$candidate" ]] || continue
+    if [[ "$carrier_host" == "$candidate" ]]; then
+      return 0
+    fi
+  done < <(local_host_address_candidates | sort -u)
+  return 1
+}
+
+load_cli_privilege_env() {
+  if [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$TRANSPARENT_RUNTIME_ENV_FILE"
+  fi
+}
+
+should_run_chimera_cli_with_sudo() {
+  local subcommand="${1:-}"
+  case "$subcommand" in
+    up|down|rollback)
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  load_cli_privilege_env
+  [[ "${CHIMERA_RUNNER_USE_SUDO:-0}" == "1" ]] || return 1
+  [[ "$(id -u)" != "0" ]] || return 1
+  command -v sudo >/dev/null 2>&1 || return 1
+  return 0
+}
+
 run_chimera_cli() {
+  local subcommand="${1:-}"
+  if should_run_chimera_cli_with_sudo "$subcommand"; then
+    local xdg_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+    local xdg_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+    local -a sudo_env=(
+      "HOME=$HOME"
+      "PATH=$PATH"
+      "XDG_CACHE_HOME=$xdg_cache_home"
+      "XDG_CONFIG_HOME=$xdg_config_home"
+      "CHIMERA_RUNNER_USE_SUDO=${CHIMERA_RUNNER_USE_SUDO:-1}"
+    )
+    if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+      sudo_env+=("XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR")
+    fi
+    if [[ -n "${CHIMERA_NFT_PRIVILEGE_MODE:-}" ]]; then
+      sudo_env+=("CHIMERA_NFT_PRIVILEGE_MODE=$CHIMERA_NFT_PRIVILEGE_MODE")
+    fi
+    if [[ -n "${CHIMERA_ALLOW_SELF_UPSTREAM:-}" ]]; then
+      sudo_env+=("CHIMERA_ALLOW_SELF_UPSTREAM=$CHIMERA_ALLOW_SELF_UPSTREAM")
+    fi
+    if [[ -x "$CHIMERA_RUNNER" ]]; then
+      sudo -n env "${sudo_env[@]}" "$CHIMERA_RUNNER" cli "$@"
+      return $?
+    fi
+    if [[ -x "$CHIMERA_CLI_BIN" ]]; then
+      sudo -n env "${sudo_env[@]}" "$CHIMERA_CLI_BIN" "$@"
+      return $?
+    fi
+  fi
   if [[ -x "$CHIMERA_RUNNER" ]]; then
     "$CHIMERA_RUNNER" cli "$@"
     return $?
@@ -723,16 +811,46 @@ run_chimera_cli() {
   return 1
 }
 
-run_chimera_gateway() {
+remove_state_file_for_datapath_apply() {
+  if should_run_chimera_cli_with_sudo up; then
+    sudo -n rm -f "$STATE_FILE"
+    return $?
+  fi
+  rm -f "$STATE_FILE"
+}
+
+default_tun_device_name() {
+  printf '%s\n' "${CHIMERA_TUN_NAME:-chimera0}"
+}
+
+run_ip_privileged() {
+  if should_run_chimera_cli_with_sudo up; then
+    sudo -n ip "$@"
+    return $?
+  fi
+  ip "$@"
+}
+
+cleanup_stale_tun_without_state() {
+  local tun_name="${1:-$(default_tun_device_name)}"
+  [[ -n "$tun_name" ]] || return 0
+  [[ -f "$STATE_FILE" ]] && return 0
+  if ! run_ip_privileged link show dev "$tun_name" >/dev/null 2>&1; then
+    return 0
+  fi
+  run_ip_privileged link delete dev "$tun_name" >/dev/null 2>&1
+}
+
+run_chimera_node() {
   if [[ -x "$CHIMERA_RUNNER" ]]; then
-    "$CHIMERA_RUNNER" gateway "$@"
+    "$CHIMERA_RUNNER" node "$@"
     return $?
   fi
-  if [[ -x "$CHIMERA_GATEWAY_BIN" ]]; then
-    "$CHIMERA_GATEWAY_BIN" "$@"
+  if [[ -x "$CHIMERA_NODE_BIN" ]]; then
+    "$CHIMERA_NODE_BIN" "$@"
     return $?
   fi
-  echo "error: shipped chimera-gateway binary is missing: $CHIMERA_GATEWAY_BIN" >&2
+  echo "error: shipped chimera-node binary is missing: $CHIMERA_NODE_BIN" >&2
   return 1
 }
 
@@ -744,6 +862,42 @@ run_chimera_runner() {
     return $?
   fi
   echo "error: chimera-runner script is missing" >&2
+  return 1
+}
+
+datapath_apply_proof_state() {
+  local output rc
+  output="$(run_chimera_cli state proof --state-file "$STATE_FILE" 2>/dev/null)" && rc=0 || rc=$?
+  if [[ "$output" =~ (^|[[:space:]])datapath_proof=([A-Za-z0-9_:-]+) ]]; then
+    echo "${BASH_REMATCH[2]}"
+    return "$rc"
+  fi
+  echo "proof_command_failed"
+  return 1
+}
+
+datapath_apply_proof_ok() {
+  [[ "$(datapath_apply_proof_state)" == "ok" ]]
+}
+
+datapath_strict_flow_proof_state() {
+  if ! [[ "$CHIMERA_FLOW_PROOF_MAX_AGE_SEC" =~ ^[0-9]+$ ]] || (( CHIMERA_FLOW_PROOF_MAX_AGE_SEC < 1 )); then
+    echo "flow_proof_bad_max_age"
+    return 1
+  fi
+  local output rc
+  output="$(
+    run_chimera_cli state proof \
+      --state-file "$STATE_FILE" \
+      --require-flow true \
+      --max-flow-age-sec "$CHIMERA_FLOW_PROOF_MAX_AGE_SEC" \
+      2>/dev/null
+  )" && rc=0 || rc=$?
+  if [[ "$output" =~ (^|[[:space:]])datapath_proof=([A-Za-z0-9_:-]+) ]]; then
+    echo "${BASH_REMATCH[2]}"
+    return "$rc"
+  fi
+  echo "flow_proof_command_failed"
   return 1
 }
 
@@ -905,21 +1059,21 @@ systemd_chimera_units_present() {
   local units
   units="$(systemctl --user list-unit-files 2>/dev/null || true)"
   if command -v rg >/dev/null 2>&1; then
-    printf '%s\n' "$units" | rg -q '^chimera-gateway\.service|^chimera-client\.service'
+    printf '%s\n' "$units" | rg -q "^${NODE_SERVICE_UNIT//./\\.}|^${DATAPATH_SERVICE_UNIT//./\\.}"
   else
-    printf '%s\n' "$units" | grep -Eq '^chimera-gateway\.service|^chimera-client\.service'
+    printf '%s\n' "$units" | grep -Eq "^${NODE_SERVICE_UNIT//./\\.}|^${DATAPATH_SERVICE_UNIT//./\\.}"
   fi
 }
 
 systemd_units_active_ok() {
-  local client_expected="${1:-1}"
-  local gateway_state client_state
-  gateway_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
-  client_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
-  if [[ "$client_expected" == "1" ]]; then
-    [[ "$gateway_state" == "active" && "$client_state" == "active" ]]
+  local datapath_expected="${1:-1}"
+  local node_state datapath_state
+  node_state="$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)"
+  datapath_state="$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)"
+  if [[ "$datapath_expected" == "1" ]]; then
+    [[ "$node_state" == "active" && "$datapath_state" == "active" ]]
   else
-    [[ "$gateway_state" == "active" ]]
+    [[ "$node_state" == "active" ]]
   fi
 }
 
@@ -1018,8 +1172,8 @@ foreign_vpn_contours_present() {
   if pgrep -f '/usr/sbin/openvpn|wg-quick|wireguard|xray|hysteria' >/dev/null 2>&1; then
     return 0
   fi
-  # Detect non-CHIMERA sing-box by config path.
-  if pgrep -af 'sing-box run -c ' 2>/dev/null | grep -vE 'chimera|singbox-split\.json' >/dev/null 2>&1; then
+  # Detect third-party network overlays so CHIMERA does not mutate routes over them by surprise.
+  if pgrep -af 'sing-box run -c ' 2>/dev/null | grep -vE 'chimera|transparent-runtime\.json' >/dev/null 2>&1; then
     return 0
   fi
   return 1
@@ -1270,27 +1424,52 @@ endpoint_latency_ms_probe() {
   fi
 }
 
-upstream_probe() {
+load_upstream_env_context() {
+  UPSTREAM_ENV_SOURCE="none"
+  LEGACY_UPSTREAM_SOURCE_USED="false"
   if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$UPSTREAM_ENV_FILE"
+    if [[ "$UPSTREAM_ENV_FILE" == "$BOOTSTRAP_ENV_FILE" ]]; then
+      UPSTREAM_ENV_SOURCE="mesh_bootstrap_env"
+    else
+      UPSTREAM_ENV_SOURCE="configured_upstream_env"
+    fi
+  elif [[ -f "$LEGACY_UPSTREAM_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$LEGACY_UPSTREAM_ENV_FILE"
+    UPSTREAM_ENV_SOURCE="legacy_upstream_env"
+    LEGACY_UPSTREAM_SOURCE_USED="true"
+  elif [[ "$LEGACY_UPSTREAM_ENV_COMPAT_FILE" != "$LEGACY_UPSTREAM_ENV_FILE" && -f "$LEGACY_UPSTREAM_ENV_COMPAT_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$LEGACY_UPSTREAM_ENV_COMPAT_FILE"
+    UPSTREAM_ENV_SOURCE="legacy_upstream_env_compat_path"
+    LEGACY_UPSTREAM_SOURCE_USED="true"
   fi
+}
+
+upstream_probe() {
+  load_upstream_env_context
   local endpoint lat parsed transport endpoint_only
   local best="" best_lat=2147483647
+  echo "upstream_source=$UPSTREAM_ENV_SOURCE"
+  echo "legacy_upstream_source_used=$LEGACY_UPSTREAM_SOURCE_USED"
+  echo "upstream_truth_boundary=legacy_lab_only_not_datapath_evidence"
+  echo "upstream_product_datapath_evidence=false"
   while IFS= read -r endpoint; do
     [[ -z "$endpoint" ]] && continue
     parsed="$(parse_transport_endpoint "$endpoint" || true)"
     transport="${parsed%%|*}"
     endpoint_only="${parsed#*|}"
     lat="$(endpoint_latency_ms_probe "$endpoint")"
-    echo "upstream_candidate transport=${transport:-unknown} endpoint=${endpoint_only:-unknown} latency_ms=$lat"
+    echo "upstream_candidate transport=${transport:-unknown} endpoint_present=$([[ -n "${endpoint_only:-}" ]] && echo true || echo false) endpoint=<redacted> latency_ms=$lat"
     if [[ "$lat" =~ ^[0-9]+$ ]] && [[ "$lat" -lt "$best_lat" ]]; then
       best_lat="$lat"
       best="$endpoint_only"
     fi
   done < <(build_upstream_candidates)
   if [[ -n "$best" ]]; then
-    echo "upstream_best endpoint=$best latency_ms=$best_lat strategy=$UPSTREAM_STRATEGY"
+    echo "upstream_best endpoint_present=true endpoint=<redacted> latency_ms=$best_lat strategy=$UPSTREAM_STRATEGY"
   else
     echo "upstream_best endpoint=none"
   fi
@@ -1306,11 +1485,12 @@ upstream_audit() {
   if ! [[ "$lines" =~ ^[0-9]+$ ]]; then
     lines=30
   fi
-  if [[ -f "$UPSTREAM_ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$UPSTREAM_ENV_FILE"
-  fi
+  load_upstream_env_context
   echo "upstream_audit_begin"
+  echo "upstream_source=$UPSTREAM_ENV_SOURCE"
+  echo "legacy_upstream_source_used=$LEGACY_UPSTREAM_SOURCE_USED"
+  echo "upstream_truth_boundary=legacy_lab_only_not_datapath_evidence"
+  echo "upstream_product_datapath_evidence=false"
   echo "upstream_strategy=$UPSTREAM_STRATEGY"
   local candidates_total
   candidates_total="$(count_upstream_candidates)"
@@ -1321,8 +1501,12 @@ upstream_audit() {
     echo "upstream_adaptation_possible=false"
   fi
   if [[ -f "$LAST_ENDPOINT_FILE" ]]; then
-    echo "upstream_last_endpoint=$(awk -F'|' 'NR==1{print $1}' "$LAST_ENDPOINT_FILE" 2>/dev/null || true)"
-    echo "upstream_last_endpoint_sticky_until=$(awk -F'|' 'NR==1{print $2}' "$LAST_ENDPOINT_FILE" 2>/dev/null || true)"
+    local last_endpoint sticky_until
+    last_endpoint="$(awk -F'|' 'NR==1{print $1}' "$LAST_ENDPOINT_FILE" 2>/dev/null || true)"
+    sticky_until="$(awk -F'|' 'NR==1{print $2}' "$LAST_ENDPOINT_FILE" 2>/dev/null || true)"
+    echo "upstream_last_endpoint_present=$([[ -n "${last_endpoint:-}" ]] && echo true || echo false)"
+    echo "upstream_last_endpoint=<redacted>"
+    echo "upstream_last_endpoint_sticky_until=${sticky_until:-unknown}"
   else
     echo "upstream_last_endpoint=unknown"
   fi
@@ -1341,9 +1525,9 @@ upstream_audit() {
   fi
   echo "upstream_probe_now:"
   upstream_probe
-  if [[ -f "${XDG_CACHE_HOME:-$HOME/.cache}/chimera/singbox-split.log" ]]; then
+  if [[ -f "$SPLIT_TRANSPARENT_LOG_FILE" ]]; then
     echo "upstream_recent_events:"
-    tail -n "$lines" "${XDG_CACHE_HOME:-$HOME/.cache}/chimera/singbox-split.log" | grep -E 'route|failover|reason=' || true
+    tail -n "$lines" "$SPLIT_TRANSPARENT_LOG_FILE" | grep -E 'route|failover|reason=' || true
   fi
   echo "upstream_audit_end"
 }
@@ -1353,14 +1537,65 @@ upstream_failover_smoke() {
   if ! [[ "$wait_sec" =~ ^[0-9]+$ ]]; then
     wait_sec=10
   fi
-  echo "upstream_failover_smoke=transparent_runtime"
+  echo "upstream_failover_smoke=legacy_lab_only_not_datapath_evidence"
   split_transparent_status
   sleep "$wait_sec"
-  upstream_audit 200
+  local audit_output legacy_source_used
+  audit_output="$(upstream_audit 200)"
+  printf '%s\n' "$audit_output"
+  legacy_source_used="$(printf '%s\n' "$audit_output" | awk -F= '/^legacy_upstream_source_used=/{print $2; exit}')"
+  [[ "${legacy_source_used:-false}" != "true" ]]
 }
 
 ensure_parent_dir() {
   mkdir -p "$(dirname "${1:?file_required}")"
+}
+
+path_exists_or_link() {
+  [[ -e "${1:?path_required}" || -L "${1:?path_required}" ]]
+}
+
+remove_path_if_present() {
+  local path="${1:?path_required}"
+  path_exists_or_link "$path" || return 0
+  rm -rf "$path"
+}
+
+remove_link_if_points_to_root() {
+  local path="${1:?path_required}"
+  local resolved=""
+  [[ -L "$path" ]] || return 0
+  resolved="$(readlink -f "$path" 2>/dev/null || true)"
+  [[ -n "$resolved" && "$resolved" == "$ROOT_DIR/"* ]] || return 0
+  rm -f "$path"
+}
+
+remove_previous_release_backups() {
+  local release_parent="${1:?release_parent_required}"
+  local backup_path=""
+  shopt -s nullglob
+  for backup_path in "$release_parent"/.chimera-previous.*; do
+    remove_path_if_present "$backup_path"
+  done
+  shopt -u nullglob
+}
+
+uninstall_release_tree() {
+  local release_parent=""
+  release_parent="$(dirname "$ROOT_DIR")"
+  remove_link_if_points_to_root "$LOCAL_BIN_DIR/chimera"
+  remove_link_if_points_to_root "$LOCAL_BIN_DIR/chimera.sh"
+  remove_link_if_points_to_root "$LOCAL_BIN_DIR/chimera-sh"
+  remove_path_if_present "$SYSTEMD_USER_DIR/$NODE_SERVICE_UNIT"
+  remove_path_if_present "$SYSTEMD_USER_DIR/$DATAPATH_SERVICE_UNIT"
+  remove_path_if_present "$SYSTEMD_USER_DIR/$LEGACY_NODE_COMPAT_SERVICE_UNIT"
+  remove_path_if_present "$SYSTEMD_USER_DIR/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT"
+  remove_path_if_present "$APPLICATIONS_DIR/chimera-control-gui.desktop"
+  remove_path_if_present "$APPLICATIONS_DIR/chimera-control.desktop"
+  remove_path_if_present "$CHIMERA_CONFIG_DIR"
+  remove_path_if_present "$CHIMERA_CACHE_DIR"
+  remove_path_if_present "$ROOT_DIR"
+  remove_previous_release_backups "$release_parent"
 }
 
 trim_ascii_line() {
@@ -1463,17 +1698,17 @@ merge_unique_domain_sources() {
 
 runtime_state_is_up() {
   if systemd_user_ready; then
-    local gateway_state client_state
-    gateway_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
-    client_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
-    if client_config_ready; then
-      [[ "$gateway_state" == "active" && "$client_state" == "active" ]]
+    local node_state datapath_state
+    node_state="$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)"
+    datapath_state="$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)"
+    if node_config_ready; then
+      [[ "$node_state" == "active" && "$datapath_state" == "active" ]]
     else
-      [[ "$gateway_state" == "active" ]]
+      [[ "$node_state" == "active" ]]
     fi
     return $?
   fi
-  if client_config_ready; then
+  if node_config_ready; then
     pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)"
     return $?
   fi
@@ -1489,9 +1724,9 @@ read_runtime_service_state() {
   if systemd_user_ready; then
     systemctl --user is-active "$unit" 2>/dev/null || true
   else
-    if [[ "$unit" == "chimera-gateway.service" ]] && pidfile_running "$(peer_egress_pid_path)"; then
+    if [[ "$unit" == "$NODE_SERVICE_UNIT" || "$unit" == "$LEGACY_NODE_COMPAT_SERVICE_UNIT" ]] && pidfile_running "$(peer_egress_pid_path)"; then
       echo "active"
-    elif [[ "$unit" == "chimera-client.service" ]] && pidfile_running "$(transparent_runtime_pid_path)"; then
+    elif [[ "$unit" == "$DATAPATH_SERVICE_UNIT" || "$unit" == "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" ]] && pidfile_running "$(transparent_runtime_pid_path)"; then
       echo "active"
     else
       echo "unknown"
@@ -1589,7 +1824,7 @@ site_auto_discover_run() {
   tmp="$(mktemp)"
   : >"$tmp"
   local file
-  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_TRANSIT_DOMAINS_FILE" "$MANUAL_GATEWAY_DOMAINS_FILE" "$ADAPTIVE_DOMAINS_FILE"; do
+  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_TRANSIT_DOMAINS_FILE" "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE" "$ADAPTIVE_DOMAINS_FILE"; do
     if [[ -f "$file" ]]; then
       while IFS= read -r line; do
         line="$(trim_ascii_line "$line")"
@@ -1630,7 +1865,7 @@ site_auto_bootstrap_run() {
   tmp="$(mktemp)"
   : >"$tmp"
   local file
-  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_TRANSIT_DOMAINS_FILE" "$MANUAL_GATEWAY_DOMAINS_FILE" "$SITE_DISCOVERY_DOMAINS_FILE"; do
+  for file in "$SITE_AUTO_SEEDS_FILE" "$MANUAL_TRANSIT_DOMAINS_FILE" "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE" "$SITE_DISCOVERY_DOMAINS_FILE"; do
     if [[ -f "$file" ]]; then
       while IFS= read -r line; do
         line="$(trim_ascii_line "$line")"
@@ -1674,10 +1909,10 @@ site_auto_status() {
   echo "site_discovery_file=$SITE_DISCOVERY_DOMAINS_FILE"
   echo "adaptive_domains_file=$ADAPTIVE_DOMAINS_FILE"
   echo "manual_transit_domains_file=$MANUAL_TRANSIT_DOMAINS_FILE"
-  echo "legacy_manual_gateway_domains_file=$MANUAL_GATEWAY_DOMAINS_FILE"
+  echo "legacy_manual_compat_domains_file=$LEGACY_MANUAL_COMPAT_DOMAINS_FILE"
   echo "adaptive_domains_count=$(count_noncomment_lines "$ADAPTIVE_DOMAINS_FILE")"
   echo "manual_transit_domains_count=$(count_noncomment_lines "$MANUAL_TRANSIT_DOMAINS_FILE")"
-  echo "legacy_manual_gateway_domains_count=$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
+  echo "legacy_manual_compat_domains_count=$(count_noncomment_lines "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE")"
   echo "discovered_domains_count=$(count_noncomment_lines "$SITE_DISCOVERY_DOMAINS_FILE")"
 }
 
@@ -1692,18 +1927,18 @@ count_noncomment_lines() {
 
 site_list() {
   echo "manual_transit_domains_file=$MANUAL_TRANSIT_DOMAINS_FILE"
-  echo "legacy_manual_gateway_domains_file=$MANUAL_GATEWAY_DOMAINS_FILE"
+  echo "legacy_manual_compat_domains_file=$LEGACY_MANUAL_COMPAT_DOMAINS_FILE"
   echo "adaptive_domains_file=$ADAPTIVE_DOMAINS_FILE"
   echo "manual_transit_domains_count=$(count_noncomment_lines "$MANUAL_TRANSIT_DOMAINS_FILE")"
-  echo "legacy_manual_gateway_domains_count=$(count_noncomment_lines "$MANUAL_GATEWAY_DOMAINS_FILE")"
+  echo "legacy_manual_compat_domains_count=$(count_noncomment_lines "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE")"
   echo "adaptive_domains_count=$(count_noncomment_lines "$ADAPTIVE_DOMAINS_FILE")"
   echo "manual_transit_domains:"
   if [[ -f "$MANUAL_TRANSIT_DOMAINS_FILE" ]]; then
     awk 'NF && $0 !~ /^[[:space:]]*#/' "$MANUAL_TRANSIT_DOMAINS_FILE"
   fi
-  echo "legacy_manual_gateway_domains:"
-  if [[ -f "$MANUAL_GATEWAY_DOMAINS_FILE" ]]; then
-    awk 'NF && $0 !~ /^[[:space:]]*#/' "$MANUAL_GATEWAY_DOMAINS_FILE"
+  echo "legacy_manual_compat_domains:"
+  if [[ -f "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE" ]]; then
+    awk 'NF && $0 !~ /^[[:space:]]*#/' "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE"
   fi
   echo "adaptive_domains:"
   if [[ -f "$ADAPTIVE_DOMAINS_FILE" ]]; then
@@ -1731,7 +1966,7 @@ site_remove() {
     domain="$(normalize_domain_token "$domain")"
     [[ -z "$domain" ]] && continue
     remove_exact_line "$MANUAL_TRANSIT_DOMAINS_FILE" "$domain"
-    remove_exact_line "$MANUAL_GATEWAY_DOMAINS_FILE" "$domain"
+    remove_exact_line "$LEGACY_MANUAL_COMPAT_DOMAINS_FILE" "$domain"
     removed=$((removed + 1))
   done
   site_auto_bootstrap_run >/dev/null 2>&1 || true
@@ -1863,113 +2098,39 @@ resolve_service_ids_for_args() {
 }
 
 service_route_enable() {
-  local ids=("$@")
-  if [[ "${#ids[@]}" -eq 0 ]]; then
-    mapfile -t ids < <(list_config_ids "service:")
-  else
-    mapfile -t ids < <(resolve_service_ids_for_args "${ids[@]}")
-  fi
-  local id
-  for id in "${ids[@]}"; do
-    [[ -n "$id" ]] || continue
-    set_service_route_override "$id" "enabled"
-  done
-  echo "service_route_enable_status=ok count=${#ids[@]}"
+  legacy_app_workflow_disabled "service_route_enable"
 }
 
 service_route_disable() {
-  local ids=("$@")
-  if [[ "${#ids[@]}" -eq 0 ]]; then
-    mapfile -t ids < <(list_config_ids "service:")
-  else
-    mapfile -t ids < <(resolve_service_ids_for_args "${ids[@]}")
-  fi
-  local id
-  for id in "${ids[@]}"; do
-    [[ -n "$id" ]] || continue
-    delete_service_route_override "$id"
-  done
-  echo "service_route_disable_status=ok count=${#ids[@]}"
+  legacy_app_workflow_disabled "service_route_disable"
 }
 
 service_route_enable_running() {
-  if systemd_user_ready; then
-    mapfile -t running < <(systemctl --user list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service$//')
-    if [[ "${#running[@]}" -gt 0 ]]; then
-      service_route_enable "${running[@]}"
-      return 0
-    fi
-  fi
-  service_route_enable "$@"
+  legacy_app_workflow_disabled "service_route_enable_running"
 }
 
 verify_service() {
-  local ids=("$@")
-  if [[ "${#ids[@]}" -eq 0 ]]; then
-    mapfile -t ids < <(list_config_ids "service:")
-  else
-    mapfile -t ids < <(resolve_service_ids_for_args "${ids[@]}")
-  fi
-  local failed=0
-  local id svc_name state
-  for id in "${ids[@]}"; do
-    svc_name="$(resolve_service_name "$id")"
-    state="$(service_route_override_state "$id")"
-    if [[ -n "$svc_name" ]]; then
-      echo "verify_service[$id]=pass service=$svc_name override=${state:-none}"
-    else
-      echo "verify_service[$id]=skip reason=service_not_installed"
-    fi
-  done
-  [[ "$failed" -eq 0 ]]
+  legacy_app_workflow_disabled "verify_service"
 }
 
 run_app() {
-  local app_id="${1:?app_id_required}"
-  shift || true
-  local command env_spec full_cmd
-  command="$(resolve_app_command "$app_id")"
-  if [[ -z "$command" ]]; then
-    echo "run_app_status=fail reason=app_not_found app_id=$app_id" >&2
-    return 2
-  fi
-  env_spec="$(resolve_app_env "$app_id")"
-  full_cmd="$command"
-  local arg
-  for arg in "$@"; do
-    full_cmd+=" $(printf '%q' "$arg")"
-  done
-  run_shell_command_with_env "$env_spec" "$full_cmd"
+  legacy_app_workflow_disabled "run_app"
 }
 
 verify_app() {
-  local app_id="${1:?app_id_required}"
-  shift || true
-  if run_app "$app_id" "$@"; then
-    echo "verify_app_status=pass app_id=$app_id"
-    return 0
-  else
-    local rc=$?
-    echo "verify_app_status=fail app_id=$app_id exit=$rc" >&2
-    return "$rc"
-  fi
+  legacy_app_workflow_disabled "verify_app"
 }
 
 verify_cmd() {
-  local full_cmd=""
-  local arg
-  for arg in "$@"; do
-    full_cmd+=" $(printf '%q' "$arg")"
-  done
-  full_cmd="${full_cmd# }"
-  if bash -lc "$full_cmd"; then
-    echo "verify_cmd_status=pass"
-    return 0
-  else
-    local rc=$?
-    echo "verify_cmd_status=fail exit=$rc" >&2
-    return "$rc"
-  fi
+  legacy_app_workflow_disabled "verify_cmd"
+}
+
+legacy_app_workflow_disabled() {
+  local command_name="${1:?command_name_required}"
+  echo "${command_name}_status=fail reason=legacy_lab_only_not_datapath_evidence"
+  echo "product_datapath_evidence=false"
+  echo "hint=use_normal_application_workflow_after_transparent_datapath_start"
+  return 2
 }
 
 apps_running() {
@@ -2010,10 +2171,10 @@ logs_tail() {
   fi
   echo "=== node log: <redacted> ==="
   echo "node_log_path_state=present"
-  tail -n "$lines" "$GATEWAY_LOG" 2>/dev/null | redact_diagnostic_stream || true
+  tail -n "$lines" "$NODE_LOG" 2>/dev/null | redact_diagnostic_stream || true
   echo "=== transparent-runtime log: <redacted> ==="
   echo "transparent_runtime_log_path_state=present"
-  tail -n "$lines" "$CLIENT_LOG" 2>/dev/null | redact_diagnostic_stream || true
+  tail -n "$lines" "$DATAPATH_LOG" 2>/dev/null | redact_diagnostic_stream || true
   echo "=== autofix log: <redacted> ==="
   echo "autofix_log_path_state=present"
   tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null | redact_diagnostic_stream || true
@@ -2024,7 +2185,7 @@ write_doctor_fail_json() {
   local reason="${2:?reason_required}"
   mkdir -p "$(dirname "$out")" >/dev/null 2>&1 || true
   cat >"$out" <<EOF
-{"status":"fail","kind":"doctor","message_en":"Doctor check is blocked until CHIMERA endpoint configuration is ready.","message_ru":"Проверка doctor заблокирована до настройки endpoint CHIMERA.","reason":"${reason}","secrets":"<redacted>","client_config_ready":false,"network_state":"not_modified"}
+{"status":"fail","kind":"doctor","message_en":"Doctor check is blocked until CHIMERA endpoint configuration is ready.","message_ru":"Проверка doctor заблокирована до настройки endpoint CHIMERA.","reason":"${reason}","secrets":"<redacted>","node_config_ready":false,"network_state":"not_modified"}
 EOF
 }
 
@@ -2032,12 +2193,12 @@ doctor_run() {
   local out_file="$ROOT_DIR/docs/doctor_latest.json"
   local config_path rc=0
   mkdir -p "$(dirname "$out_file")" >/dev/null 2>&1 || true
-  if ! client_config_ready; then
-    write_doctor_fail_json "$out_file" "client_endpoint_unconfigured"
-    echo "doctor_status=fail reason=client_endpoint_unconfigured" >&2
+  if ! node_config_ready; then
+    write_doctor_fail_json "$out_file" "node_endpoint_unconfigured"
+    echo "doctor_status=fail reason=node_endpoint_unconfigured" >&2
     return 2
   fi
-  config_path="$(client_config_path)"
+  config_path="$(node_config_path)"
   run_chimera_cli doctor --config "$config_path" --json --out "$out_file" || rc=$?
   if [[ "$rc" -eq 0 ]]; then
     echo "doctor_status=ok"
@@ -2050,25 +2211,29 @@ doctor_run() {
 start_runtime() {
   ensure_base_path
   ensure_runtime_log_paths
-  ensure_upstream_env_bootstrapped
+  ensure_mesh_bootstrap_env
   publish_peer_egress_transit_lane_bindings_from_control_plane || true
-  if [[ -x "$RUNTIME_BOOTSTRAP_SCRIPT" ]]; then
-    if ! "$RUNTIME_BOOTSTRAP_SCRIPT" ensure-singbox >/dev/null; then
-      echo "start_status=fail mode=bootstrap transparent_runtime=stopped reason=runtime_bootstrap_failed"
-      return 1
-    fi
+  if ! node_config_ready; then
+    site_auto_watch_stop >/dev/null 2>&1 || true
+    echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped reason=datapath_unconfigured"
+    return 2
+  fi
+  if ! cleanup_stale_tun_without_state; then
+    site_auto_watch_stop >/dev/null 2>&1 || true
+    echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped reason=stale_tun_cleanup_failed"
+    return 1
   fi
   if systemd_user_ready; then
     systemctl --user daemon-reload >/dev/null 2>&1 || true
     local systemd_start_rc=0
-    systemctl --user start chimera-gateway.service >/dev/null 2>&1 || systemd_start_rc=$?
+    systemctl --user start "$NODE_SERVICE_UNIT" >/dev/null 2>&1 || systemd_start_rc=$?
     local node_state node_runtime node_status
-    if wait_for_systemd_unit_stable_active chimera-gateway.service 20 5; then
+    if wait_for_systemd_unit_stable_active "$NODE_SERVICE_UNIT" 20 5; then
       node_state="active"
       node_runtime="running"
       node_status="started"
     else
-      node_state="$(systemctl --user is-active chimera-gateway.service 2>/dev/null || true)"
+      node_state="$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)"
       node_runtime="stopped"
       node_status="failed"
     fi
@@ -2076,85 +2241,171 @@ start_runtime() {
       echo "start_status=fail mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=stopped reason=node_service_failed systemctl_start_rc=$systemd_start_rc"
       return 1
     fi
-    if client_config_ready; then
-      local transparent_start_rc=0
-      systemctl --user start chimera-client.service >/dev/null 2>&1 || transparent_start_rc=$?
-      local transparent_state transparent_runtime transparent_status
-      if wait_for_systemd_unit_stable_active chimera-client.service 20 5; then
-        transparent_state="active"
-        transparent_runtime="running"
-        transparent_status="started"
-      else
-        transparent_state="$(systemctl --user is-active chimera-client.service 2>/dev/null || true)"
-        transparent_runtime="stopped"
-        transparent_status="failed"
-      fi
-      if [[ "$transparent_status" != "started" ]]; then
-        echo "start_status=fail mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=$transparent_runtime reason=transparent_service_failed systemctl_start_rc=$transparent_start_rc"
-        return 1
-      fi
-      site_auto_watch_start >/dev/null 2>&1 || true
-      echo "start_status=ok mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=$transparent_runtime"
-    else
-      systemctl --user stop chimera-client.service >/dev/null 2>&1 || true
+    if node_config_self_loop_target; then
       site_auto_watch_stop >/dev/null 2>&1 || true
-      echo "start_status=ok mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=stopped endpoint=unconfigured"
+      echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped reason=self_loop_listener_only"
+      return 0
     fi
-    return 0
-  fi
-  run_chimera_gateway doctor --config "$ROOT_DIR/configs/gateway.example.conf" --json --out "$ROOT_DIR/docs/gateway_doctor_latest.json" >/dev/null 2>&1 || true
-  local gateway_status="skipped"
-  local client_status="skipped"
-  local node_runtime="stopped"
-  if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
-    start_runner_background "peer_egress" "$(peer_egress_pid_path)" "$GATEWAY_LOG" "$PEER_EGRESS_ENV_FILE" "peer-egress" >/dev/null 2>&1 || true
-    if runner_started "$(peer_egress_pid_path)" 10; then
-      gateway_status="started"
-      node_runtime="running"
-      publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
+    local transparent_start_rc=0
+    systemctl --user start "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || transparent_start_rc=$?
+    local transparent_state transparent_runtime transparent_status
+    if wait_for_systemd_unit_stable_active "$DATAPATH_SERVICE_UNIT" 20 5; then
+      transparent_state="active"
+      transparent_runtime="running"
+      transparent_status="started"
     else
-      gateway_status="failed"
-      node_runtime="stopped"
+      transparent_state="$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)"
+      transparent_runtime="stopped"
+      transparent_status="failed"
     fi
-  fi
-  if client_config_ready && [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
-    start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$CLIENT_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
-    if runner_started "$(transparent_runtime_pid_path)" 10; then
-      client_status="started"
-    else
-      client_status="failed"
+    if [[ "$transparent_status" != "started" ]]; then
+      systemctl --user stop "$NODE_SERVICE_UNIT" >/dev/null 2>&1 || true
+      echo "start_status=fail mode=systemd_user node_runtime=stopped node=$node_status transparent_runtime=$transparent_runtime reason=transparent_service_failed systemctl_start_rc=$transparent_start_rc"
+      return 1
     fi
-    run_chimera_cli up \
-      --config "$CLIENT_CONFIG_FILE" \
+    local systemd_datapath_apply_status="skipped"
+    local systemd_datapath_apply_rc="0"
+    local systemd_datapath_proof_status="skipped"
+    local systemd_datapath_rollback_status="skipped"
+    local systemd_datapath_rollback_rc="0"
+    if ! remove_state_file_for_datapath_apply; then
+      systemctl --user stop "$DATAPATH_SERVICE_UNIT" "$NODE_SERVICE_UNIT" >/dev/null 2>&1 || true
+      echo "start_status=fail mode=systemd_user node_runtime=stopped node=$node_status transparent_runtime=stopped datapath_apply=skipped datapath_proof=stale_state_cleanup_failed reason=stale_state_cleanup_failed"
+      return 1
+    fi
+    if run_chimera_cli up \
+      --config "$(node_config_path)" \
       --state-file "$STATE_FILE" \
       --apply-tun true \
       --apply-route true \
-      --apply-dns true >/dev/null 2>&1 || true
+      --apply-dns true >/dev/null 2>&1; then
+      systemd_datapath_apply_status="ok"
+    else
+      systemd_datapath_apply_rc=$?
+      systemd_datapath_apply_status="failed"
+    fi
+    if [[ "$systemd_datapath_apply_status" == "ok" ]]; then
+      systemd_datapath_proof_status="$(datapath_apply_proof_state || true)"
+      if [[ "$systemd_datapath_proof_status" != "ok" ]]; then
+        systemd_datapath_apply_status="unverified"
+      fi
+    fi
+    if [[ "$systemd_datapath_apply_status" != "ok" ]]; then
+      site_auto_watch_stop >/dev/null 2>&1 || true
+      if run_chimera_cli rollback recover \
+        --state-file "$STATE_FILE" >/dev/null 2>&1; then
+        systemd_datapath_rollback_status="ok"
+      else
+        systemd_datapath_rollback_rc=$?
+        systemd_datapath_rollback_status="failed"
+      fi
+      systemctl --user stop "$DATAPATH_SERVICE_UNIT" "$NODE_SERVICE_UNIT" >/dev/null 2>&1 || true
+      if ! cleanup_stale_tun_without_state; then
+        systemd_datapath_rollback_status="failed"
+      fi
+      local systemd_datapath_fail_reason="datapath_apply_failed"
+      [[ "$systemd_datapath_apply_status" == "unverified" ]] && systemd_datapath_fail_reason="datapath_proof_failed"
+      echo "start_status=fail mode=systemd_user node_runtime=stopped node=$node_status transparent_runtime=stopped datapath_apply=$systemd_datapath_apply_status apply_rc=$systemd_datapath_apply_rc datapath_proof=$systemd_datapath_proof_status datapath_rollback=$systemd_datapath_rollback_status rollback_rc=$systemd_datapath_rollback_rc reason=$systemd_datapath_fail_reason"
+      return 1
+    fi
     site_auto_watch_start >/dev/null 2>&1 || true
+    echo "start_status=ok mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=$transparent_runtime datapath_apply=$systemd_datapath_apply_status datapath_proof=$systemd_datapath_proof_status"
+    return 0
+  fi
+  local direct_node_status="skipped"
+  local direct_datapath_status="skipped"
+  local direct_datapath_apply_status="skipped"
+  local direct_datapath_apply_rc="0"
+  local direct_datapath_proof_status="skipped"
+  local direct_datapath_rollback_status="skipped"
+  local direct_datapath_rollback_rc="0"
+  local node_runtime="stopped"
+  if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
+    start_runner_background "peer_egress" "$(peer_egress_pid_path)" "$NODE_LOG" "$PEER_EGRESS_ENV_FILE" "peer-egress" >/dev/null 2>&1 || true
+    if runner_started "$(peer_egress_pid_path)" 10; then
+      direct_node_status="started"
+      node_runtime="running"
+      publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
+    else
+      direct_node_status="failed"
+      node_runtime="stopped"
+    fi
+  fi
+  if [[ "$direct_node_status" == "started" ]] && node_config_self_loop_target; then
+    site_auto_watch_stop >/dev/null 2>&1 || true
+    echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped reason=self_loop_listener_only"
+    return 0
+  fi
+  if [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+    start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$DATAPATH_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
+    if runner_started "$(transparent_runtime_pid_path)" 10; then
+      direct_datapath_status="started"
+    else
+      direct_datapath_status="failed"
+    fi
+    if ! remove_state_file_for_datapath_apply; then
+      stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
+      stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
+      echo "start_status=fail mode=direct node_runtime=stopped node=$direct_node_status transparent_runtime=stopped datapath_apply=skipped datapath_proof=stale_state_cleanup_failed reason=stale_state_cleanup_failed"
+      return 1
+    fi
+    if run_chimera_cli up \
+      --config "$(node_config_path)" \
+      --state-file "$STATE_FILE" \
+      --apply-tun true \
+      --apply-route true \
+      --apply-dns true >/dev/null 2>&1; then
+      direct_datapath_apply_status="ok"
+    else
+      direct_datapath_apply_rc=$?
+      direct_datapath_apply_status="failed"
+    fi
+    if [[ "$direct_datapath_apply_status" == "ok" ]]; then
+      direct_datapath_proof_status="$(datapath_apply_proof_state || true)"
+      if [[ "$direct_datapath_proof_status" != "ok" ]]; then
+        direct_datapath_apply_status="unverified"
+      fi
+    fi
   else
     site_auto_watch_stop >/dev/null 2>&1 || true
   fi
-  if [[ "$gateway_status" != "started" ]]; then
-    echo "start_status=fail mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status reason=node_service_failed"
+  if [[ "$direct_node_status" != "started" ]]; then
+    echo "start_status=fail mode=direct node_runtime=$node_runtime node=$direct_node_status transparent_runtime=$direct_datapath_status reason=node_service_failed"
     return 1
   fi
-  if client_config_ready && [[ "$client_status" != "started" ]]; then
-    echo "start_status=fail mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status reason=transparent_service_failed"
+  if [[ "$direct_datapath_status" != "started" ]]; then
+    echo "start_status=fail mode=direct node_runtime=$node_runtime node=$direct_node_status transparent_runtime=$direct_datapath_status reason=transparent_service_failed"
     return 1
   fi
-  if client_config_ready; then
-    echo "start_status=ok mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=$client_status"
-  else
-    echo "start_status=ok mode=direct node_runtime=$node_runtime node=$gateway_status transparent_runtime=stopped endpoint=unconfigured"
+    if [[ "$direct_datapath_apply_status" != "ok" ]]; then
+      site_auto_watch_stop >/dev/null 2>&1 || true
+      if run_chimera_cli rollback recover \
+        --state-file "$STATE_FILE" >/dev/null 2>&1; then
+        direct_datapath_rollback_status="ok"
+      else
+        direct_datapath_rollback_rc=$?
+        direct_datapath_rollback_status="failed"
+      fi
+      stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
+      stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
+      if ! cleanup_stale_tun_without_state; then
+        direct_datapath_rollback_status="failed"
+      fi
+      local direct_datapath_fail_reason="datapath_apply_failed"
+      [[ "$direct_datapath_apply_status" == "unverified" ]] && direct_datapath_fail_reason="datapath_proof_failed"
+      echo "start_status=fail mode=direct node_runtime=stopped node=$direct_node_status transparent_runtime=stopped datapath_apply=$direct_datapath_apply_status apply_rc=$direct_datapath_apply_rc datapath_proof=$direct_datapath_proof_status datapath_rollback=$direct_datapath_rollback_status rollback_rc=$direct_datapath_rollback_rc reason=$direct_datapath_fail_reason"
+      return 1
   fi
+  site_auto_watch_start >/dev/null 2>&1 || true
+  echo "start_status=ok mode=direct node_runtime=$node_runtime node=$direct_node_status transparent_runtime=$direct_datapath_status datapath_apply=$direct_datapath_apply_status datapath_proof=$direct_datapath_proof_status"
 }
 
 stop_runtime() {
   site_auto_watch_stop >/dev/null 2>&1 || true
   local cleanup_rc=0
   if systemd_user_ready; then
-    systemctl --user stop chimera-client.service >/dev/null 2>&1 || true
-    systemctl --user stop chimera-gateway.service >/dev/null 2>&1 || true
+    systemctl --user stop "$DATAPATH_SERVICE_UNIT" "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
+    systemctl --user stop "$NODE_SERVICE_UNIT" "$LEGACY_NODE_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
     cleanup_transparent_redirect_rules || cleanup_rc=$?
     if [[ "$cleanup_rc" -ne 0 ]]; then
       echo "stop_status=fail mode=systemd_user reason=transparent_redirect_cleanup_failed"
@@ -2166,7 +2417,7 @@ stop_runtime() {
   stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
   stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
   run_chimera_cli down \
-    --config "$CLIENT_CONFIG_FILE" \
+    --config "$(node_config_path)" \
     --state-file "$STATE_FILE" \
     --apply-tun true \
     --apply-route true \
@@ -2188,39 +2439,39 @@ restart_runtime() {
 }
 
 runtime_status() {
-  local gateway_state client_state route_mode split_mode watch_status
-  gateway_state="$(read_runtime_service_state chimera-gateway.service)"
-  client_state="$(read_runtime_service_state chimera-client.service)"
+  local node_state datapath_state route_mode split_mode watch_status
+  node_state="$(read_runtime_service_state "$NODE_SERVICE_UNIT")"
+  datapath_state="$(read_runtime_service_state "$DATAPATH_SERVICE_UNIT")"
   route_mode="$(read_route_mode)"
   split_mode="$(read_split_list_mode)"
   watch_status="$(site_auto_watch_status)"
   echo "runtime_root=<redacted>"
   echo "runtime_root_state=present"
-  echo "node_service_state=$gateway_state"
-  echo "transparent_runtime_service_state=$client_state"
+  echo "node_service_state=$node_state"
+  echo "transparent_runtime_service_state=$datapath_state"
   echo "peer_egress_state_file=<redacted>"
   echo "$watch_status"
-  if [[ "$gateway_state" == "active" ]]; then
+  if [[ "$node_state" == "active" ]]; then
     echo "node_runtime=running"
   else
     echo "node_runtime=stopped"
   fi
   if runtime_state_is_up; then
-    if client_config_ready; then
-      echo "transparent_runtime=$([[ "$client_state" == "active" ]] && echo running || echo stopped)"
+    if node_config_ready; then
+      echo "transparent_runtime=$([[ "$datapath_state" == "active" ]] && echo running || echo stopped)"
     else
       echo "transparent_runtime=stopped"
     fi
     echo "runtime_state_status=up"
   else
     if systemd_user_ready; then
-      if client_config_ready; then
-        echo "transparent_runtime=$([[ "$client_state" == "active" ]] && echo running || echo stopped)"
+      if node_config_ready; then
+        echo "transparent_runtime=$([[ "$datapath_state" == "active" ]] && echo running || echo stopped)"
       else
         echo "transparent_runtime=stopped"
       fi
     else
-      if client_config_ready; then
+      if node_config_ready; then
         if pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)"; then
           echo "transparent_runtime=running"
         else
@@ -2234,10 +2485,10 @@ runtime_status() {
   fi
   echo "route_mode=$route_mode"
   echo "split_list_mode=$split_mode"
-  if client_config_ready; then
-    echo "client_config_ready=true"
+  if node_config_ready; then
+    echo "node_config_ready=true"
   else
-    echo "client_config_ready=false"
+    echo "node_config_ready=false"
   fi
   if [[ -f "$STATE_FILE" ]]; then
     echo "state_file=<redacted>"
@@ -2264,24 +2515,46 @@ runtime_status() {
   fi
 }
 
-datapath_status() {
-  runtime_status
-}
-
-route_status() {
+emit_route_status_lines() {
   local app_routes_count service_routes_count manual_count adaptive_count
+  local datapath_proof_state datapath_flow_proof_state datapath_mode datapath_apply
   app_routes_count="$(count_config_prefix "$APP_ROUTES_FILE" "app:")"
   service_routes_count="$(count_config_prefix "$APP_ROUTES_FILE" "service:")"
   manual_count="$(count_noncomment_lines "$MANUAL_TRANSIT_DOMAINS_FILE")"
   adaptive_count="$(count_noncomment_lines "$ADAPTIVE_DOMAINS_FILE")"
-  echo "datapath_mode=transparent"
-  echo "runtime_state_status=$(runtime_state_is_up && echo up || echo unknown)"
-  echo "route_mode=$(read_route_mode)"
-  echo "split_list_mode=$(read_split_list_mode)"
+  datapath_proof_state="$(datapath_apply_proof_state || true)"
+  if [[ "$datapath_proof_state" == "ok" ]]; then
+    datapath_apply="ok"
+    datapath_flow_proof_state="$(datapath_strict_flow_proof_state || true)"
+  else
+    datapath_apply="unverified"
+    datapath_flow_proof_state="skipped_apply_unverified"
+  fi
+  if [[ "$datapath_proof_state" == "ok" && "$datapath_flow_proof_state" == "ok" ]]; then
+    datapath_mode="transparent"
+  else
+    datapath_mode="unknown"
+  fi
+  echo "datapath_mode=$datapath_mode"
+  echo "datapath_apply=$datapath_apply"
+  echo "datapath_proof=$datapath_proof_state"
+  echo "datapath_flow_proof=$datapath_flow_proof_state"
   echo "app_routes_count=$app_routes_count"
   echo "service_routes_count=$service_routes_count"
   echo "manual_transit_domains_count=$manual_count"
   echo "adaptive_domains_count=$adaptive_count"
+}
+
+datapath_status() {
+  runtime_status
+  emit_route_status_lines
+}
+
+route_status() {
+  emit_route_status_lines
+  echo "runtime_state_status=$(runtime_state_is_up && echo up || echo unknown)"
+  echo "route_mode=$(read_route_mode)"
+  echo "split_list_mode=$(read_split_list_mode)"
   if [[ -f "$SERVICE_ROUTE_OVERRIDES_FILE" ]]; then
     awk -F= '/^service_route_override\[/{print}' "$SERVICE_ROUTE_OVERRIDES_FILE"
   fi
@@ -2333,13 +2606,20 @@ uninstall_runtime() {
     return 1
   }
   if systemd_user_ready; then
-    systemctl --user disable --now chimera-gateway.service chimera-client.service >/dev/null 2>&1 || true
+    systemctl --user disable --now "$NODE_SERVICE_UNIT" "$DATAPATH_SERVICE_UNIT" "$LEGACY_NODE_COMPAT_SERVICE_UNIT" "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
   fi
-  rm -f "$STATE_FILE" "$GATEWAY_LOG" "$CLIENT_LOG" "$LAST_ENDPOINT_FILE" "$UPSTREAM_HEALTH_STATE_FILE" "$SITE_AUTOWATCH_PID_FILE" "$(peer_egress_pid_path)" "$(transparent_runtime_pid_path)"
+  rm -f "$STATE_FILE" "$NODE_LOG" "$DATAPATH_LOG" "$LAST_ENDPOINT_FILE" "$UPSTREAM_HEALTH_STATE_FILE" "$SITE_AUTOWATCH_PID_FILE" "$(peer_egress_pid_path)" "$(transparent_runtime_pid_path)"
   rm -f "$(peer_egress_state_path)"
   rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env" "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"
   rm -f "$SERVICE_ROUTE_OVERRIDES_FILE"
   rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/chimera/site_adaptive_routes.db"
+  uninstall_release_tree || {
+    echo "uninstall_status=fail reason=cleanup_failed"
+    return 1
+  }
+  if systemd_user_ready; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+  fi
   echo "uninstall_status=ok"
 }
 

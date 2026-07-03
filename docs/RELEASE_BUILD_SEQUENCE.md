@@ -29,15 +29,37 @@ Use this sequence for every bundle or bootstrap update.
    - `chimera.sh`
    - `chimera-pq-release.tar.gz`
    - `chimera-pq-release.tar.gz.sha256`
-9. After the GitHub release is live, install that exact release on the
+9. After the GitHub release is live, refresh the public Gitvers bootstrap
+   mirror with the same `chimera.sh`, archive and checksum contract. Do not
+   publish a Gitvers mirror that points at a different version or checksum than
+   GitHub Latest.
+   - preferred operator path:
+     `CHIMERA_GITVERS_TOKEN=... bash scripts/sync_gitvers_release.sh`
+10. After GitHub and Gitvers are aligned, install that exact release on the
    trusted peer mirror nodes and publish them with
-   `chimera-bootstrap serve-release --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" --listen 0.0.0.0:0 --base-url http://node.example --state-file "${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json"`
+   `chimera-bootstrap serve-release --root "${CHIMERA_HOME:-$HOME/.local/share/chimera}" --listen 0.0.0.0:0 --base-url https://node.example --state-file "${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json"`
    or an equivalent trusted base URL for remote proof.
-10. Verify the peer-update fallback contract remains update-only:
+11. Verify the source-order contract:
    - `chimera-sh` checks GitHub Latest first;
-   - peer fallback is tried after GitHub Latest if it is unreachable, or if it
-     is valid but not newer; it is not tried after invalid GitHub metadata/
-     checksum/source;
+   - a source becomes authoritative only after CHIMERA verifies a release
+     tuple: `version + archive checksum`;
+   - Gitvers is tried after GitHub only when GitHub is unreachable before a
+     verified tuple exists;
+   - peer fallback is tried only after GitHub and Gitvers when those higher
+     trust sources are unreachable before a verified tuple exists;
+   - peer fallback is not tried after invalid GitHub or invalid Gitvers
+     metadata/checksum/source;
+   - once GitHub or Gitvers yields a verified current or stale tuple, CHIMERA
+     stops the search, emits `chimera_update=no_newer_release`, and does not
+     let a lower-trust source outrun that verified result in the same round;
+   - if GitHub or Gitvers yielded a verified newer tuple but its archive
+     delivery/install path was unavailable, a lower-trust mirror may be used
+     only for the exact same `{version, sha256}` tuple;
+   - a lower-trust source with a different version after a verified higher-
+     trust tuple must block with `trusted_version_divergence`;
+   - a lower-trust source with the same version but a different checksum after
+     a verified higher-trust tuple must block with
+     `trusted_checksum_divergence`;
    - configured peer URLs are tried only as fallback for already installed
      CHIMERA;
    - `chimera-sh -connect <peer>` uses only that selected peer's
@@ -49,19 +71,21 @@ Use this sequence for every bundle or bootstrap update.
      metadata `sha256` to the checksum file;
    - if no trusted update source is reachable, CHIMERA keeps the installed
      version and emits `chimera_update=unavailable`;
+   - the exact runtime matrix is documented in
+     `docs/UPDATE_SOURCE_DECISION_MATRIX.md`;
    - peer update evidence is not used as first-install remote proof.
    - peer mirror serving should let CHIMERA choose a free port with
      `--listen ...:0` unless the operator has a specific reserved port.
    - `chimera mesh nodes advertise` must publish `update_bootstrap_url` from
      `--update-state-file`/`CHIMERA_PEER_UPDATE_STATE_FILE` so selected peers
      learn the current update endpoint without manual port entry.
-11. Verify the start contract before release:
+12. Verify the start contract before release:
    - `chimera-sh -start` prepares user-cache log targets before the systemd
      user start path;
    - `chimera-sh -start` returns non-zero if either node or transparent runtime
      service fails its active check;
    - false `start_status=ok` is a release-blocking regression.
-12. Smoke-test the install flow on external proof nodes only through the GitHub
+13. Smoke-test the install flow on external proof nodes only through the GitHub
    one-command bootstrap.
    - the command must be wrapped with `bash -o pipefail -c`
    - the outer bootstrap download must use `curl --disable -fsSL --retry 3

@@ -2,6 +2,8 @@
 
 Status: **PASS**
 
+Scope: lab/report artifact coverage only; not release/prod closure.
+
 Checklist:
 - M0 workspace/tooling: `true`
 - M1 local tunnel: `true`

@@ -10,6 +10,7 @@ CHECKSUM_SOURCE="${2:-${CHIMERA_RELEASE_CHECKSUM_FILE:-}}"
 ALLOW_LOCAL_SOURCE="${CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE:-0}"
 RELEASE_VERSION_FILE=".chimera_release_version"
 RELEASE_BUNDLE_SHA_FILE=".chimera_release_bundle.sha256"
+INSTALL_LOCAL_BIN_FILE=".chimera_install_local_bin"
 
 sha256_file() {
   local file="${1:?file_required}"
@@ -95,6 +96,21 @@ restore_previous_release() {
   fi
 }
 
+remove_previous_release_backup() {
+  local backup_home="${1:-}"
+  [[ -n "$backup_home" && -e "$backup_home" ]] || return 0
+  if rm -rf "$backup_home" 2>/dev/null; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    if sudo -n rm -rf "$backup_home" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  echo "warning: previous release backup cleanup failed; leaving redacted backup directory in place" >&2
+  return 0
+}
+
 install_prepared_release_tree() {
   local prepared_release="${1:?prepared_release_required}"
   local archive="${2:-}"
@@ -149,8 +165,9 @@ install_prepared_release_tree() {
     fi
     return 1
   fi
+  printf '%s\n' "$LOCAL_BIN" > "$CHIMERA_HOME/$INSTALL_LOCAL_BIN_FILE"
   if [[ -n "$backup_home" ]]; then
-    rm -rf "$backup_home"
+    remove_previous_release_backup "$backup_home"
   fi
 }
 

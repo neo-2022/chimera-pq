@@ -24,6 +24,7 @@ pub(crate) fn render_mvp_spec_report_markdown(result: MvpSpecCheckResult) -> Str
     format!(
         "# CHIMERA-PQ MVP Spec Coverage\n\n\
 Status: **{}**\n\n\
+Scope: lab/report artifact coverage only; not release/prod closure.\n\n\
 Checklist:\n\
 - M0 workspace/tooling: `{}`\n\
 - M1 local tunnel: `{}`\n\
@@ -57,6 +58,7 @@ pub(crate) fn render_m5_artifacts_report_markdown(
         Language::En => format!(
             "# M5 Artifacts Report\n\n\
 Status: **{}**\n\n\
+Scope: lab/report artifact coverage only; not release/prod closure.\n\n\
 Checks:\n\
 - Config smoke: `{}`\n\
 - Doctor artifacts: `{}`\n\
@@ -83,6 +85,7 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
         Language::Ru => format!(
             "# Отчет По Артефактам M5\n\n\
 Статус: **{}**\n\n\
+Граница: только лабораторные/report-артефакты; это не закрытие release/prod.\n\n\
 Проверки:\n\
 - Config smoke: `{}`\n\
 - Артефакты doctor: `{}`\n\
@@ -119,6 +122,7 @@ pub(crate) fn render_m6_artifacts_report_markdown(
         Language::En => format!(
             "# M6 Artifacts Report\n\n\
 Status: **{}**\n\n\
+Scope: lab/report artifact coverage only; not release/prod closure.\n\n\
 Checks:\n\
 - Benchmark artifact: `{}`\n\
 - MVP spec check artifact (M6): `{}`\n\n\
@@ -133,6 +137,7 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
         Language::Ru => format!(
             "# Отчет По Артефактам M6\n\n\
 Статус: **{}**\n\n\
+Граница: только лабораторные/report-артефакты; это не закрытие release/prod.\n\n\
 Проверки:\n\
 - Артефакт benchmark: `{}`\n\
 - Артефакт mvp-spec-check (M6): `{}`\n\n\

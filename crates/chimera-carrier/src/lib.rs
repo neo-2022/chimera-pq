@@ -34,7 +34,9 @@ impl CarrierEndpoint {
                 "carrier endpoint is empty".to_string(),
             ));
         }
-        let (transport, host_port) = if let Some((left, right)) = raw.split_once('@') {
+        let (transport, host_port) = if let Some((left, right)) = raw.split_once("://") {
+            (left.trim().to_ascii_lowercase(), right.trim())
+        } else if let Some((left, right)) = raw.split_once('@') {
             (left.trim().to_ascii_lowercase(), right.trim())
         } else {
             ("tcp".to_string(), raw)
@@ -131,6 +133,15 @@ mod tests {
         let ep = CarrierEndpoint::parse("ssh-443@203.0.113.10:443")
             .unwrap_or_else(|error| unreachable!("must parse: {error}"));
         assert_eq!(ep.transport, "ssh-443");
+        assert_eq!(ep.host, "203.0.113.10");
+        assert_eq!(ep.port, 443);
+    }
+
+    #[test]
+    fn carrier_endpoint_parses_scheme_host_port() {
+        let ep = CarrierEndpoint::parse("tcp://203.0.113.10:443")
+            .unwrap_or_else(|error| unreachable!("must parse: {error}"));
+        assert_eq!(ep.transport, "tcp");
         assert_eq!(ep.host, "203.0.113.10");
         assert_eq!(ep.port, 443);
     }

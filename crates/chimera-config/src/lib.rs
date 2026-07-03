@@ -115,6 +115,8 @@ pub struct ClientConfig {
     pub rekey: RekeyLimits,
 }
 
+pub type NodeConfig = ClientConfig;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GatewayConfig {
     pub carrier_profile: ConfigCarrierProfile,
@@ -140,23 +142,30 @@ impl Default for MeshRuntimeConfig {
 }
 
 pub fn parse_client_config_text(input: &str) -> ChimeraResult<ClientConfig> {
+    parse_node_config_text(input)
+}
+
+pub fn parse_node_config_text(input: &str) -> ChimeraResult<NodeConfig> {
     let raw = RawConfig::parse(input)?;
     validate_keys(
         &raw,
         &[
+            "node.mode",
             "carrier.profile",
             "carrier.addr",
             "carrier.server_name",
             "capture.mode",
             "capture.tun_supported",
+            "peer.listen_addr",
             "routing.split_tunnel_default",
             "routing.auto_failover",
             "runtime.invisible_mode_required",
             "rekey.max_age_seconds",
             "rekey.max_packets_per_key",
         ],
-        "client",
+        "node",
     )?;
+    validate_node_mode(&raw)?;
     let carrier_profile = parse_carrier_profile(
         raw.get("carrier.profile").unwrap_or("in-memory"),
         "carrier.profile",
@@ -210,6 +219,18 @@ pub fn parse_client_config_text(input: &str) -> ChimeraResult<ClientConfig> {
         invisible_mode_required,
         rekey,
     })
+}
+
+fn validate_node_mode(raw: &RawConfig) -> ChimeraResult<()> {
+    let Some(mode) = raw.get("node.mode") else {
+        return Ok(());
+    };
+    if mode == "mesh-node" {
+        return Ok(());
+    }
+    Err(ChimeraError::InvalidConfig(format!(
+        "node.mode must be 'mesh-node', got '{mode}'"
+    )))
 }
 
 pub fn parse_gateway_config_text(input: &str) -> ChimeraResult<GatewayConfig> {
@@ -423,7 +444,7 @@ fn parse_capture_mode(input: &str, key: &str) -> ChimeraResult<ConfigCaptureMode
 mod tests {
     use super::{
         ConfigCaptureMode, ConfigCarrierProfile, RawConfig, parse_client_config_text,
-        parse_gateway_config_text, parse_mesh_runtime_config_text,
+        parse_gateway_config_text, parse_mesh_runtime_config_text, parse_node_config_text,
     };
 
     #[test]
@@ -475,6 +496,34 @@ mod tests {
         assert_eq!(config.capture_mode, ConfigCaptureMode::Auto);
         assert_eq!(config.rekey.max_age_seconds, 300);
         assert_eq!(config.rekey.max_packets_per_key, 10_000);
+    }
+
+    #[test]
+    fn parses_mesh_node_config_marker() {
+        let text = "\
+node.mode = mesh-node
+carrier.profile = tls
+carrier.addr = ${CHIMERA_NODE_PEER_ENDPOINT}
+carrier.server_name = ${CHIMERA_NODE_SERVER_NAME}
+peer.listen_addr = ${CHIMERA_NODE_LISTEN_ADDR}
+";
+        let config = match parse_node_config_text(text) {
+            Ok(config) => config,
+            Err(error) => unreachable!("node config should parse: {error}"),
+        };
+        assert_eq!(config.carrier_profile, ConfigCarrierProfile::Tls);
+        assert_eq!(config.carrier_addr, "${CHIMERA_NODE_PEER_ENDPOINT}");
+    }
+
+    #[test]
+    fn rejects_unknown_mesh_node_mode() {
+        let parsed = parse_node_config_text("node.mode = client\n");
+        assert!(parsed.is_err());
+        let message = parsed
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(message.contains("node.mode must be 'mesh-node'"));
     }
 
     #[test]
@@ -543,7 +592,7 @@ mod tests {
             Ok(_) => unreachable!("config must fail"),
             Err(error) => {
                 let message = error.to_string();
-                assert!(message.contains("unknown client config key 'zzzzzzzz'"));
+                assert!(message.contains("unknown node config key 'zzzzzzzz'"));
                 assert!(!message.contains("did you mean"));
             }
         }

@@ -27,6 +27,7 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "message_en",
         "message_ru",
         "real_world_datapath_closed",
+        "github_release_ssh_runtime_slice_proven",
         "source_markdown",
         "source_status",
         "md_claim_closed",
@@ -35,6 +36,8 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "runtime_probe_mode",
         "runtime_probe_live_external_probe",
         "runtime_probe_ssh_stand_required_for_live_probe",
+        "runtime_probe_chimera_datapath_evidence",
+        "runtime_probe_evidence_kind",
         "runtime_probe_direct_ok",
         "runtime_probe_datapath_ok",
         "runtime_probe_datapath_attempted",
@@ -70,11 +73,13 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
 
     let bool_keys = [
         "real_world_datapath_closed",
+        "github_release_ssh_runtime_slice_proven",
         "md_claim_closed",
         "md_claim_partial_not_closed",
         "runtime_probe_file_ok",
         "runtime_probe_live_external_probe",
         "runtime_probe_ssh_stand_required_for_live_probe",
+        "runtime_probe_chimera_datapath_evidence",
         "runtime_probe_direct_ok",
         "runtime_probe_datapath_ok",
         "runtime_probe_datapath_attempted",
@@ -112,6 +117,7 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "chimera_datapath_evidence_missing",
         "ci_snapshot",
         "unknown",
     ]
@@ -123,8 +129,22 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
     let datapath_ok = get_bool(data, "runtime_probe_datapath_ok");
     let skipped_no_curl = get_bool(data, "runtime_probe_skipped_no_curl");
     let probe_mode = get_str(data, "runtime_probe_mode");
+    let evidence_kind = get_str(data, "runtime_probe_evidence_kind");
+    let chimera_datapath_evidence = get_bool(data, "runtime_probe_chimera_datapath_evidence");
     if !["live", "ci_snapshot"].contains(&probe_mode) {
         return Err("runtime_probe_mode invalid".to_string());
+    }
+    if ![
+        "external_reachability_without_system_proxy",
+        "ci_snapshot_contract",
+        "chimera_transparent_datapath",
+    ]
+    .contains(&evidence_kind)
+    {
+        return Err("runtime_probe_evidence_kind invalid".to_string());
+    }
+    if datapath_ok && !chimera_datapath_evidence {
+        return Err("runtime_probe datapath ok without CHIMERA evidence".to_string());
     }
     let ci_snapshot = probe_mode == "ci_snapshot";
     if get_bool(data, "runtime_probe_live_external_probe") == ci_snapshot {
@@ -148,11 +168,29 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
         if datapath_error != "ci_snapshot" {
             return Err("runtime_probe ci_snapshot requires ci_snapshot error marker".to_string());
         }
+        if chimera_datapath_evidence || evidence_kind != "ci_snapshot_contract" {
+            return Err("runtime_probe ci_snapshot evidence fields mismatch".to_string());
+        }
         if total != 0 || ok != 0 || failed != 0 {
             return Err("runtime_probe ci_snapshot must have zero target totals".to_string());
         }
+    } else if evidence_kind == "external_reachability_without_system_proxy" {
+        if chimera_datapath_evidence || datapath_attempted || datapath_ok {
+            return Err(
+                "runtime_probe external reachability must not masquerade as datapath".to_string(),
+            );
+        }
+        if !skipped_no_curl && datapath_error != "chimera_datapath_evidence_missing" {
+            return Err(
+                "runtime_probe external reachability requires missing datapath evidence marker"
+                    .to_string(),
+            );
+        }
     } else if !skipped_no_curl && !datapath_attempted {
-        return Err("runtime_probe datapath must be attempted when curl is available".to_string());
+        return Err(
+            "runtime_probe datapath must be attempted when CHIMERA evidence is available"
+                .to_string(),
+        );
     }
     if datapath_attempted && datapath_error == "curl_not_found" {
         return Err("runtime_probe datapath attempted with curl_not_found".to_string());
@@ -171,6 +209,8 @@ fn validate_reality_audit(data: &serde_json::Map<String, Value>) -> Result<(), S
     }
 
     let runtime_probe_path_ok = probe_mode == "live"
+        && chimera_datapath_evidence
+        && evidence_kind == "chimera_transparent_datapath"
         && get_bool(data, "runtime_probe_live_external_probe")
         && !get_bool(data, "runtime_probe_ssh_stand_required_for_live_probe")
         && get_bool(data, "runtime_probe_direct_ok")
@@ -249,6 +289,10 @@ mod tests {
         m.insert("message_ru".to_string(), json!("ok"));
         m.insert("real_world_datapath_closed".to_string(), json!(false));
         m.insert(
+            "github_release_ssh_runtime_slice_proven".to_string(),
+            json!(true),
+        );
+        m.insert(
             "source_markdown".to_string(),
             json!("docs/REALITY_AUDIT_2026-05-18.md"),
         );
@@ -257,6 +301,14 @@ mod tests {
         m.insert("md_claim_partial_not_closed".to_string(), json!(true));
         m.insert("runtime_probe_file_ok".to_string(), json!(true));
         m.insert("runtime_probe_mode".to_string(), json!("live"));
+        m.insert(
+            "runtime_probe_evidence_kind".to_string(),
+            json!("chimera_transparent_datapath"),
+        );
+        m.insert(
+            "runtime_probe_chimera_datapath_evidence".to_string(),
+            json!(true),
+        );
         m.insert("runtime_probe_live_external_probe".to_string(), json!(true));
         m.insert(
             "runtime_probe_ssh_stand_required_for_live_probe".to_string(),
@@ -319,6 +371,14 @@ mod tests {
     fn accepts_ci_snapshot_without_reality_closure() {
         let mut payload = base();
         payload.insert("runtime_probe_mode".to_string(), json!("ci_snapshot"));
+        payload.insert(
+            "runtime_probe_evidence_kind".to_string(),
+            json!("ci_snapshot_contract"),
+        );
+        payload.insert(
+            "runtime_probe_chimera_datapath_evidence".to_string(),
+            json!(false),
+        );
         payload.insert(
             "runtime_probe_live_external_probe".to_string(),
             json!(false),

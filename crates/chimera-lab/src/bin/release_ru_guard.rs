@@ -23,9 +23,25 @@ fn main() {
     let md = read_text(release_ru_md);
     let reality = read_obj(reality_json);
 
-    require_str(&release, "status", "ok");
     require_str(&release, "kind", "release_readiness_report");
-    require_bool(&release, "release_ok", true);
+    let real_world_datapath_closed = reality
+        .get("real_world_datapath_closed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let github_release_ssh_runtime_slice_proven = reality
+        .get("github_release_ssh_runtime_slice_proven")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    require_bool(&release, "lab_release_ok", true);
+    require_bool(&release, "release_ok", real_world_datapath_closed);
+    require_bool(
+        &release,
+        "github_release_ssh_runtime_slice_proven",
+        github_release_ssh_runtime_slice_proven,
+    );
+    if release.get("status").and_then(Value::as_str) == Some("ok") && !real_world_datapath_closed {
+        fail("release ru guard: status ok requires real-world datapath closure");
+    }
     require_str(&release, "network_state", "not_modified");
     let gate = get_obj(
         &release,
@@ -47,7 +63,11 @@ fn main() {
 
     for line in [
         "# Отчет Готовности Релиза",
-        "Статус: **PASS**",
+        if real_world_datapath_closed {
+            "Статус: **PASS**"
+        } else {
+            "Статус: **FAIL (ТОЛЬКО ЛАБОРАТОРНО)**"
+        },
         "Release gate (раздел 11 спеки):",
         "Этапы:",
         "Артефакты:",
@@ -64,6 +84,17 @@ fn main() {
         &format!(
             "- Real OS-level datapath closure (strict M4/M5): `{}`",
             if truth_expected["real_world_datapath_closed"] == Value::Bool(true) {
+                "true"
+            } else {
+                "false"
+            }
+        ),
+    );
+    require_line_once(
+        &md,
+        &format!(
+            "- Узкий GitHub release -> разрешенный SSH-стенд -> runtime lifecycle slice: `{}`",
+            if github_release_ssh_runtime_slice_proven {
                 "true"
             } else {
                 "false"

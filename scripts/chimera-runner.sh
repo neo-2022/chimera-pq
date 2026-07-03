@@ -10,7 +10,7 @@ Usage:
 
 Targets:
   cli       run chimera-cli with args
-  gateway   run chimera-gateway with args
+  node      run chimera-node with args
   peer-egress run chimera-peer-egress with args
   transparent-runtime run chimera-transparent-runtime with args
 EOF
@@ -42,8 +42,12 @@ case "$target" in
   cli)
     run_with_fallback "$ROOT_DIR/bin/chimera-cli" "chimera-cli" "$@"
     ;;
+  node)
+    run_with_fallback "$ROOT_DIR/bin/chimera-node" "chimera-node" "$@"
+    ;;
   gateway)
-    run_with_fallback "$ROOT_DIR/bin/chimera-gateway" "chimera-gateway" "$@"
+    echo "error: legacy target 'gateway' is retired; use target 'node'" >&2
+    exit 2
     ;;
   peer-egress)
     peer_egress_mode="${CHIMERA_PEER_EGRESS_MODE:-}"

@@ -1,10 +1,4 @@
-youtube.com
-googlevideo.com
-ytimg.com
-gstatic.com
-instagram.com
-facebook.com
-x.com
-twitter.com
-reddit.com
-wikipedia.org
+# Operator-private adaptive domain state.
+# Product defaults must stay empty: no real domains and no release-baked
+# route decisions. Runtime discovery/adaptation may populate a private state
+# file outside product defaults.

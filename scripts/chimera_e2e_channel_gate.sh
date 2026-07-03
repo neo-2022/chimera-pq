@@ -33,9 +33,10 @@ main() {
 
   APP_ROUTES_FILE="$APP_ROUTES_FILE" bash "$RUNTIME_VERIFY_SCRIPT" >/tmp/chimera_e2e_runtime_verify.log 2>&1 || true
 
-  local path_status path_reason audit_status audit_reason
+  local path_status path_reason path_chimera_evidence audit_status audit_reason
   path_status="$(jq -r '.status // "unknown"' "$PATH_PROOF_JSON" 2>/dev/null || echo "unknown")"
   path_reason="$(jq -r '.reason // "unknown"' "$PATH_PROOF_JSON" 2>/dev/null || echo "unknown")"
+  path_chimera_evidence="$(jq -r '.chimera_datapath_evidence // false' "$PATH_PROOF_JSON" 2>/dev/null || echo "false")"
   audit_status="$(jq -r '.status // "unknown"' "$CHANNEL_AUDIT_JSON" 2>/dev/null || echo "unknown")"
   audit_reason="$(jq -r '.reason // "unknown"' "$CHANNEL_AUDIT_JSON" 2>/dev/null || echo "unknown")"
 
@@ -73,7 +74,7 @@ main() {
     audit_ok_for_gate="true"
   fi
 
-  if [[ "$path_status" == "pass" && "$audit_ok_for_gate" == "true" && "$run_app_ok" == "true" ]]; then
+  if [[ "$path_status" == "pass" && "$path_chimera_evidence" == "true" && "$audit_ok_for_gate" == "true" && "$run_app_ok" == "true" ]]; then
     if [[ "$service_override_checked" == "true" && "$service_override_after" == "enabled" ]]; then
       gate_status="pass"
       gate_reason="channel_audit_and_selected_routes_ok"
@@ -90,7 +91,7 @@ main() {
   finished_at="$(now_utc)"
 
   cat >"$E2E_JSON_OUT" <<EOF
-{"kind":"chimera_e2e_channel_gate","status":"$gate_status","reason":"$gate_reason","started_at":"$started_at","finished_at":"$finished_at","network_state":"not_modified","path_proof":{"status":"$path_status","reason":"$(json_escape "$path_reason")"},"channel_audit":{"status":"$audit_status","reason":"$(json_escape "$audit_reason")"},"selected_route_checks":{"run_app_curl_example_ok":$run_app_ok,"service_override_checked":$service_override_checked,"service_override_before":"$(json_escape "$service_override_before")","service_override_after":"$(json_escape "$service_override_after")"},"artifacts":{"path_proof_json":"$(json_escape "$PATH_PROOF_JSON")","channel_audit_json":"$(json_escape "$CHANNEL_AUDIT_JSON")"}}
+{"kind":"chimera_e2e_channel_gate","status":"$gate_status","reason":"$gate_reason","started_at":"$started_at","finished_at":"$finished_at","network_state":"not_modified","path_proof":{"status":"$path_status","reason":"$(json_escape "$path_reason")","chimera_datapath_evidence":$path_chimera_evidence},"channel_audit":{"status":"$audit_status","reason":"$(json_escape "$audit_reason")"},"selected_route_checks":{"run_app_curl_example_ok":$run_app_ok,"service_override_checked":$service_override_checked,"service_override_before":"$(json_escape "$service_override_before")","service_override_after":"$(json_escape "$service_override_after")"},"artifacts":{"path_proof_json":"$(json_escape "$PATH_PROOF_JSON")","channel_audit_json":"$(json_escape "$CHANNEL_AUDIT_JSON")"}}
 EOF
 
   if [[ "$QUIET" != "1" ]]; then

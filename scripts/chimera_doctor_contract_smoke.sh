@@ -50,10 +50,10 @@ JSON
 esac
 EOF
   chmod +x "$install_root/bin/chimera-cli"
-  cat >"$install_root/configs/client.example.conf" <<'EOF'
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = 203.0.113.10:443
-carrier.server_name = gateway.local
+carrier.server_name = node.local
 capture.mode = auto
 capture.tun_supported = true
 rekey.max_age_seconds = 300
@@ -63,27 +63,27 @@ EOF
 
 run_doctor_case() {
   local case_name="${1:?case_name_required}"
-  local client_conf_mode="${2:?client_conf_mode_required}"
+  local node_conf_mode="${2:?node_conf_mode_required}"
   local fake_rc="${3:?fake_rc_required}"
   local expect_rc="${4:?expect_rc_required}"
   local expect_phrase="${5:?expect_phrase_required}"
-  local tmp_dir install_root client_conf output rc doctor_json
+  local tmp_dir install_root node_conf output rc doctor_json
 
   tmp_dir="$(mktemp -d)"
   install_root="$tmp_dir/chimera-release"
-  client_conf="$tmp_dir/client.conf"
+  node_conf="$tmp_dir/mesh-node.conf"
   mkdir -p "$tmp_dir/home" "$tmp_dir/cache" "$tmp_dir/config" "$tmp_dir/runtime"
   make_install_root "$install_root"
 
-  case "$client_conf_mode" in
+  case "$node_conf_mode" in
     missing)
-      rm -f "$client_conf"
+      rm -f "$node_conf"
       ;;
     placeholder)
-      cat >"$client_conf" <<'EOF'
+      cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = 203.0.113.10:443
-carrier.server_name = gateway.local
+carrier.server_name = node.local
 capture.mode = auto
 capture.tun_supported = true
 rekey.max_age_seconds = 300
@@ -91,10 +91,10 @@ rekey.max_packets_per_key = 10000
 EOF
       ;;
     ready)
-      cat >"$client_conf" <<'EOF'
+      cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = carrier.mesh:443
-carrier.server_name = gateway.local
+carrier.server_name = node.local
 capture.mode = tun
 capture.tun_supported = true
 rekey.max_age_seconds = 300
@@ -102,10 +102,21 @@ rekey.max_packets_per_key = 10000
 EOF
       ;;
     doc_placeholder)
-      cat >"$client_conf" <<'EOF'
+      cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = 198.51.100.10:443
-carrier.server_name = gateway.local
+carrier.server_name = node.local
+capture.mode = tun
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+      ;;
+    tcp_doc_placeholder)
+      cat >"$node_conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = tcp://198.51.100.10:443
+carrier.server_name = node.local
 capture.mode = tun
 capture.tun_supported = true
 rekey.max_age_seconds = 300
@@ -113,7 +124,7 @@ rekey.max_packets_per_key = 10000
 EOF
       ;;
     *)
-      fail "$case_name: unknown client_conf_mode=$client_conf_mode"
+      fail "$case_name: unknown node_conf_mode=$node_conf_mode"
       ;;
   esac
 
@@ -123,7 +134,7 @@ EOF
     XDG_CACHE_HOME="$tmp_dir/cache" \
     XDG_CONFIG_HOME="$tmp_dir/config" \
     XDG_RUNTIME_DIR="$tmp_dir/runtime" \
-    CLIENT_CONFIG_FILE="$client_conf" \
+    NODE_CONFIG_FILE="$node_conf" \
     CHIMERA_FAKE_DOCTOR_RC="$fake_rc" \
       timeout 10s bash "$install_root/scripts/chimera-control.sh" doctor 2>&1
   )"
@@ -140,9 +151,9 @@ EOF
   doctor_json="$install_root/docs/doctor_latest.json"
   [[ -f "$doctor_json" ]] || fail "$case_name: doctor report missing"
   [[ -s "$doctor_json" ]] || fail "$case_name: doctor report empty"
-  if [[ "$client_conf_mode" == "placeholder" || "$client_conf_mode" == "missing" || "$client_conf_mode" == "doc_placeholder" ]]; then
+  if [[ "$node_conf_mode" == "placeholder" || "$node_conf_mode" == "missing" || "$node_conf_mode" == "doc_placeholder" || "$node_conf_mode" == "tcp_doc_placeholder" ]]; then
     rg -q '"status":"fail"' "$doctor_json" || fail "$case_name: expected fail artifact"
-    rg -q '"client_config_ready":false' "$doctor_json" || fail "$case_name: expected unconfigured marker"
+    rg -q '"node_config_ready":false' "$doctor_json" || fail "$case_name: expected unconfigured marker"
   else
     rg -q '"status":"ok"' "$doctor_json" || fail "$case_name: expected ok artifact"
   fi
@@ -150,9 +161,10 @@ EOF
   rm -rf "$tmp_dir"
 }
 
-run_doctor_case "missing_config_fails_closed" "missing" "0" "2" "doctor_status=fail reason=client_endpoint_unconfigured"
-run_doctor_case "placeholder_config_fails_closed" "placeholder" "0" "2" "doctor_status=fail reason=client_endpoint_unconfigured"
-run_doctor_case "doc_placeholder_config_fails_closed" "doc_placeholder" "0" "2" "doctor_status=fail reason=client_endpoint_unconfigured"
+run_doctor_case "missing_config_fails_closed" "missing" "0" "2" "doctor_status=fail reason=node_endpoint_unconfigured"
+run_doctor_case "placeholder_config_fails_closed" "placeholder" "0" "2" "doctor_status=fail reason=node_endpoint_unconfigured"
+run_doctor_case "doc_placeholder_config_fails_closed" "doc_placeholder" "0" "2" "doctor_status=fail reason=node_endpoint_unconfigured"
+run_doctor_case "tcp_doc_placeholder_config_fails_closed" "tcp_doc_placeholder" "0" "2" "doctor_status=fail reason=node_endpoint_unconfigured"
 run_doctor_case "ready_config_success_preserves_zero_exit" "ready" "0" "0" "doctor_status=ok"
 run_doctor_case "ready_config_nonzero_exit_is_preserved" "ready" "7" "7" "doctor_status=fail exit=7"
 
@@ -163,8 +175,8 @@ run_logs_redaction_case() {
   mkdir -p "$tmp_dir/home" "$tmp_dir/cache" "$tmp_dir/config" "$tmp_dir/runtime"
   make_install_root "$install_root"
   mkdir -p "$tmp_dir/cache/chimera"
-  cat >"$tmp_dir/cache/chimera/chimera_gateway.service.log" <<'EOF'
-carrier_addr=203.0.113.10:443 endpoint=198.51.100.10:9443 server=gateway.local host=node.example.org
+  cat >"$tmp_dir/cache/chimera/chimera_node.service.log" <<'EOF'
+carrier_addr=203.0.113.10:443 endpoint=198.51.100.10:9443 server=node.local host=node.example.org
 carrier_server_name=stand.internal.example listen_addr=127.0.0.1:9443 server_name=control.private.example
 {"carrier_addr":"203.0.113.10:443","carrier_server_name":"node.example.org","listen_addr":"0.0.0.0:443","token":"raw-token","private_key":"raw-key"}
 CHIMERA_PEER_EGRESS_TOKEN="quoted-token" SECRET='quoted-secret' password=plain-password url=https://node.example.org:443/path home=/home/rawuser/chimera
@@ -197,7 +209,7 @@ EOF
   [[ "$output" != *"2001:db8::1"* ]] || fail "logs_redaction: leaked ipv6 address"
   [[ "$output" != *"0.0.0.0:443"* ]] || fail "logs_redaction: leaked listen addr"
   [[ "$output" != *"127.0.0.1:9443"* ]] || fail "logs_redaction: leaked key listen addr"
-  [[ "$output" != *"gateway.local"* ]] || fail "logs_redaction: leaked local hostname"
+  [[ "$output" != *"node.local"* ]] || fail "logs_redaction: leaked local hostname"
   [[ "$output" != *"node.example.org"* ]] || fail "logs_redaction: leaked example hostname"
   [[ "$output" != *"stand.internal.example"* ]] || fail "logs_redaction: leaked carrier server name"
   [[ "$output" != *"control.private.example"* ]] || fail "logs_redaction: leaked public-style hostname"
@@ -257,7 +269,41 @@ EOF
   rm -rf "$tmp_dir"
 }
 
+run_legacy_app_workflow_disabled_case() {
+  local tmp_dir install_root cmd output rc
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  mkdir -p "$tmp_dir/home" "$tmp_dir/cache" "$tmp_dir/config" "$tmp_dir/runtime"
+  make_install_root "$install_root"
+  for cmd in \
+    "run-app browser" \
+    "verify-app browser" \
+    "verify-cmd true" \
+    "service-route-enable browser" \
+    "service-route-disable browser" \
+    "verify-service browser" \
+    "service-route-enable-running browser"
+  do
+    set +e
+    output="$(
+      HOME="$tmp_dir/home" \
+      XDG_CACHE_HOME="$tmp_dir/cache" \
+      XDG_CONFIG_HOME="$tmp_dir/config" \
+      XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+        timeout 10s bash "$install_root/scripts/chimera-control.sh" $cmd 2>&1
+    )"
+    rc=$?
+    set -e
+    [[ "$rc" -eq 2 ]] || fail "legacy_app_workflow: expected rc=2 for '$cmd', got $rc output=$output"
+    [[ "$output" == *"reason=legacy_lab_only_not_datapath_evidence"* ]] || fail "legacy_app_workflow: missing lab-only reason for '$cmd' output=$output"
+    [[ "$output" == *"product_datapath_evidence=false"* ]] || fail "legacy_app_workflow: missing evidence=false for '$cmd' output=$output"
+    [[ "$output" != *"_status=pass"* ]] || fail "legacy_app_workflow: false pass leaked for '$cmd' output=$output"
+  done
+  rm -rf "$tmp_dir"
+}
+
 run_logs_redaction_case
 run_status_redaction_case
+run_legacy_app_workflow_disabled_case
 
 echo "chimera_doctor_contract_smoke=pass"

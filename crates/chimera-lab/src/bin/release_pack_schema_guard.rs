@@ -17,10 +17,31 @@ fn main() {
 
     let truth_expected = truth_expected(&reality);
 
-    require_str(&release, "status", "ok");
     require_str(&release, "kind", "release_readiness_report");
-    require_str(&pack, "status", "ok");
     require_str(&pack, "kind", "report_pack");
+    let real_world_datapath_closed = truth_expected
+        .get("real_world_datapath_closed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let release_ok = get_bool(&release, "release_ok");
+    let lab_release_ok = get_bool(&release, "lab_release_ok");
+    let expected_slice = get_bool(&reality, "github_release_ssh_runtime_slice_proven");
+    let release_slice = get_bool(&release, "github_release_ssh_runtime_slice_proven");
+    if !lab_release_ok {
+        fail("release lab gate is not ok");
+    }
+    if release_slice != expected_slice {
+        fail("release GitHub SSH runtime slice proof mismatch");
+    }
+    if release_ok != real_world_datapath_closed {
+        fail("release_ok must match real-world datapath closure when lab gate is ok");
+    }
+    if release.get("status").and_then(Value::as_str) == Some("ok") && !release_ok {
+        fail("release status ok requires real-world datapath release_ok");
+    }
+    if pack.get("status").and_then(Value::as_str) == Some("ok") && !release_ok {
+        fail("pack status ok requires real-world datapath release_ok");
+    }
 
     if release.get("truth_boundary") != Some(&truth_expected) {
         fail("release truth_boundary mismatch");
@@ -29,7 +50,6 @@ fn main() {
         fail("pack truth_boundary mismatch");
     }
 
-    require_bool(&release, "release_ok", true);
     require_str(&release, "network_state", "not_modified");
     require_str(&pack, "network_state", "not_modified");
 
@@ -50,9 +70,9 @@ fn main() {
 
     let release_gate_expected: BTreeSet<&str> = [
         "clean_clone_builds",
-        "client_gateway_run_linux",
+        "mesh_node_runs_linux",
         "encrypted_tunnel_carries_traffic",
-        "policy_routing_direct_gateway_block",
+        "policy_routing_direct_peer_transit_block",
         "dns_binding_works",
         "route_explain_works",
         "shutdown_restores_network_state",
@@ -110,6 +130,7 @@ fn main() {
         "m5_artifacts_report",
         "m6_artifacts_report",
         "release_readiness_report",
+        "github_release_ssh_runtime_slice_proven",
         "cef_phase1_smoke",
         "mesh_route_explain",
         "mesh_auto_adaptive_trace",
@@ -124,13 +145,19 @@ fn main() {
         "mvp_spec_report",
         "m5_artifacts_report",
         "m6_artifacts_report",
-        "release_readiness_report",
+        "github_release_ssh_runtime_slice_proven",
         "cef_phase1_smoke",
         "mesh_route_explain",
         "mesh_auto_adaptive_trace",
     ] {
-        require_bool(&pack, k, true);
+        let expected = if k == "github_release_ssh_runtime_slice_proven" {
+            expected_slice
+        } else {
+            true
+        };
+        require_bool(&pack, k, expected);
     }
+    require_bool(&pack, "release_readiness_report", release_ok);
 
     let release_top_expected: BTreeSet<&str> = [
         "status",
@@ -138,6 +165,8 @@ fn main() {
         "message_en",
         "message_ru",
         "release_ok",
+        "lab_release_ok",
+        "github_release_ssh_runtime_slice_proven",
         "truth_boundary",
         "milestones",
         "release_gate",
@@ -189,6 +218,10 @@ fn require_bool(obj: &serde_json::Map<String, Value>, key: &str, expected: bool)
     if obj.get(key).and_then(Value::as_bool) != Some(expected) {
         fail(&format!("{key} is not {expected}"));
     }
+}
+
+fn get_bool(obj: &serde_json::Map<String, Value>, key: &str) -> bool {
+    obj.get(key).and_then(Value::as_bool).unwrap_or(false)
 }
 
 fn get_obj<'a>(

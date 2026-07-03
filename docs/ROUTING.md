@@ -5,7 +5,7 @@ Default runtime mode:
 - `split` (required default).
 - CHIMERA observes system/application flows and preserves direct path for
   resources that are reachable directly.
-- CHIMERA switches only unreachable resources to gateway/proxy path.
+- CHIMERA switches only unreachable resources to the WEAVE transit path.
 - `full` mode is explicit operator override and is not default.
 
 MVP policy precedence:

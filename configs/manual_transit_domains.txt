@@ -1,14 +1,4 @@
-# Domains that must always go through CHIMERA peer transit (manual override).
+# Operator-private CHIMERA peer transit overrides.
+# Product defaults must stay empty: no real domains, no broad suffixes, no
+# release-baked route decisions.
 # One domain per line, comments start with '#'.
-aistudio.google.com
-youtube.com
-com
-google.com
-threads.net
-discord.gg
-googleusercontent.com
-chat.openai.com
-openai.com
-france24.com
-coinbase.com
-kick.com

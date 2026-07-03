@@ -2,6 +2,8 @@
 
 Status: **PASS**
 
+Scope: lab/report artifact coverage only; not release/prod closure.
+
 Checks:
 - Config smoke: `true`
 - Doctor artifacts: `true`

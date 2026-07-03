@@ -38,16 +38,45 @@ fn main() {
     let reality_obj = reality
         .as_object()
         .unwrap_or_else(|| fail("ship readiness json guard: reality root is not object"));
-    require_str_eq(report_obj, "status", "ok");
+    let report_status = report_obj
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if !["ok", "fail"].contains(&report_status) {
+        fail("ship readiness json guard: status mismatch");
+    }
     require_str_eq(report_obj, "status_scope", "lab_source_gate_only");
     require_str_eq(report_obj, "kind", "ship_readiness_report");
-    require_bool_eq(report_obj, "release_ok", true);
     require_bool_eq(report_obj, "release_ok_lab_only", true);
+    let release_ok = report_obj
+        .get("release_ok")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| fail("ship readiness json guard: invalid release_ok"));
+    let github_release_ssh_runtime_slice_proven = report_obj
+        .get("github_release_ssh_runtime_slice_proven")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| {
+            fail("ship readiness json guard: invalid github_release_ssh_runtime_slice_proven")
+        });
     require_bool_eq(report_obj, "cef_phase1_smoke_ok", true);
     require_bool_eq(report_obj, "mesh_route_explain_ok", true);
     require_bool_eq(report_obj, "mesh_auto_adaptive_ok", true);
     require_bool_eq(report_obj, "git_tree_hygiene_ok", true);
-    require_bool_eq(report_obj, "runtime_real_world_probe_smoke_ok", true);
+    let datapath_release_ok = report_obj
+        .get("runtime_real_world_datapath_release_ok")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| {
+            fail("ship readiness json guard: invalid runtime_real_world_datapath_release_ok")
+        });
+    if release_ok != datapath_release_ok {
+        fail("ship readiness json guard: release_ok must match CHIMERA datapath release evidence");
+    }
+    if report_status == "ok" && !datapath_release_ok {
+        fail("ship readiness json guard: status ok requires CHIMERA datapath release evidence");
+    }
+    if report_status == "ok" && !release_ok {
+        fail("ship readiness json guard: status ok requires release_ok");
+    }
     require_bool_eq(report_obj, "runtime_probe_access_smoke_ok", true);
     let probe_access_mode = report_obj
         .get("runtime_probe_access_mode")
@@ -85,8 +114,15 @@ fn main() {
         .get("real_world_datapath_closed")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let github_slice_expected = reality_obj
+        .get("github_release_ssh_runtime_slice_proven")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     require_bool_eq(truth, "lab_scope_only", true);
     require_bool_eq(truth, "real_world_datapath_closed", real_world_expected);
+    if github_release_ssh_runtime_slice_proven != github_slice_expected {
+        fail("ship readiness json guard: GitHub SSH runtime slice proof mismatch");
+    }
     if ci_snapshot && real_world_expected {
         fail("ship readiness json guard: ci_snapshot cannot close real-world datapath");
     }
@@ -104,6 +140,8 @@ fn main() {
         "runtime_apply_route_smoke",
         "mesh_auto_smoke",
         "mesh_auto_adaptive_trace_guard",
+        "product_language_guard_selfcheck",
+        "product_language_guard",
     ] {
         require_step_true(report_obj, key);
     }
@@ -118,6 +156,9 @@ fn main() {
         "runtime_real_world_datapath_targets_total",
         "runtime_real_world_datapath_targets_ok",
         "runtime_real_world_datapath_targets_failed",
+        "runtime_real_world_external_reachability_targets_total",
+        "runtime_real_world_external_reachability_targets_ok",
+        "runtime_real_world_external_reachability_targets_failed",
     ] {
         if report_obj
             .get(key)
@@ -136,8 +177,12 @@ fn main() {
     for key in [
         "runtime_real_world_datapath_probe_attempted",
         "runtime_real_world_datapath_probe_ok",
+        "runtime_real_world_datapath_release_ok",
         "runtime_real_world_direct_probe_ok",
+        "runtime_real_world_chimera_datapath_evidence",
         "runtime_real_world_skipped_no_curl",
+        "runtime_real_world_external_reachability_probe_attempted",
+        "runtime_real_world_external_reachability_probe_ok",
         "runtime_real_world_live_external_probe",
         "runtime_real_world_ssh_stand_required_for_live_probe",
         "runtime_probe_access_live_external_probe",
@@ -162,6 +207,7 @@ fn main() {
         "none",
         "curl_not_found",
         "datapath_target_failed",
+        "chimera_datapath_evidence_missing",
         "ci_snapshot",
         "unknown",
     ]
@@ -173,7 +219,14 @@ fn main() {
     require_md_contains(&report_md_raw, "CEF track sync guard:");
     require_md_contains(&report_md_raw, "Git tree hygiene guard:");
     require_md_contains(&report_md_raw, "Truth boundary:");
-    require_md_contains(&report_md_raw, "Status: **PASS (LAB/SOURCE GATE ONLY)**");
+    require_md_contains(
+        &report_md_raw,
+        if report_status == "ok" {
+            "Status: **PASS (LAB/SOURCE GATE ONLY)**"
+        } else {
+            "Status: **FAIL (LAB/SOURCE GATE ONLY)**"
+        },
+    );
     require_md_contains(&report_md_raw, "Fresh checked artifacts in this run:");
     require_md_contains(&report_md_raw, "Benchmark baseline control present: `true`");
     if report_md_raw.lines().any(|line| line == "Status: **PASS**") {
@@ -189,11 +242,36 @@ fn main() {
             if real_world_expected { "true" } else { "false" }
         ),
     );
+    require_md_contains(
+        &report_md_raw,
+        &format!(
+            "GitHub release -> SSH runtime slice proven: `{}`",
+            if github_slice_expected {
+                "true"
+            } else {
+                "false"
+            }
+        ),
+    );
     require_md_contains(&report_md_raw, "Runtime real-world datapath targets total:");
     require_md_contains(&report_md_raw, "Runtime real-world datapath targets ok:");
     require_md_contains(
         &report_md_raw,
         "Runtime real-world datapath targets failed:",
+    );
+    require_md_contains(&report_md_raw, "Runtime real-world evidence kind:");
+    require_md_contains(
+        &report_md_raw,
+        "Runtime real-world CHIMERA datapath evidence:",
+    );
+    require_md_contains(&report_md_raw, "Runtime real-world datapath release ok:");
+    require_md_contains(
+        &report_md_raw,
+        "Runtime real-world external reachability attempted:",
+    );
+    require_md_contains(
+        &report_md_raw,
+        "Runtime real-world external reachability targets total:",
     );
     require_md_contains(&report_md_raw, "Runtime probe-access mode:");
     require_md_contains(&report_md_raw, "Runtime probe-access live external probe:");
@@ -336,6 +414,20 @@ fn validate_runtime_datapath_logic(
     report_obj: &serde_json::Map<String, Value>,
     probe_mode: &str,
 ) -> Result<(), String> {
+    let evidence_kind = report_obj
+        .get("runtime_real_world_evidence_kind")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let chimera_evidence = report_obj
+        .get("runtime_real_world_chimera_datapath_evidence")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let datapath_release_ok = report_obj
+        .get("runtime_real_world_datapath_release_ok")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| {
+            "ship readiness json guard: invalid runtime_real_world_datapath_release_ok".to_string()
+        })?;
     let total = report_obj
         .get("runtime_real_world_datapath_targets_total")
         .and_then(Value::as_i64)
@@ -367,8 +459,59 @@ fn validate_runtime_datapath_logic(
         .get("runtime_real_world_datapath_probe_error")
         .and_then(Value::as_str)
         .unwrap_or("");
+    let external_attempted = report_obj
+        .get("runtime_real_world_external_reachability_probe_attempted")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let external_ok_flag = report_obj
+        .get("runtime_real_world_external_reachability_probe_ok")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let external_total = report_obj
+        .get("runtime_real_world_external_reachability_targets_total")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let external_ok = report_obj
+        .get("runtime_real_world_external_reachability_targets_ok")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let external_failed = report_obj
+        .get("runtime_real_world_external_reachability_targets_failed")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
     let ci_snapshot = probe_mode == "ci_snapshot";
+    let probe_smoke_ok = report_obj
+        .get("runtime_real_world_probe_smoke_ok")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| "ship readiness json guard: invalid runtime_real_world_probe_smoke_ok".to_string())?;
 
+    if ![
+        "external_reachability_without_system_proxy",
+        "ci_snapshot_contract",
+        "chimera_transparent_datapath",
+    ]
+    .contains(&evidence_kind)
+    {
+        return Err("ship readiness json guard: evidence kind value is invalid".to_string());
+    }
+    if ok_flag && !chimera_evidence {
+        return Err("ship readiness json guard: datapath ok without CHIMERA evidence".to_string());
+    }
+    let expected_datapath_release_ok = !ci_snapshot
+        && evidence_kind == "chimera_transparent_datapath"
+        && chimera_evidence
+        && attempted
+        && ok_flag
+        && !skipped_no_curl
+        && total > 0
+        && ok == total
+        && failed == 0;
+    if datapath_release_ok != expected_datapath_release_ok {
+        return Err(
+            "ship readiness json guard: datapath release flag does not match CHIMERA evidence"
+                .to_string(),
+        );
+    }
     if attempted && total <= 0 {
         return Err(
             "ship readiness json guard: datapath probe attempted with empty totals".to_string(),
@@ -386,16 +529,24 @@ fn validate_runtime_datapath_logic(
     if skipped_no_curl && attempted {
         return Err("ship readiness json guard: no curl but datapath attempted".to_string());
     }
+    if external_ok + external_failed != external_total {
+        return Err("ship readiness json guard: external reachability totals mismatch".to_string());
+    }
+    if external_ok_flag && external_failed != 0 {
+        return Err(
+            "ship readiness json guard: external reachability ok with failed targets".to_string(),
+        );
+    }
     if ci_snapshot {
-        if attempted || ok_flag || skipped_no_curl {
+        if attempted || ok_flag || skipped_no_curl || external_attempted || external_ok_flag {
             return Err(
                 "ship readiness json guard: ci_snapshot cannot report live probe attempt"
                     .to_string(),
             );
         }
-        if total != 0 || ok != 0 || failed != 0 {
+        if total != 0 || ok != 0 || failed != 0 || external_total != 0 {
             return Err(
-                "ship readiness json guard: ci_snapshot must have zero datapath totals".to_string(),
+                "ship readiness json guard: ci_snapshot must have zero probe totals".to_string(),
             );
         }
         if probe_error != "ci_snapshot" {
@@ -404,11 +555,55 @@ fn validate_runtime_datapath_logic(
                     .to_string(),
             );
         }
+        if evidence_kind != "ci_snapshot_contract" || chimera_evidence {
+            return Err(
+                "ship readiness json guard: ci_snapshot evidence fields mismatch".to_string(),
+            );
+        }
+        if probe_smoke_ok {
+            return Err(
+                "ship readiness json guard: ci_snapshot probe smoke flag must stay false"
+                    .to_string(),
+            );
+        }
+        return Ok(());
+    }
+    if evidence_kind == "external_reachability_without_system_proxy" {
+        if chimera_evidence || attempted || ok_flag {
+            return Err(
+                "ship readiness json guard: external reachability must not masquerade as datapath"
+                    .to_string(),
+            );
+        }
+        if !skipped_no_curl && !external_attempted {
+            return Err(
+                "ship readiness json guard: external reachability must be attempted when curl is available"
+                    .to_string(),
+            );
+        }
+        if external_attempted && external_total <= 0 {
+            return Err(
+                "ship readiness json guard: external reachability attempted with empty totals"
+                    .to_string(),
+            );
+        }
+        if !skipped_no_curl && probe_error != "chimera_datapath_evidence_missing" {
+            return Err(
+                "ship readiness json guard: external reachability requires missing datapath evidence marker"
+                    .to_string(),
+            );
+        }
+        if probe_smoke_ok {
+            return Err(
+                "ship readiness json guard: external reachability probe smoke flag must stay false"
+                    .to_string(),
+            );
+        }
         return Ok(());
     }
     if !skipped_no_curl && !attempted {
         return Err(
-            "ship readiness json guard: datapath must be attempted when curl is available"
+            "ship readiness json guard: datapath must be attempted when CHIMERA evidence is available"
                 .to_string(),
         );
     }
@@ -419,6 +614,20 @@ fn validate_runtime_datapath_logic(
     }
     if probe_error == "none" && !ok_flag {
         return Err("ship readiness json guard: datapath failed without error marker".to_string());
+    }
+    let expected_probe_smoke_ok = evidence_kind == "chimera_transparent_datapath"
+        && chimera_evidence
+        && attempted
+        && ok_flag
+        && !skipped_no_curl
+        && total > 0
+        && ok == total
+        && failed == 0;
+    if probe_smoke_ok != expected_probe_smoke_ok {
+        return Err(
+            "ship readiness json guard: probe smoke flag does not match live CHIMERA evidence"
+                .to_string(),
+        );
     }
     Ok(())
 }
@@ -493,6 +702,38 @@ mod tests {
             "runtime_real_world_datapath_probe_error".to_string(),
             json!("none"),
         );
+        m.insert(
+            "runtime_real_world_evidence_kind".to_string(),
+            json!("chimera_transparent_datapath"),
+        );
+        m.insert(
+            "runtime_real_world_chimera_datapath_evidence".to_string(),
+            json!(true),
+        );
+        m.insert(
+            "runtime_real_world_datapath_release_ok".to_string(),
+            json!(true),
+        );
+        m.insert(
+            "runtime_real_world_probe_smoke_ok".to_string(),
+            json!(true),
+        );
+        m.insert(
+            "runtime_real_world_external_reachability_probe_ok".to_string(),
+            json!(false),
+        );
+        m.insert(
+            "runtime_real_world_external_reachability_targets_total".to_string(),
+            json!(0),
+        );
+        m.insert(
+            "runtime_real_world_external_reachability_targets_ok".to_string(),
+            json!(0),
+        );
+        m.insert(
+            "runtime_real_world_external_reachability_targets_failed".to_string(),
+            json!(0),
+        );
         m
     }
 
@@ -529,6 +770,10 @@ mod tests {
         let mut payload = base_report_obj();
         payload.insert(
             "runtime_real_world_datapath_probe_attempted".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_release_ok".to_string(),
             json!(false),
         );
         payload.insert(
@@ -577,6 +822,10 @@ mod tests {
     fn runtime_datapath_logic_accepts_ci_snapshot_contract() {
         let mut payload = Map::new();
         payload.insert(
+            "runtime_real_world_probe_smoke_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
             "runtime_real_world_datapath_targets_total".to_string(),
             json!(0),
         );
@@ -604,7 +853,111 @@ mod tests {
             "runtime_real_world_datapath_probe_error".to_string(),
             json!("ci_snapshot"),
         );
+        payload.insert(
+            "runtime_real_world_evidence_kind".to_string(),
+            json!("ci_snapshot_contract"),
+        );
+        payload.insert(
+            "runtime_real_world_chimera_datapath_evidence".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_release_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_probe_attempted".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_probe_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_targets_total".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_targets_ok".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_targets_failed".to_string(),
+            json!(0),
+        );
         assert!(validate_runtime_datapath_logic(&payload, "ci_snapshot").is_ok());
+    }
+
+    #[test]
+    fn runtime_datapath_logic_rejects_snapshot_probe_smoke_claim() {
+        let mut payload = Map::new();
+        payload.insert(
+            "runtime_real_world_probe_smoke_ok".to_string(),
+            json!(true),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_targets_total".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_targets_ok".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_targets_failed".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_probe_attempted".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_probe_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_skipped_no_curl".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_probe_error".to_string(),
+            json!("ci_snapshot"),
+        );
+        payload.insert(
+            "runtime_real_world_evidence_kind".to_string(),
+            json!("ci_snapshot_contract"),
+        );
+        payload.insert(
+            "runtime_real_world_chimera_datapath_evidence".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_datapath_release_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_probe_attempted".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_probe_ok".to_string(),
+            json!(false),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_targets_total".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_targets_ok".to_string(),
+            json!(0),
+        );
+        payload.insert(
+            "runtime_real_world_external_reachability_targets_failed".to_string(),
+            json!(0),
+        );
+        let res = validate_runtime_datapath_logic(&payload, "ci_snapshot");
+        assert!(res.is_err());
+        assert!(res.err().is_some_and(|e| e.contains("probe smoke flag")));
     }
 
     #[test]

@@ -1,9 +1,9 @@
 # Ship Readiness Report
 
-Status: **PASS (LAB/SOURCE GATE ONLY)**
-Generated at (UTC): `2026-06-24T22:03:54Z`
+Status: **FAIL (LAB/SOURCE GATE ONLY)**
+Generated at (UTC): `2026-07-01T18:12:52Z`
 
-Contract sync note: `git_tree_hygiene_guard` was added after the original report generation; this is a source/lab contract sync, not a fresh full ship-readiness run.
+Contract sync note: GitHub release -> SSH runtime slice proof and stale-freshness flags were synchronized against current release/reality artifacts; this is a source/lab contract sync, not a fresh full ship-readiness run.
 
 Checks:
 - Git tree hygiene guard: `true`
@@ -23,8 +23,11 @@ Checks:
 - Release readiness RU markdown: `true`
 - Report pack JSON: `true`
 - Report pack markdown: `true`
-- Release gate (`release_ok`): `true`
+- Workflow attestation guard selfcheck: `true`
+- Workflow attestation guard: `true`
+- Release gate (`release_ok`): `false`
 - Release gate is lab-only (`release_ok_lab_only`): `true`
+- GitHub release -> SSH runtime slice proven: `true`
 - CEF phase1 smoke: `true`
 - CEF phase1 closed: `true`
 - Mesh route explain: `true`
@@ -42,23 +45,31 @@ Checks:
 - Runtime policy precedence smoke (`exact>suffix + dns-binding`): `true`
 - Runtime forced-stop rollback smoke (`recover without graceful down`): `true`
 - Runtime probe-access smoke (`batch targets + totals/threshold report`): `true`
-- Runtime probe-access mode: `live`
-- Runtime probe-access live external probe: `true`
-- Runtime probe-access external remote proof required for live probe: `false`
-- Runtime probe-access ci-snapshot targets ok: `false`
-- Runtime real-world probe smoke (`transparent datapath snapshot only`): `true`
-- Runtime real-world probe mode: `live`
-- Runtime real-world live external probe: `true`
-- Runtime real-world external remote proof required for live probe: `false`
-- Runtime real-world direct probe ok: `true`
-- Runtime real-world datapath probe attempted: `true`
-- Runtime real-world datapath probe ok: `true`
-- Runtime real-world datapath probe error: `none`
-- Runtime real-world datapath targets total: `3`
-- Runtime real-world datapath targets ok: `3`
+- Runtime probe-access mode: `ci_snapshot`
+- Runtime probe-access live external probe: `false`
+- Runtime probe-access external remote proof required for live probe: `true`
+- Runtime probe-access ci-snapshot targets ok: `true`
+- Runtime real-world probe smoke (`live CHIMERA datapath evidence only`): `false`
+- Runtime real-world datapath release ok: `false`
+- Runtime real-world probe mode: `ci_snapshot`
+- Runtime real-world evidence kind: `ci_snapshot_contract`
+- Runtime real-world CHIMERA datapath evidence: `false`
+- Runtime real-world live external probe: `false`
+- Runtime real-world external remote proof required for live probe: `true`
+- Runtime real-world direct probe ok: `false`
+- Runtime real-world datapath probe attempted: `false`
+- Runtime real-world datapath probe ok: `false`
+- Runtime real-world datapath probe error: `ci_snapshot`
+- Runtime real-world datapath targets total: `0`
+- Runtime real-world datapath targets ok: `0`
 - Runtime real-world datapath targets failed: `0`
+- Runtime real-world external reachability attempted: `false`
+- Runtime real-world external reachability ok: `false`
+- Runtime real-world external reachability targets total: `0`
+- Runtime real-world external reachability targets ok: `0`
+- Runtime real-world external reachability targets failed: `0`
 - Runtime real-world skipped no curl: `false`
-- Fresh checked artifacts in this run: `true`
+- Fresh checked artifacts in this run: `false`
 - Benchmark baseline control present: `true`
 
 Truth boundary:

@@ -10,20 +10,21 @@ use chimera_config::RawConfig;
 use chimera_mesh::{MeshNode, MeshNodeCountry};
 use ring::signature::{ED25519, UnparsedPublicKey};
 
+use super::bootstrap::bootstrap_env_value;
 use super::parse::build_node;
 use super::{config_string_value, extract_flag_value};
 
 pub(super) fn discovery_url_from_env() -> Option<String> {
     match env::var("CHIMERA_MESH_NODES_DISCOVERY_URL") {
         Ok(value) if !value.trim().is_empty() => Some(value),
-        _ => None,
+        _ => bootstrap_env_value("CHIMERA_MESH_NODES_DISCOVERY_URL"),
     }
 }
 
 pub(super) fn discovery_pubkey_from_env() -> Option<String> {
     match env::var("CHIMERA_MESH_NODES_DISCOVERY_PUBKEY") {
         Ok(value) if !value.trim().is_empty() => Some(value),
-        _ => None,
+        _ => bootstrap_env_value("CHIMERA_MESH_NODES_DISCOVERY_PUBKEY"),
     }
 }
 

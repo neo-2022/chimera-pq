@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-UPSTREAM_ENV_FILE="${UPSTREAM_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_proxy.env}"
-POOL_FILE_DEFAULT="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_pool.list"
+UPSTREAM_ENV_FILE="${UPSTREAM_ENV_FILE:-${LEGACY_UPSTREAM_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/legacy_upstream_probe.env}}"
+POOL_FILE_DEFAULT="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/legacy_upstream_pool.list"
+POOL_FILE_COMPAT="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/upstream_pool.list"
 POOL_FILE_FALLBACK="$ROOT_DIR/configs/upstream_pool.list"
 PROBE_TIMEOUT_SEC="${CHIMERA_UPSTREAM_BOOTSTRAP_PROBE_TIMEOUT_SEC:-3}"
 
@@ -92,6 +93,9 @@ load_pool_candidates() {
     return 0
   fi
   local pool_file="${CHIMERA_UPSTREAM_POOL_FILE:-$POOL_FILE_DEFAULT}"
+  if [[ ! -f "$pool_file" && -f "$POOL_FILE_COMPAT" ]]; then
+    pool_file="$POOL_FILE_COMPAT"
+  fi
   if [[ ! -f "$pool_file" && -f "$POOL_FILE_FALLBACK" ]]; then
     pool_file="$POOL_FILE_FALLBACK"
   fi
@@ -150,14 +154,12 @@ main() {
   local port="${best##*:}"
   mkdir -p "$(dirname "$UPSTREAM_ENV_FILE")"
   {
-    printf 'CHIMERA_UPSTREAM_USER=%s\n' "$user"
     printf 'CHIMERA_UPSTREAM_HOST=%s\n' "$host"
     printf 'CHIMERA_UPSTREAM_PORT=%s\n' "$port"
-    printf 'CHIMERA_UPSTREAM_PASS=%s\n' "$pass"
     printf 'CHIMERA_UPSTREAM_ENDPOINTS_CSV=%s\n' "$(IFS=,; echo "${normalized[*]}")"
   } >"$UPSTREAM_ENV_FILE"
   chmod 600 "$UPSTREAM_ENV_FILE"
-  echo "upstream-autobootstrap: selected=$best candidates=${#normalized[@]} file=$UPSTREAM_ENV_FILE"
+  echo "upstream-autobootstrap: selected=$best candidates=${#normalized[@]} file=$UPSTREAM_ENV_FILE mode=legacy_probe_only"
 }
 
 main "$@"

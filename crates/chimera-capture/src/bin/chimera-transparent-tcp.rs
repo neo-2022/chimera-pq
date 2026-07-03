@@ -11,6 +11,8 @@ use socket2::SockRef;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use chimera_capture::detect_forbidden_manual_proxy_protocol;
+
 const LOCAL_MAGIC: &[u8] = b"CHIMERA-LOCAL/1\n";
 const MAX_INITIAL_BYTES: usize = 128 * 1024;
 const COPY_BUFFER_BYTES: usize = 1024 * 1024;
@@ -18,7 +20,6 @@ const TCP_BUFFER_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum DirectMode {
-    Auto,
     Disabled,
 }
 
@@ -29,8 +30,8 @@ struct Options {
     transit_fallback: Option<String>,
     direct_mode: DirectMode,
     direct_timeout_ms: u64,
-    first_response_timeout_ms: u64,
     initial_read_timeout_ms: u64,
+    #[cfg(test)]
     static_destination: Option<String>,
 }
 
@@ -44,22 +45,16 @@ impl Options {
         let mut direct_mode = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE")
             .map(|value| parse_direct_mode(&value))
             .transpose()?
-            .unwrap_or(DirectMode::Auto);
+            .unwrap_or(DirectMode::Disabled);
         let mut direct_timeout_ms = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS")
             .map(|value| parse_positive_u64(&value, "direct-timeout-ms"))
             .transpose()?
             .unwrap_or(1200);
-        let mut first_response_timeout_ms =
-            env_value("CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS")
-                .map(|value| parse_positive_u64(&value, "first-response-timeout-ms"))
-                .transpose()?
-                .unwrap_or(1800);
         let mut initial_read_timeout_ms =
             env_value("CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS")
                 .map(|value| parse_positive_u64(&value, "initial-read-timeout-ms"))
                 .transpose()?
                 .unwrap_or(500);
-        let mut static_destination = env_value("CHIMERA_TRANSPARENT_TCP_STATIC_DESTINATION");
 
         let mut index = 0usize;
         while index < args.len() {
@@ -77,14 +72,9 @@ impl Options {
                 "--direct-timeout-ms" => {
                     direct_timeout_ms = parse_positive_u64(value, "direct-timeout-ms")?;
                 }
-                "--first-response-timeout-ms" => {
-                    first_response_timeout_ms =
-                        parse_positive_u64(value, "first-response-timeout-ms")?;
-                }
                 "--initial-read-timeout-ms" => {
                     initial_read_timeout_ms = parse_positive_u64(value, "initial-read-timeout-ms")?;
                 }
-                "--static-destination" => static_destination = Some(value.clone()),
                 _ => return Err(format!("unknown flag: {flag}")),
             }
             index += 2;
@@ -99,9 +89,9 @@ impl Options {
             transit_fallback,
             direct_mode,
             direct_timeout_ms,
-            first_response_timeout_ms,
             initial_read_timeout_ms,
-            static_destination,
+            #[cfg(test)]
+            static_destination: None,
         })
     }
 }
@@ -143,27 +133,9 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
     tune_tcp(&client)?;
     let initial = read_initial_bytes(&mut client, options.initial_read_timeout_ms)?;
     let destination = resolve_destination(&client, &initial, options)?;
-    eprintln!("event=transparent_flow_accepted destination={destination}");
-    if options.direct_mode == DirectMode::Disabled {
-        let transit = connect_transit_with_fallback(
-            &options.transit_local,
-            options.transit_fallback.as_deref(),
-            &destination,
-            &initial,
-            options.direct_timeout_ms,
-        )?;
-        eprintln!(
-            "event=transparent_route_selected route=transit reason=direct_mode_disabled destination={destination}"
-        );
-        return relay_plain(client, transit);
-    }
-    match try_direct(&destination, &initial, options) {
-        Ok((target, first_response)) => {
-            eprintln!("event=transparent_route_selected route=direct destination={destination}");
-            relay_after_probe(client, target, first_response)
-        }
-        Err(error) => {
-            eprintln!("event=transparent_direct_failed reason={error}");
+    eprintln!("event=transparent_flow_accepted destination_state=resolved");
+    match options.direct_mode {
+        DirectMode::Disabled => {
             let transit = connect_transit_with_fallback(
                 &options.transit_local,
                 options.transit_fallback.as_deref(),
@@ -171,7 +143,9 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
                 &initial,
                 options.direct_timeout_ms,
             )?;
-            eprintln!("event=transparent_route_selected route=transit destination={destination}");
+            eprintln!(
+                "event=transparent_route_selected route=transit reason=direct_mode_disabled destination_state=resolved"
+            );
             relay_plain(client, transit)
         }
     }
@@ -188,48 +162,13 @@ fn connect_transit_with_fallback(
         Ok(stream) => Ok(stream),
         Err(err) => match transit_fallback {
             Some(fallback) => {
-                eprintln!("event=transit_fallback_trying fallback={fallback} reason=\"{err}\"");
+                eprintln!(
+                    "event=transit_fallback_trying fallback_state=configured reason=\"{err}\""
+                );
                 connect_transit(fallback, destination, initial, timeout_ms)
             }
             None => Err(err),
         },
-    }
-}
-
-fn try_direct(
-    destination: &SocketAddr,
-    initial: &[u8],
-    options: &Options,
-) -> Result<(TcpStream, Vec<u8>), String> {
-    let mut target = connect_tcp(&destination.to_string(), options.direct_timeout_ms)
-        .map_err(|error| format!("direct connect failed: {error}"))?;
-    tune_tcp(&target)?;
-    if !initial.is_empty() {
-        target
-            .write_all(initial)
-            .map_err(|error| format!("direct initial write failed: {error}"))?;
-        target
-            .set_read_timeout(Some(Duration::from_millis(
-                options.first_response_timeout_ms,
-            )))
-            .map_err(|error| format!("direct set read timeout failed: {error}"))?;
-        let mut first = vec![0_u8; COPY_BUFFER_BYTES];
-        match target.read(&mut first) {
-            Ok(0) => Err("direct closed before first response".to_string()),
-            Ok(n) => {
-                first.truncate(n);
-                target
-                    .set_read_timeout(None)
-                    .map_err(|error| format!("direct clear read timeout failed: {error}"))?;
-                Ok((target, first))
-            }
-            Err(error) if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
-                Err("direct first response timed out".to_string())
-            }
-            Err(error) => Err(format!("direct first response read failed: {error}")),
-        }
-    } else {
-        Ok((target, Vec::new()))
     }
 }
 
@@ -259,19 +198,6 @@ fn connect_transit(
             .map_err(|error| format!("transit initial write failed: {error}"))?;
     }
     Ok(transit)
-}
-
-fn relay_after_probe(
-    mut client: TcpStream,
-    target: TcpStream,
-    first_response: Vec<u8>,
-) -> Result<(), String> {
-    if !first_response.is_empty() {
-        client
-            .write_all(&first_response)
-            .map_err(|error| format!("write first response to client failed: {error}"))?;
-    }
-    relay_plain(client, target)
 }
 
 fn relay_plain(left: TcpStream, right: TcpStream) -> Result<(), String> {
@@ -340,73 +266,19 @@ fn original_destination(stream: &TcpStream) -> Result<SocketAddr, String> {
 fn resolve_destination(
     client: &TcpStream,
     initial: &[u8],
-    options: &Options,
+    _options: &Options,
 ) -> Result<SocketAddr, String> {
-    match options.static_destination.as_deref() {
-        Some(dest) => parse_socket_addr(dest),
-        None => {
-            if let Some(addr) = parse_proxy_destination(initial) {
-                Ok(addr)
-            } else {
-                original_destination(client)
-            }
-        }
+    #[cfg(test)]
+    if let Some(dest) = _options.static_destination.as_deref() {
+        return parse_socket_addr(dest);
     }
-}
-
-fn parse_proxy_destination(initial: &[u8]) -> Option<SocketAddr> {
-    let text = std::str::from_utf8(initial).ok()?;
-    if let Some(rest) = text.strip_prefix("CONNECT ") {
-        let host_port = rest.split_whitespace().next()?;
-        let (host, port) = host_port.rsplit_once(':')?;
-        let port: u16 = port.parse().ok()?;
-        let addr = resolve_host_to_v4(host, port)?;
-        return Some(addr);
+    if let Some(protocol) = detect_forbidden_manual_proxy_protocol(initial) {
+        return Err(format!(
+            "manual_proxy_ingress_forbidden protocol={} reason=transparent_mesh_datapath_requires_os_original_destination",
+            protocol.as_str()
+        ));
     }
-    if let Some(rest) = text.strip_prefix("GET http://") {
-        let host_part = rest.split('/').next()?;
-        let (host, resolved_port) = if let Some((h, p)) = host_part.rsplit_once(':') {
-            (h, p.parse::<u16>().ok().unwrap_or(80))
-        } else {
-            (host_part, 80u16)
-        };
-        let addr = resolve_host_to_v4(host, resolved_port)?;
-        return Some(addr);
-    }
-    if let Some(rest) = text.strip_prefix("POST http://") {
-        let host_part = rest.split('/').next()?;
-        let (host, resolved_port) = if let Some((h, p)) = host_part.rsplit_once(':') {
-            (h, p.parse::<u16>().ok().unwrap_or(80))
-        } else {
-            (host_part, 80u16)
-        };
-        let addr = resolve_host_to_v4(host, resolved_port)?;
-        return Some(addr);
-    }
-    if initial.first() == Some(&5) && initial.len() >= 4 {
-        let addr_type = initial[3];
-        if addr_type == 1 && initial.len() >= 10 {
-            let ip = Ipv4Addr::new(initial[4], initial[5], initial[6], initial[7]);
-            let port = u16::from_be_bytes([initial[8], initial[9]]);
-            if !ip.is_loopback() && !ip.is_private() {
-                return Some(SocketAddr::V4(SocketAddrV4::new(ip, port)));
-            }
-        }
-    }
-    None
-}
-
-fn resolve_host_to_v4(host: &str, port: u16) -> Option<SocketAddr> {
-    let host = host.trim_end_matches('.');
-    if let Ok(ip) = host.parse::<Ipv4Addr>() {
-        return Some(SocketAddr::V4(SocketAddrV4::new(ip, port)));
-    }
-    std::net::ToSocketAddrs::to_socket_addrs(&(host, port))
-        .ok()?
-        .find_map(|addr| match addr {
-            SocketAddr::V4(v4) => Some(SocketAddr::V4(v4)),
-            _ => None,
-        })
+    original_destination(client)
 }
 
 fn connect_tcp(target: &str, timeout_ms: u64) -> Result<TcpStream, String> {
@@ -427,7 +299,7 @@ fn connect_tcp(target: &str, timeout_ms: u64) -> Result<TcpStream, String> {
             .unwrap_or(Duration::from_millis(1));
         match TcpStream::connect_timeout(&addr, remaining) {
             Ok(stream) => return Ok(stream),
-            Err(error) => last_error = format!("{addr}: {error}"),
+            Err(error) => last_error = error.to_string(),
         }
     }
     Err(last_error)
@@ -447,6 +319,7 @@ fn tune_tcp_buffers(stream: &TcpStream) {
     let _ = socket.set_send_buffer_size(TCP_BUFFER_BYTES);
 }
 
+#[cfg(test)]
 fn parse_socket_addr(value: &str) -> Result<SocketAddr, String> {
     value
         .parse::<SocketAddr>()
@@ -455,9 +328,12 @@ fn parse_socket_addr(value: &str) -> Result<SocketAddr, String> {
 
 fn parse_direct_mode(value: &str) -> Result<DirectMode, String> {
     match value {
-        "auto" => Ok(DirectMode::Auto),
         "disabled" => Ok(DirectMode::Disabled),
-        _ => Err("direct-mode must be auto or disabled".to_string()),
+        "auto" => Err(
+            "direct-mode auto is forbidden; direct routes require policy-bound WEAVE routing"
+                .to_string(),
+        ),
+        _ => Err("direct-mode must be disabled".to_string()),
     }
 }
 
@@ -502,7 +378,10 @@ fn parse_positive_u64(value: &str, name: &str) -> Result<u64, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DirectMode, Options, handle_client, parse_socket_addr, read_line_limited};
+    use super::{
+        DirectMode, Options, handle_client, parse_socket_addr, read_line_limited,
+        resolve_destination,
+    };
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::thread;
@@ -518,12 +397,8 @@ mod tests {
             "disabled".to_string(),
             "--direct-timeout-ms".to_string(),
             "100".to_string(),
-            "--first-response-timeout-ms".to_string(),
-            "200".to_string(),
             "--initial-read-timeout-ms".to_string(),
             "50".to_string(),
-            "--static-destination".to_string(),
-            "127.0.0.1:2".to_string(),
         ];
         let parsed = Options::parse(&args).unwrap_or_else(|error| {
             unreachable!("options should parse: {error}");
@@ -532,9 +407,8 @@ mod tests {
         assert_eq!(parsed.transit_local, "127.0.0.1:1");
         assert_eq!(parsed.direct_mode, DirectMode::Disabled);
         assert_eq!(parsed.direct_timeout_ms, 100);
-        assert_eq!(parsed.first_response_timeout_ms, 200);
         assert_eq!(parsed.initial_read_timeout_ms, 50);
-        assert_eq!(parsed.static_destination, Some("127.0.0.1:2".to_string()));
+        assert_eq!(parsed.static_destination, None);
         assert_eq!(parsed.transit_fallback, None);
     }
 
@@ -566,140 +440,17 @@ mod tests {
     }
 
     #[test]
-    fn transparent_tcp_uses_direct_when_direct_responds() {
-        let target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("target listener should bind: {error}");
-        });
-        let target_addr = target.local_addr().unwrap_or_else(|error| {
-            unreachable!("target addr should be available: {error}");
-        });
-        thread::spawn(move || {
-            let Ok((mut stream, _)) = target.accept() else {
-                return;
-            };
-            let mut buf = [0_u8; 16];
-            let Ok(n) = stream.read(&mut buf) else {
-                return;
-            };
-            let _ = stream.write_all(b"direct:");
-            let _ = stream.write_all(&buf[..n]);
-        });
-
-        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("transit listener should bind: {error}");
-        });
-        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
-            unreachable!("transit addr should be available: {error}");
-        });
-
-        let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("transparent listener should bind: {error}");
-        });
-        let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
-            unreachable!("transparent addr should be available: {error}");
-        });
-        let options = Options {
-            listen: transparent_addr.to_string(),
-            transit_local: transit_addr.to_string(),
-            transit_fallback: None,
-            direct_mode: DirectMode::Auto,
-            direct_timeout_ms: 500,
-            first_response_timeout_ms: 500,
-            initial_read_timeout_ms: 500,
-            static_destination: Some(target_addr.to_string()),
-        };
-        thread::spawn(move || {
-            let Ok((client, _)) = transparent.accept() else {
-                return;
-            };
-            let _ = handle_client(client, &options);
-        });
-
-        let mut client = TcpStream::connect(transparent_addr).unwrap_or_else(|error| {
-            unreachable!("client should connect to transparent listener: {error}");
-        });
-        client.write_all(b"hello").unwrap_or_else(|error| {
-            unreachable!("client write should work: {error}");
-        });
-        let mut reply = [0_u8; 12];
-        client.read_exact(&mut reply).unwrap_or_else(|error| {
-            unreachable!("client read should work: {error}");
-        });
-        assert_eq!(&reply, b"direct:hello");
-    }
-
-    #[test]
-    fn transparent_tcp_falls_back_to_transit_when_direct_is_down() {
-        let closed_target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("closed target listener should bind: {error}");
-        });
-        let closed_target_addr = closed_target.local_addr().unwrap_or_else(|error| {
-            unreachable!("closed target addr should be available: {error}");
-        });
-        drop(closed_target);
-
-        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("transit listener should bind: {error}");
-        });
-        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
-            unreachable!("transit addr should be available: {error}");
-        });
-        thread::spawn(move || {
-            let Ok((mut stream, _)) = transit.accept() else {
-                return;
-            };
-            let mut magic = [0_u8; super::LOCAL_MAGIC.len()];
-            if stream.read_exact(&mut magic).is_err() || magic != super::LOCAL_MAGIC {
-                return;
-            }
-            if read_line_limited(&mut stream, 128).is_err() {
-                return;
-            }
-            if stream.write_all(b"OK\n").is_err() {
-                return;
-            }
-            let mut buf = [0_u8; 16];
-            let Ok(n) = stream.read(&mut buf) else {
-                return;
-            };
-            let _ = stream.write_all(b"transit:");
-            let _ = stream.write_all(&buf[..n]);
-        });
-
-        let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("transparent listener should bind: {error}");
-        });
-        let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
-            unreachable!("transparent addr should be available: {error}");
-        });
-        let options = Options {
-            listen: transparent_addr.to_string(),
-            transit_local: transit_addr.to_string(),
-            transit_fallback: None,
-            direct_mode: DirectMode::Auto,
-            direct_timeout_ms: 500,
-            first_response_timeout_ms: 500,
-            initial_read_timeout_ms: 500,
-            static_destination: Some(closed_target_addr.to_string()),
-        };
-        thread::spawn(move || {
-            let Ok((client, _)) = transparent.accept() else {
-                return;
-            };
-            let _ = handle_client(client, &options);
-        });
-
-        let mut client = TcpStream::connect(transparent_addr).unwrap_or_else(|error| {
-            unreachable!("client should connect to transparent listener: {error}");
-        });
-        client.write_all(b"hello").unwrap_or_else(|error| {
-            unreachable!("client write should work: {error}");
-        });
-        let mut reply = [0_u8; 13];
-        client.read_exact(&mut reply).unwrap_or_else(|error| {
-            unreachable!("client read should work: {error}");
-        });
-        assert_eq!(&reply, b"transit:hello");
+    fn options_reject_auto_direct_mode() {
+        let args = vec![
+            "--listen".to_string(),
+            "127.0.0.1:0".to_string(),
+            "--transit-local".to_string(),
+            "127.0.0.1:1".to_string(),
+            "--direct-mode".to_string(),
+            "auto".to_string(),
+        ];
+        let error = Options::parse(&args).unwrap_err();
+        assert!(error.contains("direct-mode auto is forbidden"));
     }
 
     #[test]
@@ -751,7 +502,6 @@ mod tests {
             transit_fallback: None,
             direct_mode: DirectMode::Disabled,
             direct_timeout_ms: 500,
-            first_response_timeout_ms: 500,
             initial_read_timeout_ms: 500,
             static_destination: Some(direct_target_addr.to_string()),
         };
@@ -826,7 +576,6 @@ mod tests {
             transit_fallback: Some(transit_addr.to_string()),
             direct_mode: DirectMode::Disabled,
             direct_timeout_ms: 500,
-            first_response_timeout_ms: 500,
             initial_read_timeout_ms: 500,
             static_destination: Some("127.0.0.1:80".to_string()),
         };
@@ -848,5 +597,43 @@ mod tests {
             unreachable!("client read should work: {error}");
         });
         assert_eq!(&reply[..], b"fallback-works:hello");
+    }
+
+    #[test]
+    fn transparent_destination_rejects_manual_proxy_ingress() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("listener should bind: {error}");
+        });
+        let listener_addr = listener.local_addr().unwrap_or_else(|error| {
+            unreachable!("listener addr should be available: {error}");
+        });
+        let client = TcpStream::connect(listener_addr).unwrap_or_else(|error| {
+            unreachable!("client should connect: {error}");
+        });
+        let (server, _) = listener.accept().unwrap_or_else(|error| {
+            unreachable!("server should accept: {error}");
+        });
+        let options = Options {
+            listen: listener_addr.to_string(),
+            transit_local: "127.0.0.1:1".to_string(),
+            transit_fallback: None,
+            direct_mode: DirectMode::Disabled,
+            direct_timeout_ms: 100,
+            initial_read_timeout_ms: 100,
+            static_destination: None,
+        };
+
+        let error = match resolve_destination(
+            &server,
+            b"CONNECT example.org:443 HTTP/1.1\r\nHost: example.org\r\n\r\n",
+            &options,
+        ) {
+            Ok(_) => unreachable!("manual proxy ingress must fail closed"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("manual_proxy_ingress_forbidden"));
+        assert!(error.contains("http_connect"));
+        drop(client);
     }
 }

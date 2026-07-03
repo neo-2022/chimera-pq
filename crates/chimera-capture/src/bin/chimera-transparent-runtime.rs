@@ -20,7 +20,6 @@ struct Options {
     transit_local: String,
     direct_mode: String,
     direct_timeout_ms: u64,
-    first_response_timeout_ms: u64,
     initial_read_timeout_ms: u64,
     table_name: String,
     chain_name: String,
@@ -41,17 +40,12 @@ impl Options {
         let mut listen = env_value("CHIMERA_TRANSPARENT_TCP_LISTEN");
         let mut transit_local = env_value("CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL")
             .or_else(|| env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL"));
-        let mut direct_mode =
-            env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE").unwrap_or_else(|| "auto".to_string());
+        let mut direct_mode = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE")
+            .unwrap_or_else(|| "disabled".to_string());
         let mut direct_timeout_ms = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS")
             .map(|value| parse_positive_u64(&value, "direct-timeout-ms"))
             .transpose()?
             .unwrap_or(1200);
-        let mut first_response_timeout_ms =
-            env_value("CHIMERA_TRANSPARENT_TCP_FIRST_RESPONSE_TIMEOUT_MS")
-                .map(|value| parse_positive_u64(&value, "first-response-timeout-ms"))
-                .transpose()?
-                .unwrap_or(1800);
         let mut initial_read_timeout_ms =
             env_value("CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS")
                 .map(|value| parse_positive_u64(&value, "initial-read-timeout-ms"))
@@ -101,13 +95,6 @@ impl Options {
                 "--direct-timeout-ms" => {
                     direct_timeout_ms =
                         parse_positive_u64(&arg_value(args, index, flag)?, "direct-timeout-ms")?;
-                    index += 2;
-                }
-                "--first-response-timeout-ms" => {
-                    first_response_timeout_ms = parse_positive_u64(
-                        &arg_value(args, index, flag)?,
-                        "first-response-timeout-ms",
-                    )?;
                     index += 2;
                 }
                 "--initial-read-timeout-ms" => {
@@ -177,8 +164,14 @@ impl Options {
             }
         }
 
-        if direct_mode != "auto" && direct_mode != "disabled" {
-            return Err("direct-mode must be auto or disabled".to_string());
+        if direct_mode == "auto" {
+            return Err(
+                "direct-mode auto is forbidden; direct routes require policy-bound WEAVE routing"
+                    .to_string(),
+            );
+        }
+        if direct_mode != "disabled" {
+            return Err("direct-mode must be disabled".to_string());
         }
         let exempt_uid = exempt_uid.or(transparent_uid).ok_or_else(|| {
             "missing --exempt-uid/--transparent-uid or CHIMERA_REDIRECT_EXEMPT_UID".to_string()
@@ -197,7 +190,6 @@ impl Options {
             )?,
             direct_mode,
             direct_timeout_ms,
-            first_response_timeout_ms,
             initial_read_timeout_ms,
             table_name,
             chain_name,
@@ -296,8 +288,6 @@ fn spawn_transparent(options: &Options) -> Result<Child, String> {
         .arg(&options.direct_mode)
         .arg("--direct-timeout-ms")
         .arg(options.direct_timeout_ms.to_string())
-        .arg("--first-response-timeout-ms")
-        .arg(options.first_response_timeout_ms.to_string())
         .arg("--initial-read-timeout-ms")
         .arg(options.initial_read_timeout_ms.to_string())
         .stdin(Stdio::null())
@@ -463,6 +453,22 @@ mod tests {
             "65534".to_string(),
         ];
         assert!(Options::parse(&args).is_err());
+    }
+
+    #[test]
+    fn options_reject_auto_direct_mode() {
+        let args = vec![
+            "--listen".to_string(),
+            "127.0.0.1:18144".to_string(),
+            "--transit-local".to_string(),
+            "127.0.0.1:18142".to_string(),
+            "--direct-mode".to_string(),
+            "auto".to_string(),
+            "--exempt-uid".to_string(),
+            "65534".to_string(),
+        ];
+        let error = Options::parse(&args).unwrap_err();
+        assert!(error.contains("direct-mode auto is forbidden"));
     }
 
     #[test]

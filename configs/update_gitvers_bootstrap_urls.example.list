@@ -1,0 +1,13 @@
+# Public GitVerse/bootstrap mirror URLs for CHIMERA release fallback.
+#
+# One URL per line. Use public bootstrap mirrors that serve a CHIMERA
+# `chimera.sh` script with matching archive/checksum metadata.
+#
+# Official public GitVerse bootstrap mirror:
+https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh
+#
+# Examples:
+# https://gitverse.ru/<owner>/<repo>
+# https://gitverse.ru/<owner>/<repo>/content/main/chimera.sh
+# https://gitverse.ru/api/repos/<owner>/<repo>/raw/branch/main/chimera.sh
+# https://mirror.example/chimera-pq-release.tar.gz

@@ -4,9 +4,7 @@ use chimera_carrier::{Carrier, InMemoryCarrier};
 use chimera_carrier_quic::{QuicCarrier, QuicCarrierConfig};
 use chimera_carrier_tls::{TlsCarrier, TlsCarrierConfig};
 use chimera_client::ClientHandshake;
-use chimera_config::{
-    ConfigCarrierProfile, RawConfig, parse_client_config_text, parse_gateway_config_text,
-};
+use chimera_config::{ConfigCarrierProfile, RawConfig, parse_node_config_text};
 use chimera_dns::{DnsBinding, DnsBindingStore};
 use chimera_gateway::GatewayHandshake;
 use chimera_policy::parse_policy_text;
@@ -23,6 +21,7 @@ mod cef_phase1_mesh;
 mod metadata_perf;
 mod mvp_reports;
 mod release_reports;
+mod release_runtime_slice;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Language {
@@ -114,9 +113,9 @@ fn render_help(lang: Language) -> String {
             out.push_str("  [--lang en|ru] cef-phase1-smoke [--json] [--out <file>]\n");
             out.push_str("  [--lang en|ru] mesh-auto-smoke [--json] [--out <file>]\n");
             out.push_str(
-                "  [--lang en|ru] doctor [--client <file>] [--gateway <file>] [--json] [--out <file>]\n",
+                "  [--lang en|ru] doctor [--node-config <file>] [--json] [--out <file>]\n",
             );
-            out.push_str("  [--lang en|ru] config-smoke [--client <file>] [--gateway <file>]\n");
+            out.push_str("  [--lang en|ru] config-smoke [--node-config <file>]\n");
             out.push_str("  [--lang en|ru] fuzz-smoke\n");
             out.push_str(
                 "  [--lang en|ru] perf-smoke [--min-encode-ops <n>] [--min-decode-ops <n>] [--json]\n",
@@ -157,9 +156,9 @@ fn render_help(lang: Language) -> String {
             out.push_str("  [--lang en|ru] cef-phase1-smoke [--json] [--out <файл>]\n");
             out.push_str("  [--lang en|ru] mesh-auto-smoke [--json] [--out <файл>]\n");
             out.push_str(
-                "  [--lang en|ru] doctor [--client <файл>] [--gateway <файл>] [--json] [--out <файл>]\n",
+                "  [--lang en|ru] doctor [--node-config <файл>] [--json] [--out <файл>]\n",
             );
-            out.push_str("  [--lang en|ru] config-smoke [--client <файл>] [--gateway <файл>]\n");
+            out.push_str("  [--lang en|ru] config-smoke [--node-config <файл>]\n");
             out.push_str("  [--lang en|ru] fuzz-smoke\n");
             out.push_str(
                 "  [--lang en|ru] perf-smoke [--min-encode-ops <n>] [--min-decode-ops <n>] [--json]\n",
@@ -490,8 +489,7 @@ fn render_cef_phase1_smoke_json(result: CefPhase1SmokeResult) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DoctorOptions {
-    client_path: String,
-    gateway_path: String,
+    node_config_path: String,
     json_output: bool,
     out_path: Option<String>,
 }
@@ -499,8 +497,7 @@ struct DoctorOptions {
 impl Default for DoctorOptions {
     fn default() -> Self {
         Self {
-            client_path: "configs/client.example.conf".to_string(),
-            gateway_path: "configs/gateway.example.conf".to_string(),
+            node_config_path: "configs/mesh-node.example.conf".to_string(),
             json_output: false,
             out_path: None,
         }
@@ -509,10 +506,10 @@ impl Default for DoctorOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct DoctorResult {
-    client_config_ok: bool,
-    gateway_config_ok: bool,
-    client_carrier_ok: bool,
-    gateway_carrier_ok: bool,
+    node_config_ok: bool,
+    peer_ingress_config_ok: bool,
+    node_carrier_ok: bool,
+    peer_ingress_ok: bool,
     net_sim_ok: bool,
     net_sim_dropped: usize,
     net_sim_reconnect_events: usize,
@@ -532,8 +529,7 @@ fn parse_doctor_options(args: &[String]) -> Result<DoctorOptions, String> {
             .get(index + 1)
             .ok_or_else(|| format!("missing value for {flag}"))?;
         match flag {
-            "--client" => options.client_path = value.to_string(),
-            "--gateway" => options.gateway_path = value.to_string(),
+            "--node-config" | "--config" => options.node_config_path = value.to_string(),
             "--out" => options.out_path = Some(value.to_string()),
             _ => return Err(format!("unknown option: {flag}")),
         }
@@ -550,13 +546,13 @@ fn run_doctor(lang: Language, args: &[String]) -> i32 {
                 Language::En => {
                     eprintln!("Doctor options error: {error}");
                     eprintln!(
-                        "usage: chimera-lab [--lang en|ru] doctor [--client <file>] [--gateway <file>] [--json] [--out <file>]"
+                        "usage: chimera-lab [--lang en|ru] doctor [--node-config <file>] [--json] [--out <file>]"
                     );
                 }
                 Language::Ru => {
                     eprintln!("Ошибка опций doctor: {error}");
                     eprintln!(
-                        "использование: chimera-lab [--lang en|ru] doctor [--client <файл>] [--gateway <файл>] [--json] [--out <файл>]"
+                        "использование: chimera-lab [--lang en|ru] doctor [--node-config <файл>] [--json] [--out <файл>]"
                     );
                 }
             }
@@ -588,28 +584,19 @@ fn run_doctor(lang: Language, args: &[String]) -> i32 {
 }
 
 fn execute_doctor(options: &DoctorOptions) -> Result<DoctorResult, String> {
-    let client_text = fs::read_to_string(&options.client_path)
-        .map_err(|error| format!("client config read failed: {error}"))?;
-    let gateway_text = fs::read_to_string(&options.gateway_path)
-        .map_err(|error| format!("gateway config read failed: {error}"))?;
+    let node_text = fs::read_to_string(&options.node_config_path)
+        .map_err(|error| format!("node config read failed: {error}"))?;
 
-    let client_config = parse_client_config_text(&client_text)
-        .map_err(|error| format!("client config invalid: {error}"))?;
-    let gateway_config = parse_gateway_config_text(&gateway_text)
-        .map_err(|error| format!("gateway config invalid: {error}"))?;
-
+    let node_config = parse_node_config_text(&node_text)
+        .map_err(|error| format!("node config invalid: {error}"))?;
+    let peer_listen_addr = peer_listen_addr_from_node_config(&node_text)?;
     validate_carrier_profile(
-        client_config.carrier_profile,
-        &client_config.carrier_addr,
-        &client_config.carrier_server_name,
+        node_config.carrier_profile,
+        &node_config.carrier_addr,
+        &node_config.carrier_server_name,
     )
-    .map_err(|error| format!("client carrier validation failed: {error}"))?;
-    validate_carrier_profile(
-        gateway_config.carrier_profile,
-        &gateway_config.listen_addr,
-        "gateway.local",
-    )
-    .map_err(|error| format!("gateway carrier validation failed: {error}"))?;
+    .map_err(|error| format!("node carrier validation failed: {error}"))?;
+    validate_peer_listen_addr(&peer_listen_addr)?;
 
     let net_sim = execute_net_sim(NetSimOptions::default());
     if net_sim.reconnect_events == 0 {
@@ -617,14 +604,26 @@ fn execute_doctor(options: &DoctorOptions) -> Result<DoctorResult, String> {
     }
 
     Ok(DoctorResult {
-        client_config_ok: true,
-        gateway_config_ok: true,
-        client_carrier_ok: true,
-        gateway_carrier_ok: true,
+        node_config_ok: true,
+        peer_ingress_config_ok: true,
+        node_carrier_ok: true,
+        peer_ingress_ok: true,
         net_sim_ok: true,
         net_sim_dropped: net_sim.dropped,
         net_sim_reconnect_events: net_sim.reconnect_events,
     })
+}
+
+fn peer_listen_addr_from_node_config(text: &str) -> Result<String, String> {
+    let raw = RawConfig::parse(text).map_err(|error| format!("node config invalid: {error}"))?;
+    Ok(raw.get("peer.listen_addr").unwrap_or("auto").to_string())
+}
+
+fn validate_peer_listen_addr(listen_addr: &str) -> Result<(), String> {
+    if listen_addr.trim().is_empty() {
+        return Err("peer ingress listen address is empty".to_string());
+    }
+    Ok(())
 }
 
 fn render_doctor_text(lang: Language, options: &DoctorOptions, result: DoctorResult) -> String {
@@ -633,55 +632,34 @@ fn render_doctor_text(lang: Language, options: &DoctorOptions, result: DoctorRes
         Language::En => {
             out.push_str("Lab doctor: ready for MVP checks\n");
             out.push_str("Checks:\n");
-            out.push_str(&format!("  - Client config: {}\n", result.client_config_ok));
+            out.push_str(&format!("  - Node config: {}\n", result.node_config_ok));
             out.push_str(&format!(
-                "  - Gateway config: {}\n",
-                result.gateway_config_ok
+                "  - Peer ingress config: {}\n",
+                result.peer_ingress_config_ok
             ));
-            out.push_str(&format!(
-                "  - Client carrier: {}\n",
-                result.client_carrier_ok
-            ));
-            out.push_str(&format!(
-                "  - Gateway carrier: {}\n",
-                result.gateway_carrier_ok
-            ));
+            out.push_str(&format!("  - Node carrier: {}\n", result.node_carrier_ok));
+            out.push_str(&format!("  - Peer ingress: {}\n", result.peer_ingress_ok));
             out.push_str(&format!("  - Net sim: {}\n", result.net_sim_ok));
             out.push_str(&format!(
-                "Summary: client={}, gateway={}, net_sim_dropped={}, net_sim_reconnect_events={}\n",
-                options.client_path,
-                options.gateway_path,
-                result.net_sim_dropped,
-                result.net_sim_reconnect_events
+                "Summary: node_config={}, net_sim_dropped={}, net_sim_reconnect_events={}\n",
+                options.node_config_path, result.net_sim_dropped, result.net_sim_reconnect_events
             ));
             out.push_str("Network state: not modified\n");
         }
         Language::Ru => {
             out.push_str("Lab doctor: готово к MVP-проверкам\n");
             out.push_str("Проверки:\n");
+            out.push_str(&format!("  - Конфиг узла: {}\n", result.node_config_ok));
             out.push_str(&format!(
-                "  - Конфиг клиента: {}\n",
-                result.client_config_ok
+                "  - Конфиг peer-входа: {}\n",
+                result.peer_ingress_config_ok
             ));
-            out.push_str(&format!(
-                "  - Конфиг gateway: {}\n",
-                result.gateway_config_ok
-            ));
-            out.push_str(&format!(
-                "  - Carrier клиента: {}\n",
-                result.client_carrier_ok
-            ));
-            out.push_str(&format!(
-                "  - Carrier gateway: {}\n",
-                result.gateway_carrier_ok
-            ));
+            out.push_str(&format!("  - Carrier узла: {}\n", result.node_carrier_ok));
+            out.push_str(&format!("  - Peer-вход: {}\n", result.peer_ingress_ok));
             out.push_str(&format!("  - Net sim: {}\n", result.net_sim_ok));
             out.push_str(&format!(
-                "Сводка: client={}, gateway={}, net_sim_dropped={}, net_sim_reconnect_events={}\n",
-                options.client_path,
-                options.gateway_path,
-                result.net_sim_dropped,
-                result.net_sim_reconnect_events
+                "Сводка: node_config={}, net_sim_dropped={}, net_sim_reconnect_events={}\n",
+                options.node_config_path, result.net_sim_dropped, result.net_sim_reconnect_events
             ));
             out.push_str("Состояние сети: не изменялось\n");
         }
@@ -691,11 +669,11 @@ fn render_doctor_text(lang: Language, options: &DoctorOptions, result: DoctorRes
 
 fn render_doctor_json(result: DoctorResult) -> String {
     format!(
-        "{{\"status\":\"ok\",\"kind\":\"lab_doctor\",\"message_en\":\"Lab doctor check is ready.\",\"message_ru\":\"Проверка lab doctor готова.\",\"client_config_ok\":{},\"gateway_config_ok\":{},\"client_carrier_ok\":{},\"gateway_carrier_ok\":{},\"net_sim_ok\":{},\"net_sim_dropped\":{},\"net_sim_reconnect_events\":{},\"network_state\":\"not_modified\"}}",
-        result.client_config_ok,
-        result.gateway_config_ok,
-        result.client_carrier_ok,
-        result.gateway_carrier_ok,
+        "{{\"status\":\"ok\",\"kind\":\"lab_doctor\",\"message_en\":\"Lab doctor check is ready.\",\"message_ru\":\"Проверка lab doctor готова.\",\"node_config_ok\":{},\"peer_ingress_config_ok\":{},\"node_carrier_ok\":{},\"peer_ingress_ok\":{},\"net_sim_ok\":{},\"net_sim_dropped\":{},\"net_sim_reconnect_events\":{},\"network_state\":\"not_modified\"}}",
+        result.node_config_ok,
+        result.peer_ingress_config_ok,
+        result.node_carrier_ok,
+        result.peer_ingress_ok,
         result.net_sim_ok,
         result.net_sim_dropped,
         result.net_sim_reconnect_events
@@ -704,15 +682,13 @@ fn render_doctor_json(result: DoctorResult) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ConfigSmokeOptions {
-    client_path: String,
-    gateway_path: String,
+    node_config_path: String,
 }
 
 impl Default for ConfigSmokeOptions {
     fn default() -> Self {
         Self {
-            client_path: "configs/client.example.conf".to_string(),
-            gateway_path: "configs/gateway.example.conf".to_string(),
+            node_config_path: "configs/mesh-node.example.conf".to_string(),
         }
     }
 }
@@ -726,8 +702,7 @@ fn parse_config_smoke_options(args: &[String]) -> Result<ConfigSmokeOptions, Str
             .get(index + 1)
             .ok_or_else(|| format!("missing value for {flag}"))?;
         match flag {
-            "--client" => options.client_path = value.to_string(),
-            "--gateway" => options.gateway_path = value.to_string(),
+            "--node-config" | "--config" => options.node_config_path = value.to_string(),
             _ => return Err(format!("unknown option: {flag}")),
         }
         index += 2;
@@ -743,13 +718,13 @@ fn run_config_smoke(lang: Language, args: &[String]) -> i32 {
                 Language::En => {
                     eprintln!("Config-smoke options error: {error}");
                     eprintln!(
-                        "usage: chimera-lab [--lang en|ru] config-smoke [--client <file>] [--gateway <file>]"
+                        "usage: chimera-lab [--lang en|ru] config-smoke [--node-config <file>]"
                     );
                 }
                 Language::Ru => {
                     eprintln!("Ошибка опций config-smoke: {error}");
                     eprintln!(
-                        "использование: chimera-lab [--lang en|ru] config-smoke [--client <файл>] [--gateway <файл>]"
+                        "использование: chimera-lab [--lang en|ru] config-smoke [--node-config <файл>]"
                     );
                 }
             }
@@ -770,60 +745,43 @@ fn execute_config_smoke(
     options: &ConfigSmokeOptions,
     print_output: bool,
 ) -> Result<(), String> {
-    let client_text = match fs::read_to_string(&options.client_path) {
+    let node_text = match fs::read_to_string(&options.node_config_path) {
         Ok(text) => text,
         Err(error) => {
-            return Err(format!("client config read failed: {error}"));
-        }
-    };
-    let gateway_text = match fs::read_to_string(&options.gateway_path) {
-        Ok(text) => text,
-        Err(error) => {
-            return Err(format!("gateway config read failed: {error}"));
+            return Err(format!("node config read failed: {error}"));
         }
     };
 
-    let client_config = match parse_client_config_text(&client_text) {
+    let node_config = match parse_node_config_text(&node_text) {
         Ok(config) => config,
         Err(error) => {
-            return Err(format!("client config invalid: {error}"));
+            return Err(format!("node config invalid: {error}"));
         }
     };
-    let gateway_config = match parse_gateway_config_text(&gateway_text) {
-        Ok(config) => config,
-        Err(error) => {
-            return Err(format!("gateway config invalid: {error}"));
-        }
-    };
+    let peer_listen_addr = peer_listen_addr_from_node_config(&node_text)?;
 
     if let Err(error) = validate_carrier_profile(
-        client_config.carrier_profile,
-        &client_config.carrier_addr,
-        &client_config.carrier_server_name,
+        node_config.carrier_profile,
+        &node_config.carrier_addr,
+        &node_config.carrier_server_name,
     ) {
-        return Err(format!("client carrier validation failed: {error}"));
+        return Err(format!("node carrier validation failed: {error}"));
     }
-    if let Err(error) = validate_carrier_profile(
-        gateway_config.carrier_profile,
-        &gateway_config.listen_addr,
-        "gateway.local",
-    ) {
-        return Err(format!("gateway carrier validation failed: {error}"));
-    }
+    validate_peer_listen_addr(&peer_listen_addr)?;
     run_negative_config_parser_smoke()?;
 
     if print_output {
         match lang {
             Language::En => {
                 println!("Config smoke: ok");
-                println!("Client config: {}", options.client_path);
-                println!("Gateway config: {}", options.gateway_path);
+                println!("Node config: {}", options.node_config_path);
+                println!("Peer ingress: configured");
                 println!("Network state: not modified");
             }
             Language::Ru => {
                 println!("Config smoke: ok");
-                println!("Конфиг клиента: {}", options.client_path);
-                println!("Конфиг gateway: {}", options.gateway_path);
+                println!("Конфиг узла: {}", options.node_config_path);
+                println!("Peer-вход: настроен");
                 println!("Состояние сети: не изменялось");
             }
         }
@@ -832,24 +790,24 @@ fn execute_config_smoke(
 }
 
 fn run_negative_config_parser_smoke() -> Result<(), String> {
-    let client_unknown_key = "carrier.addr = 203.0.113.10:443\ncapture.mdoe = auto\n";
-    let client_duplicate_key = "carrier.addr = 203.0.113.10:443\ncarrier.addr = 198.51.100.7:443\n";
+    let node_unknown_key = "carrier.addr = 203.0.113.10:443\ncapture.mdoe = auto\n";
+    let node_duplicate_key = "carrier.addr = 203.0.113.10:443\ncarrier.addr = 198.51.100.7:443\n";
     let raw_missing_separator = "carrier.addr 203.0.113.10:443\n";
-    let gateway_unknown_key = "gateway.lsiten_addr = 127.0.0.1:443\n";
+    let bad_node_mode = "node.mode = gateway\n";
 
-    let unknown_key_error = match parse_client_config_text(client_unknown_key) {
+    let unknown_key_error = match parse_node_config_text(node_unknown_key) {
         Ok(_) => {
             return Err("negative smoke failed: unknown key input unexpectedly parsed".to_string());
         }
         Err(error) => error.to_string(),
     };
-    if !unknown_key_error.contains("unknown client config key") {
+    if !unknown_key_error.contains("unknown node config key") {
         return Err(format!(
             "negative smoke failed: unknown key error shape changed: {unknown_key_error}"
         ));
     }
 
-    let duplicate_key_error = match parse_client_config_text(client_duplicate_key) {
+    let duplicate_key_error = match parse_node_config_text(node_duplicate_key) {
         Ok(_) => {
             return Err(
                 "negative smoke failed: duplicate key input unexpectedly parsed".to_string(),
@@ -877,17 +835,15 @@ fn run_negative_config_parser_smoke() -> Result<(), String> {
         ));
     }
 
-    let gateway_unknown_key_error = match parse_gateway_config_text(gateway_unknown_key) {
+    let bad_node_mode_error = match parse_node_config_text(bad_node_mode) {
         Ok(_) => {
-            return Err(
-                "negative smoke failed: gateway unknown key input unexpectedly parsed".to_string(),
-            );
+            return Err("negative smoke failed: bad node.mode unexpectedly parsed".to_string());
         }
         Err(error) => error.to_string(),
     };
-    if !gateway_unknown_key_error.contains("unknown gateway config key") {
+    if !bad_node_mode_error.contains("node.mode must be 'mesh-node'") {
         return Err(format!(
-            "negative smoke failed: gateway unknown key error shape changed: {gateway_unknown_key_error}"
+            "negative smoke failed: bad node.mode error shape changed: {bad_node_mode_error}"
         ));
     }
 
@@ -1562,9 +1518,9 @@ pub(crate) struct MvpSpecCheckResult {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ReleaseGateChecklist {
     clean_clone_builds: bool,
-    client_gateway_run_linux: bool,
+    mesh_node_runs_linux: bool,
     encrypted_tunnel_carries_traffic: bool,
-    policy_routing_direct_gateway_block: bool,
+    policy_routing_direct_peer_transit_block: bool,
     dns_binding_works: bool,
     route_explain_works: bool,
     shutdown_restores_network_state: bool,
@@ -1583,9 +1539,9 @@ pub(crate) struct ReleaseGateChecklist {
 impl ReleaseGateChecklist {
     fn all_ok(self) -> bool {
         self.clean_clone_builds
-            && self.client_gateway_run_linux
+            && self.mesh_node_runs_linux
             && self.encrypted_tunnel_carries_traffic
-            && self.policy_routing_direct_gateway_block
+            && self.policy_routing_direct_peer_transit_block
             && self.dns_binding_works
             && self.route_explain_works
             && self.shutdown_restores_network_state
@@ -2294,10 +2250,7 @@ fn check_mesh_auto_adaptive_trace_artifact(path: &str) -> bool {
 }
 
 fn detect_real_world_datapath_closed() -> bool {
-    detect_real_world_datapath_closed_from_paths(&[
-        "docs/REALITY_AUDIT_LATEST.json",
-        "docs/REALITY_AUDIT_2026-05-18.md",
-    ])
+    detect_real_world_datapath_closed_from_paths(&["docs/REALITY_AUDIT_LATEST.json"])
 }
 
 fn detect_real_world_datapath_closed_from_paths(paths: &[&str]) -> bool {
@@ -2314,14 +2267,6 @@ fn detect_real_world_datapath_closed_from_paths(paths: &[&str]) -> bool {
                 return true;
             }
             continue;
-        }
-        if content
-            .contains("Real OS-level datapath closure for strict M4/M5: PARTIAL / NOT CLOSED.")
-        {
-            return false;
-        }
-        if content.contains("Real OS-level datapath closure for strict M4/M5: CLOSED.") {
-            return true;
         }
     }
     false
@@ -2363,9 +2308,9 @@ fn build_release_gate_checklist(result: &MvpSpecCheckResult) -> ReleaseGateCheck
         check_runtime_forced_stop_rollback_artifact("docs/RUNTIME_FORCED_STOP_ROLLBACK_SMOKE.json");
     ReleaseGateChecklist {
         clean_clone_builds: build_markers_ok && result.m0_workspace,
-        client_gateway_run_linux: doctor_ok,
+        mesh_node_runs_linux: doctor_ok,
         encrypted_tunnel_carries_traffic: result.m1_local_tunnel,
-        policy_routing_direct_gateway_block: check_policy_modes() && datapath_ok,
+        policy_routing_direct_peer_transit_block: check_policy_modes() && datapath_ok,
         dns_binding_works: route_ok && datapath_ok,
         route_explain_works: route_ok,
         shutdown_restores_network_state: rollback_ok,
@@ -2693,7 +2638,7 @@ fn run_release_readiness_report(lang: Language, args: &[String]) -> i32 {
         ),
     };
     let checklist = build_release_gate_checklist(&result);
-    let release_ok = mvp_ok
+    let lab_release_ok = mvp_ok
         && artifacts.m5_report_ok
         && artifacts.m6_report_ok
         && artifacts.benchmark_ok
@@ -2702,10 +2647,13 @@ fn run_release_readiness_report(lang: Language, args: &[String]) -> i32 {
         && artifacts.mesh_auto_adaptive_ok
         && checklist.all_ok();
 
+    let github_release_ssh_runtime_slice_proven =
+        release_runtime_slice::detect_github_release_ssh_runtime_slice_proven();
     let real_world_datapath_closed = detect_real_world_datapath_closed();
     let report = render_release_readiness_report_markdown(
         lang,
-        release_ok,
+        lab_release_ok,
+        github_release_ssh_runtime_slice_proven,
         real_world_datapath_closed,
         result,
         checklist,
@@ -2714,7 +2662,8 @@ fn run_release_readiness_report(lang: Language, args: &[String]) -> i32 {
 
     if options.json_output {
         let json = render_release_readiness_report_json(
-            release_ok,
+            lab_release_ok,
+            github_release_ssh_runtime_slice_proven,
             real_world_datapath_closed,
             result,
             checklist,
@@ -2824,6 +2773,8 @@ fn run_report_pack(lang: Language, args: &[String]) -> i32 {
     let release_ok = fs::read_to_string("docs/RELEASE_READINESS_REPORT.md")
         .map(|v| report_is_pass(&v))
         .unwrap_or(false);
+    let github_release_ssh_runtime_slice_proven =
+        release_runtime_slice::detect_github_release_ssh_runtime_slice_proven();
     let cef_phase1_ok = check_cef_phase1_smoke_artifact("docs/CEF_PHASE1_SMOKE.json");
     let mesh_route_explain_ok = check_mesh_route_explain_artifact("docs/MESH_ROUTE_EXPLAIN.json");
     let mesh_auto_adaptive_ok =
@@ -2846,6 +2797,7 @@ Included reports:\n\
 - M5 artifacts: `{}` (`docs/M5_ARTIFACTS_REPORT.md`)\n\
 - M6 artifacts: `{}` (`docs/M6_ARTIFACTS_REPORT.md`)\n\
 - Release readiness: `{}` (`docs/RELEASE_READINESS_REPORT.md`)\n\
+- GitHub release -> SSH runtime slice: `{}` (`docs/WORKFLOW_ATTESTATION_GITHUB_RELEASE_RUNTIME_GATE_*.md`)\n\
 - CEF phase1 smoke: `{}` (`docs/CEF_PHASE1_SMOKE.json`)\n\
 - Mesh route explain: `{}` (`docs/MESH_ROUTE_EXPLAIN.json`)\n\
 - Mesh auto adaptive trace: `{}` (`docs/MESH_AUTO_ADAPTIVE_TRACE.json`)\n\n\
@@ -2858,6 +2810,7 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
             m5_ok,
             m6_ok,
             release_ok,
+            github_release_ssh_runtime_slice_proven,
             cef_phase1_ok,
             mesh_route_explain_ok,
             mesh_auto_adaptive_ok,
@@ -2871,6 +2824,7 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
 - Артефакты M5: `{}` (`docs/M5_ARTIFACTS_REPORT.md`)\n\
 - Артефакты M6: `{}` (`docs/M6_ARTIFACTS_REPORT.md`)\n\
 - Готовность релиза: `{}` (`docs/RELEASE_READINESS_REPORT.md`)\n\
+- GitHub release -> SSH runtime slice: `{}` (`docs/WORKFLOW_ATTESTATION_GITHUB_RELEASE_RUNTIME_GATE_*.md`)\n\
 - CEF phase1 smoke: `{}` (`docs/CEF_PHASE1_SMOKE.json`)\n\
 - Mesh route explain: `{}` (`docs/MESH_ROUTE_EXPLAIN.json`)\n\
 - Mesh auto adaptive trace: `{}` (`docs/MESH_AUTO_ADAPTIVE_TRACE.json`)\n\n\
@@ -2883,6 +2837,7 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
             m5_ok,
             m6_ok,
             release_ok,
+            github_release_ssh_runtime_slice_proven,
             cef_phase1_ok,
             mesh_route_explain_ok,
             mesh_auto_adaptive_ok,
@@ -2895,9 +2850,9 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
             .map(|r| build_release_gate_checklist(&r))
             .unwrap_or(ReleaseGateChecklist {
                 clean_clone_builds: false,
-                client_gateway_run_linux: false,
+                mesh_node_runs_linux: false,
                 encrypted_tunnel_carries_traffic: false,
-                policy_routing_direct_gateway_block: false,
+                policy_routing_direct_peer_transit_block: false,
                 dns_binding_works: false,
                 route_explain_works: false,
                 shutdown_restores_network_state: false,
@@ -2913,21 +2868,24 @@ Network safety: no OS route/DNS/firewall/proxy changes in this report path.\n",
                 runtime_forced_stop_rollback_verified: false,
             });
         let real_world_datapath_closed = detect_real_world_datapath_closed();
+        let github_release_ssh_runtime_slice_proven =
+            release_runtime_slice::detect_github_release_ssh_runtime_slice_proven();
         let json = format!(
-            "{{\"status\":\"{}\",\"kind\":\"report_pack\",\"message_en\":\"Combined MVP reports are ready.\",\"message_ru\":\"Сводные отчеты MVP готовы.\",\"mvp_spec_report\":{},\"m5_artifacts_report\":{},\"m6_artifacts_report\":{},\"release_readiness_report\":{},\"cef_phase1_smoke\":{},\"mesh_route_explain\":{},\"mesh_auto_adaptive_trace\":{},\"truth_boundary\":{{\"lab_scope_only\":true,\"real_world_datapath_closed\":{}}},\"release_gate\":{{\"clean_clone_builds\":{},\"client_gateway_run_linux\":{},\"encrypted_tunnel_carries_traffic\":{},\"policy_routing_direct_gateway_block\":{},\"dns_binding_works\":{},\"route_explain_works\":{},\"shutdown_restores_network_state\":{},\"security_tests_pass\":{},\"parser_fuzz_smoke_passes\":{},\"no_raw_secrets_in_logs\":{},\"benchmark_report_exists\":{},\"operations_guide_exists\":{},\"runtime_apply_dns_verified\":{},\"runtime_apply_route_verified\":{},\"runtime_route_policy_validation_verified\":{},\"runtime_tun_name_validation_verified\":{},\"runtime_forced_stop_rollback_verified\":{}}},\"network_state\":\"not_modified\"}}",
+            "{{\"status\":\"{}\",\"kind\":\"report_pack\",\"message_en\":\"Combined MVP reports are ready.\",\"message_ru\":\"Сводные отчеты MVP готовы.\",\"mvp_spec_report\":{},\"m5_artifacts_report\":{},\"m6_artifacts_report\":{},\"release_readiness_report\":{},\"github_release_ssh_runtime_slice_proven\":{},\"cef_phase1_smoke\":{},\"mesh_route_explain\":{},\"mesh_auto_adaptive_trace\":{},\"truth_boundary\":{{\"lab_scope_only\":true,\"real_world_datapath_closed\":{}}},\"release_gate\":{{\"clean_clone_builds\":{},\"mesh_node_runs_linux\":{},\"encrypted_tunnel_carries_traffic\":{},\"policy_routing_direct_peer_transit_block\":{},\"dns_binding_works\":{},\"route_explain_works\":{},\"shutdown_restores_network_state\":{},\"security_tests_pass\":{},\"parser_fuzz_smoke_passes\":{},\"no_raw_secrets_in_logs\":{},\"benchmark_report_exists\":{},\"operations_guide_exists\":{},\"runtime_apply_dns_verified\":{},\"runtime_apply_route_verified\":{},\"runtime_route_policy_validation_verified\":{},\"runtime_tun_name_validation_verified\":{},\"runtime_forced_stop_rollback_verified\":{}}},\"network_state\":\"not_modified\"}}",
             if all_ok { "ok" } else { "fail" },
             mvp_ok,
             m5_ok,
             m6_ok,
             release_ok,
+            github_release_ssh_runtime_slice_proven,
             cef_phase1_ok,
             mesh_route_explain_ok,
             mesh_auto_adaptive_ok,
             real_world_datapath_closed,
             release_gate.clean_clone_builds,
-            release_gate.client_gateway_run_linux,
+            release_gate.mesh_node_runs_linux,
             release_gate.encrypted_tunnel_carries_traffic,
-            release_gate.policy_routing_direct_gateway_block,
+            release_gate.policy_routing_direct_peer_transit_block,
             release_gate.dns_binding_works,
             release_gate.route_explain_works,
             release_gate.shutdown_restores_network_state,
@@ -3168,7 +3126,7 @@ fn run_mvp_snapshot(lang: Language, args: &[String]) -> i32 {
             && mesh_auto_ok
             && mvp_check_ok
     };
-    let release_ready = gate.all_ok()
+    let lab_release_ready = gate.all_ok()
         && mvp.m0_workspace
         && mvp.m1_local_tunnel
         && mvp.m2_crypto_session
@@ -3178,11 +3136,13 @@ fn run_mvp_snapshot(lang: Language, args: &[String]) -> i32 {
         && mvp.m6_hardening
         && audit;
     let real_world_datapath_closed = detect_real_world_datapath_closed();
+    let release_ready = lab_release_ready && real_world_datapath_closed;
 
     let json = format!(
-        "{{\"status\":\"{}\",\"kind\":\"mvp_snapshot\",\"message_en\":\"MVP snapshot generated.\",\"message_ru\":\"Снимок MVP сформирован.\",\"release_ready\":{},\"truth_boundary\":{{\"lab_scope_only\":true,\"real_world_datapath_closed\":{}}},\"mvp\":{{\"m0\":{},\"m1\":{},\"m2\":{},\"m3\":{},\"m4\":{},\"m5\":{},\"m6\":{}}},\"release_gate\":{{\"clean_clone_builds\":{},\"client_gateway_run_linux\":{},\"encrypted_tunnel_carries_traffic\":{},\"policy_routing_direct_gateway_block\":{},\"dns_binding_works\":{},\"route_explain_works\":{},\"shutdown_restores_network_state\":{},\"security_tests_pass\":{},\"parser_fuzz_smoke_passes\":{},\"no_raw_secrets_in_logs\":{},\"benchmark_report_exists\":{},\"operations_guide_exists\":{},\"runtime_apply_dns_verified\":{},\"runtime_apply_route_verified\":{},\"runtime_route_policy_validation_verified\":{},\"runtime_tun_name_validation_verified\":{},\"runtime_forced_stop_rollback_verified\":{}}},\"artifact_audit\":{},\"network_state\":\"not_modified\"}}",
+        "{{\"status\":\"{}\",\"kind\":\"mvp_snapshot\",\"message_en\":\"MVP snapshot generated.\",\"message_ru\":\"Снимок MVP сформирован.\",\"release_ready\":{},\"lab_release_ready\":{},\"truth_boundary\":{{\"lab_scope_only\":true,\"real_world_datapath_closed\":{}}},\"mvp\":{{\"m0\":{},\"m1\":{},\"m2\":{},\"m3\":{},\"m4\":{},\"m5\":{},\"m6\":{}}},\"release_gate\":{{\"clean_clone_builds\":{},\"mesh_node_runs_linux\":{},\"encrypted_tunnel_carries_traffic\":{},\"policy_routing_direct_peer_transit_block\":{},\"dns_binding_works\":{},\"route_explain_works\":{},\"shutdown_restores_network_state\":{},\"security_tests_pass\":{},\"parser_fuzz_smoke_passes\":{},\"no_raw_secrets_in_logs\":{},\"benchmark_report_exists\":{},\"operations_guide_exists\":{},\"runtime_apply_dns_verified\":{},\"runtime_apply_route_verified\":{},\"runtime_route_policy_validation_verified\":{},\"runtime_tun_name_validation_verified\":{},\"runtime_forced_stop_rollback_verified\":{}}},\"artifact_audit\":{},\"network_state\":\"not_modified\"}}",
         if release_ready { "ok" } else { "fail" },
         release_ready,
+        lab_release_ready,
         real_world_datapath_closed,
         mvp.m0_workspace,
         mvp.m1_local_tunnel,
@@ -3192,9 +3152,9 @@ fn run_mvp_snapshot(lang: Language, args: &[String]) -> i32 {
         mvp.m5_doctor_and_config,
         mvp.m6_hardening,
         gate.clean_clone_builds,
-        gate.client_gateway_run_linux,
+        gate.mesh_node_runs_linux,
         gate.encrypted_tunnel_carries_traffic,
-        gate.policy_routing_direct_gateway_block,
+        gate.policy_routing_direct_peer_transit_block,
         gate.dns_binding_works,
         gate.route_explain_works,
         gate.shutdown_restores_network_state,
@@ -3223,15 +3183,17 @@ fn run_mvp_snapshot(lang: Language, args: &[String]) -> i32 {
     } else {
         let text = match lang {
             Language::En => format!(
-                "MVP snapshot result: {}\nReady for release: {}\nArtifact audit passed: {}\nNetwork state: not modified",
+                "MVP snapshot result: {}\nReady for release: {}\nLab ready: {}\nArtifact audit passed: {}\nNetwork state: not modified",
                 if release_ready { "ok" } else { "fail" },
                 release_ready,
+                lab_release_ready,
                 audit
             ),
             Language::Ru => format!(
-                "Результат снимка MVP: {}\nГотово к релизу: {}\nАудит артефактов пройден: {}\nСостояние сети: не изменялось",
+                "Результат снимка MVP: {}\nГотово к релизу: {}\nЛабораторно готово: {}\nАудит артефактов пройден: {}\nСостояние сети: не изменялось",
                 if release_ready { "ok" } else { "fail" },
                 release_ready,
+                lab_release_ready,
                 audit
             ),
         };
@@ -3539,7 +3501,8 @@ fn render_m6_artifacts_report_markdown(
 
 fn render_release_readiness_report_markdown(
     lang: Language,
-    release_ok: bool,
+    lab_release_ok: bool,
+    github_release_ssh_runtime_slice_proven: bool,
     real_world_datapath_closed: bool,
     result: MvpSpecCheckResult,
     checklist: ReleaseGateChecklist,
@@ -3547,7 +3510,8 @@ fn render_release_readiness_report_markdown(
 ) -> String {
     release_reports::render_release_readiness_report_markdown(
         lang,
-        release_ok,
+        lab_release_ok,
+        github_release_ssh_runtime_slice_proven,
         real_world_datapath_closed,
         result,
         checklist,
@@ -3556,14 +3520,16 @@ fn render_release_readiness_report_markdown(
 }
 
 fn render_release_readiness_report_json(
-    release_ok: bool,
+    lab_release_ok: bool,
+    github_release_ssh_runtime_slice_proven: bool,
     real_world_datapath_closed: bool,
     result: MvpSpecCheckResult,
     checklist: ReleaseGateChecklist,
     artifacts: ReleaseReadinessArtifacts,
 ) -> String {
     release_reports::render_release_readiness_report_json(
-        release_ok,
+        lab_release_ok,
+        github_release_ssh_runtime_slice_proven,
         real_world_datapath_closed,
         result,
         checklist,
@@ -4244,12 +4210,7 @@ mod tests {
         };
         assert_eq!(parsed_default, ConfigSmokeOptions::default());
 
-        let args = vec![
-            "--client".to_string(),
-            "a.conf".to_string(),
-            "--gateway".to_string(),
-            "b.conf".to_string(),
-        ];
+        let args = vec!["--node-config".to_string(), "a.conf".to_string()];
         let parsed = match parse_config_smoke_options(&args) {
             Ok(parsed) => parsed,
             Err(error) => unreachable!("override config smoke options should parse: {error}"),
@@ -4257,8 +4218,7 @@ mod tests {
         assert_eq!(
             parsed,
             ConfigSmokeOptions {
-                client_path: "a.conf".to_string(),
-                gateway_path: "b.conf".to_string(),
+                node_config_path: "a.conf".to_string(),
             }
         );
     }
@@ -4382,10 +4342,8 @@ mod tests {
         assert_eq!(parsed_default, DoctorOptions::default());
 
         let args = vec![
-            "--client".to_string(),
+            "--node-config".to_string(),
             "a.conf".to_string(),
-            "--gateway".to_string(),
-            "b.conf".to_string(),
             "--json".to_string(),
             "--out".to_string(),
             "doctor.json".to_string(),
@@ -4394,8 +4352,7 @@ mod tests {
             Ok(parsed) => parsed,
             Err(error) => unreachable!("doctor options should parse: {error}"),
         };
-        assert_eq!(parsed.client_path, "a.conf");
-        assert_eq!(parsed.gateway_path, "b.conf");
+        assert_eq!(parsed.node_config_path, "a.conf");
         assert!(parsed.json_output);
         assert_eq!(parsed.out_path, Some("doctor.json".to_string()));
     }
@@ -4403,10 +4360,10 @@ mod tests {
     #[test]
     fn doctor_json_contains_expected_fields() {
         let json = render_doctor_json(DoctorResult {
-            client_config_ok: true,
-            gateway_config_ok: true,
-            client_carrier_ok: true,
-            gateway_carrier_ok: true,
+            node_config_ok: true,
+            peer_ingress_config_ok: true,
+            node_carrier_ok: true,
+            peer_ingress_ok: true,
             net_sim_ok: true,
             net_sim_dropped: 18,
             net_sim_reconnect_events: 1,
@@ -4414,6 +4371,10 @@ mod tests {
         assert!(json.contains("\"kind\":\"lab_doctor\""));
         assert!(json.contains("\"message_en\":\"Lab doctor check is ready.\""));
         assert!(json.contains("\"message_ru\":\"Проверка lab doctor готова.\""));
+        assert!(json.contains("\"node_config_ok\":true"));
+        assert!(json.contains("\"peer_ingress_config_ok\":true"));
+        assert!(!json.contains("client_config_ok"));
+        assert!(!json.contains("gateway_config_ok"));
         assert!(json.contains("\"net_sim_dropped\":18"));
         assert!(json.contains("\"network_state\":\"not_modified\""));
     }
@@ -4605,9 +4566,9 @@ mod tests {
     fn release_readiness_report_json_contains_cef_phase1_artifact_flag() {
         let checklist = ReleaseGateChecklist {
             clean_clone_builds: true,
-            client_gateway_run_linux: true,
+            mesh_node_runs_linux: true,
             encrypted_tunnel_carries_traffic: true,
-            policy_routing_direct_gateway_block: true,
+            policy_routing_direct_peer_transit_block: true,
             dns_binding_works: true,
             route_explain_works: true,
             shutdown_restores_network_state: true,
@@ -4623,6 +4584,7 @@ mod tests {
             runtime_forced_stop_rollback_verified: true,
         };
         let json = render_release_readiness_report_json(
+            true,
             true,
             false,
             MvpSpecCheckResult {
@@ -4649,9 +4611,10 @@ mod tests {
 
     #[test]
     fn report_pack_json_contains_cef_phase1_flag() {
-        let json = "{\"status\":\"ok\",\"kind\":\"report_pack\",\"message_en\":\"Combined MVP reports are ready.\",\"message_ru\":\"Сводные отчеты MVP готовы.\",\"mvp_spec_report\":true,\"m5_artifacts_report\":true,\"m6_artifacts_report\":true,\"release_readiness_report\":true,\"cef_phase1_smoke\":true,\"truth_boundary\":{\"lab_scope_only\":true,\"real_world_datapath_closed\":false},\"release_gate\":{\"clean_clone_builds\":true,\"client_gateway_run_linux\":true,\"encrypted_tunnel_carries_traffic\":true,\"policy_routing_direct_gateway_block\":true,\"dns_binding_works\":true,\"route_explain_works\":true,\"shutdown_restores_network_state\":true,\"security_tests_pass\":true,\"parser_fuzz_smoke_passes\":true,\"no_raw_secrets_in_logs\":true,\"benchmark_report_exists\":true,\"operations_guide_exists\":true,\"runtime_apply_dns_verified\":true,\"runtime_apply_route_verified\":true},\"network_state\":\"not_modified\"}".to_string();
+        let json = "{\"status\":\"ok\",\"kind\":\"report_pack\",\"message_en\":\"Combined MVP reports are ready.\",\"message_ru\":\"Сводные отчеты MVP готовы.\",\"mvp_spec_report\":true,\"m5_artifacts_report\":true,\"m6_artifacts_report\":true,\"release_readiness_report\":true,\"github_release_ssh_runtime_slice_proven\":true,\"cef_phase1_smoke\":true,\"truth_boundary\":{\"lab_scope_only\":true,\"real_world_datapath_closed\":false},\"release_gate\":{\"clean_clone_builds\":true,\"mesh_node_runs_linux\":true,\"encrypted_tunnel_carries_traffic\":true,\"policy_routing_direct_peer_transit_block\":true,\"dns_binding_works\":true,\"route_explain_works\":true,\"shutdown_restores_network_state\":true,\"security_tests_pass\":true,\"parser_fuzz_smoke_passes\":true,\"no_raw_secrets_in_logs\":true,\"benchmark_report_exists\":true,\"operations_guide_exists\":true,\"runtime_apply_dns_verified\":true,\"runtime_apply_route_verified\":true},\"network_state\":\"not_modified\"}".to_string();
         assert!(json.contains("\"kind\":\"report_pack\""));
         assert!(json.contains("\"cef_phase1_smoke\":true"));
+        assert!(json.contains("\"github_release_ssh_runtime_slice_proven\":true"));
     }
 
     #[test]
@@ -4812,9 +4775,9 @@ mod tests {
     fn release_readiness_report_render_ru_contains_status() {
         let checklist = ReleaseGateChecklist {
             clean_clone_builds: true,
-            client_gateway_run_linux: true,
+            mesh_node_runs_linux: true,
             encrypted_tunnel_carries_traffic: true,
-            policy_routing_direct_gateway_block: true,
+            policy_routing_direct_peer_transit_block: true,
             dns_binding_works: true,
             route_explain_works: true,
             shutdown_restores_network_state: true,
@@ -4831,6 +4794,7 @@ mod tests {
         };
         let text = render_release_readiness_report_markdown(
             Language::Ru,
+            true,
             true,
             false,
             MvpSpecCheckResult {
@@ -4853,20 +4817,23 @@ mod tests {
             },
         );
         assert!(text.contains("# Отчет Готовности Релиза"));
-        assert!(text.contains("Статус: **PASS**"));
+        assert!(text.contains("Статус: **FAIL (ТОЛЬКО ЛАБОРАТОРНО)**"));
         assert!(text.contains(
             "Просто: если статус PASS, MVP готов только к расширенным лабораторным тестам"
         ));
         assert!(text.contains("Real OS-level datapath closure (strict M4/M5): `false`"));
+        assert!(text.contains(
+            "Узкий GitHub release -> разрешенный SSH-стенд -> runtime lifecycle slice: `true`"
+        ));
     }
 
     #[test]
     fn release_readiness_report_render_en_contains_lab_only_notice() {
         let checklist = ReleaseGateChecklist {
             clean_clone_builds: true,
-            client_gateway_run_linux: true,
+            mesh_node_runs_linux: true,
             encrypted_tunnel_carries_traffic: true,
-            policy_routing_direct_gateway_block: true,
+            policy_routing_direct_peer_transit_block: true,
             dns_binding_works: true,
             route_explain_works: true,
             shutdown_restores_network_state: true,
@@ -4883,6 +4850,7 @@ mod tests {
         };
         let text = render_release_readiness_report_markdown(
             Language::En,
+            true,
             true,
             false,
             MvpSpecCheckResult {
@@ -4905,19 +4873,24 @@ mod tests {
             },
         );
         assert!(text.contains("# Release Readiness Report"));
-        assert!(text.contains("Status: **PASS**"));
+        assert!(text.contains("Status: **FAIL (LAB ONLY)**"));
         assert!(text.contains("ready for wider lab validation only"));
         assert!(text.contains("not a real-world datapath closure claim"));
         assert!(text.contains("Real OS-level datapath closure (strict M4/M5): `false`"));
+        assert!(
+            text.contains(
+                "GitHub release -> approved SSH stand -> runtime lifecycle slice: `true`"
+            )
+        );
     }
 
     #[test]
     fn release_readiness_report_json_contains_gate_fields() {
         let checklist = ReleaseGateChecklist {
             clean_clone_builds: true,
-            client_gateway_run_linux: true,
+            mesh_node_runs_linux: true,
             encrypted_tunnel_carries_traffic: true,
-            policy_routing_direct_gateway_block: true,
+            policy_routing_direct_peer_transit_block: true,
             dns_binding_works: true,
             route_explain_works: true,
             shutdown_restores_network_state: true,
@@ -4933,6 +4906,7 @@ mod tests {
             runtime_forced_stop_rollback_verified: true,
         };
         let json = render_release_readiness_report_json(
+            true,
             true,
             false,
             MvpSpecCheckResult {
@@ -4955,7 +4929,10 @@ mod tests {
             },
         );
         assert!(json.contains("\"kind\":\"release_readiness_report\""));
-        assert!(json.contains("\"release_ok\":true"));
+        assert!(json.contains("\"status\":\"fail\""));
+        assert!(json.contains("\"release_ok\":false"));
+        assert!(json.contains("\"lab_release_ok\":true"));
+        assert!(json.contains("\"github_release_ssh_runtime_slice_proven\":true"));
         assert!(json.contains("\"truth_boundary\""));
         assert!(json.contains("\"lab_scope_only\":true"));
         assert!(json.contains("\"real_world_datapath_closed\":false"));

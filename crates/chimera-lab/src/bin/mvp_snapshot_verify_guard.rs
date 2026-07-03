@@ -16,10 +16,23 @@ fn main() {
     let reality = read_obj(reality_json);
     let truth_expected = truth_expected(&reality);
 
-    require_str(&snapshot, "status", "ok");
     require_str(&snapshot, "kind", "mvp_snapshot");
-    require_str(&verify, "status", "ok");
     require_str(&verify, "kind", "mvp_verify");
+    let real_world_datapath_closed = truth_expected
+        .get("real_world_datapath_closed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let release_ready = get_bool(&snapshot, "release_ready");
+    if release_ready != real_world_datapath_closed {
+        fail("snapshot release_ready must match real-world datapath closure");
+    }
+    require_bool(&snapshot, "lab_release_ready", true);
+    if snapshot.get("status").and_then(Value::as_str) == Some("ok") && !release_ready {
+        fail("snapshot status ok requires real-world release_ready");
+    }
+    if verify.get("status").and_then(Value::as_str) == Some("ok") && !release_ready {
+        fail("verify status ok requires real-world release_ready");
+    }
 
     if snapshot.get("truth_boundary") != Some(&truth_expected) {
         fail("snapshot truth_boundary mismatch");
@@ -28,12 +41,10 @@ fn main() {
         fail("verify truth_boundary mismatch");
     }
 
-    require_bool(&snapshot, "release_ready", true);
     require_bool(&snapshot, "artifact_audit", true);
     require_str(&snapshot, "network_state", "not_modified");
     require_str(&verify, "network_state", "not_modified");
     require_bool(&verify, "artifact_audit", true);
-    require_bool(&verify, "mvp_snapshot", true);
 
     let mvp = get_obj(&snapshot, "mvp", "snapshot mvp is not object");
     let mvp_expected: BTreeSet<&str> = ["m0", "m1", "m2", "m3", "m4", "m5", "m6"]
@@ -44,9 +55,9 @@ fn main() {
 
     let gate_expected: BTreeSet<&str> = [
         "clean_clone_builds",
-        "client_gateway_run_linux",
+        "mesh_node_runs_linux",
         "encrypted_tunnel_carries_traffic",
-        "policy_routing_direct_gateway_block",
+        "policy_routing_direct_peer_transit_block",
         "dns_binding_works",
         "route_explain_works",
         "shutdown_restores_network_state",
@@ -81,14 +92,14 @@ fn main() {
         "mvp_spec_report",
         "m5_artifacts_report",
         "m6_artifacts_report",
-        "release_readiness_report",
-        "report_pack",
         "artifact_audit",
-        "mvp_snapshot",
     ];
     for k in verify_expected {
         require_bool(&verify, k, true);
     }
+    require_bool(&verify, "release_readiness_report", release_ready);
+    require_bool(&verify, "report_pack", release_ready);
+    require_bool(&verify, "mvp_snapshot", release_ready);
 
     let snapshot_top: BTreeSet<&str> = [
         "status",
@@ -96,6 +107,7 @@ fn main() {
         "message_en",
         "message_ru",
         "release_ready",
+        "lab_release_ready",
         "truth_boundary",
         "mvp",
         "release_gate",
@@ -167,6 +179,10 @@ fn require_bool(obj: &serde_json::Map<String, Value>, key: &str, expected: bool)
     if obj.get(key).and_then(Value::as_bool) != Some(expected) {
         fail(&format!("{key} is not {expected}"));
     }
+}
+
+fn get_bool(obj: &serde_json::Map<String, Value>, key: &str) -> bool {
+    obj.get(key).and_then(Value::as_bool).unwrap_or(false)
 }
 fn get_obj<'a>(
     root: &'a serde_json::Map<String, Value>,

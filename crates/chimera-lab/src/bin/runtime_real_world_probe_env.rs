@@ -81,13 +81,18 @@ fn emit_string(
 
 fn normalize_datapath_probe_error(value: &str) -> &str {
     match value {
-        "none" | "curl_not_found" | "datapath_target_failed" | "ci_snapshot" | "unknown" => value,
+        "none"
+        | "curl_not_found"
+        | "datapath_target_failed"
+        | "chimera_datapath_evidence_missing"
+        | "ci_snapshot"
+        | "unknown" => value,
         _ => "unknown",
     }
 }
 
 fn render_exports(parsed: &Value) -> Vec<String> {
-    let mut out = Vec::with_capacity(11);
+    let mut out = Vec::with_capacity(20);
     let totals = normalize_datapath_target_totals(
         parsed
             .get("datapath_targets_total")
@@ -101,6 +106,20 @@ fn render_exports(parsed: &Value) -> Vec<String> {
             .get("datapath_targets_failed")
             .and_then(|v| v.as_i64())
             .unwrap_or(0),
+    );
+    emit_bool(
+        &mut out,
+        parsed,
+        "chimera_datapath_evidence",
+        "runtime_real_world_chimera_datapath_evidence",
+        false,
+    );
+    emit_string(
+        &mut out,
+        parsed,
+        "evidence_kind",
+        "runtime_real_world_evidence_kind",
+        "unknown",
     );
     emit_bool(
         &mut out,
@@ -179,6 +198,55 @@ fn render_exports(parsed: &Value) -> Vec<String> {
         "runtime_real_world_datapath_targets_failed",
         0,
     );
+    let external_totals = normalize_datapath_target_totals(
+        parsed
+            .get("external_reachability_targets_total")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        parsed
+            .get("external_reachability_targets_ok")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        parsed
+            .get("external_reachability_targets_failed")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+    );
+    emit_bool(
+        &mut out,
+        parsed,
+        "external_reachability_probe_attempted",
+        "runtime_real_world_external_reachability_probe_attempted",
+        false,
+    );
+    emit_bool(
+        &mut out,
+        parsed,
+        "external_reachability_probe_ok",
+        "runtime_real_world_external_reachability_probe_ok",
+        false,
+    );
+    emit_i64(
+        &mut out,
+        &serde_json::json!({ "v": external_totals.0 }),
+        "v",
+        "runtime_real_world_external_reachability_targets_total",
+        0,
+    );
+    emit_i64(
+        &mut out,
+        &serde_json::json!({ "v": external_totals.1 }),
+        "v",
+        "runtime_real_world_external_reachability_targets_ok",
+        0,
+    );
+    emit_i64(
+        &mut out,
+        &serde_json::json!({ "v": external_totals.2 }),
+        "v",
+        "runtime_real_world_external_reachability_targets_failed",
+        0,
+    );
     out
 }
 
@@ -225,6 +293,14 @@ mod tests {
         );
         assert!(
             got.iter()
+                .any(|l| l == "runtime_real_world_chimera_datapath_evidence=false")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_evidence_kind='unknown'")
+        );
+        assert!(
+            got.iter()
                 .any(|l| l == "runtime_real_world_probe_mode='unknown'")
         );
         assert!(
@@ -239,12 +315,18 @@ mod tests {
             got.iter()
                 .any(|l| l == "runtime_real_world_datapath_targets_total=0")
         );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_external_reachability_targets_total=0")
+        );
     }
 
     #[test]
     fn maps_present_fields() {
         let got = render_exports(&json!({
             "direct_probe_ok": true,
+            "chimera_datapath_evidence": false,
+            "evidence_kind": "external_reachability_without_system_proxy",
             "probe_mode": "ci_snapshot",
             "live_external_probe": false,
             "ssh_stand_required_for_live_probe": true,
@@ -254,7 +336,19 @@ mod tests {
             "skipped_no_curl": false,
             "datapath_targets_total": 3,
             "datapath_targets_ok": 2,
-            "datapath_targets_failed": 1
+            "datapath_targets_failed": 1,
+            "external_reachability_probe_attempted": true,
+            "external_reachability_probe_ok": true,
+            "external_reachability_targets_total": 4,
+            "external_reachability_targets_ok": 4,
+            "external_reachability_targets_failed": 0
+        }));
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_chimera_datapath_evidence=false")
+        );
+        assert!(got.iter().any(|l| {
+            l == "runtime_real_world_evidence_kind='external_reachability_without_system_proxy'"
         }));
         assert!(
             got.iter()
@@ -284,6 +378,14 @@ mod tests {
             got.iter()
                 .any(|l| l == "runtime_real_world_datapath_targets_total=3")
         );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_external_reachability_probe_attempted=true")
+        );
+        assert!(
+            got.iter()
+                .any(|l| l == "runtime_real_world_external_reachability_targets_total=4")
+        );
     }
 
     #[test]
@@ -307,6 +409,10 @@ mod tests {
         assert_eq!(
             normalize_datapath_probe_error("datapath_target_failed"),
             "datapath_target_failed"
+        );
+        assert_eq!(
+            normalize_datapath_probe_error("chimera_datapath_evidence_missing"),
+            "chimera_datapath_evidence_missing"
         );
         assert_eq!(normalize_datapath_probe_error("ci_snapshot"), "ci_snapshot");
         assert_eq!(normalize_datapath_probe_error("unknown"), "unknown");

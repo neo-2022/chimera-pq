@@ -74,7 +74,7 @@ config-smoke:
     cargo run -p chimera-lab --bin chimera-lab -- config-smoke
 
 diag-export:
-    cargo run -p chimera-cli -- diag export --config configs/client.example.conf --age 120 --packets 1 --out docs/diag_export_latest.json
+    cargo run -p chimera-cli -- diag export --config configs/mesh-node.example.conf --age 120 --packets 1 --out docs/diag_export_latest.json
 
 route-explain-json:
     cargo run -p chimera-cli -- route explain example.org --json --out docs/route_explain_latest.json
@@ -110,9 +110,13 @@ probe-access-smoke-selfcheck:
       printf '%s\n' 'https://chimera-ci-snapshot.local/ok' 'http://chimera-ci-snapshot.local/failover' > "$probe_tmp/targets.txt"; \
       PATH="$probe_tmp:$PATH" cargo run -q -p chimera-cli -- probe access --url-file "$probe_tmp/targets.txt" --timeout-sec 2 --fail-threshold 0 --json --out /tmp/chimera_probe_access_smoke.json
     rg -q '"kind":"probe_access"' /tmp/chimera_probe_access_smoke.json
+    rg -Fq '"redaction":"raw_targets_redacted"' /tmp/chimera_probe_access_smoke.json
+    rg -Fq '"target_profile":"ci_snapshot"' /tmp/chimera_probe_access_smoke.json
     rg -Fq '"targets":[' /tmp/chimera_probe_access_smoke.json
     rg -Fq '"totals":{' /tmp/chimera_probe_access_smoke.json
-    rg -q 'chimera-ci-snapshot.local' /tmp/chimera_probe_access_smoke.json
+    rg -Fq '"url":"target#1"' /tmp/chimera_probe_access_smoke.json
+    rg -Fq '"target_ref":"target#1"' /tmp/chimera_probe_access_smoke.json
+    ! rg -q 'chimera-ci-snapshot.local|https?://|domain_exact=' /tmp/chimera_probe_access_smoke.json
     rm -f /tmp/chimera_probe_access_smoke.json
 
 chimera-path-proof:
@@ -125,11 +129,20 @@ chimera-path-proof-selfcheck:
       bash scripts/chimera-path-proof.sh /tmp/chimera_path_proof_selfcheck.json > "$tmp_out" 2>/dev/null || true ; \
       rg -q '"kind":"chimera_path_proof"' "$tmp_out" ; \
       rm -f "$tmp_out"
-    rg -Fq '"mode":"transparent_datapath"' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"mode":"external_reachability_without_system_proxy"' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"chimera_datapath_evidence":false' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"truth_boundary":"' /tmp/chimera_path_proof_selfcheck.json
     rg -Fq '"direct_baseline":{' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"redaction":"raw_targets_and_remote_ips_redacted"' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"target_ref":"direct#1"' /tmp/chimera_path_proof_selfcheck.json
     rg -Fq '"datapath":{' /tmp/chimera_path_proof_selfcheck.json
+    rg -Fq '"external_reachability":{' /tmp/chimera_path_proof_selfcheck.json
     rg -Fq '"results":[' /tmp/chimera_path_proof_selfcheck.json
     rg -Fq '"network_state":"not_modified"' /tmp/chimera_path_proof_selfcheck.json
+    rg -q 'set \+e' scripts/chimera-path-proof.sh
+    rg -q 'curl_exit=\$\?' scripts/chimera-path-proof.sh
+    ! rg -q 'if ! env .*curl' scripts/chimera-path-proof.sh
+    ! rg -q 'https?://|"remote_ip":"|"target":"|"url":"' /tmp/chimera_path_proof_selfcheck.json
     rm -f /tmp/chimera_path_proof_selfcheck.json
 
 chimera-channel-audit:
@@ -151,7 +164,8 @@ chimera-app-routes-selfcheck:
     rg -q '^app:' configs/chimera-app-routes.example.conf
     rg -q '^service:' configs/chimera-app-routes.example.conf
     APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh app-routes-status | rg -q '^app_routes_count='
-    APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh route-status | rg -q '^datapath_mode=transparent$'
+    STATE_FILE=/tmp/chimera_missing_datapath_proof.json APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh route-status | rg -q '^datapath_mode=unknown$'
+    STATE_FILE=/tmp/chimera_missing_datapath_proof.json APP_ROUTES_FILE=configs/chimera-app-routes.example.conf bash scripts/chimera-control.sh route-status | rg -q '^datapath_apply=unverified$'
 
 chimera-runtime-verify:
     test -x scripts/chimera_runtime_verification.sh
@@ -187,10 +201,14 @@ upstream-resilience-smoke:
 upstream-resilience-smoke-selfcheck:
     test -x scripts/upstream_resilience_smoke.sh
     bash -n scripts/upstream_resilience_smoke.sh
+    rg -q 'legacy_lab_only_not_datapath_evidence' scripts/upstream_resilience_smoke.sh
+    rg -Fq '"product_datapath_evidence": false' scripts/upstream_resilience_smoke.sh
+    rg -q 'upstream_product_datapath_evidence=false' scripts/chimera-control.sh
+    rg -q 'legacy_source_used' scripts/upstream_resilience_smoke.sh
     tmp_json=$(mktemp) ; \
       bash scripts/upstream_resilience_smoke.sh "$tmp_json" >/dev/null ; \
       rg -q '"smoke":[[:space:]]*"upstream_resilience"' "$tmp_json" ; \
-      rg -q '"outcome":[[:space:]]*"(pass|partial)"' "$tmp_json" ; \
+      rg -q '"outcome":[[:space:]]*"(pass|partial|legacy)"' "$tmp_json" ; \
       rg -Fq '"post": {' "$tmp_json" ; \
       rm -f "$tmp_json"
 
@@ -225,7 +243,22 @@ chimera-fresh-gate-report-selfcheck:
     rg -q 'CHIMERA_PATH_PROOF_JSON' scripts/chimera_fresh_gate_report.sh
     rg -q 'CHIMERA_E2E_GATE_JSON' scripts/chimera_fresh_gate_report.sh
     rg -q 'CHIMERA_LOAD_GATE_JSON' scripts/chimera_fresh_gate_report.sh
+    rg -q 'path_proof_contract_failed' scripts/chimera_fresh_gate_report.sh
+    rg -q 'chimera_transparent_datapath' scripts/chimera_fresh_gate_report.sh
+    rg -q 'path_proof_chimera_datapath_evidence' scripts/chimera_fresh_gate_report.sh
+    rg -q 'path_proof_datapath_attempted' scripts/chimera_fresh_gate_report.sh
     rg -q '"chimera_fresh_gate_report"' scripts/chimera_fresh_gate_report.sh
+    tmp_dir=$(mktemp -d); \
+      trap 'rm -rf "$tmp_dir"' EXIT; \
+      printf '%s\n' '{"status":"pass","reason":"external_ok","mode":"external_reachability_without_system_proxy","chimera_datapath_evidence":false,"datapath":{"attempted":false,"ok":false,"targets_total":0,"targets_passed":0,"targets_failed":0}}' > "$tmp_dir/path.json"; \
+      printf '%s\n' '{"status":"pass"}' > "$tmp_dir/audit.json"; \
+      printf '%s\n' '{"status":"pass"}' > "$tmp_dir/e2e.json"; \
+      printf '%s\n' '{"status":"pass"}' > "$tmp_dir/load.json"; \
+      CHIMERA_PATH_PROOF_JSON="$tmp_dir/path.json" CHIMERA_CHANNEL_AUDIT_JSON="$tmp_dir/audit.json" CHIMERA_E2E_GATE_JSON="$tmp_dir/e2e.json" CHIMERA_LOAD_GATE_JSON="$tmp_dir/load.json" bash scripts/chimera_fresh_gate_report.sh "$tmp_dir/out.json" >/dev/null 2>&1 && exit 1 || true; \
+      jq -e '.status == "fail" and .reason == "path_proof_contract_failed" and .checks.path_proof_contract_ok == false' "$tmp_dir/out.json" >/dev/null; \
+      printf '%s\n' '{"status":"pass","reason":"ok","mode":"chimera_transparent_datapath","chimera_datapath_evidence":true,"datapath":{"attempted":true,"ok":true,"targets_total":2,"targets_passed":2,"targets_failed":0}}' > "$tmp_dir/path.json"; \
+      CHIMERA_PATH_PROOF_JSON="$tmp_dir/path.json" CHIMERA_CHANNEL_AUDIT_JSON="$tmp_dir/audit.json" CHIMERA_E2E_GATE_JSON="$tmp_dir/e2e.json" CHIMERA_LOAD_GATE_JSON="$tmp_dir/load.json" bash scripts/chimera_fresh_gate_report.sh "$tmp_dir/out.json" >/dev/null; \
+      jq -e '.status == "pass" and .checks.path_proof_contract_ok == true' "$tmp_dir/out.json" >/dev/null
 
 chimera-side-b-fresh-gate-sync:
     bash scripts/chimera_side_b_fresh_gate_sync.sh
@@ -310,12 +343,12 @@ rollback-json-smoke:
     cargo run -p chimera-cli -- down --state-file docs/runtime_state_latest.json
 
 runtime-apply-dns-smoke:
-    printf '%s\n' 'carrier.profile = tls' 'gateway.listen_addr = 127.0.0.1:18443' 'rekey.max_age_seconds = 300' 'rekey.max_packets_per_key = 10000' > /tmp/chimera_gateway_smoke.conf
-    printf '%s\n' 'carrier.profile = tls' 'carrier.addr = 127.0.0.1:18443' 'carrier.server_name = gateway.local' 'capture.mode = auto' 'capture.tun_supported = true' 'rekey.max_age_seconds = 300' 'rekey.max_packets_per_key = 10000' > /tmp/chimera_client_smoke.conf
+    printf '%s\n' 'node.mode = mesh-node' 'carrier.profile = tls' 'carrier.addr = 127.0.0.1:18443' 'carrier.server_name = node.local' 'peer.listen_addr = 127.0.0.1:18443' 'capture.mode = auto' 'capture.tun_supported = true' 'rekey.max_age_seconds = 300' 'rekey.max_packets_per_key = 10000' > /tmp/chimera_node_listen_smoke.conf
+    printf '%s\n' 'node.mode = mesh-node' 'carrier.profile = tls' 'carrier.addr = 127.0.0.1:18443' 'carrier.server_name = node.local' 'capture.mode = auto' 'capture.tun_supported = true' 'rekey.max_age_seconds = 300' 'rekey.max_packets_per_key = 10000' > /tmp/chimera_node_smoke.conf
     printf '%s\n' '# smoketest' 'nameserver 8.8.8.8' > /tmp/chimera_resolv_smoke.conf
-    CHIMERA_GATEWAY_IDLE_EXIT_MS=6000 cargo run -q -p chimera-gateway -- run --config /tmp/chimera_gateway_smoke.conf > /tmp/chimera_gateway_smoke.log 2>&1 &
+    CHIMERA_NODE_IDLE_EXIT_MS=6000 cargo run -q -p chimera-gateway --bin chimera-node -- run --config /tmp/chimera_node_listen_smoke.conf > /tmp/chimera_node_smoke.log 2>&1 &
     sleep 0.5
-    cargo run -q -p chimera-cli -- up --state-file /tmp/chimera_runtime_apply_state.json --config /tmp/chimera_client_smoke.conf --skip-connect-check true --apply-dns true --dns-server 9.9.9.9 --resolv-conf /tmp/chimera_resolv_smoke.conf
+    cargo run -q -p chimera-cli -- up --state-file /tmp/chimera_runtime_apply_state.json --config /tmp/chimera_node_smoke.conf --skip-connect-check true --apply-dns true --dns-server 9.9.9.9 --resolv-conf /tmp/chimera_resolv_smoke.conf
     rg -q '"network_state":"modified"' /tmp/chimera_runtime_apply_state.json
     rg -q 'nameserver 9.9.9.9' /tmp/chimera_resolv_smoke.conf
     cargo run -q -p chimera-cli -- down --state-file /tmp/chimera_runtime_apply_state.json
@@ -356,6 +389,166 @@ runtime-forced-stop-rollback-smoke:
 rust-no-hardcode-guard:
     cargo run -q -p chimera-lab --bin rust_no_hardcode_guard
 
+chimera-start-contract-smoke:
+    bash scripts/chimera_start_contract_smoke.sh
+
+chimera-route-status-contract-smoke:
+    bash scripts/chimera_route_status_contract_smoke.sh
+
+chimera-route-status-contract-smoke-selfcheck:
+    test -x scripts/chimera_route_status_contract_smoke.sh
+    bash -n scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'missing_state_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'invalid_json_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'duplicate_key_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'network_not_modified_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'tun_not_applied_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'route_not_applied_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'dns_not_applied_negative_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'valid_state_positive_control' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'datapath_mode=transparent' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'datapath_mode=unknown' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'datapath_apply=unverified' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'datapath_apply=ok' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'datapath-status' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'datapath_status_missing_datapath_mode_' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'state_invalid_json' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'duplicate_field' scripts/chimera_route_status_contract_smoke.sh
+    rg -q 'false_transparent_datapath' scripts/chimera_route_status_contract_smoke.sh
+
+chimera-start-contract-smoke-selfcheck:
+    test -x scripts/chimera_start_contract_smoke.sh
+    bash -n scripts/chimera_start_contract_smoke.sh
+    rg -q 'systemd_datapath_apply_failure' scripts/chimera_start_contract_smoke.sh
+    rg -q 'systemd_apply_rc0_state_missing' scripts/chimera_start_contract_smoke.sh
+    rg -q 'systemd_apply_rc0_network_not_modified' scripts/chimera_start_contract_smoke.sh
+    rg -q 'systemd_apply_rc0_valid_state_allows_ok' scripts/chimera_start_contract_smoke.sh
+    rg -q 'route_status_without_proof' scripts/chimera_start_contract_smoke.sh
+    rg -q 'direct_datapath_apply_failure' scripts/chimera_start_contract_smoke.sh
+    rg -q 'systemd_cli_privileged_up_path' scripts/chimera_start_contract_smoke.sh
+    rg -q 'cli up did not use sudo env wrapper' scripts/chimera_start_contract_smoke.sh
+    rg -q 'state cleanup did not use sudo' scripts/chimera_start_contract_smoke.sh
+    rg -q 'reason=datapath_apply_failed' scripts/chimera_start_contract_smoke.sh
+    rg -q 'reason=datapath_proof_failed' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_apply=unverified' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_apply=failed' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_proof=missing_state' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_proof=network_not_modified' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_proof=ok' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_rollback=ok' scripts/chimera_start_contract_smoke.sh
+    rg -q 'apply_rc=42' scripts/chimera_start_contract_smoke.sh
+    rg -q 'rollback recover was not invoked after partial apply state' scripts/chimera_start_contract_smoke.sh
+    rg -q 'partial runtime state was not removed by rollback' scripts/chimera_start_contract_smoke.sh
+    rg -q 'node/datapath units were not stopped after apply failure' scripts/chimera_start_contract_smoke.sh
+    rg -q 'node pidfile not cleaned after apply failure' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath pidfile not cleaned after apply failure' scripts/chimera_start_contract_smoke.sh
+    rg -q 'datapath_apply_failed' scripts/chimera-control.sh
+    rg -q 'rollback recover' scripts/chimera-control.sh
+    rg -q 'datapath_apply_proof_state' scripts/chimera-control.sh
+    rg -q 'load_cli_privilege_env' scripts/chimera-control.sh
+    rg -q 'should_run_chimera_cli_with_sudo' scripts/chimera-control.sh
+    rg -q 'remove_state_file_for_datapath_apply' scripts/chimera-control.sh
+    rg -q 'sudo -n env' scripts/chimera-control.sh
+    rg -q 'unverified' scripts/chimera-control.sh
+    rg -q 'datapath_proof=stale_state_cleanup_failed' scripts/chimera-control.sh
+    rg -Fq 'datapath_proof=$systemd_datapath_proof_status' scripts/chimera-control.sh
+    rg -Fq 'datapath_proof=$direct_datapath_proof_status' scripts/chimera-control.sh
+    rg -q 'state_proof_command' crates/chimera-cli/src/main.rs
+    rg -q 'validate_datapath_state_proof' crates/chimera-cli/src/main.rs
+    rg -q 'network_not_modified' crates/chimera-cli/src/main.rs
+    rg -q 'duplicate_field' crates/chimera-cli/src/main.rs
+    rg -Fq 'datapath_apply=$systemd_datapath_apply_status' scripts/chimera-control.sh
+    rg -Fq 'datapath_apply=$direct_datapath_apply_status' scripts/chimera-control.sh
+
+product-language-guard:
+    bash scripts/product_language_guard.sh
+
+product-language-guard-selfcheck:
+    test -x scripts/product_language_guard.sh
+    bash -n scripts/product_language_guard.sh
+    rg -q 'cargo run -q -p chimera-lab --bin product_language_guard' scripts/product_language_guard.sh
+    test -f crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'product language guard: PASS' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'forbidden VPN/proxy product wording' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'Release evidence status: invalid_for_release' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'mesh_node_runs_linux' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'policy_routing_direct_peer_transit_block' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'validate_normal_path_contracts' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'reject_contextual_normal_path_workaround' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'crates/chimera-cli/src/main.rs' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'crates/chimera-lab/src/main.rs' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'scripts/chimera_stop_contract_smoke.sh' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'node_config_file' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'node_config_ok' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q "legacy target 'gateway' is retired" crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'target/release/chimera-node' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'target/release/chimera-gateway' crates/chimera-lab/src/bin/product_language_guard.rs
+    rg -q 'crates/chimera-gateway/src/bin/chimera-node.rs' crates/chimera-lab/src/bin/product_language_guard.rs
+    test -f tests/fixtures/product_language_guard/fail/vpn_proxy_product.md
+    test -f tests/fixtures/product_language_guard/fail/client_gateway_workflow.md
+    test -f tests/fixtures/product_language_guard/fail/legacy_client_config_path.sh
+    test -f tests/fixtures/product_language_guard/fail/proxy_release_evidence.json
+    test -f tests/fixtures/product_language_guard/fail/singbox_bootstrap_normal_path.sh
+    test -f tests/fixtures/product_language_guard/fail/vpn_for_apps_product.md
+    test -f tests/fixtures/product_language_guard/fail/normal_vpn_mode.md
+    test -f tests/fixtures/product_language_guard/fail/proxy_workflow_normal_path.md
+    test -f tests/fixtures/product_language_guard/fail/app_specific_proxy_flags.md
+    test -f tests/fixtures/product_language_guard/fail/app_relaunch_workaround.md
+    test -f tests/fixtures/product_language_guard/fail/third_party_runtime_normal_path.sh
+    test -f tests/fixtures/product_language_guard/pass/allowed_safety_context.md
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/vpn_proxy_product.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/client_gateway_workflow.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/legacy_client_config_path.sh >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/proxy_release_evidence.json >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/singbox_bootstrap_normal_path.sh >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/vpn_for_apps_product.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/normal_vpn_mode.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/proxy_workflow_normal_path.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/app_specific_proxy_flags.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/app_relaunch_workaround.md >/dev/null 2>&1
+    ! cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/fail/third_party_runtime_normal_path.sh >/dev/null 2>&1
+    cargo run -q -p chimera-lab --bin product_language_guard -- tests/fixtures/product_language_guard/pass/allowed_safety_context.md >/dev/null
+
+public-artifact-redaction-guard:
+    bash scripts/public_artifact_redaction_guard.sh
+
+public-artifact-redaction-guard-selfcheck:
+    test -x scripts/public_artifact_redaction_guard.sh
+    bash -n scripts/public_artifact_redaction_guard.sh
+    rg -q 'CHIMERA_PUBLIC_ARTIFACT_REDACTION_FILES' scripts/public_artifact_redaction_guard.sh
+    rg -q 'REQUIRED_FILES' scripts/public_artifact_redaction_guard.sh
+    rg -q 'EXTRA_CANDIDATES' scripts/public_artifact_redaction_guard.sh
+    rg -q 'docs/probe_access_latest.json' scripts/public_artifact_redaction_guard.sh
+    rg -q 'docs/SECOND_MACHINE_REPORT.md' scripts/public_artifact_redaction_guard.sh
+    rg -q 'Workspace under test:' scripts/public_artifact_redaction_guard.sh
+    rg -q 'Host kernel:' scripts/public_artifact_redaction_guard.sh
+    rg -q 'public_artifact_redaction_guard=pass' scripts/public_artifact_redaction_guard.sh
+    rg -q 'unredacted_public_artifact' scripts/public_artifact_redaction_guard.sh
+    tmp_dir=$(mktemp -d) ; \
+      printf '%s\n' '{"status":"ok","url":"target#1","direct_url":"direct#1"}' > "$tmp_dir/pass.json" ; \
+      bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/pass.json" >/dev/null ; \
+      printf '%s\n' '{"status":"ok","url":"https://stand.example/path?token=leak"}' > "$tmp_dir/fail-url.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-url.json" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","remote_ip":"203.0.113.10"}' > "$tmp_dir/fail-ip.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-ip.json" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","remote_ip":"2001:db8::1"}' > "$tmp_dir/fail-ipv6.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-ipv6.json" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","endpoint":"user@example.org"}' > "$tmp_dir/fail-user-host.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-user-host.json" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","endpoint":"node.example.org:443"}' > "$tmp_dir/fail-host-port.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-host-port.json" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","path":"/home/operator/chimera"}' > "$tmp_dir/fail-path.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-path.json" >/dev/null 2>&1 ; \
+      printf '%s\n' 'Workspace under test: /tmp/chimera-pq-cleanroom' > "$tmp_dir/fail-workspace.md" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-workspace.md" >/dev/null 2>&1 ; \
+      printf '%s\n' 'Host kernel: Linux 7.0.0-22-generic x86_64' > "$tmp_dir/fail-kernel.md" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-kernel.md" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","error":"token=leak"}' > "$tmp_dir/fail-token.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-token.json" >/dev/null 2>&1 ; \
+      printf '%s\n' '{"status":"ok","error":"payload=48656c6c6f"}' > "$tmp_dir/fail-payload.json" ; \
+      ! bash scripts/public_artifact_redaction_guard.sh "$tmp_dir/fail-payload.json" >/dev/null 2>&1 ; \
+      rm -rf "$tmp_dir"
+
 rust-no-hardcode-guard-selfcheck:
     rg -q '^#!\[forbid\(unsafe_code\)\]$' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python source found in project tree' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
@@ -372,6 +565,10 @@ rust-no-hardcode-guard-selfcheck:
     rg -q 'CHIMERA_REAL_WORLD_DATAPATH_TIMEOUT_SEC' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'baked runtime target found in runtime_real_world_probe.rs' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'baked URL/proxy endpoint found in runtime Rust bins' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'transparent TCP product direct/proxy-style bypass is forbidden' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'transparent failover must fail closed when CHIMERA transit is not verified' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'release default route/adaptive domain list must be empty' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'CHIMERA transit path is not verified; fail closed' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'ws://' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'wss://' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'cargo run -q -p chimera-lab --bin -- lab health' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
@@ -437,12 +634,16 @@ runtime-real-world-probe-smoke-selfcheck:
     rg -q 'ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn resolve_non_empty_setting' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn format_datapath_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q '^fn target_ref' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q '^fn format_target_refs_csv' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'stderr\(Stdio::null\(\)\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn is_supported_probe_url' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q '^fn extract_authority' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'let authority = extract_authority\(rest\);' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'authority_has_non_empty_host\(authority\)' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'parse_datapath_targets_dedups_case_insensitive_and_trims' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'format_datapath_targets_csv_preserves_normalized_order' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
+    rg -q 'redacted_target_refs_are_stable_and_one_based' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'resolve_non_empty_setting_trims_and_rejects_empty' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'extract_authority_stops_on_path_query_and_fragment' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
     rg -q 'supported_probe_url_requires_http_or_https' crates/chimera-lab/src/bin/runtime_real_world_probe.rs
@@ -475,15 +676,20 @@ runtime-real-world-probe-schema-guard-selfcheck:
     rg -q 'live_external_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'ssh_stand_required_for_live_probe' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'validate_probe_accepts_ci_snapshot_payload' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'probe string is empty:' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'probe direct_url must use http/https' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'probe direct_url must be redacted direct ref' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'probe direct_url must be redacted direct ref' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'probe public artifact contains unredacted location' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'datapath target totals mismatch' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'direct_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'datapath_timeout_sec' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'datapath_targets csv is not normalized' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'datapath_targets contains non-http/https url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'datapath_targets contains non-redacted target ref' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'datapath probe not attempted must have empty target rows' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q '^fn normalize_datapath_targets_csv' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q '^fn is_redacted_direct_ref' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q '^fn is_redacted_target_ref' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q '^fn validate_public_probe_redaction' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q '^fn contains_hostname_literal' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q '^fn is_supported_probe_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q '^fn extract_authority' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'let authority = extract_authority\(rest\);' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
@@ -492,12 +698,18 @@ runtime-real-world-probe-schema-guard-selfcheck:
     rg -q 'validate_probe_rejects_not_attempted_with_non_empty_rows' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'extract_authority_stops_on_path_query_and_fragment' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'validate_probe_rejects_empty_required_strings' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'validate_probe_rejects_non_http_direct_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_raw_direct_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_raw_hostname_in_public_text' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_raw_hostname_with_port_in_public_text' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_raw_ipv4_in_public_text' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_local_path_in_public_text' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'ws://target1.example' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'wss://target1.example' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
-    rg -q 'validate_probe_rejects_non_http_datapath_target_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_raw_datapath_target_url' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    rg -q 'validate_probe_rejects_invalid_redacted_target_ref' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'https://bad host' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
     rg -q 'runtime real-world probe schema guard: PASS' crates/chimera-lab/src/bin/runtime_real_world_probe_schema_guard.rs
+    cargo test -q -p chimera-lab --bin runtime_real_world_probe_schema_guard
 
 mesh-cli-recovery-schema-guard:
     bash scripts/mesh_cli_recovery_schema_guard.sh
@@ -574,7 +786,7 @@ reality-audit-schema-guard-selfcheck:
     rg -q 'runtime_probe ci_snapshot cannot report live probe success' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'accepts_ci_snapshot_without_reality_closure' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe no curl but datapath attempted' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
-    rg -q 'runtime_probe datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
+    rg -q 'runtime_probe datapath must be attempted when CHIMERA evidence is available' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe datapath ok requires failed=0' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
     rg -q 'runtime_probe datapath attempted with empty target totals' crates/chimera-lab/src/bin/reality_audit_schema_guard.rs
@@ -598,7 +810,7 @@ reality-ship-sync-guard-selfcheck:
     rg -q 'str mismatch' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'runtime_probe_datapath_targets_failed' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
-    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
+    rg -q 'datapath must be attempted when CHIMERA evidence is available' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'datapath ok with failed targets' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
     rg -q 'datapath attempted with empty totals' crates/chimera-lab/src/bin/reality_ship_sync_guard.rs
@@ -754,6 +966,8 @@ ship-readiness-selfcheck:
     test -x scripts/git_tree_hygiene_guard.sh
     bash -n scripts/git_tree_hygiene_guard.sh
     rg -q '^just git-tree-hygiene-guard$' scripts/ship_readiness.sh
+    rg -q '^just product-language-guard-selfcheck$' scripts/ship_readiness.sh
+    rg -q '^just product-language-guard$' scripts/ship_readiness.sh
     rg -q 'git_tree_hygiene_ok' scripts/ship_readiness.sh
     rg -q '"git_tree_hygiene_guard":' scripts/ship_readiness.sh
     rg -q 'Git tree hygiene guard:' scripts/ship_readiness.sh
@@ -795,8 +1009,10 @@ ship-readiness-selfcheck:
     rg -q 'just release-readiness-report-ru' scripts/ship_readiness.sh
     rg -q 'just report-pack-json' scripts/ship_readiness.sh
     rg -q 'just report-pack$' scripts/ship_readiness.sh
-    rg -q 'just reality-ship-sync-guard-selfcheck' scripts/ship_readiness.sh
-    rg -q 'just reality-ship-sync-guard' scripts/ship_readiness.sh
+    awk '/^ship-report-contract-check:/{in_recipe=1; next} /^[[:alnum:]_-]+:/{in_recipe=0} in_recipe && /just reality-ship-sync-guard-selfcheck/{found=1} END{exit found ? 0 : 1}' justfile
+    awk '/^ship-report-contract-check:/{in_recipe=1; next} /^[[:alnum:]_-]+:/{in_recipe=0} in_recipe && /just reality-ship-sync-guard$/{found=1} END{exit found ? 0 : 1}' justfile
+    rg -q 'just public-artifact-redaction-guard-selfcheck' scripts/ship_readiness.sh
+    rg -q 'just public-artifact-redaction-guard' scripts/ship_readiness.sh
     rg -q 'cef_phase1_smoke_ok' scripts/ship_readiness.sh
     rg -q '"report_pack_json":true' scripts/ship_readiness.sh
     rg -q '"cef_track_report":true' scripts/ship_readiness.sh
@@ -895,17 +1111,11 @@ cleanroom-handoff-selfcheck:
     rg -q 'recover_ok' scripts/cleanroom_handoff_check.sh
     rg -q 'down_state_clean' scripts/cleanroom_handoff_check.sh
 
-client-health:
-    cargo run -p chimera-cli -- health --config configs/client.example.conf
+node-health:
+    cargo run -p chimera-cli -- health --config configs/mesh-node.example.conf
 
-client-doctor:
-    cargo run -p chimera-cli -- doctor --config configs/client.example.conf --json --out docs/doctor_latest.json
-
-gateway-health:
-    cargo run -p chimera-gateway -- health --config configs/gateway.example.conf
-
-gateway-doctor:
-    cargo run -p chimera-gateway -- doctor --config configs/gateway.example.conf --json --out docs/gateway_doctor_latest.json
+node-doctor:
+    cargo run -p chimera-cli -- doctor --config configs/mesh-node.example.conf --json --out docs/doctor_latest.json
 
 fuzz-smoke:
     cargo run -p chimera-lab --bin chimera-lab -- fuzz-smoke
@@ -1957,6 +2167,8 @@ ship-report-contract-check:
     just mesh-cli-recovery-schema-guard
     just reality-audit-schema-guard-selfcheck
     just reality-audit-schema-guard
+    just reality-ship-sync-guard-selfcheck
+    just reality-ship-sync-guard
     just json-no-dupe-guard-selfcheck
     just json-no-dupe-guard
     just mvp-snapshot-verify-guard-selfcheck
@@ -1984,12 +2196,12 @@ ship-report-contract-check:
     test -f docs/benchmark_baseline.json
     test -f docs/benchmark_ci_baseline.json
     test -f docs/benchmark_latest.json
-    rg -q '"status":"ok"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"status":"(ok|fail)"' docs/SHIP_READINESS_REPORT.json
     rg -q '"status_scope":"lab_source_gate_only"' docs/SHIP_READINESS_REPORT.json
     rg -q '"kind":"ship_readiness_report"' docs/SHIP_READINESS_REPORT.json
     test "$(rg -c '"generated_at":"' docs/SHIP_READINESS_REPORT.json)" -eq 1
     rg -q '"generated_at":"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"' docs/SHIP_READINESS_REPORT.json
-    rg -q '"release_ok":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"release_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"release_ok_lab_only":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"cef_phase1_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
     rg -q '"cef_phase1_closed":true' docs/SHIP_READINESS_REPORT.json
@@ -2019,13 +2231,18 @@ ship-report-contract-check:
     rg -q '"runtime_probe_access_live_external_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_probe_access_ssh_stand_required_for_live_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_probe_access_ci_snapshot_targets_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_probe_smoke_ok":true' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_probe_smoke_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_datapath_release_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_probe_mode":"(live|ci_snapshot)"' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_live_external_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_ssh_stand_required_for_live_probe":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_datapath_probe_attempted":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_datapath_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
-    rg -q '"runtime_real_world_datapath_probe_error":"(none|curl_not_found|datapath_target_failed|ci_snapshot|unknown)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_evidence_kind":"(external_reachability_without_system_proxy|ci_snapshot_contract|chimera_transparent_datapath)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_chimera_datapath_evidence":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_datapath_probe_error":"(none|curl_not_found|datapath_target_failed|chimera_datapath_evidence_missing|ci_snapshot|unknown)"' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_external_reachability_probe_attempted":(true|false)' docs/SHIP_READINESS_REPORT.json
+    rg -q '"runtime_real_world_external_reachability_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_direct_probe_ok":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"runtime_real_world_skipped_no_curl":(true|false)' docs/SHIP_READINESS_REPORT.json
     rg -q '"fresh_checked_artifacts_ok":true' docs/SHIP_READINESS_REPORT.json
@@ -2176,6 +2393,7 @@ ship-report-contract-check:
     rg -q 'Runtime probe-access external remote proof required for live probe:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime probe-access ci-snapshot targets ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe attempted:' docs/SHIP_READINESS_REPORT.md
+    rg -q 'Runtime real-world datapath release ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe ok:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath probe error:' docs/SHIP_READINESS_REPORT.md
     rg -q 'Runtime real-world datapath targets total:' docs/SHIP_READINESS_REPORT.md
@@ -2210,11 +2428,14 @@ ship-readiness-json-guard-selfcheck:
     rg -q 'datapath probe attempted with empty totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath probe not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath probe ok with failed targets' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
-    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath must be attempted when CHIMERA evidence is available' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'runtime_real_world_datapath_release_ok' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'invalid runtime_real_world_probe_mode' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'ci_snapshot cannot close real-world datapath' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'ci_snapshot cannot report direct probe success' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'status ok requires CHIMERA datapath release evidence' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
+    rg -q 'datapath release flag does not match CHIMERA evidence' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'runtime_datapath_logic_accepts_ci_snapshot_contract' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'validate_direct_probe_visibility' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
     rg -q 'direct_probe_failure_is_allowed_when_snapshot_gate_is_still_visible' crates/chimera-lab/src/bin/ship_readiness_json_guard.rs
@@ -2227,32 +2448,38 @@ probe-access-ship-guard-selfcheck:
     test -f crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     test -f crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     test -f crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    test -f crates/chimera-lab/src/bin/probe_access_ship_guard/redaction.rs
     test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard.rs | tr -d ' ')" -le 260
     test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs | tr -d ' ')" -le 340
     test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs | tr -d ' ')" -le 420
+    test "$(wc -l < crates/chimera-lab/src/bin/probe_access_ship_guard/redaction.rs | tr -d ' ')" -le 120
     rg -q '^#!\[forbid\(unsafe_code\)\]$' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q '#\[path = "probe_access_ship_guard/contract.rs"\]' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q '#\[path = "probe_access_ship_guard/redaction.rs"\]' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'invalid runtime_probe_access_mode' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'ci_snapshot probe access requires snapshot-safe targets' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'validate_probe_contract' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
+    rg -q 'redaction marker missing' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'target url must be redacted ref' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'raw policy_rule_id field forbidden' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'validate_public_probe_text_fields' crates/chimera-lab/src/bin/probe_access_ship_guard/redaction.rs
+    rg -q 'payload' crates/chimera-lab/src/bin/probe_access_ship_guard/redaction.rs
+    rg -q 'hexdump' crates/chimera-lab/src/bin/probe_access_ship_guard/redaction.rs
     rg -q 'probe failed_total mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     rg -q '#\[path = "contract_tests.rs"\]' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     rg -q 'target_error requires failed policy' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
-    rg -q 'rejects_probe_contract_total_mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_missing_redaction_marker' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_raw_target_url' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_target_ref_mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_duplicate_or_skipped_target_refs' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_raw_domain_policy_hint' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_legacy_policy_rule_id' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
+    rg -q 'rejects_sensitive_target_error_text' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
     rg -q 'target direct_ok total mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     rg -q 'mixed ci_snapshot and live probe targets' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     rg -q 'threshold_exceeded cannot ship' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
-    rg -q 'rejects_probe_contract_target_row_mismatch' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'rejects_probe_contract_non_object_target' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'rejects_probe_contract_non_http_target_url' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'rejects_probe_contract_empty_authority_url' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'rejects_applied_policy_without_verify_ok' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'rejects_failed_policy_without_error' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'rejects_target_error_without_failed_policy' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'accepts_applied_policy_with_verified_route' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
-    rg -q 'authority_has_non_empty_host' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
+    rg -q 'accepts_applied_policy_with_redacted_rule_ref' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
     rg -q 'applied policy must verify ok' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
-    rg -q 'rejects_mixed_ci_snapshot_and_live_targets' crates/chimera-lab/src/bin/probe_access_ship_guard/contract_tests.rs
     rg -q 'checked_total' crates/chimera-lab/src/bin/probe_access_ship_guard/contract.rs
     rg -q 'probe access ship guard: PASS' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
     rg -q 'rejects_ci_snapshot_with_external_targets' crates/chimera-lab/src/bin/probe_access_ship_guard.rs
@@ -2296,13 +2523,16 @@ ship-nonregression-guard-selfcheck:
     rg -q 'route multi-cidr skipped_no_tun is not releasable' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'forced-stop skipped_no_tun is not releasable' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
-    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath must be attempted when CHIMERA evidence is available' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath ok with failed targets' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath attempted with empty target totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath not attempted with non-zero totals' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath error value is invalid' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'datapath totals mismatch' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'legacy proxy runtime proof is not releasable' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'datapath release flag does not match CHIMERA evidence' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
+    rg -q 'status ok requires CHIMERA datapath release evidence' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'probe mode value is invalid' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
     rg -q 'ci_snapshot cannot report live probe attempt' crates/chimera-lab/src/bin/ship_nonregression_guard.rs
 
@@ -2330,11 +2560,13 @@ reality-truth-guard-selfcheck:
     rg -q 'runtime_probe_datapath_error' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'str mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'no curl but datapath attempted' crates/chimera-lab/src/bin/reality_truth_guard.rs
-    rg -q 'datapath must be attempted when curl is available' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath must be attempted when CHIMERA evidence is available' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'datapath attempted with curl_not_found' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'datapath ok with failed targets' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'datapath error value is invalid' crates/chimera-lab/src/bin/reality_truth_guard.rs
     rg -q 'datapath totals mismatch' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'datapath release flag does not match CHIMERA evidence' crates/chimera-lab/src/bin/reality_truth_guard.rs
+    rg -q 'status ok requires CHIMERA datapath release evidence' crates/chimera-lab/src/bin/reality_truth_guard.rs
 
 ship-structure-guard:
     bash scripts/ship_structure_guard.sh \
@@ -2349,7 +2581,7 @@ ship-structure-guard-selfcheck:
     rg -q 'ship structure guard: PASS' crates/chimera-lab/src/bin/ship_structure_guard.rs
     rg -q 'missing steps:' crates/chimera-lab/src/bin/ship_structure_guard.rs
     rg -q 'unexpected steps:' crates/chimera-lab/src/bin/ship_structure_guard.rs
-    rg -q 'non-true steps:' crates/chimera-lab/src/bin/ship_structure_guard.rs
+    rg -q 'non-bool steps:' crates/chimera-lab/src/bin/ship_structure_guard.rs
 
 release-pack-schema-guard:
     bash scripts/release_pack_schema_guard.sh \
@@ -2364,20 +2596,63 @@ release-bundle-install-contract-smoke-selfcheck:
     bash -n scripts/release_bundle_install_contract_smoke.sh
     rg -q 'cargo_forbidden' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1' scripts/release_bundle_install_contract_smoke.sh
-    rg -q 'upstream_proxy.env.example' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'mesh_bootstrap.env.example' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'archive_forbidden_config_present' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'release_bundle_secret_or_stand_literal_found' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'CHIMERA_RELEASE_BUNDLE_FORBIDDEN_PATTERNS_FILE' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'stale-token-from-previous-release' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'install_without_cargo_ok=true' scripts/release_bundle_install_contract_smoke.sh
-    rg -q 'installed_upstream_env_placeholder_credentials' scripts/release_bundle_install_contract_smoke.sh
-    rg -q 'installed_upstream_env_peer_token_leak' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_mesh_bootstrap_env_upstream_credentials' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_mesh_bootstrap_env_peer_token_leak' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'node_help_missing_node_commands' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'node_help_legacy_gateway_wording' scripts/release_bundle_install_contract_smoke.sh
     ! rg -q 'CHIMERA_SINGBOX_RUNTIME_DIR=' scripts/release_bundle_install_contract_smoke.sh
     rg -q 'Release Bundle Install Contract' .github/workflows/release.yml
     rg -q 'scripts/release_bundle_install_contract_smoke.sh' .github/workflows/release.yml
-    rg -q 'configs/upstream_proxy\\.env\\.example' scripts/build_release.sh
-    rg -q 'missing_singbox_sha256' scripts/chimera_runtime_bootstrap.sh
-    rg -q 'runtime_bootstrap_failed' scripts/chimera-control.sh
-    rg -q 'remove_env_kv "\$UPSTREAM_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"' scripts/install_desktop_control.sh
+    rg -q 'git verify-tag --raw -v' .github/workflows/release.yml
+    rg -q 'CHIMERA_RELEASE_GPG_PUBLIC_KEY' .github/workflows/release.yml
+    rg -q 'CHIMERA_RELEASE_GPG_FINGERPRINT' .github/workflows/release.yml
+    rg -q 'immutable release policy forbids asset replacement' .github/workflows/release.yml
+    ! rg -q 'delete-asset|--clobber' .github/workflows/release.yml
+    rg -q 'github_release_missing_gpg_tag_verification' scripts/chimera_installer_gate.sh
+    rg -q 'configs/mesh_bootstrap\\.env\\.example' scripts/build_release.sh
+    rg -q 'upstream_proxy\\.env\\.example' scripts/build_release.sh
+    ! rg -q 'configs\"/\\*\\.conf' scripts/build_release.sh
+    rg -q 'policy\\.runtime\\.conf' scripts/build_release.sh
+    rg -q 'chimera-app-routes\\.conf' scripts/build_release.sh
+    rg -q 'chimera-release/scripts/chimera_runtime_bootstrap' scripts/build_release.sh
+    ! rg -q 'cp -p .*chimera_runtime_bootstrap\.sh' scripts/build_release.sh
+    rg -q 'installed_legacy_third_party_runtime_bootstrap_present' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_missing_state' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_invalid_not_rejected' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_duplicate_field' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_network_not_modified' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_tun_not_applied' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_route_not_applied' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_dns_not_applied' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_state_proof_valid_not_accepted' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_without_proof' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_duplicate_field' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_network_not_modified' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_tun_not_applied' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_route_not_applied' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_dns_not_applied' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_valid_apply_without_flow_proof' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_stale_flow_proof' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'installed_route_status_valid_flow_proof' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_mode=unknown' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_apply=unverified' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_proof=missing_state' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_flow_proof=missing_flow_proof' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_flow_proof=flow_stale' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_mode=transparent' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_proof=ok' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'datapath_flow_proof=ok' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'chimera-release/scripts/chimera-control.sh' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'chimera-release/scripts/chimera-runner.sh' scripts/release_bundle_install_contract_smoke.sh
+    rg -q 'chimera-release/scripts/chimera_runtime_bootstrap' .github/workflows/release.yml
+    ! rg -q 'RUNTIME_BOOTSTRAP_SCRIPT|ensure-singbox|SINGBOX_BIN|singbox-split\.json|chimera-singbox\.pid' scripts/chimera-control.sh
+    rg -q 'remove_env_kv "\$BOOTSTRAP_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"' scripts/install_desktop_control.sh
 
 release-pack-schema-guard-selfcheck:
     test -x scripts/release_pack_schema_guard.sh
@@ -2387,6 +2662,8 @@ release-pack-schema-guard-selfcheck:
     rg -q 'release-pack schema guard: PASS' crates/chimera-lab/src/bin/release_pack_schema_guard.rs
     rg -q 'release top-level keys mismatch' crates/chimera-lab/src/bin/release_pack_schema_guard.rs
     rg -q 'pack top-level keys mismatch' crates/chimera-lab/src/bin/release_pack_schema_guard.rs
+    rg -q 'lab_release_ok' crates/chimera-lab/src/bin/release_pack_schema_guard.rs
+    rg -q 'status ok requires real-world datapath' crates/chimera-lab/src/bin/release_pack_schema_guard.rs
 
 report-pack-guard:
     bash scripts/report_pack_guard.sh \
@@ -2401,6 +2678,7 @@ report-pack-guard-selfcheck:
     rg -q 'report pack guard: PASS' crates/chimera-lab/src/bin/report_pack_guard.rs
     rg -q 'truth_boundary mismatch' crates/chimera-lab/src/bin/report_pack_guard.rs
     rg -q 'section order mismatch' crates/chimera-lab/src/bin/report_pack_guard.rs
+    rg -q 'status ok requires real-world datapath closure' crates/chimera-lab/src/bin/report_pack_guard.rs
 
 release-ru-guard:
     bash scripts/release_ru_guard.sh \
@@ -2415,6 +2693,8 @@ release-ru-guard-selfcheck:
     rg -q 'release ru guard: PASS' crates/chimera-lab/src/bin/release_ru_guard.rs
     rg -q 'runtime order mismatch' crates/chimera-lab/src/bin/release_ru_guard.rs
     rg -q 'artifacts order mismatch' crates/chimera-lab/src/bin/release_ru_guard.rs
+    rg -q 'lab_release_ok' crates/chimera-lab/src/bin/release_ru_guard.rs
+    rg -q 'FAIL \\(ТОЛЬКО ЛАБОРАТОРНО\\)' crates/chimera-lab/src/bin/release_ru_guard.rs
 
 mvp-snapshot-verify-guard:
     bash scripts/mvp_snapshot_verify_guard.sh \
@@ -2429,6 +2709,8 @@ mvp-snapshot-verify-guard-selfcheck:
     rg -q 'mvp snapshot/verify guard: PASS' crates/chimera-lab/src/bin/mvp_snapshot_verify_guard.rs
     rg -q 'snapshot top-level keys mismatch' crates/chimera-lab/src/bin/mvp_snapshot_verify_guard.rs
     rg -q 'verify top-level keys mismatch' crates/chimera-lab/src/bin/mvp_snapshot_verify_guard.rs
+    rg -q 'lab_release_ready' crates/chimera-lab/src/bin/mvp_snapshot_verify_guard.rs
+    rg -q 'status ok requires real-world release_ready' crates/chimera-lab/src/bin/mvp_snapshot_verify_guard.rs
 
 json-no-dupe-guard:
     bash scripts/json_no_dupe_guard.sh \
@@ -2449,6 +2731,8 @@ json-no-dupe-guard-selfcheck:
     rg -q 'usage:' scripts/json_no_dupe_guard.sh
 
 mvp-check:
+    just product-language-guard-selfcheck
+    just product-language-guard
     just check
     just test
     just lint
@@ -2474,8 +2758,7 @@ mvp-check:
     just diag-export
     just route-explain-json
     just datapath-report-json
-    just client-doctor
-    just gateway-doctor
+    just node-doctor
     just lab-doctor
     bash scripts/chimera_doctor_contract_smoke.sh
     just mvp-spec-check
@@ -2507,14 +2790,24 @@ handoff-check:
     just current-workline-attestation-guard
     just mvp-check
     just release-readiness-report-json
+    just public-artifact-redaction-guard-selfcheck
+    just public-artifact-redaction-guard
 
 session-process-guard:
     just workflow-attestation-guard-selfcheck
     just workflow-attestation-guard
     just current-workline-attestation-guard-selfcheck
     just current-workline-attestation-guard
+    just chimera-start-contract-smoke-selfcheck
+    just chimera-start-contract-smoke
+    just chimera-route-status-contract-smoke-selfcheck
+    just chimera-route-status-contract-smoke
     just ai-architect-artifact-guard-selfcheck
     just ai-architect-artifact-guard
+    just product-language-guard-selfcheck
+    just product-language-guard
+    just public-artifact-redaction-guard-selfcheck
+    just public-artifact-redaction-guard
 
 handoff-process-check:
     just git-tree-hygiene-guard allow-no-git
@@ -2739,11 +3032,24 @@ chimera-autonomous-nat-guard-selfcheck:
     bash -n scripts/chimera_autonomous_nat_guard.sh
     rg -q 'chimera_autonomous_nat_guard' scripts/chimera_autonomous_nat_guard.sh
     rg -q 'upstream_adaptation_possible' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'legacy_upstream_source_not_allowed' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'legacy_upstream_source_used' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'upstream_product_datapath_evidence' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'path_proof_contract_failed' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'chimera_transparent_datapath' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'path_chimera_datapath_evidence' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'path_datapath_attempted' scripts/chimera_autonomous_nat_guard.sh
+    rg -q 'path_contract_ok' scripts/chimera_autonomous_nat_guard.sh
 
 chimera-upstream-autobootstrap-selfcheck:
     test -x scripts/chimera_upstream_autobootstrap.sh
     bash -n scripts/chimera_upstream_autobootstrap.sh
     rg -q 'upstream-autobootstrap: selected=' scripts/chimera_upstream_autobootstrap.sh
     rg -q 'CHIMERA_UPSTREAM_ENDPOINTS_CSV=' scripts/chimera_upstream_autobootstrap.sh
+    rg -q 'legacy_upstream_probe.env' scripts/chimera_upstream_autobootstrap.sh
+    rg -q 'legacy_upstream_pool.list' scripts/chimera_upstream_autobootstrap.sh
+    rg -q 'mode=legacy_probe_only' scripts/chimera_upstream_autobootstrap.sh
+    ! rg -q "printf 'CHIMERA_UPSTREAM_USER=%s" scripts/chimera_upstream_autobootstrap.sh
+    ! rg -q "printf 'CHIMERA_UPSTREAM_PASS=%s" scripts/chimera_upstream_autobootstrap.sh
     rg -q 'is_placeholder_upstream_value' scripts/chimera_upstream_autobootstrap.sh
     rg -q 'your_server_host_or_ip' scripts/chimera_upstream_autobootstrap.sh

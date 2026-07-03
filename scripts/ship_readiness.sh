@@ -50,6 +50,8 @@ just runtime-forced-stop-rollback-smoke-selfcheck
 just runtime-forced-stop-rollback-smoke
 just rust-no-hardcode-guard-selfcheck
 just rust-no-hardcode-guard
+just product-language-guard-selfcheck
+just product-language-guard
 just runtime-real-world-probe-smoke-selfcheck
 just runtime-real-world-probe-smoke
 just runtime-real-world-probe-schema-guard-selfcheck
@@ -63,6 +65,7 @@ just reality-audit-schema-guard
 
 release_ok=false
 release_ok_lab_only=false
+github_release_ssh_runtime_slice_proven=false
 cef_phase1_smoke_ok=false
 cef_phase1_closed=false
 network_state_ok=false
@@ -77,8 +80,13 @@ runtime_resolv_conf_validation_smoke_ok=false
 runtime_datapath_multiflow_smoke_ok=false
 runtime_policy_precedence_smoke_ok=false
 runtime_forced_stop_rollback_smoke_ok=false
+# Live-only summary flag. Snapshot-only and external-reachability-only branches
+# must stay false here so they cannot be mistaken for CHIMERA datapath proof.
 runtime_real_world_probe_smoke_ok=false
+runtime_real_world_datapath_release_ok=false
 runtime_real_world_probe_mode="unknown"
+runtime_real_world_evidence_kind="unknown"
+runtime_real_world_chimera_datapath_evidence=false
 runtime_real_world_live_external_probe=false
 runtime_real_world_ssh_stand_required_for_live_probe=true
 runtime_real_world_direct_probe_ok=false
@@ -89,6 +97,11 @@ runtime_real_world_skipped_no_curl=false
 runtime_real_world_datapath_targets_total=0
 runtime_real_world_datapath_targets_ok=0
 runtime_real_world_datapath_targets_failed=0
+runtime_real_world_external_reachability_probe_attempted=false
+runtime_real_world_external_reachability_probe_ok=false
+runtime_real_world_external_reachability_targets_total=0
+runtime_real_world_external_reachability_targets_ok=0
+runtime_real_world_external_reachability_targets_failed=0
 runtime_probe_access_smoke_ok=false
 runtime_probe_access_mode="unknown"
 runtime_probe_access_live_external_probe=false
@@ -102,7 +115,12 @@ real_world_datapath_closed=false
 git_tree_hygiene_ok=true
 if rg -q '"release_ok":true' docs/RELEASE_READINESS_REPORT.json; then
   release_ok=true
+fi
+if rg -q '"lab_release_ok":true' docs/RELEASE_READINESS_REPORT.json || rg -q '"release_ok":true' docs/RELEASE_READINESS_REPORT.json; then
   release_ok_lab_only=true
+fi
+if rg -q '"github_release_ssh_runtime_slice_proven":true' docs/RELEASE_READINESS_REPORT.json; then
+  github_release_ssh_runtime_slice_proven=true
 fi
 if rg -q '"network_state":"not_modified"' docs/RELEASE_READINESS_REPORT.json; then
   network_state_ok=true
@@ -154,13 +172,17 @@ if rg -q '"status":"ok"' docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json && rg -q '"kin
   eval "$(
     cargo run -q -p chimera-lab --bin runtime_real_world_probe_env -- docs/RUNTIME_REAL_WORLD_PROBE_SMOKE.json
   )"
-  # This is a snapshot integrity gate, not a real-world closure claim.
-  # Direct/external target failures remain visible in the report fields and
-  # truth boundary; they must not be hidden as a source/release regression.
-  if [[ "$runtime_real_world_skipped_no_curl" == "false" && "$runtime_real_world_datapath_probe_attempted" == "true" && "$runtime_real_world_datapath_targets_total" -gt 0 && $((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed)) -eq "$runtime_real_world_datapath_targets_total" ]]; then
+  # `runtime_real_world_probe_smoke_ok` is reserved for live CHIMERA datapath
+  # evidence only. Snapshot-contract and external-reachability branches remain
+  # visible through their own fields, but they must not masquerade as live
+  # datapath confirmation.
+  if [[ "$runtime_real_world_chimera_datapath_evidence" == "true" && "$runtime_real_world_skipped_no_curl" == "false" && "$runtime_real_world_datapath_probe_attempted" == "true" && "$runtime_real_world_datapath_probe_ok" == "true" && "$runtime_real_world_datapath_targets_total" -gt 0 && $((runtime_real_world_datapath_targets_ok + runtime_real_world_datapath_targets_failed)) -eq "$runtime_real_world_datapath_targets_total" && "$runtime_real_world_datapath_targets_failed" -eq 0 && "$runtime_real_world_datapath_targets_ok" -eq "$runtime_real_world_datapath_targets_total" ]]; then
     runtime_real_world_probe_smoke_ok=true
+    runtime_real_world_datapath_release_ok=true
+  elif [[ "$runtime_real_world_evidence_kind" == "external_reachability_without_system_proxy" && "$runtime_real_world_chimera_datapath_evidence" == "false" && "$runtime_real_world_skipped_no_curl" == "false" && "$runtime_real_world_external_reachability_probe_attempted" == "true" && "$runtime_real_world_external_reachability_targets_total" -gt 0 && $((runtime_real_world_external_reachability_targets_ok + runtime_real_world_external_reachability_targets_failed)) -eq "$runtime_real_world_external_reachability_targets_total" && "$runtime_real_world_datapath_probe_attempted" == "false" && "$runtime_real_world_datapath_probe_ok" == "false" && "$runtime_real_world_datapath_probe_error" == "chimera_datapath_evidence_missing" && "$runtime_real_world_datapath_targets_total" -eq 0 && "$runtime_real_world_datapath_targets_ok" -eq 0 && "$runtime_real_world_datapath_targets_failed" -eq 0 ]]; then
+    runtime_real_world_probe_smoke_ok=false
   elif [[ "$runtime_real_world_probe_mode" == "ci_snapshot" && "$runtime_real_world_live_external_probe" == "false" && "$runtime_real_world_ssh_stand_required_for_live_probe" == "true" && "$runtime_real_world_direct_probe_ok" == "false" && "$runtime_real_world_skipped_no_curl" == "false" && "$runtime_real_world_datapath_probe_attempted" == "false" && "$runtime_real_world_datapath_probe_ok" == "false" && "$runtime_real_world_datapath_probe_error" == "ci_snapshot" && "$runtime_real_world_datapath_targets_total" -eq 0 && "$runtime_real_world_datapath_targets_ok" -eq 0 && "$runtime_real_world_datapath_targets_failed" -eq 0 ]]; then
-    runtime_real_world_probe_smoke_ok=true
+    runtime_real_world_probe_smoke_ok=false
   fi
 fi
 if [[ -f docs/probe_access_latest.json ]]; then
@@ -225,20 +247,20 @@ if [[ ! -f docs/benchmark_ci_baseline.json ]]; then
 fi
 
 status="fail"
-if [[ "$release_ok" == "true" && "$cef_phase1_smoke_ok" == "true" && "$cef_phase1_closed" == "true" && "$network_state_ok" == "true" && "$runtime_apply_smoke_ok" == "true" && "$runtime_apply_route_smoke_ok" == "true" && "$runtime_apply_route_existing_tun_smoke_ok" == "true" && "$runtime_apply_route_multi_cidr_smoke_ok" == "true" && "$runtime_route_policy_validation_smoke_ok" == "true" && "$runtime_route_duplicate_cidr_validation_smoke_ok" == "true" && "$runtime_tun_name_validation_smoke_ok" == "true" && "$runtime_resolv_conf_validation_smoke_ok" == "true" && "$runtime_datapath_multiflow_smoke_ok" == "true" && "$runtime_policy_precedence_smoke_ok" == "true" && "$runtime_forced_stop_rollback_smoke_ok" == "true" && "$runtime_probe_access_smoke_ok" == "true" && "$runtime_real_world_probe_smoke_ok" == "true" && "$mesh_route_explain_ok" == "true" && "$mesh_auto_adaptive_ok" == "true" && "$artifacts_fresh_ok" == "true" && "$cef_gap_map_guard" == "true" ]]; then
+if [[ "$release_ok" == "true" && "$cef_phase1_smoke_ok" == "true" && "$cef_phase1_closed" == "true" && "$network_state_ok" == "true" && "$runtime_apply_smoke_ok" == "true" && "$runtime_apply_route_smoke_ok" == "true" && "$runtime_apply_route_existing_tun_smoke_ok" == "true" && "$runtime_apply_route_multi_cidr_smoke_ok" == "true" && "$runtime_route_policy_validation_smoke_ok" == "true" && "$runtime_route_duplicate_cidr_validation_smoke_ok" == "true" && "$runtime_tun_name_validation_smoke_ok" == "true" && "$runtime_resolv_conf_validation_smoke_ok" == "true" && "$runtime_datapath_multiflow_smoke_ok" == "true" && "$runtime_policy_precedence_smoke_ok" == "true" && "$runtime_forced_stop_rollback_smoke_ok" == "true" && "$runtime_probe_access_smoke_ok" == "true" && "$runtime_real_world_datapath_release_ok" == "true" && "$mesh_route_explain_ok" == "true" && "$mesh_auto_adaptive_ok" == "true" && "$artifacts_fresh_ok" == "true" && "$cef_gap_map_guard" == "true" ]]; then
   status="ok"
 fi
 
 GENERATED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 cat > docs/SHIP_READINESS_REPORT.json <<REPORT
-{"status":"${status}","status_scope":"lab_source_gate_only","kind":"ship_readiness_report","message_en":"Ship readiness pipeline finished.","message_ru":"Пайплайн готовности к передаче завершен.","release_ok":${release_ok},"release_ok_lab_only":${release_ok_lab_only},"cef_phase1_smoke_ok":${cef_phase1_smoke_ok},"cef_phase1_closed":${cef_phase1_closed},"mesh_route_explain_ok":${mesh_route_explain_ok},"mesh_auto_adaptive_ok":${mesh_auto_adaptive_ok},"git_tree_hygiene_ok":${git_tree_hygiene_ok},"truth_boundary":{"lab_scope_only":true,"real_world_datapath_closed":${real_world_datapath_closed}},"network_state_not_modified":${network_state_ok},"runtime_apply_smoke_modified":${runtime_apply_smoke_ok},"runtime_apply_route_smoke_modified":${runtime_apply_route_smoke_ok},"runtime_apply_route_existing_tun_smoke_modified":${runtime_apply_route_existing_tun_smoke_ok},"runtime_apply_route_multi_cidr_smoke_ok":${runtime_apply_route_multi_cidr_smoke_ok},"runtime_route_policy_validation_smoke_ok":${runtime_route_policy_validation_smoke_ok},"runtime_route_duplicate_cidr_validation_smoke_ok":${runtime_route_duplicate_cidr_validation_smoke_ok},"runtime_tun_name_validation_smoke_ok":${runtime_tun_name_validation_smoke_ok},"runtime_resolv_conf_validation_smoke_ok":${runtime_resolv_conf_validation_smoke_ok},"runtime_datapath_multiflow_smoke_ok":${runtime_datapath_multiflow_smoke_ok},"runtime_policy_precedence_smoke_ok":${runtime_policy_precedence_smoke_ok},"runtime_forced_stop_rollback_smoke_ok":${runtime_forced_stop_rollback_smoke_ok},"runtime_probe_access_smoke_ok":${runtime_probe_access_smoke_ok},"runtime_probe_access_mode":"${runtime_probe_access_mode}","runtime_probe_access_live_external_probe":${runtime_probe_access_live_external_probe},"runtime_probe_access_ssh_stand_required_for_live_probe":${runtime_probe_access_ssh_stand_required_for_live_probe},"runtime_probe_access_ci_snapshot_targets_ok":${runtime_probe_access_ci_snapshot_targets_ok},"runtime_real_world_probe_smoke_ok":${runtime_real_world_probe_smoke_ok},"runtime_real_world_probe_mode":"${runtime_real_world_probe_mode}","runtime_real_world_live_external_probe":${runtime_real_world_live_external_probe},"runtime_real_world_ssh_stand_required_for_live_probe":${runtime_real_world_ssh_stand_required_for_live_probe},"runtime_real_world_direct_probe_ok":${runtime_real_world_direct_probe_ok},"runtime_real_world_datapath_probe_attempted":${runtime_real_world_datapath_probe_attempted},"runtime_real_world_datapath_probe_ok":${runtime_real_world_datapath_probe_ok},"runtime_real_world_datapath_probe_error":"${runtime_real_world_datapath_probe_error}","runtime_real_world_datapath_targets_total":${runtime_real_world_datapath_targets_total},"runtime_real_world_datapath_targets_ok":${runtime_real_world_datapath_targets_ok},"runtime_real_world_datapath_targets_failed":${runtime_real_world_datapath_targets_failed},"runtime_real_world_skipped_no_curl":${runtime_real_world_skipped_no_curl},"fresh_checked_artifacts_ok":${artifacts_fresh_ok},"baseline_control_required":true,"artifacts_fresh":${artifacts_fresh_ok},"steps":{"git_tree_hygiene_guard":${git_tree_hygiene_ok},"baseline_freeze":true,"cleanroom_handoff_check":true,"benchmark_regression_gate":true,"cef_track_report":true,"cef_track_guard":true,"cef_track_sync_guard":true,"cef_gap_map_guard":${cef_gap_map_guard},"cef_consistency_guard":true,"cef_phase1_smoke":true,"mesh_auto_smoke":true,"mesh_auto_adaptive_trace_guard":true,"mesh_cli_recovery_schema_guard_selfcheck":true,"mesh_cli_recovery_schema_guard":true,"release_readiness_report_json":true,"release_readiness_report_ru":true,"report_pack_json":true,"report_pack_md":true,"runtime_apply_dns_smoke":true,"runtime_apply_route_smoke_selfcheck":true,"runtime_apply_route_smoke":true,"runtime_apply_route_existing_tun_smoke_selfcheck":true,"runtime_apply_route_existing_tun_smoke":true,"runtime_apply_route_multi_cidr_smoke_selfcheck":true,"runtime_apply_route_multi_cidr_smoke":true,"runtime_route_policy_validation_smoke_selfcheck":true,"runtime_route_policy_validation_smoke":true,"runtime_route_duplicate_cidr_validation_smoke_selfcheck":true,"runtime_route_duplicate_cidr_validation_smoke":true,"runtime_tun_name_validation_smoke_selfcheck":true,"runtime_tun_name_validation_smoke":true,"runtime_resolv_conf_validation_smoke_selfcheck":true,"runtime_resolv_conf_validation_smoke":true,"runtime_datapath_multiflow_smoke_selfcheck":true,"runtime_datapath_multiflow_smoke":true,"runtime_policy_precedence_smoke_selfcheck":true,"runtime_policy_precedence_smoke":true,"runtime_forced_stop_rollback_smoke_selfcheck":true,"runtime_forced_stop_rollback_smoke":true,"rust_no_hardcode_guard_selfcheck":true,"rust_no_hardcode_guard":true,"workflow_attestation_guard_selfcheck":true,"workflow_attestation_guard":true,"current_workline_attestation_guard_selfcheck":true,"current_workline_attestation_guard":true,"runtime_real_world_probe_smoke_selfcheck":true,"runtime_real_world_probe_smoke":true,"runtime_real_world_probe_schema_guard_selfcheck":true,"runtime_real_world_probe_schema_guard":true,"probe_access_smoke_selfcheck":true,"probe_access_smoke":true,"reality_audit_refresh_selfcheck":true,"reality_audit_refresh":true,"reality_audit_schema_guard_selfcheck":true,"reality_audit_schema_guard":true,"reality_ship_sync_guard_selfcheck":true,"reality_ship_sync_guard":true,"freshness_check":${artifacts_fresh_ok}},"generated_at":"${GENERATED_AT_UTC}"}
+{"status":"${status}","status_scope":"lab_source_gate_only","kind":"ship_readiness_report","message_en":"Ship readiness pipeline finished.","message_ru":"Пайплайн готовности к передаче завершен.","release_ok":${release_ok},"release_ok_lab_only":${release_ok_lab_only},"github_release_ssh_runtime_slice_proven":${github_release_ssh_runtime_slice_proven},"cef_phase1_smoke_ok":${cef_phase1_smoke_ok},"cef_phase1_closed":${cef_phase1_closed},"mesh_route_explain_ok":${mesh_route_explain_ok},"mesh_auto_adaptive_ok":${mesh_auto_adaptive_ok},"git_tree_hygiene_ok":${git_tree_hygiene_ok},"truth_boundary":{"lab_scope_only":true,"real_world_datapath_closed":${real_world_datapath_closed}},"network_state_not_modified":${network_state_ok},"runtime_apply_smoke_modified":${runtime_apply_smoke_ok},"runtime_apply_route_smoke_modified":${runtime_apply_route_smoke_ok},"runtime_apply_route_existing_tun_smoke_modified":${runtime_apply_route_existing_tun_smoke_ok},"runtime_apply_route_multi_cidr_smoke_ok":${runtime_apply_route_multi_cidr_smoke_ok},"runtime_route_policy_validation_smoke_ok":${runtime_route_policy_validation_smoke_ok},"runtime_route_duplicate_cidr_validation_smoke_ok":${runtime_route_duplicate_cidr_validation_smoke_ok},"runtime_tun_name_validation_smoke_ok":${runtime_tun_name_validation_smoke_ok},"runtime_resolv_conf_validation_smoke_ok":${runtime_resolv_conf_validation_smoke_ok},"runtime_datapath_multiflow_smoke_ok":${runtime_datapath_multiflow_smoke_ok},"runtime_policy_precedence_smoke_ok":${runtime_policy_precedence_smoke_ok},"runtime_forced_stop_rollback_smoke_ok":${runtime_forced_stop_rollback_smoke_ok},"runtime_probe_access_smoke_ok":${runtime_probe_access_smoke_ok},"runtime_probe_access_mode":"${runtime_probe_access_mode}","runtime_probe_access_live_external_probe":${runtime_probe_access_live_external_probe},"runtime_probe_access_ssh_stand_required_for_live_probe":${runtime_probe_access_ssh_stand_required_for_live_probe},"runtime_probe_access_ci_snapshot_targets_ok":${runtime_probe_access_ci_snapshot_targets_ok},"runtime_real_world_probe_smoke_ok":${runtime_real_world_probe_smoke_ok},"runtime_real_world_datapath_release_ok":${runtime_real_world_datapath_release_ok},"runtime_real_world_probe_mode":"${runtime_real_world_probe_mode}","runtime_real_world_evidence_kind":"${runtime_real_world_evidence_kind}","runtime_real_world_chimera_datapath_evidence":${runtime_real_world_chimera_datapath_evidence},"runtime_real_world_live_external_probe":${runtime_real_world_live_external_probe},"runtime_real_world_ssh_stand_required_for_live_probe":${runtime_real_world_ssh_stand_required_for_live_probe},"runtime_real_world_direct_probe_ok":${runtime_real_world_direct_probe_ok},"runtime_real_world_datapath_probe_attempted":${runtime_real_world_datapath_probe_attempted},"runtime_real_world_datapath_probe_ok":${runtime_real_world_datapath_probe_ok},"runtime_real_world_datapath_probe_error":"${runtime_real_world_datapath_probe_error}","runtime_real_world_datapath_targets_total":${runtime_real_world_datapath_targets_total},"runtime_real_world_datapath_targets_ok":${runtime_real_world_datapath_targets_ok},"runtime_real_world_datapath_targets_failed":${runtime_real_world_datapath_targets_failed},"runtime_real_world_external_reachability_probe_attempted":${runtime_real_world_external_reachability_probe_attempted},"runtime_real_world_external_reachability_probe_ok":${runtime_real_world_external_reachability_probe_ok},"runtime_real_world_external_reachability_targets_total":${runtime_real_world_external_reachability_targets_total},"runtime_real_world_external_reachability_targets_ok":${runtime_real_world_external_reachability_targets_ok},"runtime_real_world_external_reachability_targets_failed":${runtime_real_world_external_reachability_targets_failed},"runtime_real_world_skipped_no_curl":${runtime_real_world_skipped_no_curl},"fresh_checked_artifacts_ok":${artifacts_fresh_ok},"baseline_control_required":true,"artifacts_fresh":${artifacts_fresh_ok},"steps":{"git_tree_hygiene_guard":${git_tree_hygiene_ok},"baseline_freeze":true,"cleanroom_handoff_check":true,"benchmark_regression_gate":true,"cef_track_report":true,"cef_track_guard":true,"cef_track_sync_guard":true,"cef_gap_map_guard":${cef_gap_map_guard},"cef_consistency_guard":true,"cef_phase1_smoke":true,"mesh_auto_smoke":true,"mesh_auto_adaptive_trace_guard":true,"mesh_cli_recovery_schema_guard_selfcheck":true,"mesh_cli_recovery_schema_guard":true,"release_readiness_report_json":true,"release_readiness_report_ru":true,"report_pack_json":true,"report_pack_md":true,"runtime_apply_dns_smoke":true,"runtime_apply_route_smoke_selfcheck":true,"runtime_apply_route_smoke":true,"runtime_apply_route_existing_tun_smoke_selfcheck":true,"runtime_apply_route_existing_tun_smoke":true,"runtime_apply_route_multi_cidr_smoke_selfcheck":true,"runtime_apply_route_multi_cidr_smoke":true,"runtime_route_policy_validation_smoke_selfcheck":true,"runtime_route_policy_validation_smoke":true,"runtime_route_duplicate_cidr_validation_smoke_selfcheck":true,"runtime_route_duplicate_cidr_validation_smoke":true,"runtime_tun_name_validation_smoke_selfcheck":true,"runtime_tun_name_validation_smoke":true,"runtime_resolv_conf_validation_smoke_selfcheck":true,"runtime_resolv_conf_validation_smoke":true,"runtime_datapath_multiflow_smoke_selfcheck":true,"runtime_datapath_multiflow_smoke":true,"runtime_policy_precedence_smoke_selfcheck":true,"runtime_policy_precedence_smoke":true,"runtime_forced_stop_rollback_smoke_selfcheck":true,"runtime_forced_stop_rollback_smoke":true,"rust_no_hardcode_guard_selfcheck":true,"rust_no_hardcode_guard":true,"product_language_guard_selfcheck":true,"product_language_guard":true,"workflow_attestation_guard_selfcheck":true,"workflow_attestation_guard":true,"current_workline_attestation_guard_selfcheck":true,"current_workline_attestation_guard":true,"runtime_real_world_probe_smoke_selfcheck":true,"runtime_real_world_probe_smoke":true,"runtime_real_world_probe_schema_guard_selfcheck":true,"runtime_real_world_probe_schema_guard":true,"probe_access_smoke_selfcheck":true,"probe_access_smoke":true,"reality_audit_refresh_selfcheck":true,"reality_audit_refresh":true,"reality_audit_schema_guard_selfcheck":true,"reality_audit_schema_guard":true,"reality_ship_sync_guard_selfcheck":true,"reality_ship_sync_guard":true,"freshness_check":${artifacts_fresh_ok}},"generated_at":"${GENERATED_AT_UTC}"}
 REPORT
 
 cat > docs/SHIP_READINESS_REPORT.md <<REPORT
 # Ship Readiness Report
 
-Status: **$(if [[ "$status" == "ok" ]]; then echo "PASS (LAB/SOURCE GATE ONLY)"; else echo "FAIL"; fi)**
+Status: **$(if [[ "$status" == "ok" ]]; then echo "PASS (LAB/SOURCE GATE ONLY)"; else echo "FAIL (LAB/SOURCE GATE ONLY)"; fi)**
 Generated at (UTC): \`${GENERATED_AT_UTC}\`
 
 Checks:
@@ -263,6 +285,7 @@ Checks:
 - Workflow attestation guard: \`true\`
 - Release gate (\`release_ok\`): \`${release_ok}\`
 - Release gate is lab-only (\`release_ok_lab_only\`): \`${release_ok_lab_only}\`
+- GitHub release -> SSH runtime slice proven: \`${github_release_ssh_runtime_slice_proven}\`
 - CEF phase1 smoke: \`${cef_phase1_smoke_ok}\`
 - CEF phase1 closed: \`${cef_phase1_closed}\`
 - Mesh route explain: \`${mesh_route_explain_ok}\`
@@ -284,8 +307,11 @@ Checks:
 - Runtime probe-access live external probe: \`${runtime_probe_access_live_external_probe}\`
 - Runtime probe-access external remote proof required for live probe: \`${runtime_probe_access_ssh_stand_required_for_live_probe}\`
 - Runtime probe-access ci-snapshot targets ok: \`${runtime_probe_access_ci_snapshot_targets_ok}\`
-- Runtime real-world probe smoke (\`transparent datapath snapshot only\`): \`${runtime_real_world_probe_smoke_ok}\`
+- Runtime real-world probe smoke (\`live CHIMERA datapath evidence only\`): \`${runtime_real_world_probe_smoke_ok}\`
+- Runtime real-world datapath release ok: \`${runtime_real_world_datapath_release_ok}\`
 - Runtime real-world probe mode: \`${runtime_real_world_probe_mode}\`
+- Runtime real-world evidence kind: \`${runtime_real_world_evidence_kind}\`
+- Runtime real-world CHIMERA datapath evidence: \`${runtime_real_world_chimera_datapath_evidence}\`
 - Runtime real-world live external probe: \`${runtime_real_world_live_external_probe}\`
 - Runtime real-world external remote proof required for live probe: \`${runtime_real_world_ssh_stand_required_for_live_probe}\`
 - Runtime real-world direct probe ok: \`${runtime_real_world_direct_probe_ok}\`
@@ -295,9 +321,16 @@ Checks:
 - Runtime real-world datapath targets total: \`${runtime_real_world_datapath_targets_total}\`
 - Runtime real-world datapath targets ok: \`${runtime_real_world_datapath_targets_ok}\`
 - Runtime real-world datapath targets failed: \`${runtime_real_world_datapath_targets_failed}\`
+- Runtime real-world external reachability attempted: \`${runtime_real_world_external_reachability_probe_attempted}\`
+- Runtime real-world external reachability ok: \`${runtime_real_world_external_reachability_probe_ok}\`
+- Runtime real-world external reachability targets total: \`${runtime_real_world_external_reachability_targets_total}\`
+- Runtime real-world external reachability targets ok: \`${runtime_real_world_external_reachability_targets_ok}\`
+- Runtime real-world external reachability targets failed: \`${runtime_real_world_external_reachability_targets_failed}\`
 - Runtime real-world skipped no curl: \`${runtime_real_world_skipped_no_curl}\`
 - Fresh checked artifacts in this run: \`${artifacts_fresh_ok}\`
 - Benchmark baseline control present: \`true\`
+- ci_snapshot is a snapshot integrity gate, not a real-world closure claim.
+- Direct/external target failures remain visible in the probe counters and do not become CHIMERA datapath PASS.
 
 Truth boundary:
 - Lab/proof/report contour only: \`true\`
@@ -336,6 +369,8 @@ REPORT
 
 just reality-ship-sync-guard-selfcheck
 just reality-ship-sync-guard
+just public-artifact-redaction-guard-selfcheck
+just public-artifact-redaction-guard
 
 if [[ "$status" != "ok" ]]; then
   echo "ship readiness failed: release report gate is not green" >&2

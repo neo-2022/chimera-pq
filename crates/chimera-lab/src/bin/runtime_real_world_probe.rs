@@ -4,12 +4,20 @@ use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const DEFAULT_DIRECT_TIMEOUT_SEC: u64 = 8;
 const DEFAULT_DATAPATH_TIMEOUT_SEC: u64 = 12;
+const DEFAULT_FLOW_MAX_AGE_SEC: u64 = 300;
+const DEFAULT_STATE_PATH: &str = "docs/runtime_state_latest.json";
 const MODE_LIVE: &str = "live";
 const MODE_CI_SNAPSHOT: &str = "ci_snapshot";
+const EVIDENCE_EXTERNAL_REACHABILITY: &str = "external_reachability_without_system_proxy";
+const EVIDENCE_CI_SNAPSHOT: &str = "ci_snapshot_contract";
+const EVIDENCE_CHIMERA_DATAPATH: &str = "chimera_transparent_datapath";
+const DATAPATH_EVIDENCE_MISSING: &str = "chimera_datapath_evidence_missing";
+const TRUTH_BOUNDARY_EXTERNAL: &str = "ordinary curl --noproxy proves external reachability without system proxy only; it is not CHIMERA/WEAVE datapath evidence";
+const TRUTH_BOUNDARY_DATAPATH: &str = "strict CHIMERA flow-proof plus ordinary target outcomes provide CHIMERA/WEAVE datapath evidence; direct curl remains an external baseline only";
 
 fn main() {
     let config_path = env::var("CHIMERA_REAL_WORLD_CONFIG")
@@ -31,7 +39,7 @@ fn main() {
         };
         if !is_supported_probe_url(&value) {
             eprintln!(
-                "runtime real-world probe: invalid CHIMERA_REAL_WORLD_DIRECT_URL (expected http/https): {value}"
+                "runtime real-world probe: invalid CHIMERA_REAL_WORLD_DIRECT_URL (expected http/https)"
             );
             std::process::exit(2);
         }
@@ -56,16 +64,14 @@ fn main() {
             );
             std::process::exit(2);
         }
-        if let Some(invalid) = values.iter().find(|target| !is_supported_probe_url(target)) {
+        if values.iter().any(|target| !is_supported_probe_url(target)) {
             eprintln!(
-                "runtime real-world probe: invalid datapath target URL (expected http/https): {invalid}"
+                "runtime real-world probe: invalid datapath target URL (expected http/https)"
             );
             std::process::exit(2);
         }
         values
     };
-    let datapath_targets_csv = format_datapath_targets_csv(&datapath_targets);
-
     let direct_timeout_sec = parse_u64_setting_with_min(
         "CHIMERA_REAL_WORLD_DIRECT_TIMEOUT_SEC",
         &file_cfg,
@@ -83,11 +89,28 @@ fn main() {
     let mut datapath_probe_ok = false;
     let mut skipped_no_curl = false;
     let mut datapath_probe_attempted = false;
-    let mut datapath_probe_error = "none".to_string();
+    let datapath_probe_error: String;
     let mut datapath_targets_total = 0usize;
     let mut datapath_targets_ok = 0usize;
     let mut datapath_targets_failed = 0usize;
     let mut datapath_target_rows: Vec<(String, bool)> = Vec::new();
+    let mut external_reachability_probe_attempted = false;
+    let mut external_reachability_probe_ok = false;
+    let mut external_reachability_targets_total = 0usize;
+    let mut external_reachability_targets_ok = 0usize;
+    let mut external_reachability_targets_failed = 0usize;
+    let mut external_reachability_target_rows: Vec<(String, bool)> = Vec::new();
+    let mut evidence_kind = if probe_mode == MODE_CI_SNAPSHOT {
+        EVIDENCE_CI_SNAPSHOT
+    } else {
+        EVIDENCE_EXTERNAL_REACHABILITY
+    };
+    let mut chimera_datapath_evidence = false;
+    let mut truth_boundary = TRUTH_BOUNDARY_EXTERNAL;
+    let mut message_en =
+        "External reachability snapshot collected; CHIMERA datapath evidence not collected.";
+    let mut message_ru =
+        "Снимок внешней доступности собран; доказательство CHIMERA datapath не собрано.";
 
     if probe_mode == MODE_CI_SNAPSHOT {
         datapath_probe_error = MODE_CI_SNAPSHOT.to_string();
@@ -95,42 +118,92 @@ fn main() {
         skipped_no_curl = true;
         datapath_probe_error = "curl_not_found".to_string();
     } else {
+        external_reachability_probe_attempted = true;
         direct_probe_ok = run_curl_plain(&direct_url, direct_timeout_sec);
-        datapath_probe_attempted = true;
         for target in &datapath_targets {
+            let redacted_target_ref = target_ref(external_reachability_targets_total);
             let ok = run_curl_plain(target, datapath_timeout_sec);
             if ok {
-                datapath_targets_ok += 1;
+                external_reachability_targets_ok += 1;
             } else {
-                datapath_targets_failed += 1;
+                external_reachability_targets_failed += 1;
             }
-            datapath_targets_total += 1;
-            datapath_target_rows.push((target.to_string(), ok));
+            external_reachability_targets_total += 1;
+            external_reachability_target_rows.push((redacted_target_ref, ok));
         }
-        datapath_probe_ok = datapath_targets_total > 0 && datapath_targets_failed == 0;
-        if !datapath_probe_ok {
-            datapath_probe_error = "datapath_target_failed".to_string();
+        external_reachability_probe_ok =
+            external_reachability_targets_total > 0 && external_reachability_targets_failed == 0;
+        if strict_flow_proof_ok(&file_cfg) {
+            truth_boundary = TRUTH_BOUNDARY_DATAPATH;
+            evidence_kind = EVIDENCE_CHIMERA_DATAPATH;
+            chimera_datapath_evidence = true;
+            datapath_probe_attempted = true;
+            datapath_targets_total = external_reachability_targets_total;
+            datapath_targets_ok = external_reachability_targets_ok;
+            datapath_targets_failed = external_reachability_targets_failed;
+            datapath_probe_ok = datapath_targets_total > 0 && datapath_targets_failed == 0;
+            datapath_target_rows = external_reachability_target_rows.clone();
+            if datapath_probe_ok {
+                datapath_probe_error = "none".to_string();
+                message_en = "Strict CHIMERA datapath evidence collected.";
+                message_ru = "Собрано строгое доказательство CHIMERA datapath.";
+            } else {
+                datapath_probe_error = "datapath_target_failed".to_string();
+                message_en = "Strict CHIMERA datapath evidence collected; one or more ordinary target flows failed.";
+                message_ru = "Собрано строгое доказательство CHIMERA datapath; один или несколько ordinary target flow не прошли.";
+            }
+        } else {
+            datapath_probe_error = DATAPATH_EVIDENCE_MISSING.to_string();
         }
     }
 
     let mut targets_json = String::new();
     targets_json.push('[');
-    for (idx, (url, ok)) in datapath_target_rows.iter().enumerate() {
+    for (idx, (redacted_target_ref, ok)) in datapath_target_rows.iter().enumerate() {
         if idx > 0 {
             targets_json.push(',');
         }
         targets_json.push_str("{\"url\":\"");
-        targets_json.push_str(&escape_json(url));
+        targets_json.push_str(&escape_json(redacted_target_ref));
         targets_json.push_str("\",\"ok\":");
         targets_json.push_str(if *ok { "true" } else { "false" });
         targets_json.push('}');
     }
     targets_json.push(']');
 
+    let mut external_targets_json = String::new();
+    external_targets_json.push('[');
+    for (idx, (redacted_target_ref, ok)) in external_reachability_target_rows.iter().enumerate() {
+        if idx > 0 {
+            external_targets_json.push(',');
+        }
+        external_targets_json.push_str("{\"url\":\"");
+        external_targets_json.push_str(&escape_json(redacted_target_ref));
+        external_targets_json.push_str("\",\"ok\":");
+        external_targets_json.push_str(if *ok { "true" } else { "false" });
+        external_targets_json.push('}');
+    }
+    external_targets_json.push(']');
+
     let mut out = String::new();
     out.push_str("{\"status\":\"ok\",\"kind\":\"runtime_real_world_probe_smoke\",");
-    out.push_str("\"message_en\":\"Real-world transparent datapath probe snapshot collected.\",");
-    out.push_str("\"message_ru\":\"Снимок проверки прозрачного datapath собран.\",");
+    out.push_str("\"message_en\":\"");
+    out.push_str(&escape_json(message_en));
+    out.push_str("\",");
+    out.push_str("\"message_ru\":\"");
+    out.push_str(&escape_json(message_ru));
+    out.push_str("\",");
+    out.push_str("\"evidence_kind\":\"");
+    out.push_str(evidence_kind);
+    out.push_str("\",\"chimera_datapath_evidence\":");
+    out.push_str(if chimera_datapath_evidence {
+        "true"
+    } else {
+        "false"
+    });
+    out.push_str(",\"truth_boundary\":\"");
+    out.push_str(&escape_json(truth_boundary));
+    out.push_str("\",");
     out.push_str("\"probe_mode\":\"");
     out.push_str(&escape_json(&probe_mode));
     out.push_str("\",");
@@ -147,10 +220,20 @@ fn main() {
         "true"
     });
     out.push(',');
+    let datapath_target_refs_csv = format_target_refs_csv(datapath_targets.len());
+    let external_target_refs_csv = format_target_refs_csv(external_reachability_targets_total);
     out.push_str("\"direct_url\":\"");
-    out.push_str(&escape_json(&direct_url));
+    out.push_str(if probe_mode == MODE_LIVE {
+        "direct#1"
+    } else {
+        ""
+    });
     out.push_str("\",\"datapath_targets\":\"");
-    out.push_str(&escape_json(&datapath_targets_csv));
+    out.push_str(&escape_json(if chimera_datapath_evidence {
+        &datapath_target_refs_csv
+    } else {
+        ""
+    }));
     out.push_str("\",\"direct_probe_ok\":");
     out.push_str(if direct_probe_ok { "true" } else { "false" });
     out.push_str(",\"datapath_probe_ok\":");
@@ -175,6 +258,28 @@ fn main() {
     out.push_str(&datapath_targets_failed.to_string());
     out.push_str(",\"datapath_target_results\":");
     out.push_str(&targets_json);
+    out.push_str(",\"external_reachability_probe_attempted\":");
+    out.push_str(if external_reachability_probe_attempted {
+        "true"
+    } else {
+        "false"
+    });
+    out.push_str(",\"external_reachability_probe_ok\":");
+    out.push_str(if external_reachability_probe_ok {
+        "true"
+    } else {
+        "false"
+    });
+    out.push_str(",\"external_reachability_targets\":\"");
+    out.push_str(&escape_json(&external_target_refs_csv));
+    out.push_str("\",\"external_reachability_targets_total\":");
+    out.push_str(&external_reachability_targets_total.to_string());
+    out.push_str(",\"external_reachability_targets_ok\":");
+    out.push_str(&external_reachability_targets_ok.to_string());
+    out.push_str(",\"external_reachability_targets_failed\":");
+    out.push_str(&external_reachability_targets_failed.to_string());
+    out.push_str(",\"external_reachability_target_results\":");
+    out.push_str(&external_targets_json);
     out.push_str(",\"skipped_no_curl\":");
     out.push_str(if skipped_no_curl { "true" } else { "false" });
     out.push_str(",\"network_state\":\"not_modified\"}");
@@ -312,7 +417,9 @@ fn run_curl_plain(url: &str, timeout_sec: u64) -> bool {
         .arg("--max-time")
         .arg(timeout_sec.to_string())
         .arg("--output")
-        .arg("/dev/null");
+        .arg("/dev/null")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     for key in [
         "HTTP_PROXY",
         "HTTPS_PROXY",
@@ -340,8 +447,102 @@ fn parse_datapath_targets(csv: &str) -> Vec<String> {
     out
 }
 
+fn resolve_cli_bin(file_cfg: &std::collections::BTreeMap<String, String>) -> Option<String> {
+    let mut candidates = Vec::new();
+    if let Some(value) = resolve_non_empty_setting("CHIMERA_REAL_WORLD_CLI", file_cfg) {
+        candidates.push(value);
+    }
+    if let Some(value) = resolve_non_empty_setting("CHIMERA_CLI_BIN", file_cfg) {
+        candidates.push(value);
+    }
+    candidates.push("bin/chimera-cli".to_string());
+    candidates.push("target/debug/chimera-cli".to_string());
+    for candidate in candidates {
+        let path_candidate = Path::new(&candidate);
+        if candidate.contains('/') {
+            if is_executable_file(path_candidate) {
+                return Some(candidate);
+            }
+        } else if command_exists(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn resolve_state_path(file_cfg: &std::collections::BTreeMap<String, String>) -> String {
+    resolve_non_empty_setting("CHIMERA_REAL_WORLD_STATE_FILE", file_cfg)
+        .unwrap_or_else(|| DEFAULT_STATE_PATH.to_string())
+}
+
+fn strict_flow_proof_ok(file_cfg: &std::collections::BTreeMap<String, String>) -> bool {
+    let Some(cli_bin) = resolve_cli_bin(file_cfg) else {
+        return false;
+    };
+    let state_path = resolve_state_path(file_cfg);
+    let max_flow_age_sec = parse_u64_setting_with_min(
+        "CHIMERA_REAL_WORLD_FLOW_MAX_AGE_SEC",
+        file_cfg,
+        DEFAULT_FLOW_MAX_AGE_SEC,
+        1,
+    );
+    let output = Command::new(cli_bin)
+        .arg("state")
+        .arg("proof")
+        .arg("--state-file")
+        .arg(state_path)
+        .arg("--require-flow")
+        .arg("true")
+        .arg("--max-flow-age-sec")
+        .arg(max_flow_age_sec.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output();
+    let Ok(output) = output else {
+        return false;
+    };
+    output.status.success() && strict_flow_proof_stdout_ok(&output.stdout)
+}
+
+fn strict_flow_proof_stdout_ok(stdout: &[u8]) -> bool {
+    std::str::from_utf8(stdout)
+        .ok()
+        .map(|text| text.lines().any(|line| line.trim() == "datapath_proof=ok"))
+        .unwrap_or(false)
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+#[cfg(test)]
 fn format_datapath_targets_csv(values: &[String]) -> String {
     values.join(",")
+}
+
+fn target_ref(index_zero_based: usize) -> String {
+    format!("target#{}", index_zero_based + 1)
+}
+
+fn format_target_refs_csv(count: usize) -> String {
+    (0..count)
+        .map(target_ref)
+        .collect::<Vec<String>>()
+        .join(",")
 }
 
 fn is_supported_probe_url(value: &str) -> bool {
@@ -415,10 +616,19 @@ fn escape_json(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_authority, format_datapath_targets_csv, is_supported_probe_url,
-        parse_datapath_targets, resolve_non_empty_setting, select_probe_mode,
+        DEFAULT_STATE_PATH, extract_authority, format_datapath_targets_csv, format_target_refs_csv,
+        is_supported_probe_url, parse_datapath_targets, resolve_cli_bin, resolve_non_empty_setting,
+        resolve_state_path, select_probe_mode, strict_flow_proof_ok, strict_flow_proof_stdout_ok,
+        target_ref,
     };
     use std::collections::BTreeMap;
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    #[cfg(unix)]
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn probe_url(scheme: &str, authority: &str) -> String {
         format!("{scheme}://{authority}")
@@ -452,6 +662,14 @@ mod tests {
         ];
         let expected = format!("{},{}", values[0], values[1]);
         assert_eq!(format_datapath_targets_csv(&values), expected);
+    }
+
+    #[test]
+    fn redacted_target_refs_are_stable_and_one_based() {
+        assert_eq!(target_ref(0), "target#1");
+        assert_eq!(target_ref(2), "target#3");
+        assert_eq!(format_target_refs_csv(3), "target#1,target#2,target#3");
+        assert_eq!(format_target_refs_csv(0), "");
     }
 
     #[test]
@@ -504,5 +722,122 @@ mod tests {
         assert!(!is_supported_probe_url(&probe_url("https", " ")));
         assert!(!is_supported_probe_url(&probe_url("https", "bad host")));
         assert!(!is_supported_probe_url("target.example"));
+    }
+
+    #[test]
+    fn resolve_state_path_defaults_to_runtime_state_file() {
+        let cfg = BTreeMap::new();
+        assert_eq!(resolve_state_path(&cfg), DEFAULT_STATE_PATH);
+    }
+
+    #[test]
+    fn resolve_state_path_prefers_config_value() {
+        let mut cfg = BTreeMap::new();
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_STATE_FILE".to_string(),
+            "docs/custom_state.json".to_string(),
+        );
+        assert_eq!(resolve_state_path(&cfg), "docs/custom_state.json");
+    }
+
+    #[test]
+    fn strict_flow_proof_stdout_requires_exact_ok_marker() {
+        assert!(strict_flow_proof_stdout_ok(b"datapath_proof=ok\n"));
+        assert!(strict_flow_proof_stdout_ok(
+            b"other=value\ndatapath_proof=ok\n"
+        ));
+        assert!(!strict_flow_proof_stdout_ok(
+            b"datapath_proof=missing_flow_proof\n"
+        ));
+    }
+
+    #[cfg(unix)]
+    fn temp_test_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "runtime_real_world_probe_{name}_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[cfg(unix)]
+    fn write_executable_script(path: &PathBuf, body: &str) {
+        fs::write(path, body).unwrap();
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_cli_bin_accepts_explicit_executable_path() {
+        let dir = temp_test_dir("resolve_cli_bin");
+        let cli_path = dir.join("chimera-cli");
+        write_executable_script(&cli_path, "#!/bin/sh\nexit 0\n");
+        let mut cfg = BTreeMap::new();
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_CLI".to_string(),
+            cli_path.display().to_string(),
+        );
+        assert_eq!(resolve_cli_bin(&cfg), Some(cli_path.display().to_string()));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_flow_proof_ok_uses_cli_contract() {
+        let dir = temp_test_dir("strict_flow_proof_ok");
+        let cli_path = dir.join("chimera-cli");
+        let state_path = dir.join("runtime_state.json");
+        fs::write(&state_path, "{}").unwrap();
+        write_executable_script(
+            &cli_path,
+            "#!/bin/sh\nprintf 'datapath_proof=ok\\n'\nexit 0\n",
+        );
+        let mut cfg = BTreeMap::new();
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_CLI".to_string(),
+            cli_path.display().to_string(),
+        );
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_STATE_FILE".to_string(),
+            state_path.display().to_string(),
+        );
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_FLOW_MAX_AGE_SEC".to_string(),
+            "120".to_string(),
+        );
+        assert!(strict_flow_proof_ok(&cfg));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_flow_proof_ok_rejects_non_ok_cli_result() {
+        let dir = temp_test_dir("strict_flow_proof_fail");
+        let cli_path = dir.join("chimera-cli");
+        let state_path = dir.join("runtime_state.json");
+        fs::write(&state_path, "{}").unwrap();
+        write_executable_script(
+            &cli_path,
+            "#!/bin/sh\nprintf 'datapath_proof=missing_flow_proof\\n'\nexit 1\n",
+        );
+        let mut cfg = BTreeMap::new();
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_CLI".to_string(),
+            cli_path.display().to_string(),
+        );
+        cfg.insert(
+            "CHIMERA_REAL_WORLD_STATE_FILE".to_string(),
+            state_path.display().to_string(),
+        );
+        assert!(!strict_flow_proof_ok(&cfg));
+        fs::remove_dir_all(dir).unwrap();
     }
 }

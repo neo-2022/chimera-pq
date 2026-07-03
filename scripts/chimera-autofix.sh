@@ -14,10 +14,8 @@ echo "--- $timestamp autofix start ---" >>"$LOG_FILE"
 
 if [[ ! -f "$DOMAINS_FILE" ]]; then
   cat >"$DOMAINS_FILE" <<'EOF'
-youtube.com
-googlevideo.com
-ytimg.com
-gstatic.com
+# Add private operator/adaptive domains here, one domain per line.
+# Product defaults intentionally do not include public website lists.
 EOF
 fi
 
@@ -47,13 +45,8 @@ while IFS= read -r raw_domain; do
   fi
 done <"$DOMAINS_FILE"
 
-if [[ "$failed" -gt 0 ]]; then
-  echo "default-transit = default => transit" >>"$tmp_policy"
-  echo "autofix decision: default route switched to transit (failed_domains=$failed)" >>"$LOG_FILE"
-else
-  echo "default-direct = default => direct" >>"$tmp_policy"
-  echo "autofix decision: default route remains direct (failed_domains=0)" >>"$LOG_FILE"
-fi
+echo "# No generated default route; split-mode defaults stay policy/runtime controlled." >>"$tmp_policy"
+echo "autofix decision: no generated default route (failed_domains=$failed)" >>"$LOG_FILE"
 mv "$tmp_policy" "$POLICY_FILE"
 
 echo "runtime policy path: $POLICY_FILE" >>"$LOG_FILE"

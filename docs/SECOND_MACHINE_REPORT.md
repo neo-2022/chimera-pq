@@ -2,9 +2,9 @@
 
 Date: 2026-06-25
 Verification mode: independent clean-room copy
-Workspace under test: /tmp/chimera-pq-cleanroom
+Workspace under test: <redacted>
 Run timestamp (UTC): 2026-06-24T22:02:58Z
-Host kernel: Linux 7.0.0-22-generic x86_64
+Host kernel: <redacted>
 
 ## Commands Executed
 

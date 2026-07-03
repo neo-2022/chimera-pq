@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKSPACE_DIR="$(cd "$ROOT_DIR/.." && pwd)"
 CLEAN_ROOT="/tmp/chimera-pq-cleanroom"
 REPORT_PATH="$ROOT_DIR/docs/SECOND_MACHINE_REPORT.md"
 RUN_DATE="$(date +%F)"
 RUN_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-HOST_INFO="$(uname -srm)"
 
 rm -rf "$CLEAN_ROOT"
 mkdir -p "$CLEAN_ROOT"
@@ -14,6 +14,14 @@ mkdir -p "$CLEAN_ROOT"
 cd "$ROOT_DIR"
 find . -mindepth 1 -maxdepth 1 \( -name target -o -name .git \) -prune -o -print0 | \
   xargs -0 -I{} cp -a {} "$CLEAN_ROOT"/
+
+# Workflow attestation evidence legitimately references a few workspace-level
+# rule/spec documents that are not part of the product subtree.
+for required_doc in AGENTS.md Agent.md CHIMERA-PQ_MVP_SPEC.md; do
+  if [[ -f "$WORKSPACE_DIR/$required_doc" && ! -e "$CLEAN_ROOT/$required_doc" ]]; then
+    cp -a "$WORKSPACE_DIR/$required_doc" "$CLEAN_ROOT/$required_doc"
+  fi
+done
 
 cd "$CLEAN_ROOT"
 just benchmark-regression-selfcheck
@@ -49,9 +57,9 @@ cat > "$REPORT_PATH" <<REPORT
 
 Date: ${RUN_DATE}
 Verification mode: independent clean-room copy
-Workspace under test: ${CLEAN_ROOT}
+Workspace under test: <redacted>
 Run timestamp (UTC): ${RUN_TS}
-Host kernel: ${HOST_INFO}
+Host kernel: <redacted>
 
 ## Commands Executed
 

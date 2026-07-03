@@ -20,9 +20,7 @@ require_env CHIMERA_SIDE_B_PASS
 require_env CHIMERA_SIDE_A_HOST
 require_env CHIMERA_SIDE_A_USER
 require_env CHIMERA_SIDE_A_PASS
-require_env CHIMERA_UPSTREAM_USER
 require_env CHIMERA_UPSTREAM_HOST
-require_env CHIMERA_UPSTREAM_PASS
 require_env CHIMERA_UPSTREAM_PORT
 require_env CHIMERA_UPSTREAM_TRANSPORTS_CSV
 
@@ -46,21 +44,23 @@ need_cmd() {
 need_cmd sshpass
 need_cmd jq
 
+sshpass_remote() {
+  local password="$1"
+  shift
+  SSHPASS="$password" sshpass -e ssh -o StrictHostKeyChecking=no "$@"
+}
+
 side_b_json="$(
-  sshpass -p "$SIDE_B_PASS" ssh -o StrictHostKeyChecking=no "$SIDE_B_USER@$SIDE_B_HOST" \
-    "bash -s -- '$CHIMERA_UPSTREAM_USER' '$CHIMERA_UPSTREAM_HOST' '$CHIMERA_UPSTREAM_PASS' '$CHIMERA_UPSTREAM_PORT' '$CHIMERA_UPSTREAM_TRANSPORTS_CSV'" <<'EOS'
+  sshpass_remote "$SIDE_B_PASS" "$SIDE_B_USER@$SIDE_B_HOST" \
+    "bash -s -- '$CHIMERA_UPSTREAM_HOST' '$CHIMERA_UPSTREAM_PORT' '$CHIMERA_UPSTREAM_TRANSPORTS_CSV'" <<'EOS'
   set -euo pipefail
-  CHIMERA_UPSTREAM_USER="$1"
-  CHIMERA_UPSTREAM_HOST="$2"
-  CHIMERA_UPSTREAM_PASS="$3"
-  CHIMERA_UPSTREAM_PORT="$4"
-  CHIMERA_UPSTREAM_TRANSPORTS_CSV="$5"
+  CHIMERA_UPSTREAM_HOST="$1"
+  CHIMERA_UPSTREAM_PORT="$2"
+  CHIMERA_UPSTREAM_TRANSPORTS_CSV="$3"
   cd "$HOME/.local/share/chimera-pq"
   mkdir -p ~/.config/chimera
-  cat > ~/.config/chimera/upstream_proxy.env <<EOF
-CHIMERA_UPSTREAM_USER=${CHIMERA_UPSTREAM_USER}
+  cat > ~/.config/chimera/legacy_upstream_probe.env <<EOF
 CHIMERA_UPSTREAM_HOST=${CHIMERA_UPSTREAM_HOST}
-CHIMERA_UPSTREAM_PASS=${CHIMERA_UPSTREAM_PASS}
 CHIMERA_UPSTREAM_PORT=${CHIMERA_UPSTREAM_PORT}
 CHIMERA_UPSTREAM_TRANSPORTS_CSV=${CHIMERA_UPSTREAM_TRANSPORTS_CSV}
 EOF
@@ -72,27 +72,23 @@ EOF
   path_reason="$(jq -r '.reason // "unknown"' docs/CHIMERA_PATH_PROOF.json 2>/dev/null || echo unknown)"
   gate_status="$(jq -r '.status // "unknown"' docs/CHIMERA_E2E_CHANNEL_GATE_SIDE_B.json 2>/dev/null || echo unknown)"
   gate_reason="$(jq -r '.reason // "unknown"' docs/CHIMERA_E2E_CHANNEL_GATE_SIDE_B.json 2>/dev/null || echo unknown)"
-  printf '{"path_status":"%s","path_reason":"%s","gate_status":"%s","gate_reason":"%s"}\n' "$path_status" "$path_reason" "$gate_status" "$gate_reason"
+  printf '{"host_redacted":true,"path_status":"%s","path_reason":"%s","gate_status":"%s","gate_reason":"%s","same_ip_relaxation_used":false,"warn_audit_relaxation_used":false}\n' "$path_status" "$path_reason" "$gate_status" "$gate_reason"
 EOS
 )"
 
 side_a_json="$(
-  sshpass -p "$SIDE_A_PASS" ssh -o StrictHostKeyChecking=no "$SIDE_A_USER@$SIDE_A_HOST" \
-    "bash -s -- '$CHIMERA_UPSTREAM_USER' '$CHIMERA_UPSTREAM_HOST' '$CHIMERA_UPSTREAM_PASS' '$CHIMERA_UPSTREAM_PORT' '$CHIMERA_UPSTREAM_TRANSPORTS_CSV'" <<'EOS'
+  sshpass_remote "$SIDE_A_PASS" "$SIDE_A_USER@$SIDE_A_HOST" \
+    "bash -s -- '$CHIMERA_UPSTREAM_HOST' '$CHIMERA_UPSTREAM_PORT' '$CHIMERA_UPSTREAM_TRANSPORTS_CSV'" <<'EOS'
   set -euo pipefail
-  CHIMERA_UPSTREAM_USER="$1"
-  CHIMERA_UPSTREAM_HOST="$2"
-  CHIMERA_UPSTREAM_PASS="$3"
-  CHIMERA_UPSTREAM_PORT="$4"
-  CHIMERA_UPSTREAM_TRANSPORTS_CSV="$5"
+  CHIMERA_UPSTREAM_HOST="$1"
+  CHIMERA_UPSTREAM_PORT="$2"
+  CHIMERA_UPSTREAM_TRANSPORTS_CSV="$3"
   apt-get update -y >/tmp/ch_bi_apt_upd.log 2>&1 || true
   apt-get install -y sshpass >/tmp/ch_bi_apt_inst.log 2>&1 || true
   cd "$HOME/.local/share/chimera-pq"
   mkdir -p ~/.config/chimera
-  cat > ~/.config/chimera/upstream_proxy.env <<EOF
-CHIMERA_UPSTREAM_USER=${CHIMERA_UPSTREAM_USER}
+  cat > ~/.config/chimera/legacy_upstream_probe.env <<EOF
 CHIMERA_UPSTREAM_HOST=${CHIMERA_UPSTREAM_HOST}
-CHIMERA_UPSTREAM_PASS=${CHIMERA_UPSTREAM_PASS}
 CHIMERA_UPSTREAM_PORT=${CHIMERA_UPSTREAM_PORT}
 CHIMERA_UPSTREAM_TRANSPORTS_CSV=${CHIMERA_UPSTREAM_TRANSPORTS_CSV}
 EOF
@@ -104,7 +100,7 @@ EOF
   path_reason="$(jq -r '.reason // "unknown"' docs/CHIMERA_PATH_PROOF.json 2>/dev/null || echo unknown)"
   gate_status="$(jq -r '.status // "unknown"' docs/CHIMERA_E2E_CHANNEL_GATE_SIDE_A.json 2>/dev/null || echo unknown)"
   gate_reason="$(jq -r '.reason // "unknown"' docs/CHIMERA_E2E_CHANNEL_GATE_SIDE_A.json 2>/dev/null || echo unknown)"
-  printf '{"path_status":"%s","path_reason":"%s","gate_status":"%s","gate_reason":"%s"}\n' "$path_status" "$path_reason" "$gate_status" "$gate_reason"
+  printf '{"host_redacted":true,"path_status":"%s","path_reason":"%s","gate_status":"%s","gate_reason":"%s","same_ip_relaxation_used":true,"warn_audit_relaxation_used":true}\n' "$path_status" "$path_reason" "$gate_status" "$gate_reason"
 EOS
 )"
 
@@ -112,8 +108,12 @@ cat >"$OUT_FILE" <<EOF
 # CHIMERA Bidirectional E2E Smoke
 
 - generated_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-- side_b_host: ${SIDE_B_USER}@${SIDE_B_HOST}
-- side_a_host: ${SIDE_A_USER}@${SIDE_A_HOST}
+- release_evidence_status: invalid_for_release
+- truth_boundary: historical_proxy_evidence_only
+- stand_identifiers_redacted: true
+- side_b_host: <redacted>
+- side_a_host: <redacted>
+- remote_auth_mode: sshpass_env
 
 ## Side B
 ${side_b_json}

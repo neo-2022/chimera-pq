@@ -1,14 +1,14 @@
 # Отчет Готовности Релиза
 
-Статус: **PASS**
+Статус: **FAIL (ТОЛЬКО ЛАБОРАТОРНО)**
 
 Просто: если статус PASS, MVP готов только к расширенным лабораторным тестам (это не означает закрытие real-world datapath).
 
 Release gate (раздел 11 спеки):
 - Чистая копия репозитория собирается: `true`
-- Клиент и gateway запускаются на Linux: `true`
+- WEAVE mesh-node запускается на Linux: `true`
 - Зашифрованный tunnel передает трафик: `true`
-- Policy routing работает (direct/gateway/block): `true`
+- Policy routing работает (direct/peer-transit/block): `true`
 - DNS binding работает: `true`
 - Route explain работает: `true`
 - Shutdown восстанавливает состояние сети: `true`
@@ -43,5 +43,9 @@ Release gate (раздел 11 спеки):
 Граница истины:
 - Контур lab/proof/report: `true`
 - Real OS-level datapath closure (strict M4/M5): `false`
+
+Отдельно уже доказано:
+- Узкий GitHub release -> разрешенный SSH-стенд -> runtime lifecycle slice: `false`
+- Граница этого доказательства: install/update без cargo, lifecycle, rebind/reconnect, rollback и redacted diagnostics.
 
 Безопасность сети: в этом отчете мы не меняем маршруты/DNS/firewall/proxy ОС.

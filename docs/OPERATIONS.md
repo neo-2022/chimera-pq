@@ -16,8 +16,8 @@ Manual expanded sequence (same checks, step-by-step):
 2. `just test`
 3. `just lint`
 4. `just deny`
-5. `just client-doctor`
-6. `just gateway-doctor`
+5. `./scripts/chimera-control.sh status`
+6. `./scripts/chimera-control.sh datapath-status`
 7. `just lab-doctor`
 8. `just mvp-spec-check`
 9. `just hardening-smoke`
@@ -31,17 +31,17 @@ Manual expanded sequence (same checks, step-by-step):
 17. `just cleanroom-handoff-selfcheck`
 18. `just truth-contract-check`
 
-Gateway config validation check (no network changes):
+WEAVE node config validation check (no network changes):
 
-1. prepare a local gateway config file;
-2. run `cargo run -p chimera-gateway -- run --config <file>`;
+1. prepare a local mesh-node config file;
+2. run the safe config/doctor checks for the node/datapath workflow;
 3. ensure output contains `config accepted` and safety line.
 
 Expected result:
 
 - all commands exit with code `0`;
-- doctor reports are refreshed in `docs/doctor_latest.json`,
-  `docs/gateway_doctor_latest.json`, `docs/lab_doctor_latest.json`;
+- doctor reports are refreshed in `docs/doctor_latest.json` and
+  `docs/lab_doctor_latest.json`;
 - release-readiness reports are refreshed in:
   `docs/RELEASE_READINESS_REPORT.md`, `docs/RELEASE_READINESS_REPORT_RU.md`, `docs/RELEASE_READINESS_REPORT.json`;
 - `config-smoke` covers both positive config parsing and negative parser smoke
@@ -90,15 +90,27 @@ English (simple):
 
 ## CHIMERA Path Proof
 
-Use `just chimera-path-proof` to generate direct-vs-CHIMERA path evidence.
+`just chimera-path-proof` is an external reachability snapshot. By itself it is
+not release evidence and not proof that traffic crossed the CHIMERA/WEAVE
+datapath.
 
 Behavior:
 
 1. Uses the normal process network path without `--proxy` or app proxy flags.
-2. Captures a direct baseline probe and transparent datapath target probes.
+2. Captures a direct baseline probe and external target probes.
 3. Emits compact per-target result rows.
 4. Produces explicit pass/fail reason fields (`status`, `reason`, per-row reasons).
 5. Writes JSON artifact to `docs/CHIMERA_PATH_PROOF.json` (or custom output path).
+
+Gate rule:
+
+- release/runtime aggregators must not accept `status=pass` alone;
+- CHIMERA datapath proof requires `mode=chimera_transparent_datapath`,
+  `chimera_datapath_evidence=true`, `datapath.attempted=true`,
+  `datapath.ok=true`, at least one datapath target, and zero failed datapath
+  targets;
+- if the artifact says `external_reachability_without_system_proxy`, it remains
+  ordinary external reachability only.
 
 Key env overrides:
 
@@ -133,9 +145,9 @@ Parallel WEAVE isolation:
 
 - CHIMERA must not hijack already-used local WEAVE ports.
 - CHIMERA runtime uses the transparent TUN path and does not require a
-  user-facing proxy-port selection.
-- Selected upstream settings are persisted to the configured bootstrap state
-  for transport setup and reused by runtime.
+  user-facing per-app port selection.
+- Selected mesh endpoint settings are persisted to private bootstrap state for
+  transport setup and reused by runtime.
 
 Selfcheck:
 
@@ -155,28 +167,21 @@ This flow:
 - runs channel audit and writes `docs/CHIMERA_CHANNEL_AUDIT.json`;
 - prints compact summary fields from the JSON artifact.
 
-## Self-Contained Runtime Bootstrap
+## Self-Contained Transparent Runtime
 
-CHIMERA runtime uses a fail-closed dependency bootstrap for split transparent
-mode:
+CHIMERA release must use the shipped CHIMERA binaries for the normal
+transparent mesh path:
 
 1. `chimera.sh -install` installs the CHIMERA release and prepares runtime
-   config without downloading third-party runtime binaries.
-2. `chimera-control.sh start` checks the split runtime dependency before
-   starting services.
-3. Runtime binary is placed under:
-   `${XDG_DATA_HOME:-$HOME/.local/share}/chimera-pq/runtime/singbox/sing-box`
-4. If no existing `sing-box` binary is available, runtime bootstrap downloads it
-   only when a checksum is pinned via env:
-   - `CHIMERA_SINGBOX_VERSION`
-   - `CHIMERA_SINGBOX_URL`
-   - `CHIMERA_SINGBOX_SHA256`
+   config without downloading third-party network runtime binaries.
+2. `chimera-control.sh start` starts the CHIMERA node service and transparent
+   datapath service from the shipped release tree.
+3. A missing first-party transparent datapath is a fail-closed condition. It
+   must not be silently replaced with a third-party runtime bootstrap.
 
-If `CHIMERA_SINGBOX_SHA256` is missing and no existing runtime binary is
-available, start fails closed with `reason=runtime_bootstrap_failed`. This
-prevents silent execution of an unverified third-party binary. Full
-self-contained runtime delivery remains blocked until CHIMERA ships the runtime
-binary or ships a pinned per-architecture checksum manifest.
+Release and install gates must reject `chimera_runtime_bootstrap.sh` in the
+normal bundle. Historical third-party bootstrap scripts are not release
+evidence and are not allowed to prove invisible app UX.
 
 ## External Proof Install/Update Contract
 
@@ -226,11 +231,54 @@ Peer update fallback:
 
 - GitHub Release/Latest remains the primary source for first install and remote
   proof.
+- Gitvers is the secondary public bootstrap source for installed CHIMERA and
+  operator-driven reinstall/update when GitHub is unreachable.
+- Gitvers does not have its own product version stream. It serves the same
+  CHIMERA release version (`VERSION` plus matching archive/checksum) as the
+  bundle published for that release.
+- Gitvers bootstrap mirrors are configured through:
+  - `CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URL`
+  - `CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS`
+  - `${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_gitvers_bootstrap_urls.list`
+- A Gitvers entry is treated as a public bootstrap source. CHIMERA normalizes
+  the URL to the bootstrap script path, including GitVerse repo-root and
+  GitVerse viewer URLs such as
+  `https://gitverse.ru/<owner>/<repo>` and
+  `https://gitverse.ru/<owner>/<repo>/content/main/chimera.sh`, which are
+  converted to
+  `https://gitverse.ru/api/repos/<owner>/<repo>/raw/branch/main/chimera.sh`.
+  CHIMERA then reads release version/archive/checksum metadata from that
+  bootstrap script and verifies the downloaded archive checksum before
+  extraction.
 - After a successful GitHub publish, refresh trusted peer mirror nodes to
   the same release tree and serve them with `chimera-bootstrap serve-release`
   so peers can update from an already-installed Chimera when GitHub is
   unreachable.
-- If GitHub is unavailable or returns a valid but not newer release during
+- See [UPDATE_SOURCE_DECISION_MATRIX.md](UPDATE_SOURCE_DECISION_MATRIX.md) for
+  the normative runtime matrix.
+- During `start`, `restart`, `mesh`, or `connect`, CHIMERA walks the trust
+  ladder `GitHub -> Gitvers -> peer`.
+- A source becomes authoritative only after CHIMERA verifies a full release
+  tuple: `version + archive checksum`.
+- If GitHub is unreachable before a verified tuple exists, CHIMERA may try
+  Gitvers. If GitHub is invalid or inconsistent, CHIMERA fails closed and does
+  not try a lower-trust substitute.
+- If GitHub yields a verified current or stale tuple, CHIMERA emits
+  `chimera_update=no_newer_release`, keeps the installed release, and does not
+  let Gitvers or peer outrun GitHub in the same round.
+- If GitHub yields a verified newer tuple, CHIMERA installs that release from
+  GitHub.
+- If GitHub yielded a verified newer tuple but the archive delivery/install
+  path was unavailable, CHIMERA may try a lower-trust mirror only for the exact
+  same `{version, sha256}` tuple. A different version blocks with
+  `trusted_version_divergence`; the same version with a different checksum
+  blocks with `trusted_checksum_divergence`.
+- If GitHub is unreachable and Gitvers yields a verified current or stale
+  tuple, CHIMERA emits `chimera_update=no_newer_release` and does not let peer
+  outrun Gitvers in the same round.
+- If GitHub is unreachable and Gitvers yields a verified newer tuple, CHIMERA
+  installs that release from Gitvers.
+- If GitHub and Gitvers are unreachable before a verified tuple exists during
   `start`, `restart`, `mesh`, or `connect`, an already-installed CHIMERA can
   try trusted peer bootstrap URLs from:
   - `CHIMERA_UPDATE_PEER_BOOTSTRAP_URLS`
@@ -243,19 +291,23 @@ Peer update fallback:
   the launcher normalizes it to the peer metadata endpoint. The peer bootstrap
   script is not executed or parsed as a trust source during peer fallback.
 - A peer source is used only if `/metadata.json` reports
-  `kind=chimera_peer_update_metadata`, `status=ok`, a newer semver version, the
-  canonical same-origin archive/checksum URLs, and a 64-hex `sha256` value.
-  The update still downloads the archive and checksum, verifies that metadata
-  sha equals the checksum file before extraction, writes installed
-  version/checksum metadata, and re-runs the original command after install.
-- Peer fallback is allowed when GitHub Latest is unreachable or valid but not
-  newer. If GitHub responds with invalid metadata, bad version, invalid
-  checksum, or an inconsistent source, CHIMERA fails closed and does not try a
-  peer substitute. If GitHub responds with a valid but not newer release,
-  CHIMERA continues to trusted peer sources instead of stopping there.
-- If GitHub and all trusted peers are unreachable, CHIMERA keeps the installed
-  version and emits `chimera_update=unavailable`; network outage alone is not
-  a release block.
+  `kind=chimera_peer_update_metadata`, `status=ok`, a semver version that is
+  either newer than the installed release or matches an already verified
+  higher-trust tuple, the canonical same-origin archive/checksum URLs, and a
+  64-hex `sha256` value. The update still downloads the archive and checksum,
+  verifies that metadata sha equals the checksum file before extraction, writes
+  installed version/checksum metadata, and re-runs the original command after
+  install.
+- Peer fallback is allowed only when higher-trust sources have not yet produced
+  a verified tuple, or when a higher-trust verified newer tuple needs mirror
+  delivery of the exact same `{version, sha256}` because the original archive
+  delivery/install path was unavailable.
+- If GitHub, Gitvers, and all trusted peers are unreachable, CHIMERA keeps the
+  installed version and emits `chimera_update=unavailable`; network outage
+  alone is not a release block.
+- If one or more configured sources are reachable and valid but none of them is
+  newer than the installed version, CHIMERA emits
+  `chimera_update=no_newer_release` and continues without downgrade.
 - Peer update is update-only fallback. It is not acceptable evidence for the
   GitHub one-command first-install external proof.
 - Checksum verification gives bundle integrity. Peer-source provenance must be
@@ -267,7 +319,7 @@ Start contract:
 - `chimera-sh -start` prepares user-cache log targets before the systemd user
   start path, so `StandardOutput=append:%h/.cache/chimera/...` does not fail on
   a missing log file or missing cache directory.
-- If either `chimera-gateway.service` or the transparent runtime service fails
+- If either `chimera-node.service` or `chimera-datapath.service` fails
   its active check, `chimera-sh -start` must return non-zero and report
   `start_status=fail` with the matching failure reason.
 
@@ -467,7 +519,7 @@ Operational commands:
 Seed sources for bootstrap:
 
 - `configs/auto_failover_seeds.txt`
-- `configs/manual_gateway_domains.txt`
+- legacy compatibility seed file (`configs/manual_gateway_domains.txt`)
 - adaptive DB (`~/.config/chimera/site_adaptive_routes.db`)
 - URL domains discovered in app-routes config (`configs/chimera-app-routes.conf`)
 
