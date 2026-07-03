@@ -45,13 +45,16 @@ jobs:
               echo "error: workflow_dispatch requires release_tag" >&2
               exit 1
             fi
-            git fetch --tags --force
-            git rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null || {
-              echo "error: release tag does not exist: ${release_tag}" >&2
-              exit 1
-            }
-            git checkout -q "refs/tags/${release_tag}"
           fi
+          # actions/checkout on tag pushes can leave refs/tags/<tag> as a
+          # commit-only ref in the runner clone. Refetch the remote tag object
+          # explicitly before signature verification.
+          git fetch --tags --force origin
+          git rev-parse -q --verify "refs/tags/${release_tag}^{tag}" >/dev/null || {
+            echo "error: annotated signed release tag is required: ${release_tag}" >&2
+            exit 1
+          }
+          git checkout -q "refs/tags/${release_tag}"
           if [[ -z "${CHIMERA_RELEASE_GPG_PUBLIC_KEY:-}" ]]; then
             echo "error: CHIMERA_RELEASE_GPG_PUBLIC_KEY secret is required for signed release tags" >&2
             exit 1
