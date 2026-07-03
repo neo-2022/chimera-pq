@@ -670,6 +670,28 @@ node_config_path() {
   echo "$ROOT_DIR/configs/mesh-node.example.conf"
 }
 
+read_peer_egress_env_kv() {
+  local key="${1:?key_required}"
+  [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
+  awk -F= -v key="$key" '
+    index($0, key "=") == 1 {
+      print substr($0, length(key) + 2)
+      exit
+    }
+  ' "$PEER_EGRESS_ENV_FILE" 2>/dev/null || true
+}
+
+node_listener_only_bootstrap_ready() {
+  local mode token local_listen peer_listen
+  mode="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_MODE)")"
+  token="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_TOKEN)")"
+  local_listen="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_LOCAL_LISTEN)")"
+  peer_listen="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_PEER_LISTEN)")"
+  [[ "$mode" == "node" ]] || return 1
+  [[ -n "$token" && -n "$local_listen" && -n "$peer_listen" ]] || return 1
+  return 0
+}
+
 node_config_ready() {
   local config_path addr
   config_path="$(node_config_path)"
@@ -2213,7 +2235,10 @@ start_runtime() {
   ensure_runtime_log_paths
   ensure_mesh_bootstrap_env
   publish_peer_egress_transit_lane_bindings_from_control_plane || true
-  if ! node_config_ready; then
+  local node_config_is_ready=0
+  if node_config_ready; then
+    node_config_is_ready=1
+  elif ! node_listener_only_bootstrap_ready; then
     site_auto_watch_stop >/dev/null 2>&1 || true
     echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped reason=datapath_unconfigured"
     return 2
@@ -2240,6 +2265,12 @@ start_runtime() {
     if [[ "$node_status" != "started" ]]; then
       echo "start_status=fail mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=stopped reason=node_service_failed systemctl_start_rc=$systemd_start_rc"
       return 1
+    fi
+    publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
+    if [[ "$node_config_is_ready" -eq 0 ]]; then
+      site_auto_watch_stop >/dev/null 2>&1 || true
+      echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped reason=node_endpoint_unconfigured_listener_only"
+      return 0
     fi
     if node_config_self_loop_target; then
       site_auto_watch_stop >/dev/null 2>&1 || true
@@ -2330,6 +2361,11 @@ start_runtime() {
       direct_node_status="failed"
       node_runtime="stopped"
     fi
+  fi
+  if [[ "$direct_node_status" == "started" && "$node_config_is_ready" -eq 0 ]]; then
+    site_auto_watch_stop >/dev/null 2>&1 || true
+    echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped reason=node_endpoint_unconfigured_listener_only"
+    return 0
   fi
   if [[ "$direct_node_status" == "started" ]] && node_config_self_loop_target; then
     site_auto_watch_stop >/dev/null 2>&1 || true

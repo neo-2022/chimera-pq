@@ -377,6 +377,10 @@ Mesh node discovery is not baked into installation. On a fresh install the
 available node list is loaded from the upstream/bootstrap source at runtime.
 If no endpoint is configured yet, the first start/install path opens node
 selection and then resolves the chosen node endpoint automatically.
+If no trusted bootstrap source is present yet, the first start may still bring
+the node up in listener-only mode so it can bind and publish its own ingress
+endpoint, but transparent datapath and doctor stay fail-closed until a real
+peer endpoint is selected or materialized from trusted bootstrap data.
 
 Operator flow:
 
