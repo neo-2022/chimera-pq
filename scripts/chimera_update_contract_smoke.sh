@@ -1960,6 +1960,70 @@ case_missing_root_checksum_self_heals_from_released_bundle() (
   rm -rf "$tmp_dir"
 )
 
+case_invalid_local_version_self_heals_from_released_bundle() (
+  local tmp_dir test_root old_root archive checksum output rc
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  mkdir -p "$test_root/releases" "$tmp_dir/archive"
+  printf '%s\n' 20260614-010203 >"$test_root/.chimera_release_version"
+  make_fake_release_archive "$tmp_dir/archive" 0.1.99 "exit 0"
+  archive="$tmp_dir/archive/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/archive/chimera-pq-release.tar.gz.sha256"
+  cp "$archive" "$test_root/releases/chimera-pq-release.tar.gz"
+  cp "$checksum" "$test_root/releases/chimera-pq-release.tar.gz.sha256"
+  ROOT_DIR="$test_root"
+
+  output="$(read_local_runtime_version_from_release_bundle 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "version self-heal from released bundle should not fail, got rc=$rc"
+  [[ "$output" == "0.1.99" ]] || fail "version self-heal did not return expected version"
+  [[ "$(cat "$test_root/.chimera_release_version")" == "0.1.99" ]] || fail "version self-heal did not persist repaired version"
+  rm -rf "$tmp_dir"
+)
+
+case_invalid_local_version_uses_repaired_version_before_update_choice() (
+  local tmp_dir test_root old_root archive checksum output rc
+  tmp_dir="$(mktemp -d)"
+  test_root="$tmp_dir/root"
+  old_root="$ROOT_DIR"
+  mkdir -p "$test_root/releases" "$tmp_dir/archive"
+  printf '%s\n' 20260614-010203 >"$test_root/.chimera_release_version"
+  make_fake_release_archive "$tmp_dir/archive" 0.1.99 "exit 0"
+  archive="$tmp_dir/archive/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/archive/chimera-pq-release.tar.gz.sha256"
+  cp "$archive" "$test_root/releases/chimera-pq-release.tar.gz"
+  cp "$checksum" "$test_root/releases/chimera-pq-release.tar.gz.sha256"
+  ROOT_DIR="$test_root"
+  read_release_metadata_from_source() {
+    case "${1:-}" in
+      github)
+        printf '%s\n%s\n%s\n' \
+          0.1.98 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() { return 0; }
+  load_update_peer_bootstrap_urls_for_args() { return 0; }
+  remote_archive_sha256() {
+    printf '%s\n' "9999999999999999999999999999999999999999999999999999999999999999"
+  }
+
+  output="$(auto_update_if_needed -start 2>&1)" || rc=$?
+  rc="${rc:-0}"
+  ROOT_DIR="$old_root"
+  [[ "$rc" -eq 0 ]] || fail "repaired local version should prevent downgrade, got rc=$rc"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.99 action=continue reason=highest_available_not_newer"* ]] || fail "repaired local version was not used for update choice"
+  [[ "$(cat "$test_root/.chimera_release_version")" == "0.1.99" ]] || fail "repaired local version was not persisted before update choice"
+  rm -rf "$tmp_dir"
+)
+
 case_chimera_sh_sources_update_runtime_state_helper() (
   rg -n 'source "\$ROOT_DIR/scripts/chimera-update-runtime-state\.sh"' "$ROOT_DIR/scripts/chimera-update.sh" >/dev/null \
     || fail "update script does not source runtime state helper"
@@ -1967,6 +2031,8 @@ case_chimera_sh_sources_update_runtime_state_helper() (
     || fail "runtime state helper missing bundle sha reader"
   rg -n 'sha256_file' "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" >/dev/null \
     || fail "runtime state helper missing sha helper"
+  rg -n 'read_local_runtime_version_from_release_bundle' "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" >/dev/null \
+    || fail "runtime state helper missing release bundle version reader"
 )
 
 case_github_unavailable_peer_newer_updates_and_reruns() (
@@ -2566,6 +2632,121 @@ EOF
   rm -rf "$tmp_dir"
 )
 
+case_gitvers_same_tier_divergence_blocks_after_first_current_result() (
+  local tmp_dir calls output rc current_sha
+  tmp_dir="$(mktemp -d)"
+  calls="$tmp_dir/calls"
+  current_sha="5656565656565656565656565656565656565656565656565656565656565656"
+  read_local_runtime_version() { printf '%s\n' 0.1.141; }
+  read_local_runtime_bundle_sha() { printf '%s\n' "$current_sha"; }
+  read_release_metadata_from_source() {
+    printf '%s\n' "${2:-}" >>"$calls"
+    case "${2:-}" in
+      http://gitvers-a.invalid/chimera.sh)
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://gitvers-a.invalid/chimera-pq-release.tar.gz \
+          http://gitvers-a.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      http://gitvers-b.invalid/chimera.sh)
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://gitvers-b.invalid/chimera-pq-release.tar.gz \
+          http://gitvers-b.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() {
+    printf '%s\n' http://gitvers-a.invalid/chimera.sh
+    printf '%s\n' http://gitvers-b.invalid/chimera.sh
+  }
+  load_update_peer_bootstrap_urls_for_args() { return 0; }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://gitvers-a.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$current_sha"
+        ;;
+      http://gitvers-b.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "7878787878787878787878787878787878787878787878787878787878787878"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  set +e
+  output="$(auto_update_if_needed -restart 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 ]] || fail "same-tier gitvers divergence should block after first current result"
+  [[ "$output" == *"reason=trusted_version_divergence"* ]] || fail "missing same-tier divergence block"
+  [[ "$(cat "$calls")" == $'https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh\nhttp://gitvers-a.invalid/chimera.sh\nhttp://gitvers-b.invalid/chimera.sh' ]] || fail "second gitvers mirror was not checked after first current result"
+  rm -rf "$tmp_dir"
+)
+
+case_peer_same_tier_divergence_blocks_after_first_current_result() (
+  local tmp_dir calls output rc current_sha
+  tmp_dir="$(mktemp -d)"
+  calls="$tmp_dir/calls"
+  current_sha="6767676767676767676767676767676767676767676767676767676767676767"
+  read_local_runtime_version() { printf '%s\n' 0.1.141; }
+  read_local_runtime_bundle_sha() { printf '%s\n' "$current_sha"; }
+  read_release_metadata_from_source() {
+    printf '%s:%s\n' "${1:-}" "${2:-}" >>"$calls"
+    case "${1:-}:${2:-}" in
+      github:https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh)
+        return 2
+        ;;
+      peer:http://peer-a.invalid/chimera.sh)
+        printf '%s\n%s\n%s\n' \
+          0.1.141 \
+          http://peer-a.invalid/chimera-pq-release.tar.gz \
+          http://peer-a.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer:http://peer-b.invalid/chimera.sh)
+        printf '%s\n%s\n%s\n' \
+          0.1.142 \
+          http://peer-b.invalid/chimera-pq-release.tar.gz \
+          http://peer-b.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() { return 0; }
+  load_update_peer_bootstrap_urls_for_args() {
+    printf '%s\n' http://peer-a.invalid/chimera.sh
+    printf '%s\n' http://peer-b.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://peer-a.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$current_sha"
+        ;;
+      http://peer-b.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "8686868686868686868686868686868686868686868686868686868686868686"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  set +e
+  output="$(auto_update_if_needed -restart 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 ]] || fail "same-tier peer divergence should block after first current result"
+  [[ "$output" == *"reason=trusted_version_divergence"* ]] || fail "missing same-tier peer divergence block"
+  [[ "$(cat "$calls")" == $'github:https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh\npeer:http://peer-a.invalid/chimera.sh\npeer:http://peer-b.invalid/chimera.sh' ]] || fail "second peer mirror was not checked after first current result"
+  rm -rf "$tmp_dir"
+)
+
 case_connect_peer_update_url_does_not_use_general_peer_list() (
   selected_connect_peer_update_bootstrap_url() { return 1; }
   load_update_peer_bootstrap_urls() {
@@ -2695,6 +2876,8 @@ case_peer_metadata_sha_mismatch_blocks_install
 case_same_version_checksum_mismatch_blocks
 case_same_version_missing_local_checksum_blocks
 case_missing_root_checksum_self_heals_from_released_bundle
+case_invalid_local_version_self_heals_from_released_bundle
+case_invalid_local_version_uses_repaired_version_before_update_choice
 case_chimera_sh_sources_update_runtime_state_helper
 case_github_unavailable_peer_newer_updates_and_reruns
 case_github_current_stops_before_peer_newer_update
@@ -2702,6 +2885,8 @@ case_github_stale_stops_before_peer_newer_update
 case_github_install_source_unavailable_falls_back_to_peer
 case_github_install_source_unavailable_blocks_peer_newer_release
 case_github_install_source_unavailable_blocks_peer_checksum_divergence
+case_gitvers_same_tier_divergence_blocks_after_first_current_result
+case_peer_same_tier_divergence_blocks_after_first_current_result
 case_connect_peer_update_url_does_not_use_general_peer_list
 case_connect_peer_update_url_precedes_general_peer_list
 case_update_bootstrap_url_rejects_userinfo

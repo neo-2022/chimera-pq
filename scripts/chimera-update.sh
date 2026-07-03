@@ -97,10 +97,17 @@ is_remote_newer() {
 }
 
 read_local_runtime_version() {
-  local version_file
+  local version_file version
   version_file="$(runtime_version_file)"
   if [[ -f "$version_file" ]]; then
-    tr -d '[:space:]' < "$version_file"
+    version="$(tr -d '[:space:]' < "$version_file")"
+    if [[ -n "$version" ]]; then
+      printf '%s\n' "$version"
+      return 0
+    fi
+  fi
+  if version="$(read_local_runtime_version_from_release_bundle 2>/dev/null || true)" && [[ -n "$version" ]]; then
+    printf '%s\n' "$version"
     return 0
   fi
   echo "0.0.0"
@@ -634,11 +641,18 @@ auto_update_if_needed() {
   local_sha="$(read_local_runtime_bundle_sha)"
   local repair_required=0
   if runtime_version_needs_repair "$local_version"; then
-    repair_required=1
-    local_version="0.0.0"
+    local repaired_version=""
+    repaired_version="$(read_local_runtime_version_from_release_bundle 2>/dev/null || true)"
+    if runtime_version_needs_repair "$repaired_version"; then
+      repair_required=1
+      local_version="0.0.0"
+    else
+      local_version="$repaired_version"
+    fi
   fi
 
   local update_rc gitvers_bootstrap_url normalized_gitvers_url peer_bootstrap_url normalized_peer_url
+  local gitvers_verified_not_newer=0 peer_verified_not_newer=0
   local update_failed=0 update_source_unavailable=0
   reset_update_source_authority
 
@@ -675,8 +689,7 @@ auto_update_if_needed() {
         return 0
         ;;
       4)
-        emit_no_newer_release_status "$local_version" "$repair_required"
-        return 0
+        gitvers_verified_not_newer=1
         ;;
       2)
         update_source_unavailable=1
@@ -687,6 +700,10 @@ auto_update_if_needed() {
         ;;
     esac
   done < <(load_update_gitvers_bootstrap_urls)
+  if [[ "$gitvers_verified_not_newer" -ne 0 ]]; then
+    emit_no_newer_release_status "$local_version" "$repair_required"
+    return 0
+  fi
 
   while IFS= read -r peer_bootstrap_url; do
     normalized_peer_url="$(normalize_update_bootstrap_url "$peer_bootstrap_url" || true)"
@@ -700,8 +717,7 @@ auto_update_if_needed() {
         return 0
         ;;
       4)
-        emit_no_newer_release_status "$local_version" "$repair_required"
-        return 0
+        peer_verified_not_newer=1
         ;;
       2)
         update_source_unavailable=1
@@ -712,6 +728,10 @@ auto_update_if_needed() {
         ;;
     esac
   done < <(load_update_peer_bootstrap_urls_for_args "${original_args[@]}")
+  if [[ "$peer_verified_not_newer" -ne 0 ]]; then
+    emit_no_newer_release_status "$local_version" "$repair_required"
+    return 0
+  fi
 
   if [[ "$update_failed" -ne 0 ]]; then
     return 1
