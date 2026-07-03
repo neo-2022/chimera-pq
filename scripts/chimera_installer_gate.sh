@@ -266,6 +266,133 @@ EOF
   rm -rf "$tmp_dir"
 }
 
+run_installer_node_auto_peer_listen_smoke() {
+  local tmp_dir install_root fake_bin output rc node_conf env_file
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = tls
+carrier.addr = ${CHIMERA_NODE_PEER_ENDPOINT}
+carrier.server_name = ${CHIMERA_NODE_SERVER_NAME}
+capture.mode = auto
+capture.tun_supported = true
+peer.listen_addr = ${CHIMERA_NODE_LISTEN_ADDR}
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_REMOTE_ENDPOINT=node.mesh.invalid:18142 \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || {
+    echo "$output" >&2
+    fail "installer_node_auto_peer_listen_smoke_failed"
+  }
+
+  node_conf="$install_root/configs/mesh-node.conf"
+  env_file="$tmp_dir/config/chimera/peer-egress.env"
+  [[ -f "$node_conf" ]] || fail "installer_node_auto_peer_listen_missing_node_conf"
+  [[ -f "$env_file" ]] || fail "installer_node_auto_peer_listen_missing_env_file"
+  rg -q '^peer\.listen_addr = auto$' "$node_conf" || fail "installer_node_auto_peer_listen_node_conf_not_auto"
+  rg -q '^CHIMERA_PEER_EGRESS_PEER_LISTEN=0\.0\.0\.0:0$' "$env_file" || fail "installer_node_auto_peer_listen_env_not_auto_bind"
+  if rg -q '^CHIMERA_PEER_EGRESS_PEER_LISTEN=0\.0\.0\.0:8443$' "$env_file"; then
+    fail "installer_node_auto_peer_listen_legacy_fixed_port_leaked"
+  fi
+  rm -rf "$tmp_dir"
+}
+
 run_installer_unconfigured_node_template_smoke() {
   local tmp_dir install_root fake_bin output rc node_conf
   tmp_dir="$(mktemp -d)"
@@ -722,8 +849,13 @@ rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/
 rg -n 'quoted_value="\$\(shell_quote_env_value "\$key" "\$value"\)"' "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null || fail "control_upsert_env_not_shell_safe"
 rg -n '^normalize_node_connect_addr\(\) \{$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_connect_normalizer"
 rg -n '^materialize_node_runtime_config\(\) \{$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_config_materializer"
+rg -n '^legacy_node_listen_addr\(\) \{$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_legacy_node_listen_alias_helper"
+rg -n '^desired_node_peer_egress_listen\(\) \{$' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_peer_egress_listen_helper"
 rg -n 'CHIMERA_NODE_SERVER_NAME' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_server_name_override"
 rg -n 'CHIMERA_NODE_LISTEN_ADDR' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_node_listen_addr_override"
+if rg -n 'CHIMERA_GATEWAY_LISTEN_PORT:-8443|CHIMERA_GATEWAY_LISTEN_ADDR:-\$\{CHIMERA_GATEWAY_LISTEN_PORT:-8443\}' "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null; then
+  fail "installer_hidden_legacy_8443_default_present"
+fi
 rg -n 'tcp://node\\\.mesh\\\.invalid:18142' "$ROOT_DIR/scripts/chimera_installer_gate.sh" >/dev/null || fail "installer_gate_missing_tcp_materialization_contract"
 if rg -n 'awk -v .*quoted_value|awk -v .*line=' "$ROOT_DIR/scripts/install_desktop_control.sh" "$ROOT_DIR/scripts/chimera-control.sh" >/dev/null; then
   fail "shell_quoted_env_writer_uses_awk_v"
@@ -761,6 +893,7 @@ if rg -n 'neo-2022/chimera/main/chimera\.sh|raw\.githubusercontent\.com/neo-2022
   fail "legacy_wrong_repo_bootstrap_reference"
 fi
 run_installer_configured_node_materialization_smoke
+run_installer_node_auto_peer_listen_smoke
 run_installer_unconfigured_node_template_smoke
 run_installer_env_contract_smoke
 

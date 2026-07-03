@@ -350,12 +350,42 @@ derive_node_server_name() {
   printf '%s\n' "$server_name"
 }
 
+legacy_node_listen_addr() {
+  if [[ -n "${CHIMERA_GATEWAY_LISTEN_ADDR:-}" ]]; then
+    printf '%s\n' "${CHIMERA_GATEWAY_LISTEN_ADDR}"
+    return 0
+  fi
+  if [[ -n "${CHIMERA_GATEWAY_LISTEN_PORT:-}" ]]; then
+    printf '%s\n' "${CHIMERA_GATEWAY_LISTEN_PORT}"
+    return 0
+  fi
+  printf '%s\n' ""
+}
+
 desired_node_listen_addr() {
-  local listen_addr="${CHIMERA_NODE_LISTEN_ADDR:-${CHIMERA_NODE_PEER_LISTEN_ADDR:-auto}}"
+  local legacy_listen listen_addr
+  legacy_listen="$(legacy_node_listen_addr)"
+  listen_addr="${CHIMERA_NODE_LISTEN_ADDR:-${CHIMERA_NODE_PEER_LISTEN_ADDR:-${legacy_listen:-auto}}}"
   if [[ -z "$listen_addr" ]]; then
     listen_addr="auto"
   fi
   printf '%s\n' "$listen_addr"
+}
+
+desired_node_peer_egress_listen() {
+  local listen_addr
+  listen_addr="$(desired_node_listen_addr)"
+  case "$listen_addr" in
+    ""|auto)
+      printf '%s\n' "0.0.0.0:0"
+      ;;
+    *:*)
+      printf '%s\n' "$listen_addr"
+      ;;
+    *)
+      printf '0.0.0.0:%s\n' "$listen_addr"
+      ;;
+  esac
 }
 
 materialize_node_runtime_config() {
@@ -548,7 +578,7 @@ installer_gate_prepare_gitvers_bootstrap_sources
 auto_fix_runtime_permissions
 run_install_permissions_preflight
 configure_node_peer_target
-node_peer_listen="${CHIMERA_NODE_PEER_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_ADDR:-${CHIMERA_GATEWAY_LISTEN_PORT:-8443}}}"
+node_peer_listen="$(desired_node_peer_egress_listen)"
 if [[ -n "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
   configure_peer_egress_env "node" "$CONFIGURED_PEER_ENDPOINT" "$selected_invite_token" "$node_peer_listen" "127.0.0.1:0"
