@@ -366,6 +366,9 @@ rg -q '^https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh$
 rg -q '^# CHIMERA_MESH_NODES_DISCOVERY_URL=' "$installed_home/configs/mesh_bootstrap.env.example" || fail "discovery_url_template_missing"
 rg -q '^# CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=' "$installed_home/configs/mesh_bootstrap.env.example" || fail "discovery_pubkey_template_missing"
 rg -q '^# CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=' "$installed_home/configs/mesh_bootstrap.env.example" || fail "discovery_timeout_template_missing"
+rg -q '^# CHIMERA_MESH_NAMESPACE=cef-public$' "$installed_home/configs/mesh_bootstrap.env.example" || fail "mesh_namespace_template_missing"
+rg -q '^# CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous$' "$installed_home/configs/mesh_bootstrap.env.example" || fail "mesh_traffic_profile_template_missing"
+rg -q '^# CHIMERA_MESH_REMOTE_PEER_SPEC=$' "$installed_home/configs/mesh_bootstrap.env.example" || fail "mesh_remote_peer_spec_template_missing"
 if rg -q '^CHIMERA_UPSTREAM_(USER|HOST|PASS)=' "$config/chimera/mesh_bootstrap.env"; then
   fail "installed_mesh_bootstrap_env_upstream_credentials"
 fi

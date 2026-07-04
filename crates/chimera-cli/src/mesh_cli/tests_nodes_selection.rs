@@ -1,6 +1,7 @@
 use super::nodes_cmd::mesh_nodes_command;
 use super::nodes_cmd::node_update_bootstrap_url_for_args;
 use super::nodes_cmd::selected_node_endpoint;
+use super::nodes_cmd::selected_node_peer_spec_for_args;
 use super::nodes_inventory::load_mesh_nodes_inventory;
 use super::nodes_selection::{build_selection_entries, render_selection_prompt};
 use std::fs;
@@ -219,6 +220,64 @@ mesh.node.de.update_bootstrap_url = http://node-de.example:18179/chimera.sh
     assert_eq!(
         node_update_bootstrap_url_for_args(&args, &inventory),
         Ok(None)
+    );
+}
+
+#[test]
+fn selected_peer_spec_uses_selected_node_metrics() {
+    let text = "\
+mesh.nodes.ids = de,nl
+mesh.nodes.current = nl
+mesh.node.de.endpoint = 127.0.0.1:1111
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.observation_count = 10
+mesh.node.nl.endpoint = 127.0.0.1:2222
+mesh.node.nl.country_code = NL
+mesh.node.nl.country_name = Netherlands
+mesh.node.nl.status = healthy
+mesh.node.nl.loss_pct = 4.4
+mesh.node.nl.success_rate_1h = 97.2
+mesh.node.nl.observation_count = 10
+";
+    let inventory = super::nodes_inventory::parse_inventory_config_text(text)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+
+    assert_eq!(
+        selected_node_peer_spec_for_args(&[], &inventory),
+        Ok(Some("nl@127.0.0.1:2222@nl@4@97".to_string()))
+    );
+}
+
+#[test]
+fn selected_peer_spec_honors_direct_selector() {
+    let text = "\
+mesh.nodes.ids = de,nl
+mesh.nodes.current = de
+mesh.nodes.pinned = de
+mesh.node.de.endpoint = 127.0.0.1:1111
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.loss_pct = 1.0
+mesh.node.de.success_rate_1h = 99.0
+mesh.node.de.observation_count = 10
+mesh.node.nl.endpoint = 127.0.0.1:2222
+mesh.node.nl.country_code = NL
+mesh.node.nl.country_name = Netherlands
+mesh.node.nl.status = healthy
+mesh.node.nl.loss_pct = 3.0
+mesh.node.nl.success_rate_1h = 95.0
+mesh.node.nl.observation_count = 10
+";
+    let inventory = super::nodes_inventory::parse_inventory_config_text(text)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    let args = vec!["nl".to_string()];
+
+    assert_eq!(
+        selected_node_peer_spec_for_args(&args, &inventory),
+        Ok(Some("nl@127.0.0.1:2222@nl@3@95".to_string()))
     );
 }
 

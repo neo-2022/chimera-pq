@@ -494,6 +494,157 @@ ensure_mesh_bootstrap_env() {
   fi
 }
 
+bootstrap_template_env_value() {
+  local key="${1:?key_required}"
+  local example_file="$ROOT_DIR/configs/mesh_bootstrap.env.example"
+  [[ -f "$example_file" ]] || return 0
+  awk -F= -v key="$key" '
+    $0 ~ "^[[:space:]]*#?[[:space:]]*" key "=" {
+      value = substr($0, index($0, "=") + 1)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
+  ' "$example_file" 2>/dev/null || true
+}
+
+default_mesh_local_node() {
+  local value=""
+  if [[ -f "$STATE_FILE" ]]; then
+    value="$(awk -F= '/^mesh_node[[:space:]]*=/{print $2; exit}' "$STATE_FILE" 2>/dev/null || true)"
+    if [[ -z "$value" ]]; then
+      value="$(awk -F= '/^selected_node[[:space:]]*=/{print $2; exit}' "$STATE_FILE" 2>/dev/null || true)"
+    fi
+  fi
+  if [[ -z "$value" && -f "$UPSTREAM_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$UPSTREAM_ENV_FILE"
+    value="${CHIMERA_MESH_SELF_NODE_ID:-}"
+  fi
+  value="$(trim_ascii "${value:-${CHIMERA_MESH_SELF_NODE_ID:-}}")"
+  if [[ -z "$value" ]]; then
+    value="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)"
+  fi
+  printf '%s\n' "$value"
+}
+
+selected_mesh_remote_peer_spec_from_inventory() {
+  local -a mesh_nodes_args=()
+  local peer_spec best_node_id
+  if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+  fi
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" ]]; then
+    mesh_nodes_args+=(--discovery-url "$CHIMERA_MESH_NODES_DISCOVERY_URL")
+  fi
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
+    mesh_nodes_args+=(--discovery-pubkey "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY")
+  fi
+  mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
+  if [[ "${#mesh_nodes_args[@]}" -eq 1 ]]; then
+    return 1
+  fi
+  if run_chimera_cli mesh nodes select "${mesh_nodes_args[@]}" >/dev/null 2>&1; then
+    peer_spec="$(run_chimera_cli mesh nodes selected-peer-spec "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '\r\n' || true)"
+  fi
+  if [[ -z "$peer_spec" ]]; then
+    best_node_id="$(run_chimera_cli mesh nodes best "${mesh_nodes_args[@]}" 2>/dev/null | sed -n 's/^node_id=\([^[:space:]]*\).*/\1/p' | head -n1 | tr -d '[:space:]' || true)"
+    if [[ -n "$best_node_id" ]]; then
+      run_chimera_cli mesh nodes select --id "$best_node_id" "${mesh_nodes_args[@]}" >/dev/null 2>&1 || true
+      peer_spec="$(run_chimera_cli mesh nodes selected-peer-spec "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '\r\n' || true)"
+    fi
+  fi
+  peer_spec="$(trim_ascii "$peer_spec")"
+  [[ -n "$peer_spec" ]] || return 1
+  printf '%s\n' "$peer_spec"
+}
+
+seed_mesh_control_plane_authority_from_bootstrap() {
+  local strict_seed=0
+  case "${1:-best-effort}" in
+    best-effort|--best-effort|"") strict_seed=0 ;;
+    strict|--strict) strict_seed=1 ;;
+    *)
+      echo "error: mesh-seed-control-plane accepts --strict or --best-effort" >&2
+      return 2
+      ;;
+  esac
+  ensure_mesh_bootstrap_env
+  if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+  fi
+
+  local namespace local_node policy_payload traffic_profile remote_peer_spec
+  namespace="$(trim_ascii "${CHIMERA_MESH_NAMESPACE:-$(bootstrap_template_env_value CHIMERA_MESH_NAMESPACE)}")"
+  local_node="$(trim_ascii "${CHIMERA_MESH_LOCAL_NODE:-$(bootstrap_template_env_value CHIMERA_MESH_LOCAL_NODE)}")"
+  if [[ -z "$local_node" ]]; then
+    local_node="$(trim_ascii "$(default_mesh_local_node)")"
+  fi
+  policy_payload="$(trim_ascii "${CHIMERA_MESH_POLICY_PAYLOAD:-$(bootstrap_template_env_value CHIMERA_MESH_POLICY_PAYLOAD)}")"
+  traffic_profile="$(trim_ascii "${CHIMERA_MESH_TRAFFIC_PROFILE:-$(bootstrap_template_env_value CHIMERA_MESH_TRAFFIC_PROFILE)}")"
+  remote_peer_spec="$(trim_ascii "${CHIMERA_MESH_REMOTE_PEER_SPEC:-$(bootstrap_template_env_value CHIMERA_MESH_REMOTE_PEER_SPEC)}")"
+
+  if [[ -z "$remote_peer_spec" && -n "${CHIMERA_MESH_REMOTE_NODE:-}" && -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" && -n "${CHIMERA_MESH_REMOTE_REGION:-}" && -n "${CHIMERA_MESH_REMOTE_LOAD_SCORE:-}" && -n "${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE:-}" ]]; then
+    remote_peer_spec="${CHIMERA_MESH_REMOTE_NODE}@${CHIMERA_MESH_REMOTE_ENDPOINT}@${CHIMERA_MESH_REMOTE_REGION}@${CHIMERA_MESH_REMOTE_LOAD_SCORE}@${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE}"
+  fi
+  if [[ -z "$remote_peer_spec" ]]; then
+    remote_peer_spec="$(selected_mesh_remote_peer_spec_from_inventory 2>/dev/null || true)"
+    remote_peer_spec="$(trim_ascii "$remote_peer_spec")"
+  fi
+
+  if [[ -n "$namespace" ]]; then
+    upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NAMESPACE" "$namespace"
+    CHIMERA_MESH_NAMESPACE="$namespace"
+    export CHIMERA_MESH_NAMESPACE
+  fi
+  if [[ -n "$local_node" ]]; then
+    upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_LOCAL_NODE" "$local_node"
+    CHIMERA_MESH_LOCAL_NODE="$local_node"
+    export CHIMERA_MESH_LOCAL_NODE
+  fi
+  if [[ -n "$policy_payload" ]]; then
+    upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_POLICY_PAYLOAD" "$policy_payload"
+    CHIMERA_MESH_POLICY_PAYLOAD="$policy_payload"
+    export CHIMERA_MESH_POLICY_PAYLOAD
+  elif [[ -n "$traffic_profile" ]]; then
+    upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_TRAFFIC_PROFILE" "$traffic_profile"
+    CHIMERA_MESH_TRAFFIC_PROFILE="$traffic_profile"
+    export CHIMERA_MESH_TRAFFIC_PROFILE
+  fi
+  if [[ -n "$remote_peer_spec" ]]; then
+    upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_REMOTE_PEER_SPEC" "$remote_peer_spec"
+    CHIMERA_MESH_REMOTE_PEER_SPEC="$remote_peer_spec"
+    export CHIMERA_MESH_REMOTE_PEER_SPEC
+  fi
+
+  if [[ -z "$namespace" || -z "$local_node" ]]; then
+    printf '%s\n' "mesh_control_plane_seed=skipped reason=missing_authoritative_mesh_context" >&2
+    [[ "$strict_seed" == "1" ]] && return 1
+    return 0
+  fi
+  if [[ -n "$policy_payload" && -n "$traffic_profile" ]]; then
+    printf '%s\n' "mesh_control_plane_seed=skipped reason=ambiguous_authoritative_policy" >&2
+    [[ "$strict_seed" == "1" ]] && return 1
+    return 0
+  fi
+  if [[ -z "$policy_payload" && -z "$traffic_profile" ]]; then
+    printf '%s\n' "mesh_control_plane_seed=skipped reason=missing_authoritative_policy" >&2
+    [[ "$strict_seed" == "1" ]] && return 1
+    return 0
+  fi
+  if [[ -z "$remote_peer_spec" ]]; then
+    printf '%s\n' "mesh_control_plane_seed=skipped reason=missing_authoritative_peer_list" >&2
+    [[ "$strict_seed" == "1" ]] && return 1
+    return 0
+  fi
+
+  printf '%s\n' "mesh_control_plane_seed=ok" >&2
+  return 0
+}
+
 upsert_node_config_kv() {
   local file="${1:?file_required}"
   local key="${2:?key_required}"
@@ -753,6 +904,8 @@ Commands:
                 Show upstream health snapshot + recent watchdog switch history
   upstream-failover-smoke [wait_sec]
                 Force local tunnel drop and print recovery audit
+  mesh-seed-control-plane [--strict|--best-effort]
+                Persist mesh control-plane hints from configured/bootstrap mesh state
   mesh-bind-control-plane [--strict|--best-effort]
                 Generate mesh control-plane env and publish transit lane bindings
   apps-running  Show running applications (process names)
@@ -908,7 +1061,8 @@ peer_egress_transit_lane_bindings_ready() {
 
 ensure_bound_transit_start_contract() {
   peer_egress_bound_transit_requested || return 0
-  mesh_bind_control_plane --best-effort >/dev/null 2>&1 || true
+  seed_mesh_control_plane_authority_from_bootstrap --best-effort >/dev/null 2>&1 || true
+  mesh_bind_control_plane --strict >/dev/null 2>&1 || return 1
   peer_egress_transit_lane_bindings_ready
 }
 
@@ -1955,15 +2109,22 @@ runtime_state_is_up() {
     node_state="$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)"
     datapath_state="$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)"
     if node_config_ready; then
-      [[ "$node_state" == "active" && "$datapath_state" == "active" ]]
+      [[ "$node_state" == "active" && "$datapath_state" == "active" ]] || return 1
+      if peer_egress_bound_transit_requested; then
+        ensure_bound_transit_start_contract >/dev/null 2>&1 || return 1
+      fi
+      return 0
     else
       [[ "$node_state" == "active" ]]
     fi
     return $?
   fi
   if node_config_ready; then
-    pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)"
-    return $?
+    pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)" || return 1
+    if peer_egress_bound_transit_requested; then
+      ensure_bound_transit_start_contract >/dev/null 2>&1 || return 1
+    fi
+    return 0
   fi
   if pidfile_running "$(peer_egress_pid_path)"; then
     return 0
@@ -2436,9 +2597,10 @@ logs_tail() {
 write_doctor_fail_json() {
   local out="${1:?out_required}"
   local reason="${2:?reason_required}"
+  local node_ready="${3:-false}"
   mkdir -p "$(dirname "$out")" >/dev/null 2>&1 || true
   cat >"$out" <<EOF
-{"status":"fail","kind":"doctor","message_en":"Doctor check is blocked until CHIMERA endpoint configuration is ready.","message_ru":"Проверка doctor заблокирована до настройки endpoint CHIMERA.","reason":"${reason}","secrets":"<redacted>","node_config_ready":false,"network_state":"not_modified"}
+{"status":"fail","kind":"doctor","message_en":"Doctor check is blocked until CHIMERA runtime state is ready.","message_ru":"Проверка doctor заблокирована до готовности состояния CHIMERA.","reason":"${reason}","secrets":"<redacted>","node_config_ready":${node_ready},"network_state":"not_modified"}
 EOF
 }
 
@@ -2447,8 +2609,13 @@ doctor_run() {
   local config_path rc=0
   mkdir -p "$(dirname "$out_file")" >/dev/null 2>&1 || true
   if ! node_config_ready; then
-    write_doctor_fail_json "$out_file" "node_endpoint_unconfigured"
+    write_doctor_fail_json "$out_file" "node_endpoint_unconfigured" "false"
     echo "doctor_status=fail reason=node_endpoint_unconfigured" >&2
+    return 2
+  fi
+  if peer_egress_bound_transit_requested && ! ensure_bound_transit_start_contract >/dev/null 2>&1; then
+    write_doctor_fail_json "$out_file" "bound_transit_unready" "true"
+    echo "doctor_status=fail reason=bound_transit_unready" >&2
     return 2
   fi
   config_path="$(node_config_path)"
@@ -3098,6 +3265,10 @@ main() {
       ;;
     upstream-failover-smoke)
       upstream_failover_smoke "${2:-10}"
+      ;;
+    mesh-seed-control-plane)
+      shift || true
+      seed_mesh_control_plane_authority_from_bootstrap "${1:---strict}"
       ;;
     mesh-bind-control-plane)
       shift || true
