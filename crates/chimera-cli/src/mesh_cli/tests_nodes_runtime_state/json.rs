@@ -13,6 +13,7 @@ fn nodes_probe_all_json_contract_has_common_fields() {
         selected_peers: vec!["de".to_string()],
         connected_peer: "de".to_string(),
         connected_endpoint: "127.0.0.1:443".to_string(),
+        connected_endpoint_raw: "127.0.0.1:443".to_string(),
         success: true,
         attempts: vec![MeshConnectAttempt {
             peer_id: "de".to_string(),
@@ -65,6 +66,7 @@ fn nodes_probe_all_json_snapshot_stable() {
         selected_peers: vec!["de".to_string()],
         connected_peer: "de".to_string(),
         connected_endpoint: "127.0.0.1:443".to_string(),
+        connected_endpoint_raw: "127.0.0.1:443".to_string(),
         success: true,
         attempts: vec![MeshConnectAttempt {
             peer_id: "de".to_string(),

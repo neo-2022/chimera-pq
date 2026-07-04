@@ -217,7 +217,7 @@ pub(super) fn probe_all(args: &[String], inventory: &MeshNodesInventory) -> i32 
             if report.success
                 && let (Some(classic), Some(pq)) = (proof_classic.as_deref(), proof_pq.as_deref())
                 && let Err(error) = verify_chimera_proof(
-                    &report.connected_endpoint,
+                    report.proof_endpoint(),
                     classic,
                     pq,
                     proof_key_id.as_str(),

@@ -47,6 +47,7 @@ impl MeshRuntime {
         let timeout = Duration::from_millis(timeout_ms.max(1));
         let mut connected_peer = String::new();
         let mut connected_endpoint = String::new();
+        let mut connected_endpoint_raw = String::new();
 
         let mut attempt_index = 0usize;
         let connected = visit_connect_attempt_targets(selected_peers, fallback_ports, |target| {
@@ -72,6 +73,7 @@ impl MeshRuntime {
                     });
                     connected_peer = peer_label;
                     connected_endpoint = endpoint_label;
+                    connected_endpoint_raw = target.endpoint.to_string();
                     explain.push("connect_probe_result=connected".to_string());
                     explain.push(format!("connect_probe_connected_peer={connected_peer}"));
                     explain.push(format!(
@@ -98,6 +100,7 @@ impl MeshRuntime {
                 selected_peers: redacted_peer_labels(selected_peers),
                 connected_peer,
                 connected_endpoint,
+                connected_endpoint_raw,
                 success: true,
                 attempts,
                 explain,
@@ -110,6 +113,7 @@ impl MeshRuntime {
             selected_peers: redacted_peer_labels(selected_peers),
             connected_peer,
             connected_endpoint,
+            connected_endpoint_raw,
             success: false,
             attempts,
             explain,

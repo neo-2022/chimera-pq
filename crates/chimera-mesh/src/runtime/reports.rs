@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::policy::MeshPeerTablePolicy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,13 +108,38 @@ pub struct MeshConnectAttempt {
     pub error: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MeshConnectProbeReport {
     pub namespace: String,
     pub selected_peers: Vec<String>,
     pub connected_peer: String,
     pub connected_endpoint: String,
+    pub connected_endpoint_raw: String,
     pub success: bool,
     pub attempts: Vec<MeshConnectAttempt>,
     pub explain: Vec<String>,
+}
+
+impl MeshConnectProbeReport {
+    pub fn proof_endpoint(&self) -> &str {
+        if self.connected_endpoint_raw.is_empty() {
+            &self.connected_endpoint
+        } else {
+            &self.connected_endpoint_raw
+        }
+    }
+}
+
+impl fmt::Debug for MeshConnectProbeReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MeshConnectProbeReport")
+            .field("namespace", &self.namespace)
+            .field("selected_peers", &self.selected_peers)
+            .field("connected_peer", &self.connected_peer)
+            .field("connected_endpoint", &self.connected_endpoint)
+            .field("success", &self.success)
+            .field("attempts", &self.attempts)
+            .field("explain", &self.explain)
+            .finish()
+    }
 }

@@ -11,6 +11,7 @@ fn report() -> MeshConnectProbeReport {
         selected_peers: vec!["node-a".to_string(), "node-b".to_string()],
         connected_peer: "node-b".to_string(),
         connected_endpoint: "198.51.100.10:443".to_string(),
+        connected_endpoint_raw: "198.51.100.10:443".to_string(),
         success: true,
         attempts: vec![MeshConnectAttempt {
             peer_id: "node-b".to_string(),
