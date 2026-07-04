@@ -62,11 +62,15 @@ SITE_ADAPTIVE_ENTRY_TTL_SEC="${SITE_ADAPTIVE_ENTRY_TTL_SEC:-86400}"
 AUTOFIX_LOG_FILE="${AUTOFIX_LOG_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/autofix.log}"
 CHIMERA_CLI_BIN="${CHIMERA_CLI_BIN:-$ROOT_DIR/bin/chimera-cli}"
 CHIMERA_NODE_BIN="${CHIMERA_NODE_BIN:-${CHIMERA_GATEWAY_BIN:-$ROOT_DIR/bin/chimera-node}}"
+CHIMERA_BOOTSTRAP_BIN="${CHIMERA_BOOTSTRAP_BIN:-$ROOT_DIR/bin/chimera-bootstrap}"
 CHIMERA_RUNNER="${CHIMERA_RUNNER:-$ROOT_DIR/scripts/chimera-runner.sh}"
 NODE_CONFIG_FILE="${NODE_CONFIG_FILE:-$ROOT_DIR/configs/mesh-node.conf}"
 PEER_EGRESS_ENV_FILE="${PEER_EGRESS_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env}"
 PEER_EGRESS_STATE_FILE="${PEER_EGRESS_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.state}"
 PEER_UPDATE_STATE_FILE="${PEER_UPDATE_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-update.state.json}"
+PEER_UPDATE_ENV_FILE="${PEER_UPDATE_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-update.env}"
+PEER_UPDATE_PID_FILE="${PEER_UPDATE_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-peer-update.pid}"
+PEER_UPDATE_LOG="${PEER_UPDATE_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera_peer_update.service.log}"
 MESH_CONTROL_PLANE_ENV_FILE="${MESH_CONTROL_PLANE_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh-control-plane.env}"
 MESH_DISCOVERY_OUT_FILE="${MESH_DISCOVERY_OUT_FILE:-$ROOT_DIR/mesh_nodes.discovery.json}"
 MESH_DISCOVERY_PUBKEY_OUT_FILE="${MESH_DISCOVERY_PUBKEY_OUT_FILE:-$ROOT_DIR/mesh_nodes.discovery.pubkey}"
@@ -190,6 +194,10 @@ peer_egress_pid_path() {
 
 transparent_runtime_pid_path() {
   printf '%s' "${TRANSPARENT_RUNTIME_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-transparent-runtime.pid}"
+}
+
+peer_update_pid_path() {
+  printf '%s' "${PEER_UPDATE_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-peer-update.pid}"
 }
 
 peer_egress_state_path() {
@@ -484,6 +492,203 @@ ensure_mesh_bootstrap_env() {
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
     fi
   fi
+}
+
+upsert_node_config_kv() {
+  local file="${1:?file_required}"
+  local key="${2:?key_required}"
+  local value="${3:-}"
+  local key_re tmp_file replaced=0 line
+  if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    echo "error: invalid control character in node config value: $key" >&2
+    exit 2
+  fi
+  key_re="${key//./\\.}"
+  mkdir -p "$(dirname "$file")"
+  touch "$file"
+  tmp_file="$(mktemp)"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^[[:space:]]*$key_re[[:space:]]*= ]]; then
+      if [[ "$replaced" -eq 0 ]]; then
+        printf '%s = %s\n' "$key" "$value"
+        replaced=1
+      fi
+      continue
+    fi
+    printf '%s\n' "$line"
+  done <"$file" >"$tmp_file"
+  if [[ "$replaced" -eq 0 ]]; then
+    printf '%s = %s\n' "$key" "$value" >>"$tmp_file"
+  fi
+  cat "$tmp_file" >"$file"
+  rm -f "$tmp_file"
+}
+
+normalize_node_connect_addr() {
+  local endpoint="${1:?endpoint_required}"
+  case "$endpoint" in
+    tcp://*)
+      printf '%s\n' "$endpoint"
+      ;;
+    tcp@*)
+      printf 'tcp://%s\n' "${endpoint#tcp@}"
+      ;;
+    *@*)
+      echo "error: unsupported CHIMERA node endpoint transport" >&2
+      exit 2
+      ;;
+    *)
+      printf 'tcp://%s\n' "$endpoint"
+      ;;
+  esac
+}
+
+raw_node_endpoint_host_port() {
+  local endpoint="${1:?endpoint_required}"
+  case "$endpoint" in
+    tcp://*)
+      printf '%s\n' "${endpoint#tcp://}"
+      ;;
+    tcp@*)
+      printf '%s\n' "${endpoint#tcp@}"
+      ;;
+    *)
+      printf '%s\n' "$endpoint"
+      ;;
+  esac
+}
+
+derive_node_server_name() {
+  local host_part="${1:?host_part_required}"
+  local server_name="${CHIMERA_NODE_SERVER_NAME:-${CHIMERA_CARRIER_SERVER_NAME:-${CHIMERA_MESH_REMOTE_SERVER_NAME:-$host_part}}}"
+  server_name="${server_name#[}"
+  server_name="${server_name%]}"
+  if [[ -z "$server_name" ]]; then
+    echo "error: CHIMERA node server name is empty" >&2
+    exit 2
+  fi
+  printf '%s\n' "$server_name"
+}
+
+desired_node_listen_addr() {
+  local listen_addr
+  listen_addr="${CHIMERA_NODE_LISTEN_ADDR:-${CHIMERA_NODE_PEER_LISTEN_ADDR:-auto}}"
+  if [[ -z "$listen_addr" ]]; then
+    listen_addr="auto"
+  fi
+  printf '%s\n' "$listen_addr"
+}
+
+materialize_node_runtime_config() {
+  local node_conf="${1:?node_conf_required}"
+  local connect_addr="${2:?connect_addr_required}"
+  local host_part="${3:?host_part_required}"
+  local server_name listen_addr
+  server_name="$(derive_node_server_name "$host_part")"
+  listen_addr="$(desired_node_listen_addr)"
+  upsert_node_config_kv "$node_conf" "node.mode" "mesh-node"
+  upsert_node_config_kv "$node_conf" "carrier.addr" "$connect_addr"
+  upsert_node_config_kv "$node_conf" "carrier.server_name" "$server_name"
+  upsert_node_config_kv "$node_conf" "peer.listen_addr" "$listen_addr"
+}
+
+refresh_node_peer_target_from_bootstrap() {
+  local node_conf candidate raw_candidate connect_addr host_part port_part
+  local -a mesh_nodes_args=()
+  node_conf="$(node_config_path)"
+  candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}}"
+  if [[ -z "$candidate" && -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+    candidate="${CHIMERA_NODE_ENDPOINT:-${CHIMERA_PEER_ENDPOINT:-${CHIMERA_CARRIER_ADDR:-${CHIMERA_MESH_REMOTE_ENDPOINT:-}}}}"
+    if [[ -z "$candidate" && -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" ]]; then
+      mesh_nodes_args+=(--discovery-url "$CHIMERA_MESH_NODES_DISCOVERY_URL")
+      if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
+        mesh_nodes_args+=(--discovery-pubkey "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY")
+      fi
+      mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
+      if run_chimera_cli mesh nodes select "${mesh_nodes_args[@]}" >/dev/null 2>&1; then
+        candidate="$(run_chimera_cli mesh nodes selected-endpoint "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+      fi
+      if [[ -z "$candidate" ]]; then
+        local best_node_id=""
+        best_node_id="$(run_chimera_cli mesh nodes best "${mesh_nodes_args[@]}" 2>/dev/null | sed -n 's/^node_id=\([^[:space:]]*\).*/\1/p' | head -n1 | tr -d '[:space:]' || true)"
+        if [[ -n "$best_node_id" ]]; then
+          run_chimera_cli mesh nodes select --id "$best_node_id" "${mesh_nodes_args[@]}" >/dev/null 2>&1 || true
+          candidate="$(run_chimera_cli mesh nodes selected-endpoint "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+        fi
+      fi
+    fi
+  fi
+  [[ -n "$candidate" ]] || return 1
+
+  raw_candidate="$(raw_node_endpoint_host_port "$candidate")"
+  connect_addr="$(normalize_node_connect_addr "$candidate")"
+  if [[ "$raw_candidate" != *:* ]]; then
+    echo "error: invalid CHIMERA node endpoint" >&2
+    exit 2
+  fi
+  host_part="${raw_candidate%:*}"
+  port_part="${raw_candidate##*:}"
+  if [[ -z "$host_part" || ! "$port_part" =~ ^[0-9]+$ || "$port_part" -lt 1 || "$port_part" -gt 65535 ]]; then
+    echo "error: invalid CHIMERA node endpoint" >&2
+    exit 2
+  fi
+  if [[ ! -f "$node_conf" && -f "$ROOT_DIR/configs/mesh-node.example.conf" ]]; then
+    cp "$ROOT_DIR/configs/mesh-node.example.conf" "$node_conf"
+  fi
+  [[ -f "$node_conf" ]] || return 1
+  materialize_node_runtime_config "$node_conf" "$connect_addr" "$host_part"
+  printf '%s\n' "$raw_candidate" >"$ROOT_DIR/configs/chimera_runtime_endpoint.txt"
+  return 0
+}
+
+validate_peer_update_base_url() {
+  local url="${1:-}"
+  [[ -n "$url" ]] || return 1
+  case "$url" in
+    http://*|https://*) ;;
+    *) return 1 ;;
+  esac
+  case "$url" in
+    *\"*|*"'"*|*\`*|*\$*|*\\*|*@*|*\?*|*#*|*$'\r'*|*$'\n'*|*$'\t'*)
+      return 1
+      ;;
+  esac
+  [[ "$url" =~ [[:space:]] ]] && return 1
+  return 0
+}
+
+configure_peer_update_env() {
+  local base_url="${CHIMERA_PEER_UPDATE_BASE_URL:-}"
+  local listen="${CHIMERA_PEER_UPDATE_LISTEN:-0.0.0.0:0}"
+  if [[ -z "$base_url" && -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+    base_url="${CHIMERA_PEER_UPDATE_BASE_URL:-}"
+    listen="${CHIMERA_PEER_UPDATE_LISTEN:-$listen}"
+  fi
+  base_url="$(trim_ascii "$base_url")"
+  listen="$(trim_ascii "$listen")"
+  if ! validate_peer_update_base_url "$base_url"; then
+    rm -f "$PEER_UPDATE_ENV_FILE"
+    return 1
+  fi
+  mkdir -p "$(dirname "$PEER_UPDATE_ENV_FILE")"
+  mkdir -p "$(dirname "$PEER_UPDATE_STATE_FILE")"
+  {
+    write_env_kv 'CHIMERA_PEER_UPDATE_BASE_URL' "$base_url"
+    write_env_kv 'CHIMERA_PEER_UPDATE_LISTEN' "${listen:-0.0.0.0:0}"
+    write_env_kv 'CHIMERA_PEER_UPDATE_STATE_FILE' "$PEER_UPDATE_STATE_FILE"
+  } >"$PEER_UPDATE_ENV_FILE"
+  chmod 600 "$PEER_UPDATE_ENV_FILE" 2>/dev/null || true
+  return 0
+}
+
+start_peer_update_runtime() {
+  configure_peer_update_env || return 1
+  start_runner_background "peer_update" "$(peer_update_pid_path)" "$PEER_UPDATE_LOG" "$PEER_UPDATE_ENV_FILE" "peer-update" >/dev/null 2>&1 || return 1
+  wait_for_file "$PEER_UPDATE_STATE_FILE" 5
 }
 
 usage() {
@@ -2234,6 +2439,7 @@ start_runtime() {
   ensure_base_path
   ensure_runtime_log_paths
   ensure_mesh_bootstrap_env
+  refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
   publish_peer_egress_transit_lane_bindings_from_control_plane || true
   local node_config_is_ready=0
   if node_config_ready; then
@@ -2266,15 +2472,16 @@ start_runtime() {
       echo "start_status=fail mode=systemd_user node_runtime=$node_runtime node=$node_status transparent_runtime=stopped reason=node_service_failed systemctl_start_rc=$systemd_start_rc"
       return 1
     fi
+    start_peer_update_runtime >/dev/null 2>&1 || true
     publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
     if [[ "$node_config_is_ready" -eq 0 ]]; then
       site_auto_watch_stop >/dev/null 2>&1 || true
-      echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped reason=node_endpoint_unconfigured_listener_only"
+      echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped mesh_ready=false reason=node_endpoint_unconfigured_listener_only"
       return 0
     fi
     if node_config_self_loop_target; then
       site_auto_watch_stop >/dev/null 2>&1 || true
-      echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped reason=self_loop_listener_only"
+      echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped mesh_ready=false reason=self_loop_listener_only"
       return 0
     fi
     local transparent_start_rc=0
@@ -2356,6 +2563,7 @@ start_runtime() {
     if runner_started "$(peer_egress_pid_path)" 10; then
       direct_node_status="started"
       node_runtime="running"
+      start_peer_update_runtime >/dev/null 2>&1 || true
       publish_mesh_discovery_snapshot >/dev/null 2>&1 || true
     else
       direct_node_status="failed"
@@ -2364,12 +2572,12 @@ start_runtime() {
   fi
   if [[ "$direct_node_status" == "started" && "$node_config_is_ready" -eq 0 ]]; then
     site_auto_watch_stop >/dev/null 2>&1 || true
-    echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped reason=node_endpoint_unconfigured_listener_only"
+    echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped mesh_ready=false reason=node_endpoint_unconfigured_listener_only"
     return 0
   fi
   if [[ "$direct_node_status" == "started" ]] && node_config_self_loop_target; then
     site_auto_watch_stop >/dev/null 2>&1 || true
-    echo "start_status=ok mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped reason=self_loop_listener_only"
+    echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped mesh_ready=false reason=self_loop_listener_only"
     return 0
   fi
   if [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
@@ -2442,6 +2650,7 @@ stop_runtime() {
   if systemd_user_ready; then
     systemctl --user stop "$DATAPATH_SERVICE_UNIT" "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
     systemctl --user stop "$NODE_SERVICE_UNIT" "$LEGACY_NODE_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
+    stop_runner_background "peer_update" "$(peer_update_pid_path)" >/dev/null 2>&1 || true
     cleanup_transparent_redirect_rules || cleanup_rc=$?
     if [[ "$cleanup_rc" -ne 0 ]]; then
       echo "stop_status=fail mode=systemd_user reason=transparent_redirect_cleanup_failed"
@@ -2452,6 +2661,7 @@ stop_runtime() {
   fi
   stop_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" >/dev/null 2>&1 || true
   stop_runner_background "peer_egress" "$(peer_egress_pid_path)" >/dev/null 2>&1 || true
+  stop_runner_background "peer_update" "$(peer_update_pid_path)" >/dev/null 2>&1 || true
   run_chimera_cli down \
     --config "$(node_config_path)" \
     --state-file "$STATE_FILE" \
@@ -2537,6 +2747,17 @@ runtime_status() {
     ' "$STATE_FILE" 2>/dev/null || true
   else
     echo "state_file_state=missing"
+  fi
+  if [[ -f "$PEER_UPDATE_STATE_FILE" ]]; then
+    echo "peer_update_state_file=<redacted>"
+    echo "peer_update_state_file_state=present"
+  else
+    echo "peer_update_state_file_state=missing"
+  fi
+  if [[ -f "$(mesh_discovery_out_path)" ]]; then
+    echo "discovery_snapshot_state=present"
+  else
+    echo "discovery_snapshot_state=missing"
   fi
   if [[ -f "$(peer_egress_state_path)" ]]; then
     echo "peer_egress_state=<redacted>"

@@ -12,6 +12,7 @@ Targets:
   cli       run chimera-cli with args
   node      run chimera-node with args
   peer-egress run chimera-peer-egress with args
+  peer-update run chimera-bootstrap serve-release with env-provided args
   transparent-runtime run chimera-transparent-runtime with args
 EOF
 }
@@ -56,6 +57,28 @@ case "$target" in
       exit 1
     fi
     run_with_fallback "$ROOT_DIR/bin/chimera-peer-egress" "chimera-carrier" --mode "$peer_egress_mode" "$@"
+    ;;
+  peer-update)
+    peer_update_base_url="${CHIMERA_PEER_UPDATE_BASE_URL:-}"
+    peer_update_state_file="${CHIMERA_PEER_UPDATE_STATE_FILE:-}"
+    peer_update_listen="${CHIMERA_PEER_UPDATE_LISTEN:-0.0.0.0:0}"
+    if [[ -z "$peer_update_base_url" ]]; then
+      echo "error: missing CHIMERA_PEER_UPDATE_BASE_URL" >&2
+      exit 1
+    fi
+    if [[ -z "$peer_update_state_file" ]]; then
+      echo "error: missing CHIMERA_PEER_UPDATE_STATE_FILE" >&2
+      exit 1
+    fi
+    run_with_fallback \
+      "$ROOT_DIR/bin/chimera-bootstrap" \
+      "chimera-bootstrap" \
+      serve-release \
+      --root "$ROOT_DIR" \
+      --listen "$peer_update_listen" \
+      --base-url "$peer_update_base_url" \
+      --state-file "$peer_update_state_file" \
+      "$@"
     ;;
   transparent-runtime)
     prepare_transparent_runtime_env

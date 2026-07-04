@@ -275,8 +275,9 @@ EOF
   set -e
 
   [[ "$rc" -eq 0 ]] || fail "systemd_listener_only_unconfigured_endpoint: expected rc=0 got $rc output=$output"
-  [[ "$output" == *"start_status=ok"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing ok status output=$output"
+  [[ "$output" == *"start_status=partial"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing partial status output=$output"
   [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing listener_only mode output=$output"
+  [[ "$output" == *"mesh_ready=false"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing mesh_ready=false output=$output"
   [[ "$output" == *"reason=node_endpoint_unconfigured_listener_only"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing reason output=$output"
   [[ "$output" == *"transparent_runtime=skipped"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing transparent_runtime=skipped output=$output"
   [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing datapath_apply=skipped output=$output"
@@ -880,8 +881,9 @@ EOF
   set -e
 
   [[ "$rc" -eq 0 ]] || fail "systemd_listener_only_self_loop: expected rc=0 got $rc output=$output"
-  [[ "$output" == *"start_status=ok"* ]] || fail "systemd_listener_only_self_loop: missing ok status output=$output"
+  [[ "$output" == *"start_status=partial"* ]] || fail "systemd_listener_only_self_loop: missing partial status output=$output"
   [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_listener_only_self_loop: missing listener_only mode output=$output"
+  [[ "$output" == *"mesh_ready=false"* ]] || fail "systemd_listener_only_self_loop: missing mesh_ready=false output=$output"
   [[ "$output" == *"reason=self_loop_listener_only"* ]] || fail "systemd_listener_only_self_loop: missing self_loop_listener_only reason output=$output"
   [[ "$output" == *"transparent_runtime=skipped"* ]] || fail "systemd_listener_only_self_loop: missing transparent_runtime=skipped output=$output"
   [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_listener_only_self_loop: missing datapath_apply=skipped output=$output"
