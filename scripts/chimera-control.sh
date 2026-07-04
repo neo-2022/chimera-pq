@@ -1059,9 +1059,36 @@ peer_egress_transit_lane_bindings_ready() {
   [[ -n "$lane_file" && -s "$lane_file" ]]
 }
 
+bound_transit_authoritative_peer_source_present() {
+  if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+  fi
+  [[ -n "$(trim_ascii "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}")" ]] && return 0
+  [[ -n "$(trim_ascii "${CHIMERA_MESH_EXTRA_PEERS:-}")" ]] && return 0
+  [[ -n "$(trim_ascii "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}")" ]] && return 0
+  if [[ -n "${CHIMERA_MESH_REMOTE_NODE:-}" && -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" && -n "${CHIMERA_MESH_REMOTE_REGION:-}" && -n "${CHIMERA_MESH_REMOTE_LOAD_SCORE:-}" && -n "${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE:-}" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+bound_transit_authority_state() {
+  if ! peer_egress_bound_transit_requested; then
+    printf '%s\n' "disabled"
+    return 0
+  fi
+  if bound_transit_authoritative_peer_source_present; then
+    printf '%s\n' "present"
+    return 0
+  fi
+  printf '%s\n' "missing"
+}
+
 ensure_bound_transit_start_contract() {
   peer_egress_bound_transit_requested || return 0
   seed_mesh_control_plane_authority_from_bootstrap --best-effort >/dev/null 2>&1 || true
+  bound_transit_authoritative_peer_source_present || return 0
   mesh_bind_control_plane --strict >/dev/null 2>&1 || return 1
   peer_egress_transit_lane_bindings_ready
 }
@@ -2928,6 +2955,7 @@ runtime_status() {
   fi
   echo "route_mode=$route_mode"
   echo "split_list_mode=$split_mode"
+  echo "bound_transit_authority_state=$(bound_transit_authority_state)"
   if node_config_ready; then
     echo "node_config_ready=true"
   else

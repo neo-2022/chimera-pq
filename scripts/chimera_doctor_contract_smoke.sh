@@ -168,6 +168,60 @@ run_doctor_case "tcp_doc_placeholder_config_fails_closed" "tcp_doc_placeholder" 
 run_doctor_case "ready_config_success_preserves_zero_exit" "ready" "0" "0" "doctor_status=ok"
 run_doctor_case "ready_config_nonzero_exit_is_preserved" "ready" "7" "7" "doctor_status=fail exit=7"
 
+run_doctor_bound_transit_missing_authority_case() {
+  local tmp_dir install_root node_conf output rc doctor_json
+
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  node_conf="$tmp_dir/mesh-node.conf"
+  mkdir -p "$tmp_dir/home" "$tmp_dir/cache" "$tmp_dir/config/chimera" "$tmp_dir/runtime"
+  make_install_root "$install_root"
+
+  cat >"$node_conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = carrier.mesh:443
+carrier.server_name = node.local
+capture.mode = tun
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+
+  cat >"$tmp_dir/config/chimera/peer-egress.env" <<'EOF'
+CHIMERA_PEER_EGRESS_MODE=node
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
+CHIMERA_PEER_EGRESS_STATE_FILE=/tmp/peer-egress.state
+CHIMERA_MESH_PEER_EGRESS_STATE_PATH=/tmp/peer-egress.state
+CHIMERA_PEER_EGRESS_TOKEN=test-token
+CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true
+EOF
+
+  set +e
+  output="$(
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    NODE_CONFIG_FILE="$node_conf" \
+    CHIMERA_FAKE_DOCTOR_RC="0" \
+      timeout 10s bash "$install_root/scripts/chimera-control.sh" doctor 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "bound_transit_missing_authority_doctor: expected rc=0 got $rc output=$output"
+  [[ "$output" == *"doctor_status=ok"* ]] || fail "bound_transit_missing_authority_doctor: missing ok output=$output"
+  [[ "$output" != *"bound_transit_unready"* ]] || fail "bound_transit_missing_authority_doctor: unexpected bound transit preflight failure output=$output"
+  doctor_json="$install_root/docs/doctor_latest.json"
+  [[ -f "$doctor_json" ]] || fail "bound_transit_missing_authority_doctor: doctor report missing"
+  rg -q '"status":"ok"' "$doctor_json" || fail "bound_transit_missing_authority_doctor: expected ok artifact"
+
+  rm -rf "$tmp_dir"
+}
+
+run_doctor_bound_transit_missing_authority_case
+
 run_logs_redaction_case() {
   local tmp_dir install_root output
   tmp_dir="$(mktemp -d)"

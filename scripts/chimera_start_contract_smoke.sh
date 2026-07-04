@@ -197,7 +197,7 @@ run_case "datapath_service_failure" "1" "datapath_fail"
 run_case "datapath_unconfigured_failure" "0" "ok" "datapath_unconfigured" "0"
 run_case "datapath_unconfigured_tcp_doc_placeholder_failure" "tcp_doc_placeholder" "ok" "datapath_unconfigured" "0"
 
-run_systemd_bound_transit_unready_preflight_case() {
+run_systemd_bound_transit_missing_authority_does_not_block_start_case() {
   local tmp_dir bin_dir cache_dir config_dir runtime_dir install_root node_conf output rc fake_systemctl systemctl_log
 
   tmp_dir="$(mktemp -d)"
@@ -275,18 +275,18 @@ EOF
   rc=$?
   set -e
 
-  [[ "$rc" -ne 0 ]] || fail "systemd_bound_transit_unready_preflight: expected non-zero rc output=$output"
-  [[ "$output" == *"start_status=fail"* ]] || fail "systemd_bound_transit_unready_preflight: missing fail status output=$output"
-  [[ "$output" == *"mode=preflight"* ]] || fail "systemd_bound_transit_unready_preflight: missing preflight mode output=$output"
-  [[ "$output" == *"mesh_ready=false"* ]] || fail "systemd_bound_transit_unready_preflight: missing mesh_ready=false output=$output"
-  [[ "$output" == *"reason=bound_transit_unready"* ]] || fail "systemd_bound_transit_unready_preflight: missing reason output=$output"
-  ! grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_bound_transit_unready_preflight: node service should not start"
-  ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_bound_transit_unready_preflight: datapath service should not start"
+  [[ "$rc" -eq 0 ]] || fail "systemd_bound_transit_missing_authority_start_progress: expected rc=0 output=$output"
+  [[ "$output" == *"start_status=partial"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing partial status output=$output"
+  [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing listener_only mode output=$output"
+  [[ "$output" == *"reason=node_endpoint_unconfigured_listener_only"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing listener_only reason output=$output"
+  [[ "$output" != *"reason=bound_transit_unready"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: bound transit preflight still blocked clean start output=$output"
+  grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_bound_transit_missing_authority_start_progress: node service was not started"
+  ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_bound_transit_missing_authority_start_progress: datapath service should stay skipped in listener_only"
 
   rm -rf "$tmp_dir"
 }
 
-run_systemd_bound_transit_unready_preflight_case
+run_systemd_bound_transit_missing_authority_does_not_block_start_case
 
 run_systemd_listener_only_unconfigured_endpoint_case() {
   local tmp_dir bin_dir cache_dir config_dir runtime_dir install_root node_conf output rc fake_systemctl systemctl_log
