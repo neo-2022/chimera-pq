@@ -428,6 +428,7 @@ chimera-start-contract-smoke-selfcheck:
     rg -q 'systemd_cli_privileged_up_path' scripts/chimera_start_contract_smoke.sh
     rg -q 'cli up did not use sudo env wrapper' scripts/chimera_start_contract_smoke.sh
     rg -q 'state cleanup did not use sudo' scripts/chimera_start_contract_smoke.sh
+    rg -q 'peer_update_env_write_case' scripts/chimera_start_contract_smoke.sh
     rg -q 'reason=datapath_apply_failed' scripts/chimera_start_contract_smoke.sh
     rg -q 'reason=datapath_proof_failed' scripts/chimera_start_contract_smoke.sh
     rg -q 'datapath_apply=unverified' scripts/chimera_start_contract_smoke.sh

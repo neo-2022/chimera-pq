@@ -157,6 +157,12 @@ shell_quote_env_value() {
   printf '%q' "$value"
 }
 
+write_env_kv() {
+  local key="${1:?key_required}"
+  local value="${2:-}"
+  printf '%s=%s\n' "$key" "$(shell_quote_env_value "$key" "$value")"
+}
+
 pid_cmdline_contains() {
   local pid="${1:-}"
   local needle="${2:-}"

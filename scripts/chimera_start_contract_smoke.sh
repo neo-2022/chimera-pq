@@ -1477,4 +1477,43 @@ EOF
 
 run_direct_apply_failure_case
 
+run_peer_update_env_write_case() {
+  local tmp_dir install_root config_dir cache_dir bootstrap_env peer_env state_file output rc
+
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  config_dir="$tmp_dir/config/chimera"
+  cache_dir="$tmp_dir/cache/chimera"
+  mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+
+  bootstrap_env="$config_dir/mesh_bootstrap.env"
+  peer_env="$config_dir/peer-update.env"
+  state_file="$cache_dir/peer-update.state.json"
+  cat >"$bootstrap_env" <<'EOF'
+CHIMERA_PEER_UPDATE_BASE_URL=http://198.51.100.10
+CHIMERA_PEER_UPDATE_LISTEN=0.0.0.0:0
+EOF
+
+  set +e
+  output="$(
+    CHIMERA_BOOTSTRAP_ENV_FILE="$bootstrap_env" \
+    PEER_UPDATE_ENV_FILE="$peer_env" \
+    PEER_UPDATE_STATE_FILE="$state_file" \
+    bash -lc 'source "'"$install_root/scripts/chimera-control.sh"'"; configure_peer_update_env' 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "peer_update_env_write_case: configure_peer_update_env failed output=$output"
+  [[ -f "$peer_env" ]] || fail "peer_update_env_write_case: peer-update env file missing"
+  grep -Fxq 'CHIMERA_PEER_UPDATE_BASE_URL=http://198.51.100.10' "$peer_env" || fail "peer_update_env_write_case: missing base url"
+  grep -Fxq 'CHIMERA_PEER_UPDATE_LISTEN=0.0.0.0:0' "$peer_env" || fail "peer_update_env_write_case: missing listen addr"
+  grep -Fxq "CHIMERA_PEER_UPDATE_STATE_FILE=$state_file" "$peer_env" || fail "peer_update_env_write_case: missing state file path"
+
+  rm -rf "$tmp_dir"
+}
+
+run_peer_update_env_write_case
+
 echo "chimera_start_contract_smoke=pass"
