@@ -321,6 +321,10 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
     # shellcheck disable=SC1090
     source "$control_plane_env_file"
   fi
+  if ! mesh_control_plane_has_preflight_env && [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+  fi
 
   existing_bindings_file=""
   existing_allow_bound_transit=""
@@ -468,6 +472,25 @@ mesh_control_plane_env_from_preflight() {
   return 0
 }
 
+bootstrap_control_plane_context_ready() {
+  local namespace="" local_node="" policy_payload="" traffic_profile="" remote_peer_spec="" extra_peers=""
+  [[ -f "$BOOTSTRAP_ENV_FILE" ]] || return 1
+  # shellcheck disable=SC1090
+  source "$BOOTSTRAP_ENV_FILE"
+  namespace="$(trim_ascii "${CHIMERA_MESH_NAMESPACE:-}")"
+  local_node="$(trim_ascii "${CHIMERA_MESH_LOCAL_NODE:-}")"
+  policy_payload="$(trim_ascii "${CHIMERA_MESH_POLICY_PAYLOAD:-}")"
+  traffic_profile="$(trim_ascii "${CHIMERA_MESH_TRAFFIC_PROFILE:-}")"
+  remote_peer_spec="$(trim_ascii "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}")"
+  extra_peers="$(trim_ascii "${CHIMERA_MESH_EXTRA_PEERS:-}")"
+  [[ -n "$namespace" && -n "$local_node" ]] || return 1
+  [[ -n "$policy_payload" || -n "$traffic_profile" ]] || return 1
+  if [[ -n "$remote_peer_spec" || -n "$extra_peers" ]]; then
+    return 0
+  fi
+  [[ -n "${CHIMERA_MESH_REMOTE_NODE:-}" && -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" && -n "${CHIMERA_MESH_REMOTE_REGION:-}" && -n "${CHIMERA_MESH_REMOTE_LOAD_SCORE:-}" && -n "${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE:-}" ]]
+}
+
 mesh_bind_control_plane() {
   local strict=1
   case "${1:-}" in
@@ -478,7 +501,11 @@ mesh_bind_control_plane() {
       return 2
       ;;
   esac
-  mesh_control_plane_env_from_preflight "$strict"
+  if ! mesh_control_plane_has_preflight_env && bootstrap_control_plane_context_ready; then
+    :
+  else
+    mesh_control_plane_env_from_preflight "$strict"
+  fi
   publish_peer_egress_transit_lane_bindings_from_control_plane "$([[ "$strict" == "1" ]] && echo strict || echo best-effort)"
 }
 

@@ -1703,4 +1703,79 @@ EOF
 
 run_mesh_bootstrap_keyring_runtime_case
 
+run_mesh_bind_uses_bootstrap_env_case() {
+  local tmp_dir install_root config_dir cache_dir runtime_dir bootstrap_env peer_env fake_runner cli_log output rc bindings_file
+
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  config_dir="$tmp_dir/config/chimera"
+  cache_dir="$tmp_dir/cache/chimera"
+  runtime_dir="$tmp_dir/runtime"
+  bootstrap_env="$config_dir/mesh_bootstrap.env"
+  peer_env="$config_dir/peer-egress.env"
+  fake_runner="$tmp_dir/fake-runner.sh"
+  cli_log="$tmp_dir/cli.log"
+  bindings_file="$cache_dir/peer-egress-transit-lane-bindings.csv"
+
+  mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir" "$runtime_dir"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cat >"$bootstrap_env" <<'EOF'
+CHIMERA_MESH_NAMESPACE=cef-public
+CHIMERA_MESH_LOCAL_NODE=test-local-node
+CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+CHIMERA_MESH_REMOTE_PEER_SPEC=seed-node@198.51.100.88:443@eu@42@99
+EOF
+  cat >"$peer_env" <<'EOF'
+CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true
+EOF
+  cat >"$fake_runner" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$cli_log"
+if [[ "\${1:-}" == "cli" ]]; then
+  shift
+fi
+if [[ "\${1:-}" == "mesh" && "\${2:-}" == "route-explain" ]]; then
+  while [[ \$# -gt 0 ]]; do
+    case "\$1" in
+      --transit-lane-bindings-out)
+        printf '%s\n' 'lane-a,bound' > "\${2:?}"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "$fake_runner"
+
+  set +e
+  output="$(
+    CHIMERA_BOOTSTRAP_ENV_FILE="$bootstrap_env" \
+    CHIMERA_RUNNER="$fake_runner" \
+    CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE="$bindings_file" \
+    PEER_EGRESS_ENV_FILE="$peer_env" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    bash -lc 'source "'"$install_root/scripts/chimera-control.sh"'"; mesh_bind_control_plane --strict; cat "'"$peer_env"'"' 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "mesh_bind_uses_bootstrap_env_case: bind failed output=$output"
+  [[ "$output" == *"peer_egress_transit_lane_bindings_publish=ok"* ]] || fail "mesh_bind_uses_bootstrap_env_case: bind did not publish output=$output"
+  [[ -s "$bindings_file" ]] || fail "mesh_bind_uses_bootstrap_env_case: bindings file missing"
+  grep -q '^CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=' "$peer_env" || fail "mesh_bind_uses_bootstrap_env_case: bindings env not persisted"
+  grep -q -- 'mesh route-explain --namespace cef-public --node test-local-node --traffic-profile high_speed_anonymous --peer seed-node@198.51.100.88:443@eu@42@99 --transit-lane-bindings-out' "$cli_log" || fail "mesh_bind_uses_bootstrap_env_case: bootstrap env was not used for route explain"
+
+  rm -rf "$tmp_dir"
+}
+
+run_mesh_bind_uses_bootstrap_env_case
+
 echo "chimera_start_contract_smoke=pass"
