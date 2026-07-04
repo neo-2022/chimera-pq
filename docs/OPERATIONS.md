@@ -341,6 +341,8 @@ The peer server exposes:
 - `/chimera.sh`
 - `/chimera-pq-release.tar.gz`
 - `/chimera-pq-release.tar.gz.sha256`
+- `/mesh_nodes.discovery.json` when the current node has already published a signed discovery snapshot in its cache directory
+- `/mesh_nodes.discovery.pubkey` when the current node has already published the paired discovery public key in its cache directory
 
 When `--listen` uses port `0`, CHIMERA asks the OS for a free port, records the
 selected `listen` and `update_bootstrap_url` in the private state file, and can

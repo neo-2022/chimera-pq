@@ -26,3 +26,7 @@ pub(super) const RELEASE_ARCHIVE_ROUTE: &str = "/chimera-pq-release.tar.gz";
 pub(super) const RELEASE_CHECKSUM_NAME: &str = "chimera-pq-release.tar.gz.sha256";
 pub(super) const RELEASE_CHECKSUM_ROUTE: &str = "/chimera-pq-release.tar.gz.sha256";
 pub(super) const RELEASE_METADATA_ROUTE: &str = "/metadata.json";
+pub(super) const DISCOVERY_SNAPSHOT_NAME: &str = "mesh_nodes.discovery.json";
+pub(super) const DISCOVERY_SNAPSHOT_ROUTE: &str = "/mesh_nodes.discovery.json";
+pub(super) const DISCOVERY_PUBKEY_NAME: &str = "mesh_nodes.discovery.pubkey";
+pub(super) const DISCOVERY_PUBKEY_ROUTE: &str = "/mesh_nodes.discovery.pubkey";

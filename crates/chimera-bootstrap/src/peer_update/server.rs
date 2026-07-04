@@ -11,8 +11,9 @@ use url::Url;
 
 use super::serve_state::write_peer_update_state_file;
 use super::{
-    RELEASE_ARCHIVE_NAME, RELEASE_ARCHIVE_ROUTE, RELEASE_CHECKSUM_NAME, RELEASE_CHECKSUM_ROUTE,
-    RELEASE_METADATA_ROUTE,
+    DISCOVERY_PUBKEY_NAME, DISCOVERY_PUBKEY_ROUTE, DISCOVERY_SNAPSHOT_NAME,
+    DISCOVERY_SNAPSHOT_ROUTE, RELEASE_ARCHIVE_NAME, RELEASE_ARCHIVE_ROUTE, RELEASE_CHECKSUM_NAME,
+    RELEASE_CHECKSUM_ROUTE, RELEASE_METADATA_ROUTE,
 };
 
 const PEER_UPDATE_IO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -37,6 +38,8 @@ pub fn serve_release(
     let bound_addr = listener.local_addr()?;
     let listen = bound_addr.to_string();
     let public_base_url = advertised_base_url(public_base_url, bound_addr)?;
+    let discovery_snapshot_path = sibling_cache_artifact_path(state_file, DISCOVERY_SNAPSHOT_NAME);
+    let discovery_pubkey_path = sibling_cache_artifact_path(state_file, DISCOVERY_PUBKEY_NAME);
     let update_bootstrap_url = public_base_url
         .as_deref()
         .map(|base_url| join_url(base_url, "/chimera.sh"))
@@ -73,6 +76,8 @@ pub fn serve_release(
                 let root = Arc::clone(&root);
                 let listen = listen.clone();
                 let public_base_url = public_base_url.clone();
+                let discovery_snapshot_path = discovery_snapshot_path.clone();
+                let discovery_pubkey_path = discovery_pubkey_path.clone();
                 let active_connections = Arc::clone(&active_connections);
                 thread::spawn(move || {
                     let _slot = PeerUpdateConnectionSlot::new(active_connections);
@@ -83,6 +88,8 @@ pub fn serve_release(
                             root.as_path(),
                             &listen,
                             public_base_url.as_deref(),
+                            discovery_snapshot_path.as_deref(),
+                            discovery_pubkey_path.as_deref(),
                         )
                     }) {
                         eprintln!("chimera_peer_update_request=fail reason={error}");
@@ -132,6 +139,8 @@ fn handle_release_request(
     root: &Path,
     listen: &str,
     public_base_url: Option<&str>,
+    discovery_snapshot_path: Option<&Path>,
+    discovery_pubkey_path: Option<&Path>,
 ) -> Result<()> {
     let request = read_http_request(stream)?;
     let request_line = request
@@ -175,6 +184,22 @@ fn handle_release_request(
                 include_body,
             )?;
         }
+        DISCOVERY_SNAPSHOT_ROUTE => {
+            write_optional_file_response(
+                stream,
+                discovery_snapshot_path,
+                "application/json",
+                include_body,
+            )?;
+        }
+        DISCOVERY_PUBKEY_ROUTE => {
+            write_optional_file_response(
+                stream,
+                discovery_pubkey_path,
+                "text/plain; charset=utf-8",
+                include_body,
+            )?;
+        }
         "/chimera.sh" => {
             let body = generate_peer_bootstrap_script(root, &base_url)?;
             write_bytes_response(
@@ -206,6 +231,10 @@ fn handle_release_request(
         }
     }
     Ok(())
+}
+
+fn sibling_cache_artifact_path(state_file: Option<&Path>, name: &str) -> Option<PathBuf> {
+    state_file.and_then(|path| path.parent().map(|parent| parent.join(name)))
 }
 
 fn read_http_request(stream: &mut TcpStream) -> Result<String> {
@@ -402,6 +431,23 @@ fn write_file_response(
         stream.flush()?;
     }
     Ok(())
+}
+
+fn write_optional_file_response(
+    stream: &mut TcpStream,
+    path: Option<&Path>,
+    content_type: &str,
+    include_body: bool,
+) -> Result<()> {
+    let Some(path) = path else {
+        write_simple_response(stream, "404 Not Found", "not found\n")?;
+        return Ok(());
+    };
+    if !path.is_file() {
+        write_simple_response(stream, "404 Not Found", "not found\n")?;
+        return Ok(());
+    }
+    write_file_response(stream, path, content_type, include_body)
 }
 
 fn write_bytes_response(

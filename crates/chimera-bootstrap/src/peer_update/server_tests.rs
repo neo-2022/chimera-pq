@@ -60,6 +60,37 @@ fn fixture_server_addr() -> TestResult<(std::path::PathBuf, String, thread::Join
     Ok((root, addr, handle))
 }
 
+fn fixture_server_addr_with_state(
+    discovery_snapshot: Option<&str>,
+    discovery_pubkey: Option<&str>,
+) -> TestResult<(std::path::PathBuf, String, thread::JoinHandle<()>)> {
+    let root = fixture_root()?;
+    let cache_dir = root.join("cache").join("chimera");
+    fs::create_dir_all(&cache_dir)?;
+    if let Some(snapshot) = discovery_snapshot {
+        fs::write(cache_dir.join("mesh_nodes.discovery.json"), snapshot)?;
+    }
+    if let Some(pubkey) = discovery_pubkey {
+        fs::write(cache_dir.join("mesh_nodes.discovery.pubkey"), pubkey)?;
+    }
+    let state_file = cache_dir.join("peer-update.state.json");
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?.to_string();
+    drop(listener);
+    let server_root = root.clone();
+    let server_addr = addr.clone();
+    let handle = thread::spawn(move || {
+        let _ = super::server::serve_release(
+            &server_root,
+            &server_addr,
+            Some("http://node.example"),
+            Some(&state_file),
+        );
+    });
+    wait_for_server(&addr)?;
+    Ok((root, addr, handle))
+}
+
 fn wait_for_server(addr: &str) -> TestResult {
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
@@ -209,6 +240,38 @@ fn peer_release_partial_header_client_does_not_block_health() -> TestResult {
     assert!(response.starts_with("HTTP/1.1 200 OK"));
     assert!(response.contains("status=ok version=1.2.3"));
     drop(slow);
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+#[test]
+fn peer_release_serves_discovery_artifacts_from_state_sibling_dir() -> TestResult {
+    let snapshot = "{\"contract_version\":1,\"issued_at_unix\":1,\"expires_at_unix\":2,\"key_id\":\"default\",\"nonce\":\"n1\",\"nodes\":[],\"signature\":\"sig\"}\n";
+    let pubkey = "pubkey-base64\n";
+    let (root, addr, _server) = fixture_server_addr_with_state(Some(snapshot), Some(pubkey))?;
+
+    let snapshot_response = get_path(&addr, "/mesh_nodes.discovery.json")?;
+    assert!(snapshot_response.starts_with("HTTP/1.1 200 OK"));
+    assert!(snapshot_response.contains(snapshot.trim()));
+
+    let pubkey_response = get_path(&addr, "/mesh_nodes.discovery.pubkey")?;
+    assert!(pubkey_response.starts_with("HTTP/1.1 200 OK"));
+    assert!(pubkey_response.contains(pubkey.trim()));
+
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+#[test]
+fn peer_release_returns_404_for_missing_discovery_artifacts() -> TestResult {
+    let (root, addr, _server) = fixture_server_addr_with_state(None, None)?;
+
+    let snapshot_response = get_path(&addr, "/mesh_nodes.discovery.json")?;
+    assert!(snapshot_response.starts_with("HTTP/1.1 404 Not Found"));
+
+    let pubkey_response = get_path(&addr, "/mesh_nodes.discovery.pubkey")?;
+    assert!(pubkey_response.starts_with("HTTP/1.1 404 Not Found"));
+
     fs::remove_dir_all(root)?;
     Ok(())
 }
