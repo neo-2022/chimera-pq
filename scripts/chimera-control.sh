@@ -220,6 +220,10 @@ mesh_discovery_pubkey_out_path() {
 
 publish_mesh_discovery_snapshot() {
   local state_path
+  if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+  fi
   state_path="$(peer_egress_state_path)"
   [[ -f "$state_path" ]] || return 0
   local discovery_out
@@ -253,6 +257,8 @@ publish_mesh_discovery_snapshot() {
     fi
     CHIMERA_MESH_PEER_EGRESS_STATE_PATH="$state_path" \
     CHIMERA_MESH_ADVERTISE_INVITE_TOKEN="$advertise_invite_token" \
+    CHIMERA_MESH_NODES_DISCOVERY_KEYRING="${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}" \
+    CHIMERA_MESH_NODES_DISCOVERY_PUBKEY="${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" \
     CHIMERA_PEER_UPDATE_STATE_FILE="$PEER_UPDATE_STATE_FILE" \
     CHIMERA_MESH_SELF_NODE_ID="$self_node_id" \
     "$CHIMERA_RUNNER" cli "${advertise_args[@]}" >/dev/null 2>&1 || return 1
