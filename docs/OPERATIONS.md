@@ -174,8 +174,10 @@ transparent mesh path:
 
 1. `chimera.sh -install` installs the CHIMERA release and prepares runtime
    config without downloading third-party network runtime binaries.
-2. `chimera-control.sh start` starts the CHIMERA node service and transparent
-   datapath service from the shipped release tree.
+2. `chimera-control.sh start` always starts the CHIMERA node service from the
+   shipped release tree, but transparent datapath starts only when a real peer
+   endpoint is already configured and the node is not in bootstrap-only
+   `listener_only` mode.
 3. A missing first-party transparent datapath is a fail-closed condition. It
    must not be silently replaced with a third-party runtime bootstrap.
 
@@ -381,6 +383,14 @@ If no trusted bootstrap source is present yet, the first start may still bring
 the node up in listener-only mode so it can bind and publish its own ingress
 endpoint, but transparent datapath and doctor stay fail-closed until a real
 peer endpoint is selected or materialized from trusted bootstrap data.
+
+Node-role installs now default `CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true`
+for symmetric WEAVE behavior, while `CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT`
+remains `false`. This does not make the node mesh-ready by itself: live bound
+transit still requires authoritative mesh context, policy, peers and active
+lane bindings. Operators that need to disable bound transit must set
+`CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false` explicitly before install/update
+or change `peer-egress.env` after install.
 
 Operator flow:
 

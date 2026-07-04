@@ -45,12 +45,6 @@ fn validate_node_startup_contract_with_contract(
             "WEAVE node sealed transit lane bindings require allow_bound_transit=true".to_string(),
         );
     }
-    if options.allow_bound_transit && options.transit_lane_bindings_file.is_none() {
-        return Err(
-            "WEAVE node bound transit requires a transit lane bindings file to avoid pool fallback"
-                .to_string(),
-        );
-    }
     contract
         .validate_symmetric()
         .map_err(|error| format!("WEAVE node symmetric contract invalid: {error}"))?;
@@ -159,7 +153,6 @@ mod tests {
     fn node_startup_contract_marks_explicit_bound_transit_policy() -> Result<(), String> {
         let mut options = node_options("peer.example.invalid:8443");
         options.allow_bound_transit = true;
-        options.transit_lane_bindings_file = Some("/tmp/chimera-test-lanes.csv".to_string());
         let contract = validate_node_startup_contract(&options)?;
 
         assert!(!contract.pool_transit_allowed);
@@ -168,13 +161,14 @@ mod tests {
     }
 
     #[test]
-    fn node_startup_contract_rejects_bound_transit_without_lane_bindings() {
+    fn node_startup_contract_accepts_bound_transit_without_lane_bindings() -> Result<(), String> {
         let mut options = node_options("peer.example.invalid:8443");
         options.allow_bound_transit = true;
 
-        let result = validate_node_startup_contract(&options);
+        let contract = validate_node_startup_contract(&options)?;
 
-        assert!(result.is_err_and(|error| error.contains("requires a transit lane bindings file")));
+        assert!(contract.bound_transit_allowed);
+        Ok(())
     }
 
     #[test]

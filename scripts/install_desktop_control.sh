@@ -474,10 +474,16 @@ configure_peer_egress_env() {
   local connections="${CHIMERA_PEER_EGRESS_CONNECTIONS:-8}"
   local aead="${CHIMERA_PEER_EGRESS_AEAD:-aes256gcm}"
   local allow_pool_transit="${CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT:-false}"
-  local previous_allow_bound_transit previous_transit_lane_bindings_file
-  previous_allow_bound_transit="$(read_existing_peer_env_kv CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT)"
+  local previous_transit_lane_bindings_file
   previous_transit_lane_bindings_file="$(read_existing_peer_env_kv CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE)"
-  local allow_bound_transit="${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT:-${previous_allow_bound_transit:-false}}"
+  local allow_bound_transit
+  if [[ -n "${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT+x}" ]]; then
+    allow_bound_transit="${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT}"
+  elif [[ "$mode" == "node" ]]; then
+    allow_bound_transit="true"
+  else
+    allow_bound_transit="false"
+  fi
   local transit_lane_bindings_file="${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-${previous_transit_lane_bindings_file:-}}"
   allow_bound_transit="$(normalize_peer_env_bool "$allow_bound_transit")"
   if [[ ! "$local_listen" == *:* ]]; then

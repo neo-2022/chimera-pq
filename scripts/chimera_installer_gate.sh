@@ -135,6 +135,14 @@ EOF
     echo "$output" >&2
     fail "installer_peer_listen_env_value_not_written"
   }
+  rg -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" || {
+    echo "$output" >&2
+    fail "installer_bound_transit_default_not_written"
+  }
+  rg -q '^CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT=false$' "$env_file" || {
+    echo "$output" >&2
+    fail "installer_pool_transit_default_changed"
+  }
   rm -rf "$tmp_dir"
 }
 
