@@ -1516,4 +1516,32 @@ EOF
 
 run_peer_update_env_write_case
 
+run_mesh_discovery_default_path_case() {
+  local tmp_dir install_root output rc expected_out expected_pub
+
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  mkdir -p "$install_root/scripts" "$tmp_dir/cache"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+
+  expected_out="$tmp_dir/cache/chimera/mesh_nodes.discovery.json"
+  expected_pub="$tmp_dir/cache/chimera/mesh_nodes.discovery.pubkey"
+
+  set +e
+  output="$(
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    bash -lc 'unset MESH_DISCOVERY_OUT_FILE MESH_DISCOVERY_PUBKEY_OUT_FILE; source "'"$install_root/scripts/chimera-control.sh"'"; printf "out=%s\npub=%s\n" "$(mesh_discovery_out_path)" "$(mesh_discovery_pubkey_out_path)"' 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "mesh_discovery_default_path_case: path probe failed output=$output"
+  [[ "$output" == *"out=$expected_out"* ]] || fail "mesh_discovery_default_path_case: wrong discovery path output=$output"
+  [[ "$output" == *"pub=$expected_pub"* ]] || fail "mesh_discovery_default_path_case: wrong pubkey path output=$output"
+
+  rm -rf "$tmp_dir"
+}
+
+run_mesh_discovery_default_path_case
+
 echo "chimera_start_contract_smoke=pass"
