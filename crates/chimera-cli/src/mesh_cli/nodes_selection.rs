@@ -1,7 +1,7 @@
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::Command;
 
-use chimera_mesh::{MeshNode, MeshNodeListFilter, select_best_mesh_node};
+use chimera_mesh::{select_best_mesh_node, MeshNode, MeshNodeListFilter};
 
 use super::nodes_inventory::MeshNodesInventory;
 use super::nodes_render::{fmt_ms, fmt_pct};
@@ -309,11 +309,15 @@ fn extract_positional_selector(args: &[String]) -> Option<String> {
 }
 
 fn flag_takes_value(flag: &str) -> bool {
+    // Keep this list aligned with every mesh-nodes CLI flag that consumes the
+    // following argument. Otherwise selector helpers can misread config paths,
+    // discovery keys, or URLs as positional node selectors.
     matches!(
         flag,
         "--config"
             | "--self-node-id"
             | "--runtime-state"
+            | "--identity-state"
             | "--namespace"
             | "--proof-token"
             | "--proof-token-classic"
@@ -322,16 +326,32 @@ fn flag_takes_value(flag: &str) -> bool {
             | "--proof-pq-key-id"
             | "--bind"
             | "--discovery-url"
+            | "--discovery-pubkey"
+            | "--discovery-keyring"
+            | "--discovery-revoked-key-ids"
+            | "--discovery-revoked-node-ids"
             | "--probe-timeout-ms"
             | "--node"
             | "--country"
             | "--status"
             | "--search"
             | "--id"
+            | "--node-id"
+            | "--endpoint"
+            | "--country-code"
+            | "--country-name"
+            | "--region"
+            | "--topic"
+            | "--ttl-sec"
             | "--new-node-id"
             | "--request"
             | "--out"
             | "--key-out"
+            | "--pubkey-out"
+            | "--keypair-path"
+            | "--state-file"
+            | "--update-state-file"
+            | "--update-bootstrap-url"
             | "--register"
             | "--key"
             | "--state-out"

@@ -282,6 +282,71 @@ mesh.node.nl.observation_count = 10
 }
 
 #[test]
+fn selected_node_helpers_ignore_mesh_value_flags_without_selector() {
+    let text = "\
+mesh.nodes.ids = de,nl
+mesh.nodes.current = nl
+mesh.nodes.pinned = de
+mesh.node.de.endpoint = 127.0.0.1:1111
+mesh.node.de.country_code = DE
+mesh.node.de.country_name = Germany
+mesh.node.de.status = healthy
+mesh.node.de.observation_count = 10
+mesh.node.nl.endpoint = 127.0.0.1:2222
+mesh.node.nl.country_code = NL
+mesh.node.nl.country_name = Netherlands
+mesh.node.nl.status = healthy
+mesh.node.nl.loss_pct = 3.0
+mesh.node.nl.success_rate_1h = 95.0
+mesh.node.nl.update_bootstrap_url = http://node-nl.example:18179/chimera.sh
+mesh.node.nl.observation_count = 10
+";
+    let inventory = super::nodes_inventory::parse_inventory_config_text(text)
+        .unwrap_or_else(|err| unreachable!("{err}"));
+    let expected_peer_spec = Some("nl@127.0.0.1:2222@nl@3@95".to_string());
+    let expected_update_url = Some("http://node-nl.example:18179/chimera.sh");
+    let cases = [
+        ("--config", "/tmp/chimera.conf"),
+        ("--runtime-state", "/tmp/mesh-runtime.json"),
+        ("--identity-state", "/tmp/mesh-identity.json"),
+        ("--discovery-url", "https://mesh.example/discovery.json"),
+        ("--discovery-pubkey", "/tmp/mesh.discovery.pubkey"),
+        ("--discovery-keyring", "/tmp/mesh.discovery.keyring"),
+        ("--discovery-revoked-key-ids", "key-a,key-b"),
+        ("--discovery-revoked-node-ids", "node-a,node-b"),
+        ("--state-file", "/tmp/peer-egress.state"),
+        ("--update-state-file", "/tmp/peer-update.state.json"),
+        (
+            "--update-bootstrap-url",
+            "http://node.example:18179/chimera.sh",
+        ),
+        ("--pubkey-out", "/tmp/mesh.discovery.pub"),
+        ("--keypair-path", "/tmp/mesh.discovery.keypair"),
+        ("--node-id", "advertise-node"),
+        ("--endpoint", "198.51.100.88:45678"),
+        ("--country-code", "NL"),
+        ("--country-name", "Netherlands"),
+        ("--region", "eu-west"),
+        ("--topic", "mesh"),
+        ("--ttl-sec", "300"),
+    ];
+
+    for (flag, value) in cases {
+        let args = vec![flag.to_string(), value.to_string()];
+        assert_eq!(
+            selected_node_peer_spec_for_args(&args, &inventory),
+            Ok(expected_peer_spec.clone()),
+            "peer spec selector was hijacked by {flag}"
+        );
+        assert_eq!(
+            node_update_bootstrap_url_for_args(&args, &inventory),
+            Ok(expected_update_url),
+            "update bootstrap selector was hijacked by {flag}"
+        );
+    }
+}
+
+#[test]
 fn cli_node_record_can_carry_update_bootstrap_url() {
     let listener = TcpListener::bind("127.0.0.1:0")
         .unwrap_or_else(|err| unreachable!("bind listener failed: {err}"));
