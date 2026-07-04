@@ -1655,7 +1655,17 @@ case "\${1:-}" in
       nodes)
         case "\${3:-}" in
           select)
-            exit 0
+            shift 3
+            while [[ \$# -gt 0 ]]; do
+              case "\$1" in
+                --id)
+                  exit 0
+                  ;;
+              esac
+              shift
+            done
+            echo "mesh nodes select error: interactive selection requires a terminal or GUI; use --id <node_id>" >&2
+            exit 2
             ;;
           selected-endpoint)
             printf '%s\n' '198.51.100.77:443'

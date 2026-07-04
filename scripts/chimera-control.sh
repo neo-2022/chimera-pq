@@ -571,7 +571,7 @@ default_mesh_local_node() {
 
 selected_mesh_remote_peer_spec_from_inventory() {
   local -a mesh_nodes_args=()
-  local peer_spec best_node_id
+  local peer_spec="" best_node_id=""
   if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$BOOTSTRAP_ENV_FILE"
