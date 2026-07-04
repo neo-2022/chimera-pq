@@ -47,12 +47,31 @@ fn validate_node_startup_contract_with_contract(
         );
     }
     if options.allow_bound_transit {
-        let Some(lane_file) = options
+        let lane_file = options
             .transit_lane_bindings_file
             .as_deref()
             .map(str::trim)
-            .filter(|value| !value.is_empty())
-        else {
+            .filter(|value| !value.is_empty());
+        let Some(lane_file) = lane_file else {
+            if options.server.trim().is_empty() {
+                // Fresh installs may enable bound transit before a first peer source
+                // exists. Allow the node to boot as a listener until authority appears.
+                contract
+                    .validate_symmetric()
+                    .map_err(|error| format!("WEAVE node symmetric contract invalid: {error}"))?;
+
+                let capabilities = REQUIRED_WEAVE_NODE_CAPABILITIES.to_vec();
+
+                return Ok(NodeStartupContract {
+                    mode: options.mode.clone(),
+                    local_listen,
+                    peer_listen,
+                    outbound_bootstrap_configured: false,
+                    pool_transit_allowed: options.allow_pool_transit,
+                    bound_transit_allowed: options.allow_bound_transit,
+                    capabilities,
+                });
+            }
             return Err(
                 "WEAVE node bound transit requires a non-empty transit lane bindings file when allow_bound_transit=true"
                     .to_string(),
@@ -207,6 +226,19 @@ mod tests {
         let result = validate_node_startup_contract(&options);
 
         assert!(result.is_err_and(|error| error.contains("allow_bound_transit=true")));
+    }
+
+    #[test]
+    fn node_startup_contract_allows_clean_install_bound_transit_without_lane_bindings()
+    -> Result<(), String> {
+        let mut options = node_options("");
+        options.allow_bound_transit = true;
+
+        let contract = validate_node_startup_contract(&options)?;
+
+        assert!(contract.bound_transit_allowed);
+        assert!(!contract.outbound_bootstrap_configured);
+        Ok(())
     }
 
     #[test]

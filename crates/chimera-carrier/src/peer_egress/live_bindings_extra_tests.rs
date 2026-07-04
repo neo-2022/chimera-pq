@@ -49,6 +49,12 @@ fn options_with_lane_file(path: &str, allow_bound_transit: bool) -> Options {
     }
 }
 
+fn options_without_lane_file(allow_bound_transit: bool) -> Options {
+    let mut options = options_with_lane_file("", allow_bound_transit);
+    options.transit_lane_bindings_file = None;
+    options
+}
+
 fn ready_live_plan() -> Result<MeshPathPlan, String> {
     let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")?;
     runtime.merge_discovery(
@@ -120,6 +126,16 @@ fn live_registry_rejects_empty_document_when_bound_transit_is_enabled() {
     };
 
     assert!(error.contains("allow_bound_transit=true"));
+}
+
+#[test]
+fn live_registry_allows_empty_document_while_clean_install_waits_for_first_peer() {
+    let result = validate_live_transit_lane_document_contract(
+        &options_without_lane_file(true),
+        &TransitLaneDocument::new(Vec::new(), None),
+    );
+
+    assert!(result.is_ok());
 }
 
 #[test]
