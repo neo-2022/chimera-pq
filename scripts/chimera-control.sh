@@ -472,11 +472,8 @@ mesh_control_plane_env_from_preflight() {
   return 0
 }
 
-bootstrap_control_plane_context_ready() {
+mesh_control_plane_context_ready_from_current_env() {
   local namespace="" local_node="" policy_payload="" traffic_profile="" remote_peer_spec="" extra_peers=""
-  [[ -f "$BOOTSTRAP_ENV_FILE" ]] || return 1
-  # shellcheck disable=SC1090
-  source "$BOOTSTRAP_ENV_FILE"
   namespace="$(trim_ascii "${CHIMERA_MESH_NAMESPACE:-}")"
   local_node="$(trim_ascii "${CHIMERA_MESH_LOCAL_NODE:-}")"
   policy_payload="$(trim_ascii "${CHIMERA_MESH_POLICY_PAYLOAD:-}")"
@@ -491,8 +488,16 @@ bootstrap_control_plane_context_ready() {
   [[ -n "${CHIMERA_MESH_REMOTE_NODE:-}" && -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" && -n "${CHIMERA_MESH_REMOTE_REGION:-}" && -n "${CHIMERA_MESH_REMOTE_LOAD_SCORE:-}" && -n "${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE:-}" ]]
 }
 
+bootstrap_control_plane_context_ready() {
+  [[ -f "$BOOTSTRAP_ENV_FILE" ]] || return 1
+  # shellcheck disable=SC1090
+  source "$BOOTSTRAP_ENV_FILE"
+  mesh_control_plane_context_ready_from_current_env
+}
+
 mesh_bind_control_plane() {
   local strict=1
+  local preflight_context_ready=0
   case "${1:-}" in
     ""|--strict|strict) strict=1 ;;
     --best-effort|best-effort) strict=0 ;;
@@ -501,7 +506,10 @@ mesh_bind_control_plane() {
       return 2
       ;;
   esac
-  if ! mesh_control_plane_has_preflight_env && bootstrap_control_plane_context_ready; then
+  if mesh_control_plane_context_ready_from_current_env; then
+    preflight_context_ready=1
+  fi
+  if [[ "$preflight_context_ready" -eq 0 ]] && bootstrap_control_plane_context_ready; then
     :
   else
     mesh_control_plane_env_from_preflight "$strict"

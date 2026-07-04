@@ -1766,6 +1766,8 @@ EOF
   set +e
   output="$(
     CHIMERA_BOOTSTRAP_ENV_FILE="$bootstrap_env" \
+    CHIMERA_MESH_NAMESPACE="cef-public" \
+    CHIMERA_MESH_TRAFFIC_PROFILE="high_speed_anonymous" \
     CHIMERA_RUNNER="$fake_runner" \
     CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE="$bindings_file" \
     PEER_EGRESS_ENV_FILE="$peer_env" \
