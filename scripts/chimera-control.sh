@@ -226,6 +226,7 @@ publish_mesh_discovery_snapshot() {
   discovery_out="$(mesh_discovery_out_path)"
   local pubkey_out
   pubkey_out="$(mesh_discovery_pubkey_out_path)"
+  local advertise_invite_token=""
   local self_node_id=""
   if [[ -f "$STATE_FILE" ]]; then
     self_node_id="$(awk -F= '/^mesh_node[[:space:]]*=/{print $2; exit}' "$STATE_FILE" 2>/dev/null || true)"
@@ -239,6 +240,7 @@ publish_mesh_discovery_snapshot() {
     self_node_id="${CHIMERA_MESH_SELF_NODE_ID:-}"
   fi
   self_node_id="${self_node_id:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)}"
+  advertise_invite_token="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_TOKEN)")"
   if wait_for_file "$state_path" 5; then
     local advertise_args=(
       mesh nodes advertise
@@ -250,6 +252,7 @@ publish_mesh_discovery_snapshot() {
       advertise_args+=(--update-state-file "$PEER_UPDATE_STATE_FILE")
     fi
     CHIMERA_MESH_PEER_EGRESS_STATE_PATH="$state_path" \
+    CHIMERA_MESH_ADVERTISE_INVITE_TOKEN="$advertise_invite_token" \
     CHIMERA_PEER_UPDATE_STATE_FILE="$PEER_UPDATE_STATE_FILE" \
     CHIMERA_MESH_SELF_NODE_ID="$self_node_id" \
     "$CHIMERA_RUNNER" cli "${advertise_args[@]}" >/dev/null 2>&1 || return 1
@@ -484,15 +487,19 @@ ensure_mesh_bootstrap_env() {
   touch "$BOOTSTRAP_ENV_FILE"
   chmod 600 "$BOOTSTRAP_ENV_FILE" 2>/dev/null || true
   if [[ -f "$ROOT_DIR/configs/mesh_bootstrap.env.example" ]]; then
-    local discovery_url discovery_pubkey discovery_probe_timeout
+    local discovery_url discovery_pubkey discovery_keyring discovery_probe_timeout
     discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
+    discovery_keyring="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_KEYRING=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     if [[ -n "$discovery_url" ]]; then
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
     fi
     if [[ -n "$discovery_pubkey" ]]; then
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
+    fi
+    if [[ -n "$discovery_keyring" ]]; then
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_KEYRING" "$discovery_keyring"
     fi
     if [[ -n "$discovery_probe_timeout" ]]; then
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
@@ -547,6 +554,9 @@ selected_mesh_remote_peer_spec_from_inventory() {
   fi
   if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
     mesh_nodes_args+=(--discovery-pubkey "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY")
+  fi
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}" ]]; then
+    mesh_nodes_args+=(--discovery-keyring "$CHIMERA_MESH_NODES_DISCOVERY_KEYRING")
   fi
   mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
   if [[ "${#mesh_nodes_args[@]}" -eq 1 ]]; then
@@ -762,6 +772,9 @@ refresh_node_peer_target_from_bootstrap() {
       mesh_nodes_args+=(--discovery-url "$CHIMERA_MESH_NODES_DISCOVERY_URL")
       if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
         mesh_nodes_args+=(--discovery-pubkey "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY")
+      fi
+      if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}" ]]; then
+        mesh_nodes_args+=(--discovery-keyring "$CHIMERA_MESH_NODES_DISCOVERY_KEYRING")
       fi
       mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
       if run_chimera_cli mesh nodes select "${mesh_nodes_args[@]}" >/dev/null 2>&1; then
@@ -1093,9 +1106,17 @@ bound_transit_authority_state() {
 
 ensure_bound_transit_start_contract() {
   peer_egress_bound_transit_requested || return 0
-  seed_mesh_control_plane_authority_from_bootstrap --best-effort >/dev/null 2>&1 || true
+  local output="" rc=0
+  output="$(seed_mesh_control_plane_authority_from_bootstrap --best-effort 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 && -n "$output" ]]; then
+    printf '%s\n' "$output" >&2
+  fi
   bound_transit_authoritative_peer_source_present || return 0
-  mesh_bind_control_plane --strict >/dev/null 2>&1 || return 1
+  output="$(mesh_bind_control_plane --strict 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    return 1
+  fi
   peer_egress_transit_lane_bindings_ready
 }
 

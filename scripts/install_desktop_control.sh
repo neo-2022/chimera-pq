@@ -168,14 +168,59 @@ generate_runtime_token() {
   head -c 24 /dev/urandom | base64 | tr -d '=+/\n'
 }
 
+run_control_plane_step() {
+  local step="${1:?step_required}"
+  shift
+  local output="" rc=0
+  output="$("$ROOT_DIR/scripts/chimera-control.sh" "$step" "$@" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 && -n "$output" ]]; then
+    printf '%s\n' "$output" >&2
+  fi
+  return "$rc"
+}
+
+persist_bootstrap_env_override_if_present() {
+  local key="${1:?key_required}"
+  local value="${!key:-}"
+  [[ -n "$value" ]] || return 0
+  upsert_env_kv "$BOOTSTRAP_ENV_FILE" "$key" "$value"
+}
+
+installer_bootstrap_authoritative_peer_source_present() {
+  if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$BOOTSTRAP_ENV_FILE"
+  fi
+  [[ -n "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_EXTRA_PEERS:-}" ]] && return 0
+  [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" ]] && return 0
+  if [[ -n "${CHIMERA_MESH_REMOTE_NODE:-}" && -n "${CHIMERA_MESH_REMOTE_ENDPOINT:-}" && -n "${CHIMERA_MESH_REMOTE_REGION:-}" && -n "${CHIMERA_MESH_REMOTE_LOAD_SCORE:-}" && -n "${CHIMERA_MESH_REMOTE_RELIABILITY_SCORE:-}" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+validate_bootstrap_seed_contract() {
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" && -z "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" && -z "${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}" ]]; then
+    echo "error: CHIMERA_MESH_NODES_DISCOVERY_URL requires CHIMERA_MESH_NODES_DISCOVERY_PUBKEY or CHIMERA_MESH_NODES_DISCOVERY_KEYRING" >&2
+    exit 2
+  fi
+  if [[ -n "${CHIMERA_MESH_POLICY_PAYLOAD:-}" && -n "${CHIMERA_MESH_TRAFFIC_PROFILE:-}" ]]; then
+    echo "error: bootstrap seed must provide exactly one of CHIMERA_MESH_POLICY_PAYLOAD or CHIMERA_MESH_TRAFFIC_PROFILE" >&2
+    exit 2
+  fi
+}
+
 installer_gate_prepare_bootstrap_env() {
   mkdir -p "$(dirname "$BOOTSTRAP_ENV_FILE")"
   touch "$BOOTSTRAP_ENV_FILE"
   remove_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_PEER_EGRESS_TOKEN"
+  validate_bootstrap_seed_contract
   if [[ -f "$ROOT_DIR/configs/mesh_bootstrap.env.example" ]]; then
-    local discovery_url discovery_pubkey discovery_probe_timeout
+    local discovery_url discovery_pubkey discovery_keyring discovery_probe_timeout
     discovery_url="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_URL=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     discovery_pubkey="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
+    discovery_keyring="$(awk -F= '/^CHIMERA_MESH_NODES_DISCOVERY_KEYRING=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     discovery_probe_timeout="$(awk -F= '/^CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=/{print $2; exit}' "$ROOT_DIR/configs/mesh_bootstrap.env.example" 2>/dev/null || true)"
     if [[ -n "$discovery_url" ]]; then
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$discovery_url"
@@ -183,10 +228,36 @@ installer_gate_prepare_bootstrap_env() {
     if [[ -n "$discovery_pubkey" ]]; then
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$discovery_pubkey"
     fi
+    if [[ -n "$discovery_keyring" ]]; then
+      upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_KEYRING" "$discovery_keyring"
+    fi
     if [[ -n "$discovery_probe_timeout" ]]; then
       upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS" "$discovery_probe_timeout"
     fi
   fi
+  local bootstrap_override_keys=(
+    CHIMERA_MESH_NODES_DISCOVERY_URL
+    CHIMERA_MESH_NODES_DISCOVERY_PUBKEY
+    CHIMERA_MESH_NODES_DISCOVERY_KEYRING
+    CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS
+    CHIMERA_MESH_NAMESPACE
+    CHIMERA_MESH_LOCAL_NODE
+    CHIMERA_MESH_POLICY_PAYLOAD
+    CHIMERA_MESH_TRAFFIC_PROFILE
+    CHIMERA_MESH_REMOTE_PEER_SPEC
+    CHIMERA_MESH_EXTRA_PEERS
+    CHIMERA_MESH_REMOTE_NODE
+    CHIMERA_MESH_REMOTE_ENDPOINT
+    CHIMERA_MESH_REMOTE_REGION
+    CHIMERA_MESH_REMOTE_LOAD_SCORE
+    CHIMERA_MESH_REMOTE_RELIABILITY_SCORE
+    CHIMERA_PEER_UPDATE_BASE_URL
+    CHIMERA_PEER_UPDATE_LISTEN
+  )
+  local key
+  for key in "${bootstrap_override_keys[@]}"; do
+    persist_bootstrap_env_override_if_present "$key"
+  done
   chmod 600 "$BOOTSTRAP_ENV_FILE"
 }
 
@@ -416,6 +487,9 @@ configure_node_peer_target() {
     if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
       mesh_nodes_args+=(--discovery-pubkey "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY")
     fi
+    if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}" ]]; then
+      mesh_nodes_args+=(--discovery-keyring "$CHIMERA_MESH_NODES_DISCOVERY_KEYRING")
+    fi
     mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
     if run_chimera_cli mesh nodes select "${mesh_nodes_args[@]}"; then
       candidate="$(run_chimera_cli mesh nodes selected-endpoint "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
@@ -585,6 +659,14 @@ auto_fix_runtime_permissions
 run_install_permissions_preflight
 configure_node_peer_target
 node_peer_listen="$(desired_node_peer_egress_listen)"
+bootstrap_authority_present=0
+if installer_bootstrap_authoritative_peer_source_present; then
+  bootstrap_authority_present=1
+fi
+if [[ "$bootstrap_authority_present" -eq 1 && -z "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
+  echo "error: authoritative mesh seed did not resolve a peer endpoint during install" >&2
+  exit 2
+fi
 if [[ -n "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
   configure_peer_egress_env "node" "$CONFIGURED_PEER_ENDPOINT" "$selected_invite_token" "$node_peer_listen" "127.0.0.1:0"
@@ -592,8 +674,13 @@ else
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
   configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "$node_peer_listen" "127.0.0.1:0"
 fi
-"$ROOT_DIR/scripts/chimera-control.sh" mesh-seed-control-plane --best-effort >/dev/null 2>&1 || true
-"$ROOT_DIR/scripts/chimera-control.sh" mesh-bind-control-plane --best-effort >/dev/null 2>&1 || true
+if [[ "$bootstrap_authority_present" -eq 1 ]]; then
+  run_control_plane_step mesh-seed-control-plane --strict
+  run_control_plane_step mesh-bind-control-plane --strict
+else
+  "$ROOT_DIR/scripts/chimera-control.sh" mesh-seed-control-plane --best-effort >/dev/null 2>&1 || true
+  "$ROOT_DIR/scripts/chimera-control.sh" mesh-bind-control-plane --best-effort >/dev/null 2>&1 || true
+fi
 configure_transparent_runtime_env
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \

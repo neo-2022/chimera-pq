@@ -103,6 +103,7 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
     };
     let expires_at_unix = now_unix.saturating_add(ttl_sec);
     let nonce = format!("advertise-{node_id}-{now_unix}");
+    let invite_token = resolve_advertise_invite_token(&node_id, inventory);
     let node = serde_json::json!({
         "node_id": &node_id,
         "endpoint": &endpoint,
@@ -117,7 +118,7 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
         "country_conflict_reason": null,
         "region": &region,
         "topic": &topic,
-        "invite_token": selected_node_invite_token(inventory),
+        "invite_token": invite_token,
         "update_bootstrap_url": update_state.as_ref().map(|state| state.update_bootstrap_url.as_str()),
         "endpoint_generation": update_state.as_ref().and_then(|state| state.endpoint_generation),
         "freshness_unix": now_unix,
@@ -245,6 +246,24 @@ fn resolve_advertise_endpoint(
         "mesh nodes advertise error: cannot resolve endpoint (use --endpoint, peer egress state, or current selected endpoint)"
             .to_string(),
     )
+}
+
+fn resolve_advertise_invite_token(node_id: &str, inventory: &MeshNodesInventory) -> Option<String> {
+    inventory
+        .nodes
+        .iter()
+        .find(|node| node.node_id.0 == node_id)
+        .and_then(|node| node.invite_token.clone())
+        .or_else(|| advertise_invite_token_from_env("CHIMERA_MESH_ADVERTISE_INVITE_TOKEN"))
+        .or_else(|| advertise_invite_token_from_env("CHIMERA_PEER_EGRESS_TOKEN"))
+        .or_else(|| selected_node_invite_token(inventory).map(str::to_string))
+}
+
+fn advertise_invite_token_from_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn canonicalize_advertise_state_endpoint(

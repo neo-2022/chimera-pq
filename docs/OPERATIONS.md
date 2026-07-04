@@ -379,8 +379,14 @@ matching checksum file before extraction.
 
 Mesh node discovery is not baked into installation. On a fresh install the
 available node list is loaded from the upstream/bootstrap source at runtime.
-If no endpoint is configured yet, the first start/install path opens node
-selection and then resolves the chosen node endpoint automatically.
+If a trusted private bootstrap seed is supplied before or during install
+(`CHIMERA_MESH_NODES_DISCOVERY_URL` plus pubkey/keyring, or another supported
+authoritative peer source), install persists that seed into the private
+`mesh_bootstrap.env`, auto-selects the first reachable node, and later plain
+`chimera.sh -start` runs without repeating those install-time env overrides.
+If no endpoint is configured yet and no trusted seed is present, the first
+start/install path may still open node selection and then resolve the chosen
+node endpoint automatically.
 If no trusted bootstrap source is present yet, the first start may still bring
 the node up in listener-only mode so it can bind and publish its own ingress
 endpoint, but transparent datapath and doctor stay fail-closed until a real
@@ -396,18 +402,22 @@ or change `peer-egress.env` after install.
 
 Operator flow:
 
-1. Start CHIMERA normally or let install open the selection prompt.
-2. Open `chimera mesh nodes select`.
-3. Choose one node from the loaded list manually on the first run.
-4. After that CHIMERA persists `current`, `pinned`, and `autoconnect`.
-5. Per-resource route selection and automatic fallback are handled by
+1. Preferred: provide a trusted private bootstrap seed before install/start so
+   CHIMERA can auto-select the first node non-interactively.
+2. If no trusted seed exists yet, start CHIMERA normally or let install open
+   the selection prompt.
+3. Open `chimera mesh nodes select`.
+4. Choose one node from the loaded list manually on the first run.
+5. After that CHIMERA persists `current`, `pinned`, and `autoconnect`.
+6. Per-resource route selection and automatic fallback are handled by
    `site_auto_watch` and the adaptive split-routing path, not by changing the
    user-selected mesh node.
 
 Important:
 
 - install does not generate a baked node inventory;
-- first selection is user-visible and manual;
+- first selection is automatic only when a trusted private bootstrap seed is
+  present; otherwise it is user-visible and manual;
 - subsequent route changes are automatic and hidden from the user when
   runtime conditions change;
 - the selected mesh node stays pinned until the user changes it manually.

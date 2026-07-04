@@ -1544,4 +1544,163 @@ run_mesh_discovery_default_path_case() {
 
 run_mesh_discovery_default_path_case
 
+run_mesh_discovery_invite_token_env_case() {
+  local tmp_dir install_root config_dir cache_dir state_file peer_env fake_runner token_capture output rc
+
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  config_dir="$tmp_dir/config/chimera"
+  cache_dir="$tmp_dir/cache/chimera"
+  state_file="$cache_dir/peer-egress.state"
+  peer_env="$config_dir/peer-egress.env"
+  fake_runner="$tmp_dir/fake-runner.sh"
+  token_capture="$tmp_dir/advertise-token.txt"
+
+  mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cat >"$state_file" <<'EOF'
+mode=node
+resolved_local_listen=127.0.0.1:45678
+resolved_peer_listen=198.51.100.44:45678
+EOF
+  cat >"$peer_env" <<'EOF'
+CHIMERA_PEER_EGRESS_TOKEN=test-invite-token
+EOF
+  cat >"$fake_runner" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == "cli" ]]; then
+  shift
+fi
+printf '%s\n' "\${CHIMERA_MESH_ADVERTISE_INVITE_TOKEN:-}" > "$token_capture"
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in
+    --out)
+      printf '%s\n' '{}' > "\${2:?}"
+      shift 2
+      ;;
+    --pubkey-out)
+      printf '%s\n' 'PUBKEY' > "\${2:?}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+EOF
+  chmod +x "$fake_runner"
+
+  set +e
+  output="$(
+    CHIMERA_RUNNER="$fake_runner" \
+    PEER_EGRESS_ENV_FILE="$peer_env" \
+    PEER_EGRESS_STATE_FILE="$state_file" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    bash -lc 'source "'"$install_root/scripts/chimera-control.sh"'"; publish_mesh_discovery_snapshot' 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "mesh_discovery_invite_token_env_case: publish failed output=$output"
+  [[ -f "$token_capture" ]] || fail "mesh_discovery_invite_token_env_case: token capture missing"
+  grep -Fxq 'test-invite-token' "$token_capture" || fail "mesh_discovery_invite_token_env_case: invite token env not forwarded"
+
+  rm -rf "$tmp_dir"
+}
+
+run_mesh_discovery_invite_token_env_case
+
+run_mesh_bootstrap_keyring_runtime_case() {
+  local tmp_dir install_root config_dir cache_dir runtime_dir bootstrap_env fake_runner cli_log output rc
+
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  config_dir="$tmp_dir/config/chimera"
+  cache_dir="$tmp_dir/cache/chimera"
+  runtime_dir="$tmp_dir/runtime"
+  bootstrap_env="$config_dir/mesh_bootstrap.env"
+  fake_runner="$tmp_dir/fake-runner.sh"
+  cli_log="$tmp_dir/cli.log"
+
+  mkdir -p "$install_root/scripts" "$install_root/configs" "$config_dir" "$cache_dir" "$runtime_dir"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = node.local
+capture.mode = auto
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$bootstrap_env" <<'EOF'
+CHIMERA_MESH_NODES_DISCOVERY_URL=https://seed.example/mesh_nodes.discovery.json
+CHIMERA_MESH_NODES_DISCOVERY_KEYRING=key-a:pubkey-a,key-b:pubkey-b
+CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=1200
+CHIMERA_MESH_NAMESPACE=test-mesh
+CHIMERA_MESH_LOCAL_NODE=test-local-node
+CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+EOF
+  cat >"$fake_runner" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$cli_log"
+if [[ "\${1:-}" == "cli" ]]; then
+  shift
+fi
+case "\${1:-}" in
+  mesh)
+    case "\${2:-}" in
+      nodes)
+        case "\${3:-}" in
+          select)
+            exit 0
+            ;;
+          selected-endpoint)
+            printf '%s\n' '198.51.100.77:443'
+            exit 0
+            ;;
+          selected-peer-spec)
+            printf '%s\n' 'seed-node@198.51.100.77:443@eu@42@99'
+            exit 0
+            ;;
+          best)
+            printf '%s\n' 'node_id=seed-node'
+            exit 0
+            ;;
+        esac
+        ;;
+    esac
+    ;;
+esac
+exit 0
+EOF
+  chmod +x "$fake_runner"
+
+  set +e
+  output="$(
+    CHIMERA_BOOTSTRAP_ENV_FILE="$bootstrap_env" \
+    CHIMERA_RUNNER="$fake_runner" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    bash -lc 'source "'"$install_root/scripts/chimera-control.sh"'"; seed_mesh_control_plane_authority_from_bootstrap --strict; printf "peer_spec=%s\n" "$(selected_mesh_remote_peer_spec_from_inventory)"; refresh_node_peer_target_from_bootstrap; cat "'"$bootstrap_env"'"; cat "'"$install_root/configs/mesh-node.example.conf"'"; printf "endpoint_file=%s\n" "$(cat "'"$install_root/configs/chimera_runtime_endpoint.txt"'")"' 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "mesh_bootstrap_keyring_runtime_case: bootstrap refresh failed output=$output"
+  [[ "$output" == *"mesh_control_plane_seed=ok"* ]] || fail "mesh_bootstrap_keyring_runtime_case: strict seed did not succeed output=$output"
+  [[ "$output" == *"peer_spec=seed-node@198.51.100.77:443@eu@42@99"* ]] || fail "mesh_bootstrap_keyring_runtime_case: selected peer spec missing output=$output"
+  [[ "$output" == *"CHIMERA_MESH_REMOTE_PEER_SPEC=seed-node@198.51.100.77:443@eu@42@99"* ]] || fail "mesh_bootstrap_keyring_runtime_case: remote peer spec not persisted output=$output"
+  [[ "$output" == *"carrier.addr = tcp://198.51.100.77:443"* ]] || fail "mesh_bootstrap_keyring_runtime_case: node config not refreshed output=$output"
+  [[ "$output" == *"endpoint_file=198.51.100.77:443"* ]] || fail "mesh_bootstrap_keyring_runtime_case: runtime endpoint file missing output=$output"
+  grep -q -- '--discovery-keyring key-a:pubkey-a,key-b:pubkey-b' "$cli_log" || fail "mesh_bootstrap_keyring_runtime_case: keyring not forwarded to cli"
+
+  rm -rf "$tmp_dir"
+}
+
+run_mesh_bootstrap_keyring_runtime_case
+
 echo "chimera_start_contract_smoke=pass"

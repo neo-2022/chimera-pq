@@ -527,6 +527,603 @@ EOF
   rm -rf "$tmp_dir"
 }
 
+run_installer_seeded_mesh_bootstrap_persistence_smoke() {
+  local tmp_dir install_root fake_bin output rc node_conf control_log
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  control_log="$tmp_dir/control.log"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$control_log"
+case "\${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms|mesh-seed-control-plane|mesh-bind-control-plane)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  mesh)
+    case "${2:-}" in
+      nodes)
+        case "${3:-}" in
+          select)
+            exit 0
+            ;;
+          selected-endpoint)
+            printf '%s\n' '198.51.100.44:443'
+            exit 0
+            ;;
+          selected-invite-token)
+            printf '%s\n' 'seed-token-123'
+            exit 0
+            ;;
+          selected-peer-spec)
+            printf '%s\n' 'seed-node@198.51.100.44:443@eu@42@99'
+            exit 0
+            ;;
+        esac
+        ;;
+    esac
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = node.local
+capture.mode = auto
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+# CHIMERA_MESH_NAMESPACE=cef-public
+# CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+# CHIMERA_MESH_REMOTE_PEER_SPEC=
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_NODES_DISCOVERY_URL="https://seed.example/mesh_nodes.discovery.json" \
+    CHIMERA_MESH_NODES_DISCOVERY_PUBKEY="pubkey-base64" \
+    CHIMERA_MESH_NAMESPACE="test-mesh" \
+    CHIMERA_MESH_TRAFFIC_PROFILE="high_speed_anonymous" \
+    CHIMERA_PEER_UPDATE_BASE_URL="https://node.example" \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || {
+    echo "$output" >&2
+    fail "installer_seeded_mesh_bootstrap_persistence_failed"
+  }
+  node_conf="$install_root/configs/mesh-node.conf"
+  [[ -f "$node_conf" ]] || fail "installer_seeded_mesh_bootstrap_missing_node_conf"
+  rg -q '^carrier\.addr = tcp://198\.51\.100\.44:443$' "$node_conf" || fail "installer_seeded_mesh_bootstrap_node_conf_not_materialized"
+  rg -q '^CHIMERA_MESH_NODES_DISCOVERY_URL=https://seed\.example/mesh_nodes\.discovery\.json$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_discovery_url_not_persisted"
+  rg -q '^CHIMERA_MESH_NODES_DISCOVERY_PUBKEY=pubkey-base64$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_pubkey_not_persisted"
+  rg -q '^CHIMERA_MESH_NAMESPACE=test-mesh$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_namespace_not_persisted"
+  rg -q '^CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_profile_not_persisted"
+  rg -q '^CHIMERA_PEER_UPDATE_BASE_URL=https://node\.example$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_update_base_not_persisted"
+  grep -q '^mesh-seed-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_seed_not_strict"
+  grep -q '^mesh-bind-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_bind_not_strict"
+  rm -rf "$tmp_dir"
+}
+
+run_installer_seed_requires_discovery_trust_anchor() {
+  local tmp_dir install_root fake_bin output rc
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = node.local
+capture.mode = auto
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+# CHIMERA_MESH_NAMESPACE=cef-public
+# CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+# CHIMERA_MESH_REMOTE_PEER_SPEC=
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_NODES_DISCOVERY_URL="https://seed.example/mesh_nodes.discovery.json" \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 ]] || fail "installer_seed_requires_discovery_trust_anchor_should_fail"
+  [[ "$output" == *"requires CHIMERA_MESH_NODES_DISCOVERY_PUBKEY or CHIMERA_MESH_NODES_DISCOVERY_KEYRING"* ]] || fail "installer_seed_requires_discovery_trust_anchor_reason_missing"
+  rm -rf "$tmp_dir"
+}
+
+run_installer_seeded_mesh_bootstrap_keyring_contract_smoke() {
+  local tmp_dir install_root fake_bin output rc node_conf control_log cli_log
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  control_log="$tmp_dir/control.log"
+  cli_log="$tmp_dir/cli.log"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$control_log"
+case "\${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms|mesh-seed-control-plane|mesh-bind-control-plane)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$cli_log"
+case "\${1:-}" in
+  mesh)
+    case "\${2:-}" in
+      nodes)
+        case "\${3:-}" in
+          select)
+            exit 0
+            ;;
+          selected-endpoint)
+            printf '%s\n' '198.51.100.55:443'
+            exit 0
+            ;;
+          selected-invite-token)
+            printf '%s\n' 'seed-token-keyring'
+            exit 0
+            ;;
+          selected-peer-spec)
+            printf '%s\n' 'seed-node@198.51.100.55:443@eu@42@99'
+            exit 0
+            ;;
+        esac
+        ;;
+    esac
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = node.local
+capture.mode = auto
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+# CHIMERA_MESH_NAMESPACE=cef-public
+# CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+# CHIMERA_MESH_REMOTE_PEER_SPEC=
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_NODES_DISCOVERY_URL="https://seed.example/mesh_nodes.discovery.json" \
+    CHIMERA_MESH_NODES_DISCOVERY_KEYRING="key-a:pubkey-a,key-b:pubkey-b" \
+    CHIMERA_MESH_NAMESPACE="test-mesh" \
+    CHIMERA_MESH_TRAFFIC_PROFILE="high_speed_anonymous" \
+    CHIMERA_PEER_UPDATE_BASE_URL="https://node.example" \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || {
+    echo "$output" >&2
+    fail "installer_seeded_mesh_bootstrap_keyring_failed"
+  }
+  node_conf="$install_root/configs/mesh-node.conf"
+  [[ -f "$node_conf" ]] || fail "installer_seeded_mesh_bootstrap_keyring_missing_node_conf"
+  rg -q '^carrier\.addr = tcp://198\.51\.100\.55:443$' "$node_conf" || fail "installer_seeded_mesh_bootstrap_keyring_node_conf_not_materialized"
+  local persisted_keyring=""
+  persisted_keyring="$(
+    bash -lc 'set -euo pipefail; source "$1"; printf "%s" "${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}"' -- \
+      "$tmp_dir/config/chimera/mesh_bootstrap.env"
+  )"
+  [[ "$persisted_keyring" == "key-a:pubkey-a,key-b:pubkey-b" ]] || fail "installer_seeded_mesh_bootstrap_keyring_not_persisted"
+  grep -q -- '--discovery-keyring key-a:pubkey-a,key-b:pubkey-b' "$cli_log" || fail "installer_seeded_mesh_bootstrap_keyring_not_used"
+  grep -q '^mesh-seed-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_keyring_seed_not_strict"
+  grep -q '^mesh-bind-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_keyring_bind_not_strict"
+  rm -rf "$tmp_dir"
+}
+
+run_installer_authoritative_seed_requires_resolved_endpoint() {
+  local tmp_dir install_root fake_bin output rc cli_log
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  cli_log="$tmp_dir/cli.log"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$cli_log"
+case "\${1:-}" in
+  mesh)
+    case "\${2:-}" in
+      nodes)
+        case "\${3:-}" in
+          select)
+            exit 0
+            ;;
+          selected-endpoint)
+            exit 0
+            ;;
+          best)
+            exit 0
+            ;;
+        esac
+        ;;
+    esac
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 203.0.113.10:443
+carrier.server_name = node.local
+capture.mode = auto
+capture.tun_supported = true
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+# CHIMERA_MESH_NAMESPACE=cef-public
+# CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+# CHIMERA_MESH_REMOTE_PEER_SPEC=
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_NODES_DISCOVERY_URL="https://seed.example/mesh_nodes.discovery.json" \
+    CHIMERA_MESH_NODES_DISCOVERY_KEYRING="key-a:pubkey-a" \
+    CHIMERA_MESH_NAMESPACE="test-mesh" \
+    CHIMERA_MESH_TRAFFIC_PROFILE="high_speed_anonymous" \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 ]] || fail "installer_authoritative_seed_requires_resolved_endpoint_should_fail"
+  [[ "$output" == *"authoritative mesh seed did not resolve a peer endpoint during install"* ]] || fail "installer_authoritative_seed_requires_resolved_endpoint_reason_missing"
+  grep -q -- '--discovery-keyring key-a:pubkey-a' "$cli_log" || fail "installer_authoritative_seed_requires_resolved_endpoint_keyring_not_used"
+  rm -rf "$tmp_dir"
+}
+
+run_installer_unconfigured_node_template_smoke
+run_installer_seeded_mesh_bootstrap_persistence_smoke
+run_installer_seed_requires_discovery_trust_anchor
+run_installer_seeded_mesh_bootstrap_keyring_contract_smoke
+run_installer_authoritative_seed_requires_resolved_endpoint
+
 rg -n "installer_gate_prepare_bootstrap_env|transparent runtime|transparent runtime" \
   "$ROOT_DIR/scripts/install_desktop_control.sh" >/dev/null || fail "installer_missing_transparent_bootstrap"
 

@@ -171,6 +171,118 @@ fn nodes_advertise_writes_signed_discovery_snapshot() {
 }
 
 #[test]
+fn nodes_advertise_writes_invite_token_for_matching_node() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_invite_token_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_invite_token_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_invite_token_{}.keypair",
+        random_u64()
+    ));
+    let mut config_path = std::env::temp_dir();
+    config_path.push(format!(
+        "chimera_mesh_discovery_invite_token_{}.conf",
+        random_u64()
+    ));
+    let mut update_state_path = std::env::temp_dir();
+    update_state_path.push(format!(
+        "chimera_mesh_discovery_invite_token_{}.update.json",
+        random_u64()
+    ));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|err| unreachable!("system clock failed: {err}"))
+        .as_secs();
+    fs::write(
+        &config_path,
+        concat!(
+            "mesh.nodes.ids = node-eu-invite\n",
+            "mesh.nodes.self_node_id = node-eu-invite\n",
+            "mesh.node.node-eu-invite.endpoint = 198.51.100.79:54321\n",
+            "mesh.node.node-eu-invite.invite_token = invite-token-123\n",
+            "mesh.node.node-eu-invite.status = healthy\n",
+            "mesh.node.node-eu-invite.observation_count = 1\n",
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write config failed: {err}"));
+    fs::write(
+        &update_state_path,
+        format!(
+            "{{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"listen\":\"127.0.0.1:45680\",\"base_url\":\"http://node.example:45680\",\"update_bootstrap_url\":\"http://node.example:45680/chimera.sh\",\"version\":\"1.2.3\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"endpoint_epoch\":{now},\"endpoint_generation\":8}}"
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write update state failed: {err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&update_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod update state failed: {err}"));
+    }
+    let args = vec![
+        "advertise".to_string(),
+        "--config".to_string(),
+        config_path.display().to_string(),
+        "--node-id".to_string(),
+        "node-eu-invite".to_string(),
+        "--endpoint".to_string(),
+        "198.51.100.79:54321".to_string(),
+        "--update-state-file".to_string(),
+        update_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    let envelope: serde_json::Value =
+        serde_json::from_str(&body).unwrap_or_else(|err| unreachable!("{err}"));
+    let nodes = envelope
+        .get("nodes")
+        .and_then(serde_json::Value::as_array)
+        .unwrap_or_else(|| unreachable!("nodes array missing"));
+    assert_eq!(
+        nodes.first()
+            .and_then(|node| node.get("invite_token"))
+            .and_then(serde_json::Value::as_str),
+        Some("invite-token-123")
+    );
+
+    let pubkey = fs::read_to_string(&pubkey_path).unwrap_or_else(|err| unreachable!("{err}"));
+    let discovery_url = serve_json_once(body);
+    let discovery_args = vec![
+        "--probe-timeout-ms".to_string(),
+        "200".to_string(),
+        "--discovery-url".to_string(),
+        discovery_url,
+        "--discovery-pubkey".to_string(),
+        pubkey,
+    ];
+    let inventory =
+        load_mesh_nodes_inventory(&discovery_args).unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(
+        inventory.nodes[0].invite_token.as_deref(),
+        Some("invite-token-123")
+    );
+
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(config_path);
+    let _ = fs::remove_file(update_state_path);
+}
+
+#[test]
 fn nodes_advertise_writes_update_bootstrap_url_from_flag() {
     let mut out_path = std::env::temp_dir();
     out_path.push(format!(
