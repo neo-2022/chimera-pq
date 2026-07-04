@@ -110,6 +110,19 @@ fn live_registry_rejects_any_registration_only_document() -> Result<(), String> 
 }
 
 #[test]
+fn live_registry_rejects_empty_document_when_bound_transit_is_enabled() {
+    let error = match validate_live_transit_lane_document_contract(
+        &options_with_lane_file("/tmp/chimera-empty.csv", true),
+        &TransitLaneDocument::new(Vec::new(), None),
+    ) {
+        Ok(_) => unreachable!("empty bound transit document must fail"),
+        Err(error) => error,
+    };
+
+    assert!(error.contains("allow_bound_transit=true"));
+}
+
+#[test]
 fn live_registry_rejects_planner_only_snapshot_with_registrations() -> Result<(), String> {
     let mut plan = ready_live_plan()?;
     plan.multipath_schedule.execution_status = "planner_only_not_carrier_bound".to_string();

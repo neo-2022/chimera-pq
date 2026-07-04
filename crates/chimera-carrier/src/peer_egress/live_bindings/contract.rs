@@ -6,6 +6,12 @@ pub(super) fn validate_live_transit_lane_document_contract(
     document: &TransitLaneDocument,
 ) -> Result<(), String> {
     if document.is_empty() {
+        if options.allow_bound_transit {
+            return Err(
+                "live sealed transit lane document requires non-empty bindings when allow_bound_transit=true"
+                    .to_string(),
+            );
+        }
         return Ok(());
     }
     if !options.allow_bound_transit {

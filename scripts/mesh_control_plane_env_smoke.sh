@@ -33,14 +33,16 @@ grep -q '^CHIMERA_MESH_REMOTE_PEER_SPEC=' "$control_plane_env" \
   || fail "control-plane env missing remote peer spec"
 
 skip_file="$tmp_dir/profile-only-control-plane.env"
-skip_output="$(
+profile_output="$(
   unset CHIMERA_MESH_POLICY_PAYLOAD
   export CHIMERA_MESH_TRAFFIC_PROFILE="high_speed_anonymous"
   bash "$ROOT_DIR/scripts/mesh_control_plane_env_from_preflight.sh" "$skip_file"
 )"
-[[ "$skip_output" == *"mesh_control_plane_env=skipped reason=missing_route_binding_id"* ]] \
-  || fail "profile-only control-plane env did not skip safely: $skip_output"
-[[ ! -f "$skip_file" ]] || fail "profile-only control-plane env created a false handoff"
+[[ "$profile_output" == *"mesh_control_plane_env=ok"* ]] \
+  || fail "profile-only control-plane env did not materialize: $profile_output"
+[[ -f "$skip_file" ]] || fail "profile-only control-plane env was not created"
+grep -q '^CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous$' "$skip_file" \
+  || fail "profile-only control-plane env missing traffic profile"
 
 peer_env="$XDG_CONFIG_HOME/chimera/peer-egress.env"
 printf '%s\n' 'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true' >"$peer_env"
@@ -199,7 +201,7 @@ strict_skip_rc=$?
 set -e
 [[ "$strict_skip_rc" -ne 0 ]] \
   || fail "strict command unexpectedly accepted missing route binding"
-[[ "$strict_skip_output" == *"mesh_control_plane_env=skipped reason=missing_route_binding_id"* ]] \
+[[ "$strict_skip_output" == *"mesh_control_plane_env=skipped reason=missing_authoritative_policy"* ]] \
   || fail "strict command route binding reason mismatch: $strict_skip_output"
 [[ ! -f "$strict_skip_env" ]] \
   || fail "strict command created false control-plane handoff"

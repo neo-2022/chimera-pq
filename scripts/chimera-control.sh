@@ -331,7 +331,7 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
   fi
   existing_bindings_file="$(trim_ascii "$existing_bindings_file")"
   existing_allow_bound_transit="$(trim_ascii "$existing_allow_bound_transit")"
-  if [[ -n "$existing_bindings_file" && "$strict_publish" -eq 0 ]]; then
+  if [[ -n "$existing_bindings_file" && "$strict_publish" -eq 0 && -s "$existing_bindings_file" && ! mesh_control_plane_has_preflight_env ]]; then
     printf '%s\n' "peer_egress_transit_lane_bindings_publish=skipped reason=already_configured" >&2
     return 0
   fi
@@ -884,6 +884,32 @@ read_peer_egress_env_kv() {
       exit
     }
   ' "$PEER_EGRESS_ENV_FILE" 2>/dev/null || true
+}
+
+peer_egress_bound_transit_requested() {
+  local value
+  value="$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT | tr -d '[:space:]')"
+  [[ "$value" == "true" ]]
+}
+
+peer_egress_transit_lane_bindings_file() {
+  local value="${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-}"
+  if [[ -z "$value" ]]; then
+    value="$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE | tr -d '\r\n')"
+  fi
+  printf '%s' "$value"
+}
+
+peer_egress_transit_lane_bindings_ready() {
+  local lane_file
+  lane_file="$(peer_egress_transit_lane_bindings_file)"
+  [[ -n "$lane_file" && -s "$lane_file" ]]
+}
+
+ensure_bound_transit_start_contract() {
+  peer_egress_bound_transit_requested || return 0
+  mesh_bind_control_plane --best-effort >/dev/null 2>&1 || true
+  peer_egress_transit_lane_bindings_ready
 }
 
 node_listener_only_bootstrap_ready() {
@@ -2440,7 +2466,11 @@ start_runtime() {
   ensure_runtime_log_paths
   ensure_mesh_bootstrap_env
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
-  publish_peer_egress_transit_lane_bindings_from_control_plane || true
+  if ! ensure_bound_transit_start_contract; then
+    site_auto_watch_stop >/dev/null 2>&1 || true
+    echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped mesh_ready=false reason=bound_transit_unready"
+    return 2
+  fi
   local node_config_is_ready=0
   if node_config_ready; then
     node_config_is_ready=1

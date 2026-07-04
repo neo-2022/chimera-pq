@@ -1,4 +1,5 @@
 use chimera_mesh::{REQUIRED_WEAVE_NODE_CAPABILITIES, WeaveNodeCapability, WeaveNodeContract};
+use std::path::Path;
 
 use crate::peer_egress::options::{Mode, Options, split_host_port};
 
@@ -45,6 +46,29 @@ fn validate_node_startup_contract_with_contract(
             "WEAVE node sealed transit lane bindings require allow_bound_transit=true".to_string(),
         );
     }
+    if options.allow_bound_transit {
+        let Some(lane_file) = options
+            .transit_lane_bindings_file
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Err(
+                "WEAVE node bound transit requires a non-empty transit lane bindings file when allow_bound_transit=true"
+                    .to_string(),
+            );
+        };
+        let metadata = std::fs::metadata(Path::new(lane_file)).map_err(|_| {
+            "WEAVE node bound transit requires an existing transit lane bindings file when allow_bound_transit=true"
+                .to_string()
+        })?;
+        if !metadata.is_file() || metadata.len() == 0 {
+            return Err(
+                "WEAVE node bound transit requires a non-empty transit lane bindings file when allow_bound_transit=true"
+                    .to_string(),
+            );
+        }
+    }
     contract
         .validate_symmetric()
         .map_err(|error| format!("WEAVE node symmetric contract invalid: {error}"))?;
@@ -74,6 +98,20 @@ fn required_node_listener(value: &str, name: &str) -> Result<String, String> {
 mod tests {
     use super::*;
     use crate::peer_egress::options::Options;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn write_lane_file_fixture() -> Result<String, String> {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "chimera-startup-contract-{}-{stamp}.csv",
+            std::process::id()
+        ));
+        std::fs::write(&path, "7001,0,198.51.100.10:443\n").map_err(|error| error.to_string())?;
+        Ok(path.display().to_string())
+    }
 
     fn node_options(server: &str) -> Options {
         Options {
@@ -153,6 +191,7 @@ mod tests {
     fn node_startup_contract_marks_explicit_bound_transit_policy() -> Result<(), String> {
         let mut options = node_options("peer.example.invalid:8443");
         options.allow_bound_transit = true;
+        options.transit_lane_bindings_file = Some(write_lane_file_fixture()?);
         let contract = validate_node_startup_contract(&options)?;
 
         assert!(!contract.pool_transit_allowed);
@@ -161,14 +200,13 @@ mod tests {
     }
 
     #[test]
-    fn node_startup_contract_accepts_bound_transit_without_lane_bindings() -> Result<(), String> {
+    fn node_startup_contract_rejects_bound_transit_without_lane_bindings() {
         let mut options = node_options("peer.example.invalid:8443");
         options.allow_bound_transit = true;
 
-        let contract = validate_node_startup_contract(&options)?;
+        let result = validate_node_startup_contract(&options);
 
-        assert!(contract.bound_transit_allowed);
-        Ok(())
+        assert!(result.is_err_and(|error| error.contains("allow_bound_transit=true")));
     }
 
     #[test]
@@ -197,7 +235,7 @@ mod tests {
     {
         let mut options = node_options("peer.example.invalid:8443");
         options.allow_bound_transit = true;
-        options.transit_lane_bindings_file = Some("/tmp/chimera-test-lanes.csv".to_string());
+        options.transit_lane_bindings_file = Some(write_lane_file_fixture()?);
 
         let contract = validate_node_startup_contract(&options)?;
 

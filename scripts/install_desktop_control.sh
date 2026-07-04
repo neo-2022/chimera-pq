@@ -592,6 +592,7 @@ else
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
   configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "$node_peer_listen" "127.0.0.1:0"
 fi
+"$ROOT_DIR/scripts/chimera-control.sh" mesh-bind-control-plane --best-effort >/dev/null 2>&1 || true
 configure_transparent_runtime_env
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" \

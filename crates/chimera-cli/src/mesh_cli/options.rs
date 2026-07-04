@@ -40,16 +40,16 @@ impl MeshTrafficProfilePreset {
     fn to_policy_payload(self) -> &'static str {
         match self {
             Self::HighSpeedAnonymous => {
-                "allow=mesh;mesh_traffic_class=bulk_transfer;mesh_multipath_mode=flow_shard;mesh_continuity_policy=allow_flow_drain;mesh_max_peers=3;mesh_min_reliability=70;mesh_max_load=85;mesh_connect_fallback_ports=443,8443"
+                "allow=mesh;mesh_traffic_class=bulk_transfer;mesh_multipath_mode=flow_shard;mesh_continuity_policy=allow_flow_drain;mesh_max_peers=3;mesh_min_reliability=70;mesh_max_load=85;mesh_route_binding_id=7401;mesh_connect_fallback_ports=443,8443"
             }
             Self::PrivacyFirst => {
-                "allow=mesh;mesh_traffic_class=web_interactive;mesh_multipath_mode=standby_only;mesh_continuity_policy=same_egress_only;mesh_max_peers=1;mesh_min_reliability=85;mesh_max_load=60;mesh_connect_fallback_ports=443,8443"
+                "allow=mesh;mesh_traffic_class=web_interactive;mesh_multipath_mode=standby_only;mesh_continuity_policy=same_egress_only;mesh_max_peers=1;mesh_min_reliability=85;mesh_max_load=60;mesh_route_binding_id=7402;mesh_connect_fallback_ports=443,8443"
             }
             Self::SpeedFirst => {
-                "allow=mesh;mesh_traffic_class=artifact_download;mesh_multipath_mode=flow_shard;mesh_continuity_policy=allow_flow_drain;mesh_max_peers=3;mesh_min_reliability=65;mesh_max_load=90;mesh_connect_fallback_ports=443,8443"
+                "allow=mesh;mesh_traffic_class=artifact_download;mesh_multipath_mode=flow_shard;mesh_continuity_policy=allow_flow_drain;mesh_max_peers=3;mesh_min_reliability=65;mesh_max_load=90;mesh_route_binding_id=7403;mesh_connect_fallback_ports=443,8443"
             }
             Self::LowLatencyPrivate => {
-                "allow=mesh;mesh_traffic_class=realtime_interactive;mesh_multipath_mode=standby_only;mesh_continuity_policy=same_egress_only;mesh_max_peers=1;mesh_min_reliability=90;mesh_max_load=55;mesh_connect_fallback_ports=443,8443"
+                "allow=mesh;mesh_traffic_class=realtime_interactive;mesh_multipath_mode=standby_only;mesh_continuity_policy=same_egress_only;mesh_max_peers=1;mesh_min_reliability=90;mesh_max_load=55;mesh_route_binding_id=7404;mesh_connect_fallback_ports=443,8443"
             }
         }
     }

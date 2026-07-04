@@ -197,7 +197,7 @@ run_case "datapath_service_failure" "1" "datapath_fail"
 run_case "datapath_unconfigured_failure" "0" "ok" "datapath_unconfigured" "0"
 run_case "datapath_unconfigured_tcp_doc_placeholder_failure" "tcp_doc_placeholder" "ok" "datapath_unconfigured" "0"
 
-run_systemd_listener_only_unconfigured_endpoint_case() {
+run_systemd_bound_transit_unready_preflight_case() {
   local tmp_dir bin_dir cache_dir config_dir runtime_dir install_root node_conf output rc fake_systemctl systemctl_log
 
   tmp_dir="$(mktemp -d)"
@@ -209,6 +209,7 @@ run_systemd_listener_only_unconfigured_endpoint_case() {
   node_conf="$tmp_dir/mesh-node.conf"
   fake_systemctl="$bin_dir/systemctl"
   systemctl_log="$tmp_dir/systemctl.log"
+  : >"$systemctl_log"
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
@@ -232,6 +233,97 @@ CHIMERA_PEER_EGRESS_STATE_FILE=$tmp_dir/peer-egress.state
 CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$tmp_dir/peer-egress.state
 CHIMERA_PEER_EGRESS_TOKEN=test-token
 CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true
+EOF
+
+  cat >"$fake_systemctl" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$systemctl_log"
+case "\${1:-}" in
+  --user) shift ;;
+esac
+case "\${1:-}" in
+  show-environment|daemon-reload|start)
+    exit 0
+    ;;
+  is-active)
+    echo "active"
+    exit 0
+    ;;
+  stop|list-units|list-unit-files)
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$fake_systemctl"
+
+  set +e
+  output="$(
+    PATH="$bin_dir:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$cache_dir" \
+    XDG_CONFIG_HOME="$config_dir" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    NODE_CONFIG_FILE="$node_conf" \
+    CHIMERA_UPDATE_FIRST_CHECKED=1 \
+    SITE_AUTOWATCH_ENABLED=0 \
+    timeout 20s bash "$install_root/scripts/chimera-control.sh" start 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -ne 0 ]] || fail "systemd_bound_transit_unready_preflight: expected non-zero rc output=$output"
+  [[ "$output" == *"start_status=fail"* ]] || fail "systemd_bound_transit_unready_preflight: missing fail status output=$output"
+  [[ "$output" == *"mode=preflight"* ]] || fail "systemd_bound_transit_unready_preflight: missing preflight mode output=$output"
+  [[ "$output" == *"mesh_ready=false"* ]] || fail "systemd_bound_transit_unready_preflight: missing mesh_ready=false output=$output"
+  [[ "$output" == *"reason=bound_transit_unready"* ]] || fail "systemd_bound_transit_unready_preflight: missing reason output=$output"
+  ! grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_bound_transit_unready_preflight: node service should not start"
+  ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_bound_transit_unready_preflight: datapath service should not start"
+
+  rm -rf "$tmp_dir"
+}
+
+run_systemd_bound_transit_unready_preflight_case
+
+run_systemd_listener_only_unconfigured_endpoint_case() {
+  local tmp_dir bin_dir cache_dir config_dir runtime_dir install_root node_conf output rc fake_systemctl systemctl_log
+
+  tmp_dir="$(mktemp -d)"
+  bin_dir="$tmp_dir/bin"
+  cache_dir="$tmp_dir/cache"
+  config_dir="$tmp_dir/config"
+  runtime_dir="$tmp_dir/runtime"
+  install_root="$tmp_dir/chimera-release"
+  node_conf="$tmp_dir/mesh-node.conf"
+  fake_systemctl="$bin_dir/systemctl"
+  systemctl_log="$tmp_dir/systemctl.log"
+  : >"$systemctl_log"
+
+  mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
+  cat >"$node_conf" <<'EOF'
+carrier.profile = tls
+carrier.addr = ${CHIMERA_NODE_PEER_ENDPOINT}
+carrier.server_name = ${CHIMERA_NODE_SERVER_NAME}
+capture.mode = tun
+capture.tun_supported = true
+peer.listen_addr = ${CHIMERA_NODE_LISTEN_ADDR}
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+
+  cat >"$config_dir/chimera/peer-egress.env" <<EOF
+CHIMERA_PEER_EGRESS_MODE=node
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
+CHIMERA_PEER_EGRESS_STATE_FILE=$tmp_dir/peer-egress.state
+CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$tmp_dir/peer-egress.state
+CHIMERA_PEER_EGRESS_TOKEN=test-token
+CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false
 EOF
 
   cat >"$fake_systemctl" <<EOF

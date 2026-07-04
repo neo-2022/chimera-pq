@@ -38,6 +38,33 @@ fn parse_mesh_route_explain_options_accepts_traffic_profile_preset_without_polic
             .policy_payload
             .contains("mesh_multipath_mode=flow_shard")
     );
+    assert!(parsed.policy_payload.contains("mesh_route_binding_id=7401"));
+}
+
+#[test]
+fn all_traffic_profiles_include_route_binding_id() {
+    for (profile, route_binding_id) in [
+        ("high_speed_anonymous", "7401"),
+        ("privacy_first", "7402"),
+        ("speed_first", "7403"),
+        ("low_latency_private", "7404"),
+    ] {
+        let args = vec![
+            "--namespace".to_string(),
+            "cef-public".to_string(),
+            "--node".to_string(),
+            "node-client".to_string(),
+            "--traffic-profile".to_string(),
+            profile.to_string(),
+            "--peer".to_string(),
+            "n1@198.51.100.1:443@eu@20@90".to_string(),
+        ];
+        let parsed =
+            parse_mesh_route_explain_options(&args).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(parsed
+            .policy_payload
+            .contains(&format!("mesh_route_binding_id={route_binding_id}")));
+    }
 }
 
 #[test]

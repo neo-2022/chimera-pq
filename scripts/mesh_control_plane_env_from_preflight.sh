@@ -87,7 +87,12 @@ case "$traffic_profile" in
   *) fail "invalid CHIMERA_MESH_TRAFFIC_PROFILE" ;;
 esac
 
-if ! policy_payload_has_route_binding "$policy_payload"; then
+if [[ -z "$policy_payload" && -z "$traffic_profile" ]]; then
+  echo "mesh_control_plane_env=skipped reason=missing_authoritative_policy"
+  exit 0
+fi
+
+if [[ -n "$policy_payload" ]] && ! policy_payload_has_route_binding "$policy_payload"; then
   echo "mesh_control_plane_env=skipped reason=missing_route_binding_id"
   exit 0
 fi
