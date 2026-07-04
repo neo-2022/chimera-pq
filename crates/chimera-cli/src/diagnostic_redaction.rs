@@ -53,7 +53,10 @@ fn is_local_or_wildcard_endpoint(endpoint: &str) -> bool {
 }
 
 fn normalize_endpoint_label(endpoint: &str) -> &str {
-    endpoint.trim().strip_prefix("tcp://").unwrap_or(endpoint.trim())
+    endpoint
+        .trim()
+        .strip_prefix("tcp://")
+        .unwrap_or(endpoint.trim())
 }
 
 #[cfg(test)]

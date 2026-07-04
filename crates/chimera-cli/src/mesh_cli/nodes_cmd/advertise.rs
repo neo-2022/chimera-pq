@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{net::IpAddr, net::SocketAddr};
 
 use base64::Engine as _;
 use chimera_mesh::{MeshNodeId, validate_update_bootstrap_url};
@@ -32,15 +33,15 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
             return 2;
         }
     };
-    let endpoint = match resolve_advertise_endpoint(args, inventory) {
-        Ok(endpoint) => endpoint,
+    let update_state = match resolve_advertise_update_bootstrap_url(args, inventory, &node_id) {
+        Ok(update_state) => update_state,
         Err(error) => {
             eprintln!("mesh nodes advertise error: {error}");
             return 2;
         }
     };
-    let update_state = match resolve_advertise_update_bootstrap_url(args, inventory, &node_id) {
-        Ok(update_state) => update_state,
+    let endpoint = match resolve_advertise_endpoint(args, inventory, update_state.as_ref()) {
+        Ok(endpoint) => endpoint,
         Err(error) => {
             eprintln!("mesh nodes advertise error: {error}");
             return 2;
@@ -217,6 +218,7 @@ fn sanitize_node_id(value: &str) -> String {
 fn resolve_advertise_endpoint(
     args: &[String],
     inventory: &MeshNodesInventory,
+    update_state: Option<&PeerUpdateAdvertiseState>,
 ) -> Result<String, String> {
     if let Some(endpoint) = extract_flag_value(args, "--endpoint") {
         let endpoint = endpoint.trim();
@@ -231,7 +233,7 @@ fn resolve_advertise_endpoint(
     if let Some(state_path) = state_path
         && let Some(endpoint) = read_resolved_peer_listen_from_state(&state_path)?
     {
-        return Ok(endpoint);
+        return canonicalize_advertise_state_endpoint(&endpoint, update_state);
     }
     if let Some(endpoint) = selected_node_endpoint(inventory) {
         let endpoint = endpoint.trim();
@@ -243,6 +245,45 @@ fn resolve_advertise_endpoint(
         "mesh nodes advertise error: cannot resolve endpoint (use --endpoint, peer egress state, or current selected endpoint)"
             .to_string(),
     )
+}
+
+fn canonicalize_advertise_state_endpoint(
+    endpoint: &str,
+    update_state: Option<&PeerUpdateAdvertiseState>,
+) -> Result<String, String> {
+    let socket_addr: SocketAddr = endpoint.parse().map_err(|_| {
+        "mesh nodes advertise error: peer egress state resolved_peer_listen must be host:port"
+            .to_string()
+    })?;
+    if socket_addr.port() == 0 {
+        return Err(
+            "mesh nodes advertise error: peer egress state resolved_peer_listen port must be > 0"
+                .to_string(),
+        );
+    }
+    if !requires_authoritative_host(socket_addr.ip()) {
+        return Ok(endpoint.to_string());
+    }
+    let Some(update_state) = update_state else {
+        return Err(
+            "mesh nodes advertise error: peer egress state resolved_peer_listen uses loopback or unspecified host and no authoritative update host is available"
+                .to_string(),
+        );
+    };
+    let host = update_url_host(&update_state.update_bootstrap_url)?;
+    Ok(render_host_port(host, socket_addr.port()))
+}
+
+fn requires_authoritative_host(ip: IpAddr) -> bool {
+    ip.is_unspecified() || ip.is_loopback()
+}
+
+fn render_host_port(host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
 }
 
 fn resolve_advertise_update_bootstrap_url(

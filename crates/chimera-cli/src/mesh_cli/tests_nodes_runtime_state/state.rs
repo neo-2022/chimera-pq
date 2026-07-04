@@ -274,6 +274,139 @@ fn nodes_advertise_writes_update_bootstrap_url_from_state_file() {
 }
 
 #[test]
+fn nodes_advertise_rewrites_unspecified_state_host_from_update_state() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_unspecified_state_host_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_unspecified_state_host_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_unspecified_state_host_{}.keypair",
+        random_u64()
+    ));
+    let mut peer_egress_state_path = std::env::temp_dir();
+    peer_egress_state_path.push(format!(
+        "chimera_peer_egress_unspecified_state_{}.state",
+        random_u64()
+    ));
+    let mut update_state_path = std::env::temp_dir();
+    update_state_path.push(format!(
+        "chimera_peer_update_unspecified_state_{}.json",
+        random_u64()
+    ));
+    let port = 45678;
+    fs::write(
+        &peer_egress_state_path,
+        format!(
+            "mode=peer\nresolved_local_listen=127.0.0.1:{port}\nresolved_peer_listen=0.0.0.0:{port}\n"
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write peer egress state failed: {err}"));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|err| unreachable!("system clock failed: {err}"))
+        .as_secs();
+    fs::write(
+        &update_state_path,
+        format!(
+            "{{\"kind\":\"chimera_peer_update_serve_state\",\"status\":\"ready\",\"listen\":\"127.0.0.1:{port}\",\"base_url\":\"http://node.example:{port}\",\"update_bootstrap_url\":\"http://node.example:{port}/chimera.sh\",\"version\":\"1.2.3\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"endpoint_epoch\":{now},\"endpoint_generation\":4}}"
+        ),
+    )
+    .unwrap_or_else(|err| unreachable!("write peer update state failed: {err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&peer_egress_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod peer egress state failed: {err}"));
+        fs::set_permissions(&update_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod update state failed: {err}"));
+    }
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-unspecified".to_string(),
+        "--state-file".to_string(),
+        peer_egress_state_path.display().to_string(),
+        "--update-state-file".to_string(),
+        update_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains("\"endpoint\":\"node.example:45678\""));
+    assert!(!body.contains("\"endpoint\":\"0.0.0.0:45678\""));
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(peer_egress_state_path);
+    let _ = fs::remove_file(update_state_path);
+}
+
+#[test]
+fn nodes_advertise_rejects_unspecified_state_host_without_update_state() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_unspecified_state_fail_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_unspecified_state_fail_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_unspecified_state_fail_{}.keypair",
+        random_u64()
+    ));
+    let mut peer_egress_state_path = std::env::temp_dir();
+    peer_egress_state_path.push(format!(
+        "chimera_peer_egress_unspecified_state_fail_{}.state",
+        random_u64()
+    ));
+    fs::write(
+        &peer_egress_state_path,
+        "mode=peer\nresolved_local_listen=127.0.0.1:45678\nresolved_peer_listen=0.0.0.0:45678\n",
+    )
+    .unwrap_or_else(|err| unreachable!("write peer egress state failed: {err}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&peer_egress_state_path, fs::Permissions::from_mode(0o600))
+            .unwrap_or_else(|err| unreachable!("chmod peer egress state failed: {err}"));
+    }
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-eu-unspecified-fail".to_string(),
+        "--state-file".to_string(),
+        peer_egress_state_path.display().to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 2);
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+    let _ = fs::remove_file(peer_egress_state_path);
+}
+
+#[test]
 fn nodes_advertise_prefers_peer_egress_state_endpoint_over_inventory() {
     let mut out_path = std::env::temp_dir();
     out_path.push(format!(
