@@ -35,8 +35,8 @@ stand proof:
 - Preserve historical July 4 receipts as historical evidence; create a new
   July 5 workline bundle instead of mutating the old one.
 - Keep status truthful: this line is still `partial` because publication truth,
-  remote reboot persistence, stale artifact precedence, and live rebind
-  continuity are not yet fully proved.
+  two-node live datapath proof, and consumer-side stale artifact precedence are
+  not yet fully proved.
 
 ## Implementation Slice
 
@@ -51,6 +51,12 @@ stand proof:
   - now treats a broken `ss` listener probe as sensor failure and falls back
     to the next available probe, so fixed-port self-heal still arms runtime
     auto-listen overrides instead of quietly doing nothing.
+  - clears stale discovery and transit-lane runtime artifacts when strict
+    publication/binding cannot be produced.
+  - makes bound-transit publication strict on start/watch/doctor paths.
+- `deploy/systemd-user/chimera-runtime.service`
+  - now sets `Environment=CHIMERA_FAIL_CLOSED_ON_PARTIAL_START=0` so a listener-
+    only partial start during boot recovery does not enter a restart loop.
 - contract coverage
   - installer gate now proves preserved transparent UID/GID/exempt UID;
   - start contract smoke now proves blocked fixed-listener recovery still
@@ -59,6 +65,8 @@ stand proof:
   - update contract smoke now proves external-state rollback on failed launcher
     link after installer mutation;
   - update contract smoke now proves recorded local-bin reuse;
+  - port-conflict recovery smoke now proves deterministic listener override
+    when a fixed peer-listen port is blocked;
   - release bundle install contract still passes on the packaged path.
 
 ## Evidence
@@ -68,23 +76,50 @@ stand proof:
 - `scripts/install_desktop_control.sh`
 - `scripts/chimera-control.sh`
 - `scripts/chimera_start_contract_smoke.sh`
+- `scripts/chimera_stop_contract_smoke.sh`
 - `scripts/chimera_installer_gate.sh`
 - `scripts/chimera_update_contract_smoke.sh`
+- `scripts/chimera_port_conflict_recovery_smoke.sh`
 - `scripts/release_bundle_install_contract_smoke.sh`
+- `deploy/systemd-user/chimera-runtime.service`
 - `bash scripts/chimera_start_contract_smoke.sh`
 - `bash scripts/chimera_stop_contract_smoke.sh`
 - `bash scripts/chimera_installer_gate.sh`
 - `bash scripts/chimera_update_contract_smoke.sh`
+- `bash scripts/chimera_port_conflict_recovery_smoke.sh`
 - `bash scripts/release_bundle_install_contract_smoke.sh`
 - `just session-process-guard`
+
+## Remote Stand Evidence (v0.1.170)
+
+- GitHub release `v0.1.170` published and marked Latest.
+- Remote stand hosts used: laptop + secondary VPS + primary VPS (PC used as an
+  SSH control host; no local CHIMERA runtime or network change on the PC).
+- GitHub one-command install succeeded on all three stand hosts.
+- Installed version and checksum match `v0.1.170` release assets:
+  `b35795d0b0852c61204488f297953dfcdc816172a551facaa658fea22f9d2426`.
+- Lifecycle proof on configured node (laptop): start → status → restart →
+  status → stop → status all green.
+- Reboot recovery proof on fresh/unconfigured nodes (both VPS hosts): after
+  reboot `runtime_boot_service_state=active`, `node_service_state=active`,
+  `node_runtime=running`, `runtime_state_status=up`.
+- Preserved disabled boot recovery: after `systemctl --user disable
+  chimera-runtime.service`, reinstall left unit disabled on both VPS hosts.
+- Stale publication recovery: fake stale `peer-egress.state`,
+  `peer-update.state.json`, `mesh_nodes.discovery.json` removed after service
+  start on both VPS hosts.
+- Port-conflict recovery: observed auto-listen fallback when configured fixed
+  peer listen port was occupied; deterministic contract smoke now proves the
+  same override path locally.
 
 ## Truth Boundary
 
 - Local contract evidence for start/stop/update/install rollback, operator-
-  setting preservation, and broken-sensor listener self-heal is green in this
-  session.
-- This workline does not prove remote reboot persistence yet.
-- This workline does not prove live multi-node rebind continuity yet.
+  setting preservation, broken-sensor listener self-heal, and deterministic
+  port-conflict listener override is green in this session.
+- Remote install/checksum/lifecycle, reboot recovery, disabled boot recovery, and
+  stale-publication cleanup are proved on all three stand hosts for `v0.1.170`.
+- This workline does not prove two-node live datapath continuity yet.
 - This workline does not close the remaining false-green publication semantics
   around `auto_reconcile=armed`.
 
@@ -94,5 +129,12 @@ stand proof:
   paths and can look healthier than it is.
 - Consumer-side stale artifact precedence is still weaker than the verified CLI
   discovery path in `mesh_launch_preflight_auto_bind.sh`.
-- Remote packaged proof is still missing for reboot persistence, post-rebind
-  peer continuity, and live publication recovery on the SSH stand.
+- Two-node (or three-node) live datapath proof between stand hosts is still
+  missing.
+
+## Related Stand-Only Reports
+
+- `docs/WORKFLOW_ATTESTATION_REMOTE_STAND_V0_1_170_2026-07-06.md` (stand-specific
+  redacted evidence for v0.1.170)
+- `docs/MESH_SESSION_HANDOFF_2026-07-06_REMOTE_STAND_PROOF.md` (stand-specific
+  handoff for v0.1.170)

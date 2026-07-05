@@ -416,6 +416,18 @@ chimera-route-status-contract-smoke-selfcheck:
     rg -q 'duplicate_field' scripts/chimera_route_status_contract_smoke.sh
     rg -q 'false_transparent_datapath' scripts/chimera_route_status_contract_smoke.sh
 
+chimera-port-conflict-recovery-smoke:
+    bash scripts/chimera_port_conflict_recovery_smoke.sh
+
+chimera-port-conflict-recovery-smoke-selfcheck:
+    test -x scripts/chimera_port_conflict_recovery_smoke.sh
+    bash -n scripts/chimera_port_conflict_recovery_smoke.sh
+    rg -q 'node_listener_reset' scripts/chimera_port_conflict_recovery_smoke.sh
+    rg -q 'runtime_listener_overrides.env' scripts/chimera_port_conflict_recovery_smoke.sh
+    rg -q 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0' scripts/chimera_port_conflict_recovery_smoke.sh
+    rg -q 'fixed_listen_addr_port_is_blocked' scripts/chimera-control.sh
+    rg -q 'repair_node_listener_bindings_for_retry' scripts/chimera-control.sh
+
 chimera-start-contract-smoke-selfcheck:
     test -x scripts/chimera_start_contract_smoke.sh
     bash -n scripts/chimera_start_contract_smoke.sh
@@ -2803,6 +2815,8 @@ session-process-guard:
     just current-workline-attestation-guard
     just chimera-start-contract-smoke-selfcheck
     just chimera-start-contract-smoke
+    just chimera-port-conflict-recovery-smoke-selfcheck
+    just chimera-port-conflict-recovery-smoke
     just chimera-route-status-contract-smoke-selfcheck
     just chimera-route-status-contract-smoke
     just ai-architect-artifact-guard-selfcheck
