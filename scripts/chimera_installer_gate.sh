@@ -2516,4 +2516,8 @@ run_installer_unconfigured_node_template_smoke
 run_installer_env_contract_smoke
 run_installer_rejects_invalid_preserved_runtime_ids
 
+if ! rg -q 'Environment=CHIMERA_FAIL_CLOSED_ON_PARTIAL_START=0' "$ROOT_DIR/deploy/systemd-user/chimera-runtime.service"; then
+  fail "runtime_unit_missing_fail_closed_env_for_boot_recovery"
+fi
+
 echo "installer_gate=pass"
