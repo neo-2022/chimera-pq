@@ -46,11 +46,11 @@ ssh <stand-host> "# reboot, verify runtime boot recovery"
 | reboot_recovery | — | pass | pass |
 | disabled_boot_recovery_preserved | — | pass | pass |
 | stale_publication_recovery | — | pass | pass |
-| port_conflict_recovery | — | partial/observed | partial/observed |
+| port_conflict_recovery | — | observed in field; deterministic smoke added | observed in field; deterministic smoke added |
 
 ## Verdict
 
 `v0.1.170` is installable from GitHub Latest and recovers cleanly across reboot,
 disabled-boot preservation, and stale state cleanup on all reachable stand
-hosts. Port-conflict recovery is observed but not yet covered by a clean
-instrumented test.
+hosts. Port-conflict recovery is observed on the stand and is now covered by
+`scripts/chimera_port_conflict_recovery_smoke.sh`.
