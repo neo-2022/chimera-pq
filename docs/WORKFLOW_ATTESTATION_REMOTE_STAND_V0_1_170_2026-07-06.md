@@ -7,8 +7,10 @@ proof redacted and separate from GitHub delivery metadata.
 
 ## Stand
 
-- `remote_stand_used`: laptop + secondary VPS (primary VPS unreachable).
-- `ssh_ok`: true for reachable hosts; primary VPS timed out.
+- `remote_stand_used`: laptop + secondary VPS + primary VPS.
+- `ssh_ok`: true for all three hosts (primary reached from the PC via SSH).
+- `pc_used`: control-only SSH hop; no local CHIMERA runtime launched and no PC
+  network settings changed.
 - No stand addresses, logins, passwords, or temp paths appear in product files.
 
 ## GitHub Delivery
@@ -16,7 +18,7 @@ proof redacted and separate from GitHub delivery metadata.
 - `github_release`: v0.1.170
 - `latest_download_version`: 0.1.170
 - `checksum_ok`: true
-- `github_one_command_install_ok`: true on reachable hosts
+- `github_one_command_install_ok`: true on all three hosts
 
 ## Commands (redacted)
 
@@ -34,21 +36,21 @@ ssh <stand-host> "# reboot, verify runtime boot recovery"
 
 ## Results
 
-| Check | Status |
-|-------|--------|
-| install_from_github_latest | pass |
-| version_checksum_match | pass |
-| start_status | pass (laptop), partial-listener-only (fresh VPS) |
-| restart | pass (laptop) |
-| stop_status | pass |
-| reboot_recovery | pass |
-| disabled_boot_recovery_preserved | pass |
-| stale_publication_recovery | pass |
-| port_conflict_recovery | partial / observed |
-| primary_vps_ssh | unreachable |
+| Check | Laptop | Secondary VPS | Primary VPS |
+|-------|--------|---------------|-------------|
+| install_from_github_latest | pass | pass | pass |
+| version_checksum_match | pass | pass | pass |
+| start_status | pass | partial-listener-only | partial-listener-only |
+| restart | pass | — | — |
+| stop_status | pass | — | — |
+| reboot_recovery | — | pass | pass |
+| disabled_boot_recovery_preserved | — | pass | pass |
+| stale_publication_recovery | — | pass | pass |
+| port_conflict_recovery | — | partial/observed | partial/observed |
 
 ## Verdict
 
-`v0.1.170` is installable from GitHub Latest and recovers cleanly across reboot
-and stale state on the reachable stand hosts. Primary VPS remains a stand
-blocker and is excluded from closure claims.
+`v0.1.170` is installable from GitHub Latest and recovers cleanly across reboot,
+disabled-boot preservation, and stale state cleanup on all reachable stand
+hosts. Port-conflict recovery is observed but not yet covered by a clean
+instrumented test.
