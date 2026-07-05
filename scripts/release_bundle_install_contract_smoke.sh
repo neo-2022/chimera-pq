@@ -206,8 +206,10 @@ for required in \
   chimera-release/configs/mesh-node.example.conf \
   chimera-release/configs/mesh_bootstrap.env.example \
   chimera-release/configs/update_gitvers_bootstrap_urls.example.list \
+  chimera-release/deploy/systemd-user/chimera-runtime.service \
   chimera-release/deploy/systemd-user/chimera-node.service \
-  chimera-release/deploy/systemd-user/chimera-datapath.service
+  chimera-release/deploy/systemd-user/chimera-datapath.service \
+  chimera-release/deploy/systemd-user/chimera-site-watch.service
 do
   rg -qx "$required" "$tmp_dir/contents.txt" || fail "archive_missing:${required}"
 done
@@ -353,6 +355,8 @@ fi
 [[ -f "$installed_home/configs/mesh-node.example.conf" ]] || fail "installed_mesh_node_example_missing"
 [[ -f "$installed_home/deploy/systemd-user/chimera-node.service" ]] || fail "installed_node_unit_missing"
 [[ -f "$installed_home/deploy/systemd-user/chimera-datapath.service" ]] || fail "installed_datapath_unit_missing"
+[[ -f "$installed_home/deploy/systemd-user/chimera-runtime.service" ]] || fail "installed_runtime_unit_missing"
+[[ -f "$installed_home/deploy/systemd-user/chimera-site-watch.service" ]] || fail "installed_site_watch_unit_missing"
 [[ ! -f "$installed_home/configs/upstream_proxy.env.example" ]] || fail "installed_legacy_upstream_proxy_example_present"
 [[ ! -f "$installed_home/configs/client.example.conf" ]] || fail "installed_legacy_client_example_present"
 [[ ! -f "$installed_home/configs/gateway.example.conf" ]] || fail "installed_legacy_gateway_example_present"
@@ -589,8 +593,14 @@ rg -q '"network_state":"not_modified"' "$installed_home/docs/doctor_latest.json"
 [[ -L "$tmp_dir/local-bin/chimera" ]] || fail "launcher_chimera_missing_before_uninstall"
 [[ -L "$tmp_dir/local-bin/chimera.sh" ]] || fail "launcher_chimera_sh_missing_before_uninstall"
 [[ -L "$tmp_dir/local-bin/chimera-sh" ]] || fail "launcher_chimera_dash_sh_missing_before_uninstall"
+[[ -f "$config/systemd/user/chimera-runtime.service" ]] || fail "installed_user_runtime_unit_missing_before_uninstall"
 [[ -f "$config/systemd/user/chimera-node.service" ]] || fail "installed_user_node_unit_missing_before_uninstall"
 [[ -f "$config/systemd/user/chimera-datapath.service" ]] || fail "installed_user_datapath_unit_missing_before_uninstall"
+[[ -f "$config/systemd/user/chimera-site-watch.service" ]] || fail "installed_user_site_watch_unit_missing_before_uninstall"
+[[ -L "$config/systemd/user/default.target.wants/chimera-runtime.service" ]] || fail "installed_user_runtime_wants_missing_before_uninstall"
+[[ ! -e "$config/systemd/user/default.target.wants/chimera-node.service" ]] || fail "installed_user_node_wants_should_be_absent"
+[[ ! -e "$config/systemd/user/default.target.wants/chimera-datapath.service" ]] || fail "installed_user_datapath_wants_should_be_absent"
+[[ ! -e "$config/systemd/user/default.target.wants/chimera-site-watch.service" ]] || fail "installed_user_site_watch_wants_should_be_absent"
 [[ -f "$data/applications/chimera-control-gui.desktop" ]] || fail "installed_desktop_entry_missing_before_uninstall"
 [[ -d "$config/chimera" ]] || fail "installed_config_dir_missing_before_uninstall"
 [[ -d "$cache/chimera" ]] || fail "installed_cache_dir_missing_before_uninstall"
@@ -638,8 +648,11 @@ rg -q '^uninstall_status=ok$' "$uninstall_log" || fail "uninstall_status_missing
 [[ ! -e "$tmp_dir/local-bin/chimera" && ! -L "$tmp_dir/local-bin/chimera" ]] || fail "launcher_chimera_present_after_uninstall"
 [[ ! -e "$tmp_dir/local-bin/chimera.sh" && ! -L "$tmp_dir/local-bin/chimera.sh" ]] || fail "launcher_chimera_sh_present_after_uninstall"
 [[ ! -e "$tmp_dir/local-bin/chimera-sh" && ! -L "$tmp_dir/local-bin/chimera-sh" ]] || fail "launcher_chimera_dash_sh_present_after_uninstall"
+[[ ! -e "$config/systemd/user/chimera-runtime.service" ]] || fail "user_runtime_unit_present_after_uninstall"
 [[ ! -e "$config/systemd/user/chimera-node.service" ]] || fail "user_node_unit_present_after_uninstall"
 [[ ! -e "$config/systemd/user/chimera-datapath.service" ]] || fail "user_datapath_unit_present_after_uninstall"
+[[ ! -e "$config/systemd/user/chimera-site-watch.service" ]] || fail "user_site_watch_unit_present_after_uninstall"
+[[ ! -e "$config/systemd/user/default.target.wants/chimera-runtime.service" ]] || fail "user_runtime_wants_present_after_uninstall"
 [[ ! -e "$config/systemd/user/chimera-gateway.service" ]] || fail "legacy_user_gateway_unit_present_after_uninstall"
 [[ ! -e "$config/systemd/user/chimera-client.service" ]] || fail "legacy_user_client_unit_present_after_uninstall"
 [[ ! -e "$data/applications/chimera-control-gui.desktop" ]] || fail "desktop_entry_present_after_uninstall"

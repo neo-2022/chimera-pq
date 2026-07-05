@@ -3439,7 +3439,7 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
         escape_json(&options.resolv_conf_path),
         escape_json(&dns_backup_path)
     );
-    if let Err(error) = std::fs::write(&options.state_path, state_json) {
+    if let Err(error) = atomic_write_text_file(Path::new(&options.state_path), &state_json) {
         if dns_applied {
             let backup_path = format!("{}.chimera.bak", options.resolv_conf_path);
             let _ = rollback_dns_resolver(&options.resolv_conf_path, &backup_path);

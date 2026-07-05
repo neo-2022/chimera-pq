@@ -15,9 +15,11 @@ use bootstrap::{
     should_bootstrap_from_mesh_env,
 };
 pub(crate) use discovery::build_discovery_signature_message;
+#[cfg(test)]
+pub(crate) use discovery::discovery_urls_from_text;
 use discovery::{
-    config_discovery_pubkey, config_discovery_url, discovery_pubkey_from_env,
-    discovery_url_from_env, fetch_discovery_nodes, parse_discovery_keyring,
+    config_discovery_pubkey, config_discovery_urls, discovery_pubkey_from_env,
+    discovery_urls_from_env, fetch_discovery_nodes_from_any, parse_discovery_keyring,
 };
 use parse::parse_cli_nodes;
 pub(crate) use parse::parse_inventory_config_text;
@@ -73,18 +75,32 @@ pub(crate) fn load_mesh_nodes_inventory(args: &[String]) -> Result<MeshNodesInve
         inventory = parse_inventory_config_text(&text)?;
         inventory.source = MeshNodesInventorySource::Config;
     }
-    let discovery_url = extract_flag_value(args, "--discovery-url")
-        .map(str::to_string)
-        .or_else(|| config_discovery_url(args))
-        .or_else(discovery_url_from_env);
-    if let Some(url) = discovery_url.as_deref() {
+    let discovery_urls = {
+        let cli_urls = extract_flag_values(args, "--discovery-url");
+        if !cli_urls.is_empty() {
+            cli_urls
+        } else {
+            let config_urls = config_discovery_urls(args);
+            if !config_urls.is_empty() {
+                config_urls
+            } else {
+                discovery_urls_from_env()
+            }
+        }
+    };
+    if !discovery_urls.is_empty() {
         let discovery_pubkey = extract_flag_value(args, "--discovery-pubkey")
             .map(str::to_string)
             .or_else(|| config_discovery_pubkey(args))
             .or_else(discovery_pubkey_from_env)
             .unwrap_or_default();
         let keyring = parse_discovery_keyring(args, &discovery_pubkey)?;
-        let discovered = fetch_discovery_nodes(url, &keyring, &revoked_key_ids, &revoked_node_ids)?;
+        let discovered = fetch_discovery_nodes_from_any(
+            &discovery_urls,
+            &keyring,
+            &revoked_key_ids,
+            &revoked_node_ids,
+        )?;
         if !discovered.is_empty() {
             merge_cli_nodes(&mut inventory, discovered)?;
             inventory.source = match inventory.source {
@@ -174,6 +190,13 @@ pub(crate) fn extract_flag_value<'a>(args: &'a [String], flag: &str) -> Option<&
     args.windows(2)
         .find(|pair| pair[0] == flag)
         .map(|pair| pair[1].as_str())
+}
+
+pub(crate) fn extract_flag_values(args: &[String], flag: &str) -> Vec<String> {
+    args.windows(2)
+        .filter(|pair| pair[0] == flag)
+        .map(|pair| pair[1].clone())
+        .collect()
 }
 
 fn config_path_from_env() -> Option<String> {

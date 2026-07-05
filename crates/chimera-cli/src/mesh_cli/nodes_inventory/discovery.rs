@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
+    path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -21,6 +22,28 @@ pub(super) fn discovery_url_from_env() -> Option<String> {
     }
 }
 
+pub(super) fn discovery_urls_from_env() -> Vec<String> {
+    let mut urls = Vec::new();
+    if let Some(url) = discovery_url_from_env() {
+        urls.push(url);
+    }
+    if let Ok(value) = env::var("CHIMERA_MESH_NODES_DISCOVERY_URLS") {
+        urls.extend(split_discovery_urls(&value));
+    }
+    if let Some(value) = bootstrap_env_value("CHIMERA_MESH_NODES_DISCOVERY_URLS") {
+        urls.extend(split_discovery_urls(&value));
+    }
+    if let Some(path) = discovery_urls_file_path()
+        && let Ok(text) = fs::read_to_string(path)
+    {
+        for line in text.lines() {
+            let candidate = line.split('#').next().unwrap_or_default();
+            urls.extend(split_discovery_urls(candidate));
+        }
+    }
+    dedupe_discovery_urls(urls)
+}
+
 pub(super) fn discovery_pubkey_from_env() -> Option<String> {
     match env::var("CHIMERA_MESH_NODES_DISCOVERY_PUBKEY") {
         Ok(value) if !value.trim().is_empty() => Some(value),
@@ -33,6 +56,17 @@ pub(super) fn config_discovery_url(args: &[String]) -> Option<String> {
     let text = fs::read_to_string(path).ok()?;
     let raw = RawConfig::parse(&text).ok()?;
     raw.get("mesh.nodes.discovery_url").map(str::to_string)
+}
+
+pub(super) fn config_discovery_urls(args: &[String]) -> Vec<String> {
+    let mut urls = Vec::new();
+    if let Some(url) = config_discovery_url(args) {
+        urls.push(url);
+    }
+    if let Some(raw) = config_string_value(args, "mesh.nodes.discovery_urls") {
+        urls.extend(split_discovery_urls(&raw));
+    }
+    dedupe_discovery_urls(urls)
 }
 
 pub(super) fn config_discovery_pubkey(args: &[String]) -> Option<String> {
@@ -52,6 +86,31 @@ pub(super) fn fetch_discovery_nodes(
         .into_string()
         .map_err(|error| format!("mesh discovery read body failed: {error}"))?;
     parse_discovery_nodes_json(&text, discovery_keyring, revoked_key_ids, revoked_node_ids)
+}
+
+pub(super) fn fetch_discovery_nodes_from_any(
+    urls: &[String],
+    discovery_keyring: &BTreeMap<String, String>,
+    revoked_key_ids: &BTreeSet<String>,
+    revoked_node_ids: &BTreeSet<String>,
+) -> Result<Vec<MeshNode>, String> {
+    let mut retryable_errors = Vec::new();
+    for url in urls {
+        match fetch_discovery_nodes(url, discovery_keyring, revoked_key_ids, revoked_node_ids) {
+            Ok(nodes) => return Ok(nodes),
+            Err(error) if discovery_fetch_error_is_retryable(&error) => {
+                retryable_errors.push(format!("{url}: {error}"));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if retryable_errors.is_empty() {
+        return Ok(Vec::new());
+    }
+    Err(format!(
+        "mesh discovery request failed for all sources: {}",
+        retryable_errors.join("; ")
+    ))
 }
 
 fn parse_discovery_nodes_json(
@@ -216,6 +275,19 @@ pub(crate) fn build_discovery_signature_message(
     .into_bytes())
 }
 
+#[cfg(test)]
+pub(crate) fn discovery_urls_from_text(input: &str) -> Vec<String> {
+    let raw = RawConfig::parse(input).unwrap_or_else(|err| unreachable!("{err}"));
+    let mut urls = Vec::new();
+    if let Some(value) = raw.get("CHIMERA_MESH_NODES_DISCOVERY_URL") {
+        urls.push(value.trim().to_string());
+    }
+    if let Some(value) = raw.get("CHIMERA_MESH_NODES_DISCOVERY_URLS") {
+        urls.extend(split_discovery_urls(value));
+    }
+    dedupe_discovery_urls(urls)
+}
+
 pub(super) fn parse_discovery_keyring(
     args: &[String],
     fallback_pubkey: &str,
@@ -249,6 +321,48 @@ pub(super) fn parse_discovery_keyring(
     }
     Ok(out)
 }
+
+fn discovery_urls_file_path() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CHIMERA_MESH_NODES_DISCOVERY_URLS_FILE")
+        && !path.trim().is_empty()
+    {
+        return Some(PathBuf::from(path));
+    }
+    let home = env::var("HOME").ok()?;
+    let config_home = env::var("XDG_CONFIG_HOME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| format!("{home}/.config"));
+    Some(PathBuf::from(format!(
+        "{config_home}/chimera/mesh_nodes_discovery_urls.list"
+    )))
+}
+
+fn split_discovery_urls(raw: &str) -> Vec<String> {
+    raw.replace(['\r', '\n'], ",")
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn dedupe_discovery_urls(urls: Vec<String>) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for url in urls {
+        if seen.insert(url.clone()) {
+            out.push(url);
+        }
+    }
+    out
+}
+
+fn discovery_fetch_error_is_retryable(error: &str) -> bool {
+    error.starts_with("mesh discovery request failed:")
+        || error.starts_with("mesh discovery read body failed:")
+}
+
 fn parse_discovery_node_record(record: &serde_json::Value) -> Result<MeshNode, String> {
     let node_id = json_string(record, &["node_id", "id"])?;
     let endpoint = json_string(record, &["endpoint"])?;

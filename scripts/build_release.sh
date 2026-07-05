@@ -69,8 +69,10 @@ find "${ROOT_DIR}/configs" -maxdepth 1 -type f \( -name '*.example.*' -o -name '
   -exec cp -p {} "${RELEASE_DIR}/configs/" \;
 
 echo "build_release: copying deploy units"
+cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-runtime.service" "${RELEASE_DIR}/deploy/systemd-user/"
 cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-node.service" "${RELEASE_DIR}/deploy/systemd-user/"
 cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-datapath.service" "${RELEASE_DIR}/deploy/systemd-user/"
+cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-site-watch.service" "${RELEASE_DIR}/deploy/systemd-user/"
 cp -p "${ROOT_DIR}/deploy/desktop/chimera-control-gui.desktop" "${RELEASE_DIR}/deploy/desktop/"
 
 echo "build_release: copying scripts"
@@ -119,6 +121,7 @@ grep -q '^chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh$' "$
 grep -q '^chimera-release/configs/mesh_bootstrap\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/configs/mesh-node\.example\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/configs/update_gitvers_bootstrap_urls\.example\.list$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/deploy/systemd-user/chimera-runtime\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/deploy/systemd-user/chimera-node\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/deploy/systemd-user/chimera-datapath\.service$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 ! grep -q '^chimera-release/configs/upstream_proxy\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"

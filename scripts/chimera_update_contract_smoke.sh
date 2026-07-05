@@ -1455,6 +1455,10 @@ EOF
 [Service]
 ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
 EOF
+  cat >"$release_dir/deploy/systemd-user/chimera-runtime.service" <<'EOF'
+[Service]
+ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
+EOF
   printf '%s\n' 'CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000' \
     >"$release_dir/configs/mesh_bootstrap.env.example"
   printf '%s\n' 'https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh' \
@@ -1521,7 +1525,7 @@ EOF
   rm -rf "$tmp_dir"
 )
 
-case_auto_update_heals_legacy_bound_transit_default() (
+case_auto_update_preserves_explicit_bound_transit_disable() (
   local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum env_file output rc
   tmp_dir="$(mktemp -d)"
   old_home="$tmp_dir/home/chimera"
@@ -1567,11 +1571,11 @@ EOF
   rc=$?
   set -e
 
-  [[ "$rc" -eq 0 ]] || fail "auto-update heal legacy default install failed: $output"
-  grep -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" \
-    || fail "auto-update did not heal legacy bound transit default"
+  [[ "$rc" -eq 0 ]] || fail "auto-update preserve explicit bound transit disable install failed: $output"
+  grep -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false$' "$env_file" \
+    || fail "auto-update overwrote explicit bound transit disable"
   grep -q '^CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT=false$' "$env_file" \
-    || fail "auto-update changed pool transit while healing bound transit"
+    || fail "auto-update changed pool transit while preserving bound transit disable"
   rm -rf "$tmp_dir"
 )
 
@@ -1701,6 +1705,62 @@ EOF
   rm -rf "$tmp_dir"
 )
 
+case_auto_update_materialize_preserves_explicit_runtime_settings() (
+  local tmp_dir release_dir xdg_config xdg_cache xdg_data local_bin fake_bin node_conf output rc
+  tmp_dir="$(mktemp -d)"
+  release_dir="$tmp_dir/chimera-release"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  fake_bin="$tmp_dir/fake-bin"
+  node_conf="$release_dir/configs/mesh-node.conf"
+  mkdir -p "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.99"
+  cat >"$node_conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = tcp://old-peer.example:443
+carrier.server_name = user-fixed.example
+capture.mode = auto
+capture.tun_supported = true
+peer.listen_addr = 9443
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+
+  set +e
+  output="$(CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_MESH_REMOTE_ENDPOINT=new-peer.example:18142 \
+    CHIMERA_PEER_EGRESS_TOKEN=test-token \
+    bash "$release_dir/scripts/install_desktop_control.sh" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "materialize explicit runtime settings installer failed: $output"
+  grep -q '^carrier.addr = tcp://new-peer.example:18142$' "$node_conf" \
+    || fail "materialize did not refresh carrier addr"
+  grep -q '^carrier.server_name = user-fixed.example$' "$node_conf" \
+    || fail "materialize overwrote explicit carrier.server_name"
+  grep -q '^peer.listen_addr = 9443$' "$node_conf" \
+    || fail "materialize overwrote explicit peer.listen_addr"
+  rm -rf "$tmp_dir"
+)
+
 case_peer_token_stays_in_private_peer_env() (
   local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum bootstrap_env peer_env injected_token marker output rc peer_env_mode bootstrap_env_mode
   tmp_dir="$(mktemp -d)"
@@ -1767,36 +1827,82 @@ EOF
 )
 
 case_failed_install_restores_previous_release() (
-  local tmp_dir old_home archive checksum rc
+  local tmp_dir old_home archive checksum rc xdg_config xdg_cache xdg_data local_bin
   tmp_dir="$(mktemp -d)"
   old_home="$tmp_dir/home/chimera"
-  mkdir -p "$old_home/scripts" "$tmp_dir/bin"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  mkdir -p \
+    "$old_home/scripts" \
+    "$local_bin" \
+    "$xdg_config/chimera" \
+    "$xdg_config/systemd/user/default.target.wants" \
+    "$xdg_data/applications"
   printf 'old-release\n' >"$old_home/old_marker"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
-  make_fake_release_archive "$tmp_dir" "0.1.99" "echo failing installer >&2; exit 42"
+  printf 'old-peer\n' >"$xdg_config/chimera/peer-egress.env"
+  printf 'old-transparent\n' >"$xdg_config/chimera/transparent-runtime.env"
+  printf '[Unit]\nDescription=old-runtime\n' >"$xdg_config/systemd/user/chimera-runtime.service"
+  ln -s ../chimera-runtime.service "$xdg_config/systemd/user/default.target.wants/chimera-runtime.service"
+  printf 'old desktop\n' >"$xdg_data/applications/chimera-control-gui.desktop"
+  ln -s "$old_home/scripts/chimera.sh" "$local_bin/chimera"
+  ln -s "$old_home/scripts/chimera.sh" "$local_bin/chimera.sh"
+  ln -s "$old_home/scripts/chimera-sh" "$local_bin/chimera-sh"
+  make_fake_release_archive "$tmp_dir" "0.1.99" \
+    "mkdir -p '$xdg_config/chimera' '$xdg_config/systemd/user/default.target.wants' '$xdg_data/applications'; \
+printf '%s\n' new-peer >'$xdg_config/chimera/peer-egress.env'; \
+printf '%s\n' new-transparent >'$xdg_config/chimera/transparent-runtime.env'; \
+printf '%s\n' '[Unit]' 'Description=new-runtime' >'$xdg_config/systemd/user/chimera-runtime.service'; \
+ln -sfn ../chimera-runtime.service '$xdg_config/systemd/user/default.target.wants/chimera-runtime.service'; \
+printf '%s\n' new-desktop >'$xdg_data/applications/chimera-control-gui.desktop'; \
+echo failing installer >&2; exit 42"
   archive="$tmp_dir/chimera-pq-release.tar.gz"
   checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
 
   set +e
   CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
   CHIMERA_HOME="$old_home" \
-  CHIMERA_LOCAL_BIN="$tmp_dir/bin" \
+  CHIMERA_LOCAL_BIN="$local_bin" \
+  HOME="$tmp_dir/home/user" \
+  XDG_CONFIG_HOME="$xdg_config" \
+  XDG_CACHE_HOME="$xdg_cache" \
+  XDG_DATA_HOME="$xdg_data" \
     bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" >/dev/null 2>&1
   rc=$?
   set -e
   [[ "$rc" -ne 0 ]] || fail "expected failing installer to return non-zero"
   [[ -f "$old_home/old_marker" ]] || fail "previous release was not restored after install failure"
   [[ ! -f "$old_home/.chimera_release_version" || "$(cat "$old_home/.chimera_release_version" 2>/dev/null)" != "0.1.99" ]] || fail "failed release remained installed"
+  [[ "$(cat "$xdg_config/chimera/peer-egress.env")" == "old-peer" ]] || fail "external peer env was not restored after install failure"
+  [[ "$(cat "$xdg_config/chimera/transparent-runtime.env")" == "old-transparent" ]] || fail "external transparent env was not restored after install failure"
+  [[ "$(cat "$xdg_config/systemd/user/chimera-runtime.service")" == $'[Unit]\nDescription=old-runtime' ]] || fail "runtime unit was not restored after install failure"
+  [[ "$(readlink "$xdg_config/systemd/user/default.target.wants/chimera-runtime.service")" == "../chimera-runtime.service" ]] || fail "runtime unit enable link was not restored after install failure"
+  [[ "$(cat "$xdg_data/applications/chimera-control-gui.desktop")" == "old desktop" ]] || fail "desktop entry was not restored after install failure"
+  [[ "$(readlink "$local_bin/chimera")" == "$old_home/scripts/chimera.sh" ]] || fail "launcher chimera changed after install failure"
+  [[ "$(readlink "$local_bin/chimera.sh")" == "$old_home/scripts/chimera.sh" ]] || fail "launcher chimera.sh changed after install failure"
+  [[ "$(readlink "$local_bin/chimera-sh")" == "$old_home/scripts/chimera-sh" ]] || fail "launcher chimera-sh changed after install failure"
   rm -rf "$tmp_dir"
 )
 
 case_failed_launcher_link_restores_previous_release() (
-  local tmp_dir old_home archive checksum rc fake_bin
+  local tmp_dir old_home archive checksum rc fake_bin xdg_config xdg_cache xdg_data local_bin
   tmp_dir="$(mktemp -d)"
   old_home="$tmp_dir/home/chimera"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
   fake_bin="$tmp_dir/fake-bin"
-  mkdir -p "$old_home/scripts" "$tmp_dir/bin" "$fake_bin"
+  mkdir -p \
+    "$old_home/scripts" \
+    "$local_bin" \
+    "$fake_bin" \
+    "$xdg_config/chimera" \
+    "$xdg_config/systemd/user/default.target.wants" \
+    "$xdg_data/applications"
   cat >"$fake_bin/ln" <<'EOF'
 #!/usr/bin/env bash
 for arg in "$@"; do
@@ -1810,14 +1916,33 @@ EOF
   printf 'old-release\n' >"$old_home/old_marker"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
-  make_fake_release_archive "$tmp_dir" "0.1.99" "exit 0"
+  printf 'old-peer\n' >"$xdg_config/chimera/peer-egress.env"
+  printf 'old-transparent\n' >"$xdg_config/chimera/transparent-runtime.env"
+  printf '[Unit]\nDescription=old-runtime\n' >"$xdg_config/systemd/user/chimera-runtime.service"
+  ln -s ../chimera-runtime.service "$xdg_config/systemd/user/default.target.wants/chimera-runtime.service"
+  printf 'old desktop\n' >"$xdg_data/applications/chimera-control-gui.desktop"
+  ln -s "$old_home/scripts/chimera.sh" "$local_bin/chimera"
+  ln -s "$old_home/scripts/chimera.sh" "$local_bin/chimera.sh"
+  ln -s "$old_home/scripts/chimera-sh" "$local_bin/chimera-sh"
+  make_fake_release_archive "$tmp_dir" "0.1.99" \
+    "mkdir -p '$xdg_config/chimera' '$xdg_config/systemd/user/default.target.wants' '$xdg_data/applications'; \
+printf '%s\n' new-peer >'$xdg_config/chimera/peer-egress.env'; \
+printf '%s\n' new-transparent >'$xdg_config/chimera/transparent-runtime.env'; \
+printf '%s\n' '[Unit]' 'Description=new-runtime' >'$xdg_config/systemd/user/chimera-runtime.service'; \
+ln -sfn ../chimera-runtime.service '$xdg_config/systemd/user/default.target.wants/chimera-runtime.service'; \
+printf '%s\n' new-desktop >'$xdg_data/applications/chimera-control-gui.desktop'; \
+exit 0"
   archive="$tmp_dir/chimera-pq-release.tar.gz"
   checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
 
   set +e
   CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
   CHIMERA_HOME="$old_home" \
-  CHIMERA_LOCAL_BIN="$tmp_dir/bin" \
+  CHIMERA_LOCAL_BIN="$local_bin" \
+  HOME="$tmp_dir/home/user" \
+  XDG_CONFIG_HOME="$xdg_config" \
+  XDG_CACHE_HOME="$xdg_cache" \
+  XDG_DATA_HOME="$xdg_data" \
   PATH="$fake_bin:$PATH" \
     bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" >/dev/null 2>&1
   rc=$?
@@ -1825,6 +1950,50 @@ EOF
   [[ "$rc" -ne 0 ]] || fail "expected launcher link failure to return non-zero"
   [[ -f "$old_home/old_marker" ]] || fail "previous release was not restored after launcher link failure"
   [[ ! -f "$old_home/.chimera_release_version" || "$(cat "$old_home/.chimera_release_version" 2>/dev/null)" != "0.1.99" ]] || fail "failed release remained installed after launcher link failure"
+  [[ "$(cat "$xdg_config/chimera/peer-egress.env")" == "old-peer" ]] || fail "external peer env was not restored after launcher link failure"
+  [[ "$(cat "$xdg_config/chimera/transparent-runtime.env")" == "old-transparent" ]] || fail "external transparent env was not restored after launcher link failure"
+  [[ "$(cat "$xdg_config/systemd/user/chimera-runtime.service")" == $'[Unit]\nDescription=old-runtime' ]] || fail "runtime unit was not restored after launcher link failure"
+  [[ "$(readlink "$xdg_config/systemd/user/default.target.wants/chimera-runtime.service")" == "../chimera-runtime.service" ]] || fail "runtime unit enable link was not restored after launcher link failure"
+  [[ "$(cat "$xdg_data/applications/chimera-control-gui.desktop")" == "old desktop" ]] || fail "desktop entry was not restored after launcher link failure"
+  [[ "$(readlink "$local_bin/chimera")" == "$old_home/scripts/chimera.sh" ]] || fail "launcher chimera was not restored after launcher link failure"
+  [[ "$(readlink "$local_bin/chimera.sh")" == "$old_home/scripts/chimera.sh" ]] || fail "launcher chimera.sh was not restored after launcher link failure"
+  [[ "$(readlink "$local_bin/chimera-sh")" == "$old_home/scripts/chimera-sh" ]] || fail "launcher chimera-sh was not restored after launcher link failure"
+  rm -rf "$tmp_dir"
+)
+
+case_update_reuses_recorded_local_bin_when_env_unset() (
+  local tmp_dir old_home archive checksum rc custom_bin default_bin xdg_config xdg_cache xdg_data
+  tmp_dir="$(mktemp -d)"
+  old_home="$tmp_dir/home/chimera"
+  custom_bin="$tmp_dir/custom-bin"
+  default_bin="$tmp_dir/home/user/.local/bin"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  mkdir -p "$old_home/scripts" "$custom_bin" "$default_bin" "$xdg_config" "$xdg_cache" "$xdg_data"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
+  printf '%s\n' "$custom_bin" >"$old_home/.chimera_install_local_bin"
+  make_fake_release_archive "$tmp_dir" "0.1.99" "exit 0"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+
+  set +e
+  CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+  CHIMERA_HOME="$old_home" \
+  HOME="$tmp_dir/home/user" \
+  XDG_CONFIG_HOME="$xdg_config" \
+  XDG_CACHE_HOME="$xdg_cache" \
+  XDG_DATA_HOME="$xdg_data" \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" >/dev/null 2>&1
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || fail "expected update with recorded local bin to succeed"
+  [[ -L "$custom_bin/chimera" ]] || fail "recorded local bin chimera launcher missing after update"
+  [[ -L "$custom_bin/chimera.sh" ]] || fail "recorded local bin chimera.sh launcher missing after update"
+  [[ -L "$custom_bin/chimera-sh" ]] || fail "recorded local bin chimera-sh launcher missing after update"
+  [[ ! -e "$default_bin/chimera" ]] || fail "default local bin launcher should not be written when recorded local bin exists"
+  [[ "$(cat "$old_home/.chimera_install_local_bin")" == "$custom_bin" ]] || fail "recorded local bin marker changed unexpectedly"
   rm -rf "$tmp_dir"
 )
 
@@ -2920,12 +3089,14 @@ case_missing_local_version_blocks_when_update_unavailable
 case_missing_local_version_uses_update_repair
 case_semver_update_order
 case_auto_update_preserves_bound_transit_env
-case_auto_update_heals_legacy_bound_transit_default
+case_auto_update_preserves_explicit_bound_transit_disable
 case_peer_egress_env_shell_quotes_lane_bindings_path
 case_auto_update_preserves_quoted_lane_bindings_env
+case_auto_update_materialize_preserves_explicit_runtime_settings
 case_peer_token_stays_in_private_peer_env
 case_failed_install_restores_previous_release
 case_failed_launcher_link_restores_previous_release
+case_update_reuses_recorded_local_bin_when_env_unset
 case_peer_update_metadata_does_not_execute_peer_bootstrap
 case_peer_metadata_sha_mismatch_blocks_install
 case_same_version_checksum_mismatch_blocks

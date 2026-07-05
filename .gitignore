@@ -18,3 +18,4 @@ docs/CI_NONPRIVILEGED_GATE.json
 !configs/*.example.conf
 !configs/*.env
 !configs/*.env.example
+.chimera_install_role

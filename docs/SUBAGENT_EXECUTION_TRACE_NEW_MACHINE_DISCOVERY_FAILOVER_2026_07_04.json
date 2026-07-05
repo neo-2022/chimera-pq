@@ -1,0 +1,139 @@
+{
+  "kind": "subagent_execution_trace",
+  "schema_version": 1,
+  "current_workline_id": "new-machine-discovery-failover-2026-07-04",
+  "external_signed_receipt_available": false,
+  "truth_boundary_recorded": true,
+  "evidence": [
+    "docs/WORKFLOW_ATTESTATION_NEW_MACHINE_DISCOVERY_FAILOVER_2026_07_04.md",
+    "docs/MESH_SESSION_HANDOFF_2026-07-04_NEW_MACHINE_PROOF_V0_1_168.md"
+  ],
+  "entries": [
+    {
+      "role": "architect",
+      "agent_id": "019f2e9b-a0d6-7ee2-ad50-a75ef72f9240",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PASS",
+      "started_at_utc": "2026-07-04T19:27:20Z",
+      "completed_at_utc": "2026-07-04T19:34:30Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Architect prompt summary: evaluate the active July 4 workline, preserve historical July 1 guard-hardening receipts, define the truthful current-workline artifact shape, and constrain discovery failover to MVP-safe one-authority mirrors.",
+      "prompt_sha256": "86d61968b310fce121eef081a5f3059faf50f234b36e0ec464dc3a9129268472",
+      "output_summary": "Architect output summary: verdict PASS for architectural review; keep July 1 artifacts historical, create a new July 4 current-workline bundle, and implement ordered first-verified discovery mirror failover without drifting into public discovery fabric.",
+      "output_sha256": "c2f54ad541bc32cc8102d50ee2543c668eaa1bdebe4bb6011ebff7a09d18513d",
+      "evidence": [
+        "docs/MESH_SESSION_HANDOFF_2026-07-04_NEW_MACHINE_PROOF_V0_1_168.md",
+        "docs/WORKFLOW_ATTESTATION_NEW_MACHINE_DISCOVERY_FAILOVER_2026_07_04.md"
+      ]
+    },
+    {
+      "role": "senior_developer",
+      "agent_id": "019f2e91-7914-7e13-9eb5-d11be2c6bd68",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PASS",
+      "started_at_utc": "2026-07-04T19:24:30Z",
+      "completed_at_utc": "2026-07-04T19:28:30Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Senior developer prompt summary: inspect discovery and bootstrap code paths and identify the smallest safe product change that lets mesh node selection try multiple discovery sources when the primary public source is unreachable.",
+      "prompt_sha256": "0fb2940a9e5488d1c14af0216d7929ee37760fbcb4d0596c2642820c83d7de3d",
+      "output_summary": "Senior developer output summary: verdict PASS for read-only code audit; discovery is single-source today across CLI and shell wrappers, the fallback loop belongs in the CLI loader, and shell gates must stop rejecting source-list-only bootstrap.",
+      "output_sha256": "c35ed26e7a663787a477a2abf3fd35f8be5f688b98c0de340dcd1584e7f4bf52",
+      "evidence": [
+        "crates/chimera-cli/src/mesh_cli/nodes_inventory.rs",
+        "scripts/chimera-control.sh"
+      ]
+    },
+    {
+      "role": "tester",
+      "agent_id": "019f2e9b-e1ee-7860-98e0-79f993863ea3",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PASS",
+      "started_at_utc": "2026-07-04T19:29:20Z",
+      "completed_at_utc": "2026-07-04T19:36:20Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Tester prompt summary: define the smallest credible test set for current-workline attestation drift repair and discovery-source failover, including process-level negatives and behavior-level fallback coverage.",
+      "prompt_sha256": "f9071d260e5ddb3ed11ecffef93550127eeca417e0a112ef1ee466bc557fa915",
+      "output_summary": "Tester output summary: verdict PASS for test audit; add negative cases for newest-handoff drift and trace mismatch, plus behavioral fallback coverage for source loss and stale endpoint reannounce, while relaxing brittle source-order assertions.",
+      "output_sha256": "74fecb1b6a7a8b49f4fc4c023f1559eb0030d195e0e0e352ada48009b1ff6f0a",
+      "evidence": [
+        "crates/chimera-cli/src/mesh_cli/tests_nodes_inventory/discovery.rs",
+        "scripts/chimera_start_contract_smoke.sh"
+      ]
+    },
+    {
+      "role": "security_engineer",
+      "agent_id": "019f2e9c-0e43-72c3-9895-274134d3fde4",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PASS",
+      "started_at_utc": "2026-07-04T19:29:40Z",
+      "completed_at_utc": "2026-07-04T19:35:20Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Security prompt summary: evaluate trust and failure rules for multiple public discovery sources, including which errors may fall through, which must hard-fail, and how one local keyring should govern all mirrors.",
+      "prompt_sha256": "622465acec64761f6a7bf9fbffdc0440ec7d7e9d4022a0e46bbb751570f0e1b3",
+      "output_summary": "Security output summary: verdict PASS for security review; discovery mirrors are acceptable only as ordered sources under one local authority, fall through only on transport or unreadable-source failure, and stop on trust, freshness, or signature failure.",
+      "output_sha256": "fe39804600163c97bbf8d08e1a0483862f6e8515e2baed186e6d11689925f26c",
+      "evidence": [
+        "crates/chimera-cli/src/mesh_cli/nodes_inventory/discovery.rs",
+        "scripts/install_desktop_control.sh"
+      ]
+    },
+    {
+      "role": "devops_engineer",
+      "agent_id": "019f2e91-5377-7353-a5d9-61ea6c39d406",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PASS",
+      "started_at_utc": "2026-07-04T19:24:00Z",
+      "completed_at_utc": "2026-07-04T19:27:50Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "DevOps prompt summary: inspect why session-process-guard and current-workline attestation drift after the July 4 handoff, identify the safest truthful repair path, and explain whether simply updating latest_handoff would fake process evidence.",
+      "prompt_sha256": "6a0ea94c0ae107ab1a11ac67c73d5dc1961b73bf6c4067a5ebae3e2b28d59852",
+      "output_summary": "DevOps output summary: verdict PASS for read-only process audit; the live current-workline artifact is stale against the July 4 handoff, a new current-workline bundle is required, and merely repointing latest_handoff would be semantically false.",
+      "output_sha256": "b67eddb31caf2ca437cbe541354142b67cd826bd8050886d9b0912e3aeca6ff2",
+      "evidence": [
+        "docs/CURRENT_WORKLINE_ATTESTATION.json",
+        "crates/chimera-lab/src/current_workline_attestation_guard.rs"
+      ]
+    },
+    {
+      "role": "critic_skeptic",
+      "agent_id": "019f2e9c-41e0-75d2-8de0-6ad049531abc",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-04T19:30:10Z",
+      "completed_at_utc": "2026-07-04T19:36:50Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Critic prompt summary: challenge the minimal repair path for current-workline drift and discovery-source failover, and find any remaining fake-proof or stale-snapshot holes that would still let the next session overclaim closure.",
+      "prompt_sha256": "552583a8187cc37e00ff116d005e8201abca03927dacf6f30f5202bca02519d8",
+      "output_summary": "Critic output summary: verdict PARTIAL; repointing latest_handoff alone would fake the active workline, the July 4 proof remains partial, and auto-bind still trusts cached signed-looking snapshot structure without verifying full discovery authority.",
+      "output_sha256": "6ccbb480904623b5d5e643f15870a378f0a7952ff870dac1cfd29ca45b9aec96",
+      "evidence": [
+        "docs/CURRENT_WORKLINE_ATTESTATION.json",
+        "scripts/mesh_launch_preflight_auto_bind.sh"
+      ]
+    }
+  ]
+}

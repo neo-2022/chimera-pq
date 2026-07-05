@@ -1,0 +1,21 @@
+[Unit]
+Description=CHIMERA Publication Watch (user service)
+After=chimera-node.service
+Requires=chimera-node.service
+BindsTo=chimera-node.service
+PartOf=chimera-runtime.service chimera-node.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=__CHIMERA_ROOT__
+ExecStart=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __site-auto-watch-loop'
+ExecStop=/usr/bin/env bash -lc 'true'
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:%h/.cache/chimera/chimera_site_watch.service.log
+StandardError=append:%h/.cache/chimera/chimera_site_watch.service.log
+
+[Install]
+WantedBy=default.target

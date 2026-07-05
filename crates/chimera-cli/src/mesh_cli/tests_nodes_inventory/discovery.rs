@@ -41,6 +41,45 @@ fn nodes_inventory_discovery_contract_accepts_valid_envelope() {
 }
 
 #[test]
+fn nodes_inventory_discovery_contract_falls_through_to_next_source_on_connect_failure() {
+    let endpoint_listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind endpoint listener failed: {err}"));
+    let endpoint_addr = endpoint_listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read endpoint listener addr failed: {err}"));
+    let now = now_unix();
+    let signing_key = generate_signing_key();
+    let pubkey_b64 =
+        base64::engine::general_purpose::STANDARD.encode(signing_key.verifying_key().as_bytes());
+    let nodes = format!(
+        "[{{\"node_id\":\"de-fallback\",\"endpoint\":\"{}\",\"country_code\":\"DE\",\"country_name\":\"Germany\",\"status\":\"healthy\"}}]",
+        endpoint_addr
+    );
+    let payload = build_signed_payload(
+        &signing_key,
+        "default",
+        "n-fallback-1",
+        now.saturating_sub(1),
+        now.saturating_add(60),
+        &nodes,
+    );
+    let url = serve_json_once(payload);
+    let args = vec![
+        "--probe-timeout-ms".to_string(),
+        "200".to_string(),
+        "--discovery-url".to_string(),
+        "http://127.0.0.1:9/mesh_nodes.discovery.json".to_string(),
+        "--discovery-url".to_string(),
+        url,
+        "--discovery-pubkey".to_string(),
+        pubkey_b64,
+    ];
+    let inventory = load_mesh_nodes_inventory(&args).unwrap_or_else(|err| unreachable!("{err}"));
+    assert_eq!(inventory.nodes.len(), 1);
+    assert_eq!(inventory.nodes[0].node_id.0, "de-fallback");
+}
+
+#[test]
 fn nodes_inventory_discovery_contract_preserves_update_bootstrap_url() {
     let endpoint_listener = TcpListener::bind("127.0.0.1:0")
         .unwrap_or_else(|err| unreachable!("bind endpoint listener failed: {err}"));
@@ -308,6 +347,56 @@ fn nodes_inventory_discovery_contract_accepts_keyring_rotation() {
     let inventory = load_mesh_nodes_inventory(&args).unwrap_or_else(|err| unreachable!("{err}"));
     assert_eq!(inventory.nodes.len(), 1);
     assert_eq!(inventory.nodes[0].node_id.0, "rot1");
+}
+
+#[test]
+fn nodes_inventory_discovery_contract_does_not_fall_through_after_trust_failure() {
+    let endpoint_listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|err| unreachable!("bind endpoint listener failed: {err}"));
+    let endpoint_addr = endpoint_listener
+        .local_addr()
+        .unwrap_or_else(|err| unreachable!("read endpoint listener addr failed: {err}"));
+    let now = now_unix();
+    let signing_key = generate_signing_key();
+    let wrong_key = generate_signing_key();
+    let pubkey_b64 =
+        base64::engine::general_purpose::STANDARD.encode(signing_key.verifying_key().as_bytes());
+    let nodes = format!(
+        "[{{\"node_id\":\"de-stop-on-badsig\",\"endpoint\":\"{}\",\"country_code\":\"DE\",\"country_name\":\"Germany\",\"status\":\"healthy\"}}]",
+        endpoint_addr
+    );
+    let bad_payload = build_signed_payload(
+        &wrong_key,
+        "default",
+        "n-stop-on-badsig-1",
+        now.saturating_sub(1),
+        now.saturating_add(60),
+        &nodes,
+    );
+    let good_payload = build_signed_payload(
+        &signing_key,
+        "default",
+        "n-stop-on-badsig-2",
+        now.saturating_sub(1),
+        now.saturating_add(60),
+        &nodes,
+    );
+    let bad_url = serve_json_once(bad_payload);
+    let good_url = serve_json_once(good_payload);
+    let args = vec![
+        "--probe-timeout-ms".to_string(),
+        "200".to_string(),
+        "--discovery-url".to_string(),
+        bad_url,
+        "--discovery-url".to_string(),
+        good_url,
+        "--discovery-pubkey".to_string(),
+        pubkey_b64,
+    ];
+    let error = load_mesh_nodes_inventory(&args)
+        .err()
+        .unwrap_or_else(|| unreachable!("trust failure must stop without fallback"));
+    assert!(error.contains("signature verification failed"));
 }
 
 #[test]

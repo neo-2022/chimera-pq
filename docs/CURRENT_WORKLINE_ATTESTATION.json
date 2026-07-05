@@ -2,19 +2,19 @@
   "kind": "current_workline_attestation",
   "schema_version": 1,
   "status": "partial",
-  "current_workline_id": "ai-architect-guard-hardening-2026-07-01",
-  "updated_at_utc": "2026-07-01T13:04:39Z",
+  "current_workline_id": "failure-hardening-2026-07-05",
+  "updated_at_utc": "2026-07-05T20:10:00Z",
   "canonical_only_not_sufficient": true,
   "requires_current_workline_attestation": true,
   "requires_real_subagent_trace": true,
   "requires_interdisciplinary_trace": true,
   "canonical_lifecycle_attestation": "docs/WORKFLOW_ATTESTATION.json",
-  "workline_attestation": "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-  "workline_attestation_sha256": "70e056feddd7d00cc29dd125261bd638958ff9d04bdef66e84285edb2afabe62",
-  "subagent_execution_trace": "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json",
-  "subagent_execution_trace_sha256": "83088f9f248f760b93e42048bbeb3a06fdf8280e0295eab8411754c994e542af",
-  "latest_handoff": "docs/MESH_SESSION_HANDOFF_2026-07-01_AI_ARCHITECT_GUARD_HARDENING.md",
-  "latest_handoff_sha256": "48fae1358c020ecb3a93ca61b93a34bb129cdd0f354c645721bd4d832e1b5c1c",
+  "workline_attestation": "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
+  "workline_attestation_sha256": "721df072be0728072c3d11a2aa322cafa7f08601fb6de5a8ae5201cdf0041031",
+  "subagent_execution_trace": "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
+  "subagent_execution_trace_sha256": "476c69d010f529d9042598c0164de9ce59a6ed6266572fe824893096d9313f79",
+  "latest_handoff": "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md",
+  "latest_handoff_sha256": "2cfa77d5195c828daad4ea1c7b516a52b54ff865fff251a1be1561f525de1f39",
   "truth_boundary": {
     "local_runtime_started": false,
     "network_state": "not_modified",
@@ -39,105 +39,115 @@
     "stage_reports": [
       {
         "stage": "ANALYZE",
-        "goal": "Identify the process bypass and define the current workline scope.",
-        "outcome": "Stale canonical proof reuse and weak subagent trace were treated as real process risks.",
+        "goal": "Identify the active July 5 failure-hardening objective and verify that the current workline artifact no longer matches the newest handoff.",
+        "outcome": "The newest handoff moved to July 5 failure hardening while the live current-workline artifact still pointed at the July 4 discovery-failover line.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-          "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json"
+          "docs/CURRENT_WORKLINE_ATTESTATION.json",
+          "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
         ]
       },
       {
         "stage": "IMPACT_ANALYSIS",
-        "goal": "Check which gates could still accept stale or incomplete process evidence.",
-        "outcome": "Session, handoff and ship paths were identified as relevant guard entry points.",
+        "goal": "Measure the concrete breakage classes that still let CHIMERA leave mixed state, skip listener self-heal, or overwrite valid operator intent.",
+        "outcome": "The highest-value gaps were non-transactional external install state, transparent runtime UID/GID overwrites, a broken primary port sensor that could suppress listener self-heal, recorded local-bin drift, and still-open false-green publication semantics.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "justfile",
-          "scripts/ship_readiness.sh"
+          "scripts/install_release.sh",
+          "scripts/install_desktop_control.sh",
+          "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
         ]
       },
       {
         "stage": "RESEARCH_PLANNING",
-        "goal": "Plan proof requirements for current-workline attestation without weakening CHIMERA safety rules.",
-        "outcome": "The proof plan required current trace, stage trace, hash binding and interdisciplinary checks.",
+        "goal": "Choose the smallest truthful package that hardens shared failure boundaries without broad speculative refactoring.",
+        "outcome": "The chosen slice was install/update transactionality, operator-intent preservation, shared listener-port sensor fallback, and contract evidence, while leaving publication-truth and remote reboot/rebind proof explicitly open.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
           "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
-          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
+          "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md"
         ]
       },
       {
         "stage": "RESEARCH",
-        "goal": "Use the required interdisciplinary source lists and transfer checks from the DeepSeek algorithm.",
-        "outcome": "All seven source lists were kept mandatory and per-role transfer checks were required.",
+        "goal": "Run the required interdisciplinary council across install/update rollback, publication truth, stale artifacts, reboot recovery, and source trust.",
+        "outcome": "The council converged on widening the rollback boundary to external operator state, preserving valid operator intent, and keeping the remaining false-green and stale-artifact risks explicit as open blockers.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
-          "docs/WORKFLOW_ATTESTATION.json"
+          "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
+          "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
         ]
       },
       {
         "stage": "ARCHITECTURE_SYNTHESIS",
-        "goal": "Choose a minimal guard architecture that blocks practical bypasses.",
-        "outcome": "The solution uses canonical lifecycle proof plus a separate current-workline proof and subagent trace artifact.",
+        "goal": "Place the fixes at the smallest shared control boundary that affects install/update and listener self-heal paths.",
+        "outcome": "External-state snapshot and restore were centralized in install_release, the installer kept ownership of settings preservation and existing runtime defaults, and listener occupancy fallback stayed in the shared probe helper used by node preflight.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "crates/chimera-lab/src/current_workline_attestation_guard.rs",
-          "docs/CURRENT_WORKLINE_ATTESTATION.json"
+          "scripts/install_release.sh",
+          "scripts/install_desktop_control.sh",
+          "scripts/chimera-control.sh"
         ]
       },
       {
         "stage": "IMPLEMENTATION",
-        "goal": "Implement guard checks, fixtures and gate wiring.",
-        "outcome": "Current-workline guard validates kind, hashes, stage reports, subagent trace and interdisciplinary trace.",
+        "goal": "Implement external-state rollback, preserved transparent runtime IDs, resilient listener-port probing, and recorded local-bin reuse, then add explicit negative-path contract coverage.",
+        "outcome": "The code now snapshots external operator state before installer mutation, restores it on failure, preserves transparent runtime UID/GID/exempt UID when valid, reuses the recorded local-bin target across updates, and falls back from broken `ss` listener probes to the next available sensor so fixed-port self-heal still arms runtime auto-listen overrides.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "crates/chimera-lab/src/current_workline_attestation_guard.rs",
-          "docs/CURRENT_WORKLINE_ATTESTATION.json"
+          "scripts/install_release.sh",
+          "scripts/install_desktop_control.sh",
+          "scripts/chimera-control.sh",
+          "scripts/chimera_start_contract_smoke.sh",
+          "scripts/chimera_update_contract_smoke.sh",
+          "scripts/chimera_installer_gate.sh"
         ]
       },
       {
         "stage": "VALIDATION",
-        "goal": "Verify positive and negative process paths without local CHIMERA runtime or network changes.",
-        "outcome": "Session-process guard, selfchecks and negative current-workline cases passed in local process-only checks.",
+        "goal": "Verify the new failure-hardening package locally without touching CHIMERA runtime or network state on the current PC.",
+        "outcome": "Syntax checks passed; start, stop, update, and installer contract bundles passed; session-process-guard passed; the local proof now covers broken-sensor listener self-heal in addition to install/update rollback and preserved operator settings.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "just session-process-guard",
-          "just current-workline-attestation-guard-selfcheck",
-          "cargo clippy -q -p chimera-lab --bin current_workline_attestation_guard -- -D warnings"
+          "scripts/chimera-control.sh",
+          "scripts/chimera_start_contract_smoke.sh",
+          "scripts/chimera_stop_contract_smoke.sh",
+          "scripts/chimera_installer_gate.sh",
+          "scripts/chimera_update_contract_smoke.sh",
+          "scripts/release_bundle_install_contract_smoke.sh",
+          "docs/CURRENT_WORKLINE_ATTESTATION.json"
         ]
       },
       {
         "stage": "POSTMORTEM",
-        "goal": "Record what is fixed and what remains a truth boundary.",
-        "outcome": "Old canonical-only proof reuse is blocked; external subagent execution remains limited by absence of signed tool receipts.",
+        "goal": "State what the July 5 line really closes and what must remain open until remote proof or deeper freshness work lands.",
+        "outcome": "Install/update mixed-state failure classes and broken-sensor listener self-heal failures are materially reduced, but publication truth, stale artifact precedence, remote reboot persistence, and live rebind continuity remain open and block any pass claim.",
         "gate_decision": "pass",
         "council_review_recorded": true,
         "red_team_review_recorded": true,
         "evidence": [
-          "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-          "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json"
+          "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
+          "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
         ]
       }
     ],
     "evidence": [
       "docs/WORKFLOW_ATTESTATION.json",
-      "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md"
+      "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md"
     ]
   },
   "deepseek_stage_check": {
@@ -171,38 +181,40 @@
         "role": "architect",
         "interdisciplinary_research_used": true,
         "disciplines_considered": [
-          "systems engineering",
-          "aviation safety",
-          "incident response"
+          "release engineering",
+          "safety engineering",
+          "failure analysis"
         ],
         "fundamental_principles_checked": [
-          "defense in depth",
-          "independent verification"
+          "restore behavior not only files",
+          "do not promote partial proof to pass"
         ],
         "knowledge_transfer_checked": true,
-        "transfer_principle": "Use layered proof gates so one stale artifact cannot certify a new workline.",
-        "rejected_analogy_reason": "Human meeting minutes alone were rejected because they are not machine-checkable.",
+        "transfer_principle": "Widen the rollback boundary to the full external operator state so a failed install cannot leave behavior half-new and half-old.",
+        "rejected_analogy_reason": "A broad refactor-first approach was rejected because it would expand change surface without first closing the shared failure boundary.",
         "evidence": [
-          "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json"
+          "scripts/install_release.sh",
+          "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md"
         ]
       },
       {
         "role": "senior_developer",
         "interdisciplinary_research_used": true,
         "disciplines_considered": [
-          "compiler validation",
-          "supply-chain attestations",
-          "quality control"
+          "distributed systems",
+          "cache invalidation",
+          "control-plane design"
         ],
         "fundamental_principles_checked": [
-          "reproducible evidence",
-          "fail closed"
+          "fresh state must beat stale cache",
+          "shared resolver should own freshness rules"
         ],
         "knowledge_transfer_checked": true,
-        "transfer_principle": "Bind referenced artifacts by digest so a path name alone is not sufficient proof.",
-        "rejected_analogy_reason": "A single boolean flag was rejected because it cannot carry enough independent evidence.",
+        "transfer_principle": "Do not let raw cached endpoint files outrank validated fresh control-plane state; if freshness matters, resolution belongs in a single verified loader.",
+        "rejected_analogy_reason": "Direct shell jq parsing was rejected as a final authority because file shape alone is not enough to preserve endpoint causality.",
         "evidence": [
-          "crates/chimera-lab/src/current_workline_attestation_guard.rs"
+          "scripts/mesh_launch_preflight_auto_bind.sh",
+          "crates/chimera-cli/src/mesh_cli/nodes_inventory/discovery.rs"
         ]
       },
       {
@@ -210,242 +222,237 @@
         "interdisciplinary_research_used": true,
         "disciplines_considered": [
           "negative testing",
-          "audit sampling",
-          "safety drills"
+          "forensic audit",
+          "behavioral contracts"
         ],
         "fundamental_principles_checked": [
-          "prove rejection paths",
-          "test the guard itself"
+          "prove rollback after mutation",
+          "prove the false-green path explicitly"
         ],
         "knowledge_transfer_checked": true,
-        "transfer_principle": "Every claimed protection needs a negative case that proves the bypass is rejected.",
-        "rejected_analogy_reason": "Happy-path-only certification was rejected because it would not catch stale proof reuse.",
+        "transfer_principle": "Every hardening claim needs a paired negative-path proof showing that stale state, misleading success, and secret leakage are rejected instead of merely not discussed.",
+        "rejected_analogy_reason": "Happy-path-only validation was rejected because it would miss the exact mixed-state failures that triggered this workline.",
         "evidence": [
-          "tests/fixtures/current_workline_attestation_guard/fail/canonical_kind_mismatch.json",
-          "tests/fixtures/current_workline_attestation_guard/fail/missing_subagent_execution_log_field.json"
+          "scripts/chimera_update_contract_smoke.sh",
+          "scripts/chimera_doctor_contract_smoke.sh"
         ]
       },
       {
         "role": "security_engineer",
         "interdisciplinary_research_used": true,
         "disciplines_considered": [
-          "threat modeling",
-          "evidence handling",
-          "access control"
+          "trust management",
+          "reliability theory",
+          "change control"
         ],
         "fundamental_principles_checked": [
-          "least privilege",
-          "truth boundary"
+          "authority must stay explicit",
+          "mixed external state must fail closed"
         ],
         "knowledge_transfer_checked": true,
-        "transfer_principle": "Record what the guard cannot prove instead of silently upgrading structure checks to truth.",
-        "rejected_analogy_reason": "Cryptographic proof of external model cognition was rejected because the tool provides no signed receipt.",
+        "transfer_principle": "Rollback and source selection are both trust boundaries: preserve valid operator intent, but never silently widen the authority set or accept half-restored state.",
+        "rejected_analogy_reason": "Implicit source expansion was rejected because availability improvement is not allowed to change trust semantics by accident.",
         "evidence": [
-          "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
-          "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json"
+          "scripts/chimera-update.sh",
+          "scripts/install_release.sh"
         ]
       },
       {
         "role": "devops_engineer",
         "interdisciplinary_research_used": true,
         "disciplines_considered": [
-          "release gates",
-          "change management",
-          "operations safety"
+          "systems engineering",
+          "control theory",
+          "reliability theory"
         ],
         "fundamental_principles_checked": [
-          "same gate everywhere",
-          "safe local preflight"
+          "recovery is not proved until the loop closes remotely",
+          "service green must match runtime truth"
         ],
         "knowledge_transfer_checked": true,
-        "transfer_principle": "Put the current-workline guard into each relevant entry point, not only the preferred command.",
-        "rejected_analogy_reason": "Manual operator discipline was rejected because future sessions need automatic enforcement.",
+        "transfer_principle": "Boot recovery and port-conflict repair are only complete when the packaged release survives reboot and peers actually consume the fresh endpoint without manual repair.",
+        "rejected_analogy_reason": "Local service plumbing was rejected as sufficient proof because it does not establish remote closed-loop recovery on the stand.",
         "evidence": [
-          "justfile",
-          "scripts/ship_readiness.sh"
+          "scripts/install_desktop_control.sh",
+          "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
         ]
       },
       {
         "role": "critic_skeptic",
         "interdisciplinary_research_used": true,
         "disciplines_considered": [
-          "red-team review",
-          "forensic audit",
-          "reliability engineering"
+          "control theory",
+          "evidence freshness",
+          "forensic audit"
         ],
         "fundamental_principles_checked": [
-          "assume bypass attempts",
-          "separate evidence from claims"
+          "background recovery intent is not health truth",
+          "stale carryover must not stay green"
         ],
         "knowledge_transfer_checked": true,
-        "transfer_principle": "Treat any single self-reported trace as weaker than an independently hashed artifact plus negative tests.",
-        "rejected_analogy_reason": "Perfect-proof language was rejected because the external tool lacks cryptographic receipts.",
+        "transfer_principle": "Do not report healthy runtime when only a future background reconcile might repair publication; degraded truth must remain visibly degraded until actually repaired.",
+        "rejected_analogy_reason": "A green orchestrator with partial publication was rejected as acceptable because operator-visible health cannot be inferred from intended future recovery.",
         "evidence": [
-          "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json"
+          "scripts/chimera-control.sh",
+          "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
         ]
       }
     ],
     "evidence": [
-      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json",
-      "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md"
+      "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
+      "docs/AI_ARCHITECT_ALGORITHM_COVERAGE.json"
     ]
   },
   "subagent_execution_log": [
     {
       "role": "architect",
-      "agent_id": "019f1dac-4cd2-77a1-bccf-ebd7cd742486",
+      "agent_id": "019f338a-6d4c-7b71-8bce-4c6167297993",
       "tool": "multi_agent_v1.spawn_agent",
       "status": "completed",
-      "verdict": "PASS",
-      "started_at_utc": "2026-07-01T12:34:29Z",
-      "completed_at_utc": "2026-07-01T12:45:42Z",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:44:00Z",
+      "completed_at_utc": "2026-07-05T18:47:00Z",
       "deepseek_stages_checked": true,
       "interdisciplinary_research_used": true,
       "independent_before_cross_review": true,
       "truth_boundary_recorded": true,
-      "prompt_summary": "Architect prompt summary: perform read-only final audit of DeepSeek lifecycle guard hardening, including eight stages, current workline binding, stage trace, gate integration, hash binding, negative fixtures, and interdisciplinary coverage.",
-      "prompt_sha256": "d748dc974b7686b58fcd19f349470ed929520935b1bd45abd1d503936c70a6c0",
-      "output_summary": "Architect output summary: verdict PASS for read-only static audit; eight-stage lifecycle, current workline binding, stage_trace, handoff/ship integration, hash binding, negative fixtures, and interdisciplinary source-list checks were present within non-runtime scope.",
-      "output_sha256": "dcd94aa31097417346211d311c5df7b22d5e8bbbc78415d389c4248ccd30759b",
+      "prompt_summary": "Architect prompt summary: audit the July 5 failure-hardening line for install/update transactionality, operator intent preservation, degraded publication truth, and the exact proof boundary needed before any pass claim.",
+      "prompt_sha256": "14634574afdcd01310b844f47068eb4275b99fa395eebf21651867976937e088",
+      "output_summary": "Architect output summary: verdict PARTIAL; transactional restore and intent preservation are accepted, but the workline still needs a July 5 attestation, remote reboot/rebind proof, and stricter truth around auto-reconcile publication semantics.",
+      "output_sha256": "dfd7cad079450d42d977f6a50a9391a9dc9cdcf8ef9f56121760786485184dd2",
       "evidence": [
-        "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-        "docs/CURRENT_WORKLINE_ATTESTATION.json"
+        "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md",
+        "scripts/install_release.sh"
       ]
     },
     {
       "role": "senior_developer",
-      "agent_id": "019f1dac-8f3d-7f51-97b5-7c5f68858c71",
+      "agent_id": "019f3372-0880-70d2-8e10-532f48920d64",
       "tool": "multi_agent_v1.spawn_agent",
       "status": "completed",
-      "verdict": "PASS",
-      "started_at_utc": "2026-07-01T12:35:03Z",
-      "completed_at_utc": "2026-07-01T12:48:35Z",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:21:00Z",
+      "completed_at_utc": "2026-07-05T18:40:00Z",
       "deepseek_stages_checked": true,
       "interdisciplinary_research_used": true,
       "independent_before_cross_review": true,
       "truth_boundary_recorded": true,
-      "prompt_summary": "Senior developer prompt summary: inspect current_workline_attestation_guard code for stale canonical rejection, stage_trace validation, workline SHA binding, subagent log requirements, interdisciplinary flags, and fixtures.",
-      "prompt_sha256": "0fcd5ffd29afdae6beb87085ba3c7ede4cd119fa9b3c1ce9c10ddcb38defa381",
-      "output_summary": "Senior developer output summary: verdict PASS for read-only code audit; guard rejects old workflow attestation as current proof and validates stage_trace, workline hash, six subagent roles, interdisciplinary trace, and fixtures, with external subagent execution remaining a trust boundary.",
-      "output_sha256": "4dc6eca7798b3b45945fc0f102ec27095dddce7b96007f8fb633116539512a9c",
+      "prompt_summary": "Senior developer prompt summary: inspect mesh publication, auto-bind, and stale artifact handling to identify the smallest safe code boundary that reduces silent mixed-state and self-heal drift.",
+      "prompt_sha256": "6755a7c7c6ab97f3592c2cb7d4da36ca6c41f4c9fe2416633578e98cf0df26ab",
+      "output_summary": "Senior developer output summary: verdict PARTIAL; install/update hardening can proceed now, but shell auto-bind still trusts cached endpoint-shaped files too early and needs validated freshness or a CLI-owned resolver.",
+      "output_sha256": "2fe1bcf00e4e1aec1055fc4df945210af83ecdd190bb602d3ac1e279d6f8d1f9",
       "evidence": [
-        "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-        "crates/chimera-lab/src/current_workline_attestation_guard.rs"
+        "scripts/mesh_launch_preflight_auto_bind.sh",
+        "crates/chimera-cli/src/mesh_cli/nodes_inventory/discovery.rs"
       ]
     },
     {
       "role": "tester",
-      "agent_id": "019f1dad-419f-74b3-8d98-477b733fbd67",
+      "agent_id": "019f3372-7544-74b1-beac-416397c49517",
       "tool": "multi_agent_v1.spawn_agent",
       "status": "completed",
-      "verdict": "PASS",
-      "started_at_utc": "2026-07-01T12:35:34Z",
-      "completed_at_utc": "2026-07-01T12:41:24Z",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:21:30Z",
+      "completed_at_utc": "2026-07-05T18:39:00Z",
       "deepseek_stages_checked": true,
       "interdisciplinary_research_used": true,
       "independent_before_cross_review": true,
       "truth_boundary_recorded": true,
-      "prompt_summary": "Tester prompt summary: verify proof and test coverage for current-workline guard, including selfcheck, old canonical rejection, missing subagent log, hash mismatch, session-process guard, and ship-readiness selfcheck.",
-      "prompt_sha256": "f8cec65224c60353621b397dc1ed3358e1f85472aea6deb92f7ddb1b1a8bd52a",
-      "output_summary": "Tester output summary: verdict PASS; current-workline selfcheck, session-process guard, ship-readiness selfcheck, old canonical rejection, missing field rejection, empty log rejection, and tampered hash test passed in a read-only audit target.",
-      "output_sha256": "88d2093fd572be707dbb7c282c89a72bb8624b36a2cc9efbf6fea892c74f6356",
+      "prompt_summary": "Tester prompt summary: define the strongest negative-path contract bundle for failure hardening, covering rollback, redaction, stale state, false-green health, and release reinstall behavior.",
+      "prompt_sha256": "7646cfa22fb009935e631daefb5d51644d1c1e0e73d3819ad2fc0b45f97039b7",
+      "output_summary": "Tester output summary: verdict PARTIAL; the new rollback/install contracts are good, but status, doctor, and rollback text still need explicit negative tests against stale artifacts, misleading success, and secret leakage.",
+      "output_sha256": "ef3b62eeef120571c77eeba0f45c2ebf9f562b44867944e760fe545e3fa1bc38",
       "evidence": [
-        "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-        "docs/CURRENT_WORKLINE_ATTESTATION.json"
+        "scripts/chimera_update_contract_smoke.sh",
+        "scripts/chimera_doctor_contract_smoke.sh"
       ]
     },
     {
       "role": "security_engineer",
-      "agent_id": "019f1dad-866c-7b21-8fe6-f8ffcdfd352e",
+      "agent_id": "019f3372-314b-77d2-a86e-0ca6a0adb625",
       "tool": "multi_agent_v1.spawn_agent",
       "status": "completed",
       "verdict": "PARTIAL",
-      "started_at_utc": "2026-07-01T12:35:52Z",
-      "completed_at_utc": "2026-07-01T12:48:19Z",
+      "started_at_utc": "2026-07-05T18:20:30Z",
+      "completed_at_utc": "2026-07-05T18:41:00Z",
       "deepseek_stages_checked": true,
       "interdisciplinary_research_used": true,
       "independent_before_cross_review": true,
       "truth_boundary_recorded": true,
-      "prompt_summary": "Security prompt summary: audit bypass and secrecy risks for stale canonical proof reuse, interdisciplinary removal, secret or stand literal leakage, and the honest boundary of JSON proof.",
-      "prompt_sha256": "30c5a6e0503d7fe6cd6580e164bc2f98bde47aaed0144914b7944add69e2d923",
-      "output_summary": "Security output summary: verdict PARTIAL; stale canonical reuse and removal of interdisciplinary research are blocked structurally, no secret or stand marker issue was found in checked proof files, but JSON cannot independently prove physical external subagent execution.",
-      "output_sha256": "1f9218bb3440d52401b1733e5d1077ebfe97694f55bb227964cb7fd3bb4cdc31",
+      "prompt_summary": "Security prompt summary: inspect update-source trust, rollback safety, and operator-state preservation for failure hardening, and identify where wrong authority or mixed external state can still win.",
+      "prompt_sha256": "cada1ec71a8cd4e743fa8922f83b1cf340198e94795c5b5b04089241e4013b83",
+      "output_summary": "Security output summary: verdict PARTIAL; external-state rollback and preserved settings are the right direction, but bootstrap metadata trust and undeclared authority expansion remain open until source binding is tightened.",
+      "output_sha256": "3d9f2b81c60107a52d0ac449e53a0e3b9c837e7242d4cd647d80e9f7d0f2de56",
       "evidence": [
-        "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-        "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md"
+        "scripts/chimera-update.sh",
+        "scripts/install_release.sh"
       ]
     },
     {
       "role": "devops_engineer",
-      "agent_id": "019f1dad-c7a0-7cb3-a90f-2c42ec45cadc",
+      "agent_id": "019f3372-534b-7193-9c00-2c2b8f1756d7",
       "tool": "multi_agent_v1.spawn_agent",
       "status": "completed",
-      "verdict": "PASS",
-      "started_at_utc": "2026-07-01T12:36:16Z",
-      "completed_at_utc": "2026-07-01T12:44:55Z",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:21:00Z",
+      "completed_at_utc": "2026-07-05T18:42:00Z",
       "deepseek_stages_checked": true,
       "interdisciplinary_research_used": true,
       "independent_before_cross_review": true,
       "truth_boundary_recorded": true,
-      "prompt_summary": "DevOps prompt summary: audit process gate integration for session-process-guard, handoff-check, ship_readiness.sh, ship-readiness-selfcheck, and absence of local runtime or network changes in safe paths.",
-      "prompt_sha256": "52f02f3da690fa29a88eb843ac34e297f7f5012fb90d6310d928bc76bf18788e",
-      "output_summary": "DevOps output summary: verdict PASS for read-only gate integration audit; session-process, handoff dry-run, and ship-readiness selfcheck include current-workline guard before broader checks, with full runtime and report-writing paths intentionally not run locally.",
-      "output_sha256": "60419b4d6f76828c50ad38dea98da8b0316535f9e10f3c03697fc03f2efe3192",
+      "prompt_summary": "DevOps prompt summary: audit reboot recovery, service lifecycle coupling, port-conflict rebind continuity, and the evidence needed to prove the packaged release recovers cleanly on the SSH stand.",
+      "prompt_sha256": "72cd2eb13adfb2aee4f372a566da4571764b7db4375b9a08c8543015b9516d0c",
+      "output_summary": "DevOps output summary: verdict PARTIAL; local lifecycle plumbing exists, but reboot persistence, post-rebind peer continuity, and remote closed-loop recovery are still unproven and must stay open blockers.",
+      "output_sha256": "63ecd8ff04590763b4672783b04fbffbe4936120491016487bf9c05b9ce7a53e",
       "evidence": [
-        "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-        "justfile",
-        "scripts/ship_readiness.sh"
+        "scripts/install_desktop_control.sh",
+        "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
       ]
     },
     {
       "role": "critic_skeptic",
-      "agent_id": "019f1dae-0605-7b80-8d5b-2483d8b38e98",
+      "agent_id": "019f338a-a284-71e3-9605-3441d90453f2",
       "tool": "multi_agent_v1.spawn_agent",
       "status": "completed",
       "verdict": "PARTIAL",
-      "started_at_utc": "2026-07-01T12:36:25Z",
-      "completed_at_utc": "2026-07-01T12:44:34Z",
+      "started_at_utc": "2026-07-05T18:46:00Z",
+      "completed_at_utc": "2026-07-05T18:47:30Z",
       "deepseek_stages_checked": true,
       "interdisciplinary_research_used": true,
       "independent_before_cross_review": true,
       "truth_boundary_recorded": true,
-      "prompt_summary": "Critic prompt summary: actively search for remaining bypasses after hardening, including stale canonical reuse, missing current proof gates, fake subagent trace, fake interdisciplinary research, missing stage trace, weak hashes, and weak negative tests.",
-      "prompt_sha256": "3333ce1e7a8d087cc319a75f6493d58e73e5694da250654557b7aa8fb20fe446",
-      "output_summary": "Critic output summary: verdict PARTIAL; hardening blocks stale canonical-only proof in relevant gates and adds stage/hash/negative checks, but fake subagent trace and semantic interdisciplinary quality remain honest trust boundaries unless external signed receipts exist.",
-      "output_sha256": "58c797e911d5c0ac88f7c60b720a9cfc53a50d682f7b0308e932c52240cf4aa4",
+      "prompt_summary": "Critic prompt summary: challenge the July 5 failure-hardening line for false-green health, stale carryover, and any path where background recovery intent can mask a broken current state.",
+      "prompt_sha256": "1cbe5e5fb1e93e9b98f9dfbd43fbc66daf7b8b309c73a7dca11a042282b40901",
+      "output_summary": "Critic output summary: verdict PARTIAL; the work is safer than before, but auto_reconcile can still leave publication failure looking green, stale bindings can survive, and doctor/status still overstate health without freshness coupling.",
+      "output_sha256": "c5392beaccb1e517677a42ba54dc7afde8d8c3cb33da641951f0d42addef9b67",
       "evidence": [
-        "docs/WORKFLOW_ATTESTATION_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.md",
-        "docs/CURRENT_WORKLINE_ATTESTATION.json",
-        "crates/chimera-lab/src/current_workline_attestation_guard.rs"
+        "scripts/chimera-control.sh",
+        "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
       ]
     }
   ],
   "review_results": {
     "risks_found": [
-      "stale canonical proof reuse",
-      "manual fake subagent trace",
-      "template-like interdisciplinary wording",
-      "current proof accepted by only one gate path",
-      "artifact path accepted without content hash"
+      "external operator state could be left half-new after failed install/update",
+      "transparent runtime identity values could be silently overwritten by the current shell user",
+      "recorded local-bin launch location could drift on update",
+      "publication truth, stale artifact precedence, and remote reboot/rebind proof remain incomplete"
     ],
     "accepted_fixes": [
-      "current workline proof required",
-      "subagent execution trace required",
-      "current-workline guard wired into session, handoff and ship paths",
-      "workline report hash binding required",
-      "handoff hash binding required",
-      "stage reports required",
-      "per-role interdisciplinary checks required"
+      "snapshot and restore external operator state on install/update failure",
+      "preserve existing transparent runtime UID/GID/exempt UID when valid",
+      "reuse the recorded local-bin target when the operator did not override it",
+      "add negative-path contract coverage for installer failure, launcher-link failure, and recorded local-bin reuse"
     ],
     "rejected_items": [
-      "canonical workflow guard alone is enough",
-      "single real_subagents_used flag is enough",
-      "global interdisciplinary boolean is enough",
-      "path-only workline artifact binding is enough"
+      "broad refactor of runtime publication and discovery paths in the same pass",
+      "promoting the July 5 line to pass without remote reboot/rebind proof",
+      "treating background auto-reconcile intent as equivalent to healthy publication truth"
     ],
     "open_blockers": [
-      "security_engineer verdict PARTIAL: proxy/lab evidence and endpoint redaction risks require follow-up guard work before process can be marked pass",
-      "critic_skeptic verdict PARTIAL: semantic interdisciplinary quality and fake-trace bypass risk require follow-up guard work before process can be marked pass"
+      "Start/publication truth is still too optimistic in some auto_reconcile paths and can still look healthier than it is.",
+      "Consumer-side stale artifact precedence is still weaker than the verified CLI discovery path in mesh_launch_preflight_auto_bind.sh.",
+      "Remote packaged proof is still missing for reboot persistence, post-rebind peer continuity, and live publication recovery on the SSH stand."
     ]
   },
   "gap_resolution": {
@@ -454,10 +461,10 @@
     "interdisciplinary_trace_required": true,
     "stale_handoff_binding_blocked": true,
     "evidence": [
-      "crates/chimera-lab/src/current_workline_attestation_guard.rs",
-      "justfile",
-      "docs/CURRENT_WORKLINE_ATTESTATION.json",
-      "docs/SUBAGENT_EXECUTION_TRACE_AI_ARCHITECT_GUARD_HARDENING_2026_07_01.json"
+      "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
+      "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
+      "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md",
+      "crates/chimera-lab/src/current_workline_attestation_guard.rs"
     ]
   }
 }

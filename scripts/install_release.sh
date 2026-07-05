@@ -3,7 +3,6 @@ set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHIMERA_HOME="${CHIMERA_HOME:-$HOME/.local/share/chimera}"
-LOCAL_BIN="${CHIMERA_LOCAL_BIN:-$HOME/.local/bin}"
 DEFAULT_RELEASE_URL="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz"
 BUNDLE_SOURCE="${1:-${CHIMERA_RELEASE_ARCHIVE_URL:-$DEFAULT_RELEASE_URL}}"
 CHECKSUM_SOURCE="${2:-${CHIMERA_RELEASE_CHECKSUM_FILE:-}}"
@@ -11,6 +10,15 @@ ALLOW_LOCAL_SOURCE="${CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE:-0}"
 RELEASE_VERSION_FILE=".chimera_release_version"
 RELEASE_BUNDLE_SHA_FILE=".chimera_release_bundle.sha256"
 INSTALL_LOCAL_BIN_FILE=".chimera_install_local_bin"
+RUNTIME_SERVICE_UNIT="${CHIMERA_RUNTIME_SERVICE_UNIT:-chimera-runtime.service}"
+NODE_SERVICE_UNIT="${CHIMERA_NODE_SERVICE_UNIT:-chimera-node.service}"
+DATAPATH_SERVICE_UNIT="${CHIMERA_DATAPATH_SERVICE_UNIT:-chimera-datapath.service}"
+SITE_AUTOWATCH_SERVICE_UNIT="${CHIMERA_SITE_AUTOWATCH_SERVICE_UNIT:-chimera-site-watch.service}"
+LEGACY_NODE_COMPAT_SERVICE_UNIT="${LEGACY_NODE_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_NODE_SERVICE_UNIT:-chimera-gateway.service}}"
+LEGACY_DATAPATH_COMPAT_SERVICE_UNIT="${LEGACY_DATAPATH_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_DATAPATH_SERVICE_UNIT:-chimera-client.service}}"
+SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR="$SYSTEMD_USER_DIR/default.target.wants"
+APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
 sha256_file() {
   local file="${1:?file_required}"
@@ -80,6 +88,97 @@ verify_checksum_required() {
   export CHIMERA_RELEASE_BUNDLE_SHA256
 }
 
+path_exists_or_link() {
+  local path="${1:?path_required}"
+  [[ -e "$path" || -L "$path" ]]
+}
+
+remove_path_if_present() {
+  local path="${1:?path_required}"
+  path_exists_or_link "$path" || return 0
+  rm -rf "$path"
+}
+
+resolve_local_bin_default() {
+  local recorded_local_bin_file="${CHIMERA_HOME}/${INSTALL_LOCAL_BIN_FILE}"
+  if [[ -f "$recorded_local_bin_file" ]]; then
+    local recorded_local_bin=""
+    recorded_local_bin="$(tr -d '\r' <"$recorded_local_bin_file" 2>/dev/null | head -n 1 | tr -d '\n' || true)"
+    if [[ -n "$recorded_local_bin" ]]; then
+      printf '%s\n' "$recorded_local_bin"
+      return 0
+    fi
+  fi
+  printf '%s\n' "$HOME/.local/bin"
+}
+
+LOCAL_BIN="${CHIMERA_LOCAL_BIN:-$(resolve_local_bin_default)}"
+
+tracked_external_state_paths() {
+  printf '%s\n' \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/chimera" \
+    "$SYSTEMD_USER_DIR/$RUNTIME_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DIR/$NODE_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DIR/$DATAPATH_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DIR/$SITE_AUTOWATCH_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DIR/$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DIR/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR/$RUNTIME_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR/$NODE_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR/$DATAPATH_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR/$SITE_AUTOWATCH_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR/$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
+    "$SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" \
+    "$APPLICATIONS_DIR/chimera-control-gui.desktop" \
+    "$APPLICATIONS_DIR/chimera-control.desktop" \
+    "$LOCAL_BIN/chimera" \
+    "$LOCAL_BIN/chimera.sh" \
+    "$LOCAL_BIN/chimera-sh"
+}
+
+snapshot_external_state() {
+  local snapshot_dir="${1:?snapshot_dir_required}"
+  local snapshot_root="$snapshot_dir/files"
+  local manifest_file="$snapshot_dir/manifest.tsv"
+  local path snapshot_path
+  mkdir -p "$snapshot_root"
+  : >"$manifest_file"
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    if path_exists_or_link "$path"; then
+      printf 'present\t%s\n' "$path" >>"$manifest_file"
+      snapshot_path="$snapshot_root/${path#/}"
+      mkdir -p "$(dirname "$snapshot_path")"
+      cp -a "$path" "$snapshot_path"
+    else
+      printf 'missing\t%s\n' "$path" >>"$manifest_file"
+    fi
+  done < <(tracked_external_state_paths)
+}
+
+restore_external_state() {
+  local snapshot_dir="${1:-}"
+  local manifest_file="$snapshot_dir/manifest.tsv"
+  local snapshot_root="$snapshot_dir/files"
+  local state path snapshot_path
+  [[ -n "$snapshot_dir" && -f "$manifest_file" ]] || return 0
+  while IFS=$'\t' read -r state path; do
+    [[ -n "$path" ]] || continue
+    remove_path_if_present "$path"
+    if [[ "$state" == "present" ]]; then
+      snapshot_path="$snapshot_root/${path#/}"
+      mkdir -p "$(dirname "$path")"
+      cp -a "$snapshot_path" "$path"
+    fi
+  done <"$manifest_file"
+}
+
+cleanup_external_state_snapshot() {
+  local snapshot_dir="${1:-}"
+  [[ -n "$snapshot_dir" && -e "$snapshot_dir" ]] || return 0
+  rm -rf "$snapshot_dir"
+}
+
 link_launchers() {
   mkdir -p "${LOCAL_BIN}" || return 1
   ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera" || return 1
@@ -115,7 +214,7 @@ install_prepared_release_tree() {
   local prepared_release="${1:?prepared_release_required}"
   local archive="${2:-}"
   local checksum="${3:-}"
-  local parent_dir backup_home="" had_previous=0
+  local parent_dir backup_home="" external_state_snapshot="" had_previous=0
 
   [[ -d "$prepared_release" ]] || {
     echo "error: prepared release tree not found: $prepared_release" >&2
@@ -145,6 +244,13 @@ install_prepared_release_tree() {
     return 1
   fi
 
+  external_state_snapshot="$(mktemp -d "${parent_dir}/.chimera-external.XXXXXX")"
+  if ! snapshot_external_state "$external_state_snapshot"; then
+    restore_previous_release "$backup_home" "$had_previous"
+    cleanup_external_state_snapshot "$external_state_snapshot"
+    return 1
+  fi
+
   echo "install: running desktop control setup"
   CHIMERA_RELEASE_VERSION="$(cat "${CHIMERA_HOME}/.chimera_release_version" 2>/dev/null || true)"
   export CHIMERA_RELEASE_VERSION
@@ -152,20 +258,19 @@ install_prepared_release_tree() {
   bash "${CHIMERA_HOME}/scripts/install_desktop_control.sh" || install_rc=$?
   if [[ "$install_rc" -ne 0 ]]; then
     restore_previous_release "$backup_home" "$had_previous"
-    if [[ "$had_previous" == "1" ]]; then
-      link_launchers
-    fi
+    restore_external_state "$external_state_snapshot"
+    cleanup_external_state_snapshot "$external_state_snapshot"
     return "$install_rc"
   fi
 
   if ! link_launchers; then
     restore_previous_release "$backup_home" "$had_previous"
-    if [[ "$had_previous" == "1" ]]; then
-      link_launchers || true
-    fi
+    restore_external_state "$external_state_snapshot"
+    cleanup_external_state_snapshot "$external_state_snapshot"
     return 1
   fi
   printf '%s\n' "$LOCAL_BIN" > "$CHIMERA_HOME/$INSTALL_LOCAL_BIN_FILE"
+  cleanup_external_state_snapshot "$external_state_snapshot"
   if [[ -n "$backup_home" ]]; then
     remove_previous_release_backup "$backup_home"
   fi

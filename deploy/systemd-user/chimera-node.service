@@ -2,12 +2,19 @@
 Description=CHIMERA WEAVE Node (user service)
 After=network-online.target
 Wants=network-online.target
+PartOf=chimera-runtime.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
 WorkingDirectory=__CHIMERA_ROOT__
-ExecStart=/usr/bin/env bash -lc 'set -euo pipefail; env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"; if [[ ! -f "$env_file" ]]; then echo "error: missing peer-egress env: $env_file" >&2; exit 1; fi; set -a; source "$env_file"; exec ./scripts/chimera-runner.sh peer-egress'
+ExecStartPre=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __service-preflight-node'
+ExecStart=/usr/bin/env bash -lc 'set -euo pipefail; env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"; override_file="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/runtime_listener_overrides.env"; if [[ ! -f "$env_file" ]]; then echo "error: missing peer-egress env: $env_file" >&2; exit 1; fi; set -a; source "$env_file"; if [[ -f "$override_file" ]]; then source "$override_file"; fi; exec ./scripts/chimera-runner.sh peer-egress'
+ExecStartPost=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __service-poststart-node'
 ExecStop=/usr/bin/env bash -lc 'true'
+Restart=on-failure
+RestartSec=2
 StandardOutput=append:%h/.cache/chimera/chimera_node.service.log
 StandardError=append:%h/.cache/chimera/chimera_node.service.log
 

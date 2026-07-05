@@ -1,0 +1,139 @@
+{
+  "kind": "subagent_execution_trace",
+  "schema_version": 1,
+  "current_workline_id": "failure-hardening-2026-07-05",
+  "external_signed_receipt_available": false,
+  "truth_boundary_recorded": true,
+  "evidence": [
+    "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
+    "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
+  ],
+  "entries": [
+    {
+      "role": "architect",
+      "agent_id": "019f338a-6d4c-7b71-8bce-4c6167297993",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:44:00Z",
+      "completed_at_utc": "2026-07-05T18:47:00Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Architect prompt summary: audit the July 5 failure-hardening line for install/update transactionality, operator intent preservation, degraded publication truth, and the exact proof boundary needed before any pass claim.",
+      "prompt_sha256": "14634574afdcd01310b844f47068eb4275b99fa395eebf21651867976937e088",
+      "output_summary": "Architect output summary: verdict PARTIAL; transactional restore and intent preservation are accepted, but the workline still needs a July 5 attestation, remote reboot/rebind proof, and stricter truth around auto-reconcile publication semantics.",
+      "output_sha256": "dfd7cad079450d42d977f6a50a9391a9dc9cdcf8ef9f56121760786485184dd2",
+      "evidence": [
+        "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md",
+        "scripts/install_release.sh"
+      ]
+    },
+    {
+      "role": "senior_developer",
+      "agent_id": "019f3372-0880-70d2-8e10-532f48920d64",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:21:00Z",
+      "completed_at_utc": "2026-07-05T18:40:00Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Senior developer prompt summary: inspect mesh publication, auto-bind, and stale artifact handling to identify the smallest safe code boundary that reduces silent mixed-state and self-heal drift.",
+      "prompt_sha256": "6755a7c7c6ab97f3592c2cb7d4da36ca6c41f4c9fe2416633578e98cf0df26ab",
+      "output_summary": "Senior developer output summary: verdict PARTIAL; install/update hardening can proceed now, but shell auto-bind still trusts cached endpoint-shaped files too early and needs validated freshness or a CLI-owned resolver.",
+      "output_sha256": "2fe1bcf00e4e1aec1055fc4df945210af83ecdd190bb602d3ac1e279d6f8d1f9",
+      "evidence": [
+        "scripts/mesh_launch_preflight_auto_bind.sh",
+        "crates/chimera-cli/src/mesh_cli/nodes_inventory/discovery.rs"
+      ]
+    },
+    {
+      "role": "tester",
+      "agent_id": "019f3372-7544-74b1-beac-416397c49517",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:21:30Z",
+      "completed_at_utc": "2026-07-05T18:39:00Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Tester prompt summary: define the strongest negative-path contract bundle for failure hardening, covering rollback, redaction, stale state, false-green health, and release reinstall behavior.",
+      "prompt_sha256": "7646cfa22fb009935e631daefb5d51644d1c1e0e73d3819ad2fc0b45f97039b7",
+      "output_summary": "Tester output summary: verdict PARTIAL; the new rollback/install contracts are good, but status, doctor, and rollback text still need explicit negative tests against stale artifacts, misleading success, and secret leakage.",
+      "output_sha256": "ef3b62eeef120571c77eeba0f45c2ebf9f562b44867944e760fe545e3fa1bc38",
+      "evidence": [
+        "scripts/chimera_update_contract_smoke.sh",
+        "scripts/chimera_doctor_contract_smoke.sh"
+      ]
+    },
+    {
+      "role": "security_engineer",
+      "agent_id": "019f3372-314b-77d2-a86e-0ca6a0adb625",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:20:30Z",
+      "completed_at_utc": "2026-07-05T18:41:00Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Security prompt summary: inspect update-source trust, rollback safety, and operator-state preservation for failure hardening, and identify where wrong authority or mixed external state can still win.",
+      "prompt_sha256": "cada1ec71a8cd4e743fa8922f83b1cf340198e94795c5b5b04089241e4013b83",
+      "output_summary": "Security output summary: verdict PARTIAL; external-state rollback and preserved settings are the right direction, but bootstrap metadata trust and undeclared authority expansion remain open until source binding is tightened.",
+      "output_sha256": "3d9f2b81c60107a52d0ac449e53a0e3b9c837e7242d4cd647d80e9f7d0f2de56",
+      "evidence": [
+        "scripts/chimera-update.sh",
+        "scripts/install_release.sh"
+      ]
+    },
+    {
+      "role": "devops_engineer",
+      "agent_id": "019f3372-534b-7193-9c00-2c2b8f1756d7",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:21:00Z",
+      "completed_at_utc": "2026-07-05T18:42:00Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "DevOps prompt summary: audit reboot recovery, service lifecycle coupling, port-conflict rebind continuity, and the evidence needed to prove the packaged release recovers cleanly on the SSH stand.",
+      "prompt_sha256": "72cd2eb13adfb2aee4f372a566da4571764b7db4375b9a08c8543015b9516d0c",
+      "output_summary": "DevOps output summary: verdict PARTIAL; local lifecycle plumbing exists, but reboot persistence, post-rebind peer continuity, and remote closed-loop recovery are still unproven and must stay open blockers.",
+      "output_sha256": "63ecd8ff04590763b4672783b04fbffbe4936120491016487bf9c05b9ce7a53e",
+      "evidence": [
+        "scripts/install_desktop_control.sh",
+        "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
+      ]
+    },
+    {
+      "role": "critic_skeptic",
+      "agent_id": "019f338a-a284-71e3-9605-3441d90453f2",
+      "tool": "multi_agent_v1.spawn_agent",
+      "status": "completed",
+      "verdict": "PARTIAL",
+      "started_at_utc": "2026-07-05T18:46:00Z",
+      "completed_at_utc": "2026-07-05T18:47:30Z",
+      "deepseek_stages_checked": true,
+      "interdisciplinary_research_used": true,
+      "independent_before_cross_review": true,
+      "truth_boundary_recorded": true,
+      "prompt_summary": "Critic prompt summary: challenge the July 5 failure-hardening line for false-green health, stale carryover, and any path where background recovery intent can mask a broken current state.",
+      "prompt_sha256": "1cbe5e5fb1e93e9b98f9dfbd43fbc66daf7b8b309c73a7dca11a042282b40901",
+      "output_summary": "Critic output summary: verdict PARTIAL; the work is safer than before, but auto_reconcile can still leave publication failure looking green, stale bindings can survive, and doctor/status still overstate health without freshness coupling.",
+      "output_sha256": "c5392beaccb1e517677a42ba54dc7afde8d8c3cb33da641951f0d42addef9b67",
+      "evidence": [
+        "scripts/chimera-control.sh",
+        "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md"
+      ]
+    }
+  ]
+}

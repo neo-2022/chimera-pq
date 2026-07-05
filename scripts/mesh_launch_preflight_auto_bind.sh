@@ -49,6 +49,23 @@ read_env_value_from_file() {
   awk -F= -v key="$key" '$1 == key { print substr($0, index($0, $2)); exit }' "$file" 2>/dev/null || true
 }
 
+run_mesh_cli() {
+  if [[ -n "${CHIMERA_RUNNER:-}" && -x "${CHIMERA_RUNNER:-}" ]]; then
+    "$CHIMERA_RUNNER" cli "$@"
+    return $?
+  fi
+  if [[ -x "$repo_root/scripts/chimera-runner.sh" ]]; then
+    "$repo_root/scripts/chimera-runner.sh" cli "$@"
+    return $?
+  fi
+  if [[ -x "$repo_root/bin/chimera-cli" ]]; then
+    "$repo_root/bin/chimera-cli" "$@"
+    return $?
+  fi
+  echo "error: shipped chimera-cli binary is missing" >&2
+  return 1
+}
+
 read_endpoint_from_json_file() {
   local path="${1:?path_required}"
   local node_id="${2:-}"
@@ -153,9 +170,9 @@ resolve_endpoint_from_inventory() {
   local runtime_state
   runtime_state="$(mktemp "${TMPDIR:-/tmp}/chimera-mesh-auto-bind-${label}.XXXXXX.json")"
   local endpoint=""
-  if cargo run -q -p chimera-cli -- mesh nodes select --id "$node_id" --config "$mesh_nodes_config" --runtime-state "$runtime_state" --probe-timeout-ms "$endpoint_resolve_timeout_ms" >/dev/null 2>&1; then
+  if run_mesh_cli mesh nodes select --id "$node_id" --config "$mesh_nodes_config" --runtime-state "$runtime_state" --probe-timeout-ms "$endpoint_resolve_timeout_ms" >/dev/null 2>&1; then
     endpoint="$(
-      cargo run -q -p chimera-cli -- mesh nodes selected-endpoint --config "$mesh_nodes_config" --runtime-state "$runtime_state" 2>/dev/null | head -n1 | tr -d '[:space:]'
+      run_mesh_cli mesh nodes selected-endpoint --config "$mesh_nodes_config" --runtime-state "$runtime_state" 2>/dev/null | head -n1 | tr -d '[:space:]'
     )"
   fi
   rm -f "$runtime_state"
@@ -178,12 +195,12 @@ resolve_side_endpoint() {
   node_id="$(trim_ascii "$(read_env_value_from_file "$node_key" "$env_file")")"
   env_endpoint="$(trim_ascii "$(read_env_value_from_file CHIMERA_MESH_LOCAL_ENDPOINT "$env_file")")"
 
-  if endpoint="$(resolve_endpoint_from_discovery_snapshot "$node_id" "$side_label" || true)" && is_endpoint "$endpoint"; then
+  if endpoint="$(resolve_endpoint_from_published_runtime_state "$node_id" "$side_label" || true)" && is_endpoint "$endpoint"; then
     printf '%s' "$endpoint"
     return 0
   fi
 
-  if endpoint="$(resolve_endpoint_from_published_runtime_state "$node_id" "$side_label" || true)" && is_endpoint "$endpoint"; then
+  if endpoint="$(resolve_endpoint_from_discovery_snapshot "$node_id" "$side_label" || true)" && is_endpoint "$endpoint"; then
     printf '%s' "$endpoint"
     return 0
   fi

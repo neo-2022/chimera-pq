@@ -6,8 +6,10 @@ ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/down
 CHECKSUM_URL_DEFAULT="https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera-pq-release.tar.gz.sha256"
 GITVERS_BOOTSTRAP_URLS_DEFAULT="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_DEFAULT:-https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh}"
 GITVERS_BOOTSTRAP_URLS_FILE="${CHIMERA_UPDATE_GITVERS_BOOTSTRAP_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/update_gitvers_bootstrap_urls.list}"
+RUNTIME_SERVICE_UNIT="${CHIMERA_RUNTIME_SERVICE_UNIT:-chimera-runtime.service}"
 NODE_SERVICE_UNIT="${CHIMERA_NODE_SERVICE_UNIT:-chimera-node.service}"
 DATAPATH_SERVICE_UNIT="${CHIMERA_DATAPATH_SERVICE_UNIT:-chimera-datapath.service}"
+SITE_AUTOWATCH_SERVICE_UNIT="${CHIMERA_SITE_AUTOWATCH_SERVICE_UNIT:-chimera-site-watch.service}"
 LEGACY_NODE_COMPAT_SERVICE_UNIT="${LEGACY_NODE_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_NODE_SERVICE_UNIT:-chimera-gateway.service}}"
 LEGACY_DATAPATH_COMPAT_SERVICE_UNIT="${LEGACY_DATAPATH_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_DATAPATH_SERVICE_UNIT:-chimera-client.service}}"
 INSTALL_LOCAL_BIN_FILE=".chimera_install_local_bin"
@@ -260,8 +262,16 @@ bootstrap_uninstall_release_tree() {
   remove_link_if_points_to_root "$local_bin/chimera" "$chimera_home"
   remove_link_if_points_to_root "$local_bin/chimera.sh" "$chimera_home"
   remove_link_if_points_to_root "$local_bin/chimera-sh" "$chimera_home"
+  remove_path_if_present "$systemd_user_dir/default.target.wants/$RUNTIME_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/default.target.wants/$NODE_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/default.target.wants/$DATAPATH_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/default.target.wants/$SITE_AUTOWATCH_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/default.target.wants/$LEGACY_NODE_COMPAT_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/default.target.wants/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/$RUNTIME_SERVICE_UNIT"
   remove_path_if_present "$systemd_user_dir/$NODE_SERVICE_UNIT"
   remove_path_if_present "$systemd_user_dir/$DATAPATH_SERVICE_UNIT"
+  remove_path_if_present "$systemd_user_dir/$SITE_AUTOWATCH_SERVICE_UNIT"
   remove_path_if_present "$systemd_user_dir/$LEGACY_NODE_COMPAT_SERVICE_UNIT"
   remove_path_if_present "$systemd_user_dir/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT"
   remove_path_if_present "$applications_dir/chimera-control-gui.desktop"
@@ -292,8 +302,10 @@ bootstrap_uninstall_current_installation() {
   fi
   if systemd_user_ready; then
     systemctl --user disable --now \
+      "$RUNTIME_SERVICE_UNIT" \
       "$NODE_SERVICE_UNIT" \
       "$DATAPATH_SERVICE_UNIT" \
+      "$SITE_AUTOWATCH_SERVICE_UNIT" \
       "$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
       "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
   fi
@@ -316,8 +328,16 @@ bootstrap_uninstall_current_installation() {
     "$local_bin/chimera" \
     "$local_bin/chimera.sh" \
     "$local_bin/chimera-sh" \
+    "$systemd_user_dir/default.target.wants/$RUNTIME_SERVICE_UNIT" \
+    "$systemd_user_dir/default.target.wants/$NODE_SERVICE_UNIT" \
+    "$systemd_user_dir/default.target.wants/$DATAPATH_SERVICE_UNIT" \
+    "$systemd_user_dir/default.target.wants/$SITE_AUTOWATCH_SERVICE_UNIT" \
+    "$systemd_user_dir/default.target.wants/$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
+    "$systemd_user_dir/default.target.wants/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" \
+    "$systemd_user_dir/$RUNTIME_SERVICE_UNIT" \
     "$systemd_user_dir/$NODE_SERVICE_UNIT" \
     "$systemd_user_dir/$DATAPATH_SERVICE_UNIT" \
+    "$systemd_user_dir/$SITE_AUTOWATCH_SERVICE_UNIT" \
     "$systemd_user_dir/$LEGACY_NODE_COMPAT_SERVICE_UNIT" \
     "$systemd_user_dir/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" \
     "$applications_dir/chimera-control-gui.desktop" \
