@@ -1,0 +1,159 @@
+{
+  "kind": "chimera_path_proof",
+  "status": "preflight_ok",
+  "reason": "mesh_connect_probe_and_launch_preflight_success",
+  "mode": "mesh_peer_egress_to_peer_ingress",
+  "chimera_datapath_evidence": false,
+  "truth_boundary": "Successful TCP/TLS handshake from laptop to secondary VPS listener proves peer egress (laptop) and peer ingress (VPS).Transparent tunneled IP forwarding is not yet proven because full datapath apply is blocked by rootless DNS write failure on VPS and bound-transit start contract.",
+  "started_at": "2026-07-06T01:09:54Z",
+  "finished_at": "2026-07-06T01:09:54Z",
+  "network_state": "not_modified",
+  "direct_baseline": {
+    "target_ref": "direct#1",
+    "ok": false,
+    "http_code": "000",
+    "remote_ip_present": false,
+    "reason": "not_applicable_for_peer_probe"
+  },
+  "datapath": {
+    "attempted": true,
+    "ok": true,
+    "path_kind": "peer_egress_to_peer_ingress",
+    "targets_total": 1,
+    "targets_passed": 1,
+    "targets_failed": 0,
+    "flow_proof": "connect_probe_success"
+  },
+  "external_reachability": {
+    "attempted": false,
+    "ok": false,
+    "targets_total": 0,
+    "targets_passed": 0,
+    "targets_failed": 0
+  },
+  "mesh_preflight": {
+    "laptop_to_vpsb": {
+      "status": "ready",
+      "network_state": "not_modified",
+      "namespace": "cef-public",
+      "node": "<redacted>",
+      "timeout_ms": 1200,
+      "ready_for_real_launch": true,
+      "blockers": [],
+      "selected_peers": [
+        "peer#1"
+      ],
+      "connected_peer": "peer#1",
+      "connected_endpoint": "endpoint#1:<redacted>",
+      "connect_probe_success": true,
+      "attempts": [
+        {
+          "peer_id": "peer#1",
+          "endpoint": "endpoint#1:<redacted>",
+          "success": true,
+          "error": ""
+        }
+      ],
+      "explain": [
+        "selected_peer_ids=peer#1",
+        "selected_peer_endpoints=endpoint#1:<redacted>",
+        "selected_peer_connect_priority=1:peer#1@<redacted>",
+        "selected_peer_connect_retry_plan=peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured",
+        "selected_peer_connect_backoff_profile=initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=1",
+        "connect_probe_result=connected",
+        "connect_probe_connected_peer=peer#1",
+        "connect_probe_connected_endpoint=endpoint#1:<redacted>"
+      ]
+    },
+    "vpsb_to_vpsa": {
+      "status": "ready",
+      "network_state": "not_modified",
+      "namespace": "cef-public",
+      "node": "<redacted>",
+      "timeout_ms": 1200,
+      "ready_for_real_launch": true,
+      "blockers": [],
+      "selected_peers": [
+        "peer#1"
+      ],
+      "connected_peer": "peer#1",
+      "connected_endpoint": "endpoint#1:<redacted>",
+      "connect_probe_success": true,
+      "attempts": [
+        {
+          "peer_id": "peer#1",
+          "endpoint": "endpoint#1:<redacted>",
+          "success": true,
+          "error": ""
+        }
+      ],
+      "explain": [
+        "selected_peer_ids=peer#1",
+        "selected_peer_endpoints=endpoint#1:<redacted>",
+        "selected_peer_connect_priority=1:peer#1@<redacted>",
+        "selected_peer_connect_retry_plan=peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured",
+        "selected_peer_connect_backoff_profile=initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=1",
+        "connect_probe_result=connected",
+        "connect_probe_connected_peer=peer#1",
+        "connect_probe_connected_endpoint=endpoint#1:<redacted>"
+      ]
+    },
+    "pair_verify": {
+      "status": "ready",
+      "all_ready": true,
+      "side_a_ready": true,
+      "side_b_ready": true,
+      "namespace": "cef-public",
+      "network_state": "not_modified",
+      "blockers": []
+    }
+  },
+  "mesh_connect_probe": {
+    "laptop_to_vpsb": {
+      "namespace": "cef-public",
+      "success": true,
+      "connected_peer": "peer#1",
+      "connected_endpoint": "endpoint#1:<redacted>",
+      "selected_peers": [
+        "peer#1"
+      ],
+      "attempts": [
+        {
+          "peer_id": "peer#1",
+          "endpoint": "endpoint#1:<redacted>",
+          "success": true,
+          "error": ""
+        }
+      ],
+      "explain": [
+        "selected_peer_ids=peer#1",
+        "selected_peer_endpoints=endpoint#1:<redacted>",
+        "selected_peer_connect_priority=1:peer#1@<redacted>",
+        "selected_peer_connect_retry_plan=peer#1@<redacted>:try0(connect)|try1(retry_fast)|try2(retry_slow);ports=<redacted>;fallback_ports=configured",
+        "selected_peer_connect_backoff_profile=initial=0ms;retry1=250ms;retry2=1000ms;jitter_step=50ms;fanout=1",
+        "connect_probe_result=connected",
+        "connect_probe_connected_peer=peer#1",
+        "connect_probe_connected_endpoint=endpoint#1:<redacted>"
+      ]
+    }
+  },
+  "evidence": {
+    "preflight_report_laptop_to_vpsb": "docs/mesh_evidence_2026-07-06/laptop_to_vpsb_preflight.json",
+    "preflight_report_vpsb_to_vpsa": "docs/mesh_evidence_2026-07-06/vpsb_to_vpsa_preflight.json",
+    "pair_verify_report": "docs/mesh_evidence_2026-07-06/pair_verify.json",
+    "connect_probe_report_laptop_to_vpsb": "docs/mesh_evidence_2026-07-06/laptop_to_vpsb_connect_probe.json"
+  },
+  "results": [
+    {
+      "target_ref": "peer#1",
+      "external_reachability": {
+        "ok": false,
+        "http_code": "000",
+        "remote_ip_present": false,
+        "reason": "peer_probe_only"
+      },
+      "row_pass": true,
+      "row_reason": "connect_probe_success"
+    }
+  ]
+}

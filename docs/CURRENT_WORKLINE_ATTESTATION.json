@@ -3,23 +3,24 @@
   "schema_version": 1,
   "status": "partial",
   "current_workline_id": "failure-hardening-2026-07-05",
-  "updated_at_utc": "2026-07-06T06:00:00Z",
+  "updated_at_utc": "2026-07-06T01:14:06Z",
   "canonical_only_not_sufficient": true,
   "requires_current_workline_attestation": true,
   "requires_real_subagent_trace": true,
   "requires_interdisciplinary_trace": true,
   "canonical_lifecycle_attestation": "docs/WORKFLOW_ATTESTATION.json",
   "workline_attestation": "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
-  "workline_attestation_sha256": "b802f06e0e88120530d2a947d7c31e510fbf20ce05dd833fab85d45245425b23",
+  "workline_attestation_sha256": "7e99fa8b45c84c7319c9c751242c44799fad99d60dd821296c115f460f68722c",
   "subagent_execution_trace": "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
   "subagent_execution_trace_sha256": "476c69d010f529d9042598c0164de9ce59a6ed6266572fe824893096d9313f79",
   "latest_handoff": "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md",
-  "latest_handoff_sha256": "afa618bacfe1d21375b18bb6c2f2e7536368f2b285ce597196b7ff9f7410d80d",
+  "latest_handoff_sha256": "28286b554a11f6cc72a2bb79721ed7e9d6660d84ecf988decbf819e1dbab2043",
   "truth_boundary": {
     "local_runtime_started": false,
     "network_state": "not_modified",
     "secrets_redacted": true,
-    "stand_literals_absent": true
+    "stand_literals_absent": true,
+    "mesh_preflight_evidence": true
   },
   "stage_trace": {
     "required": true,
@@ -147,7 +148,10 @@
     ],
     "evidence": [
       "docs/WORKFLOW_ATTESTATION.json",
-      "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md"
+      "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
+      "docs/CHIMERA_PATH_PROOF.json",
+      "docs/CHIMERA_CHANNEL_AUDIT.json",
+      "docs/mesh_evidence_2026-07-06/"
     ]
   },
   "deepseek_stage_check": {
@@ -464,7 +468,10 @@
       "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
       "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
       "docs/MESH_SESSION_HANDOFF_2026-07-05_FAILURE_HARDENING_PASS.md",
-      "crates/chimera-lab/src/current_workline_attestation_guard.rs"
+      "crates/chimera-lab/src/current_workline_attestation_guard.rs",
+      "docs/CHIMERA_PATH_PROOF.json",
+      "docs/CHIMERA_CHANNEL_AUDIT.json",
+      "docs/mesh_evidence_2026-07-06/"
     ]
   }
 }

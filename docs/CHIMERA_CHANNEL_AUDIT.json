@@ -1,0 +1,46 @@
+{
+  "kind": "chimera_channel_audit",
+  "status": "partial",
+  "reason": "transparent_datapath_not_running",
+  "started_at": "2026-07-06T01:09:54Z",
+  "finished_at": "2026-07-06T01:09:54Z",
+  "network_state": "not_modified",
+  "chimera": {
+    "runtime_state": "unknown",
+    "transparent_runtime": "stopped",
+    "route_mode": "split",
+    "split_list_mode": "allow"
+  },
+  "path_proof": {
+    "status": "preflight_ok",
+    "reason": "mesh_connect_probe_and_launch_preflight_success",
+    "direct_remote_ip": "",
+    "datapath_mode": "mesh_peer_egress_to_peer_ingress",
+    "chimera_datapath_evidence": false,
+    "targets_total": 1,
+    "targets_passed": 1,
+    "targets_failed": 0,
+    "pair_verify_all_ready": true,
+    "connect_probe_success": true
+  },
+  "selective_routing": {
+    "app_routes_count": 0,
+    "service_routes_count": 0,
+    "service_override_rows": 0,
+    "app_routes_file": "configs/chimera-app-routes.conf"
+  },
+  "system_default_path": {
+    "iface": "enp0s31f6",
+    "gateway": "192.168.31.1",
+    "iface_class": "regular_interface"
+  },
+  "open_blockers": [
+    "DNS apply fails on VPS because /etc/resolv.conf is a systemd-resolved symlink and cannot be overwritten",
+    "Bound transit start contract fails when ALLOW_BOUND_TRANSIT=true without a transit-lane-bindings file",
+    "Transparent tun routing and real IP packet forwarding remain unproven"
+  ],
+  "evidence": {
+    "path_proof": "docs/CHIMERA_PATH_PROOF.json",
+    "mesh_evidence_dir": "docs/mesh_evidence_2026-07-06"
+  }
+}

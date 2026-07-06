@@ -114,22 +114,61 @@
 - This pass does **not** close the remaining false-green publication semantics
   around `auto_reconcile=armed`.
 
+## Mesh Two-Node Preflight Proof (Added 2026-07-06)
+
+- Secondary VPS (public listener on port 18142) and laptop both run CHIMERA
+  v0.1.170 installed from GitHub Latest.
+- `chimera-cli mesh connect-probe` from laptop to secondary VPS returned
+  `success=true` (TCP/TLS handshake succeeded).
+- `chimera-cli mesh launch-preflight` from laptop to secondary VPS returned
+  `status=ready`, `ready_for_real_launch=true`, `connect_probe_success=true`.
+- `chimera-cli mesh launch-preflight-verify` with:
+  - side-a report: laptop → secondary VPS
+  - side-b report: secondary VPS → primary VPS listener
+  returned `status=ready`, `all_ready=true`, `blockers=[]`.
+- Captured artifacts:
+  - `docs/mesh_evidence_2026-07-06/laptop_to_vpsb_preflight.json`
+  - `docs/mesh_evidence_2026-07-06/laptop_to_vpsb_connect_probe.json`
+  - `docs/mesh_evidence_2026-07-06/vpsb_to_vpsa_preflight.json`
+  - `docs/mesh_evidence_2026-07-06/pair_verify.json`
+  - `docs/CHIMERA_PATH_PROOF.json`
+  - `docs/CHIMERA_CHANNEL_AUDIT.json`
+- The PC was used only as an SSH control host; no local CHIMERA runtime or PC
+  network state was changed.
+
+## Truth Boundary
+
+- Peer egress from the laptop and peer ingress on the secondary VPS are now
+  proven with real cross-Internet handshakes.
+- The primary VPS was used only as an additional listener so that the pair
+  verify command had a ready side-b report; it is not claimed as the target
+  two-node datapath.
+- Transparent tunneled IP forwarding, DNS-to-route binding, and sealed transit
+  are not yet proven because the full datapath apply fails on the VPS due to
+  `/etc/resolv.conf` being a systemd-resolved symlink and because the bound
+  transit start contract fails when enabled without a bindings file.
+- Runtime/publication truth and stale-artifact precedence remain open.
+
 ## Remaining High-Value Gaps
 
+- Close the DNS-apply blocker on systemd-resolved hosts (skip or external DNS
+  path) so `chimera-cli up --apply-dns` does not abort datapath apply.
+- Close the bound-transit start contract failure (`ALLOW_BOUND_TRANSIT=true`
+  without a generated transit-lane-bindings file causes node service failure).
+- Prove transparent tunneled IP forwarding and DNS-to-route binding between two
+  real stand hosts.
 - Runtime/publication truth can still look healthier than it is in some
   background-reconcile paths; this still needs deeper negative-path coverage.
 - Consumer-side stale artifact precedence is still weaker than it should be for
   some persisted selection/publication artifacts; stale-but-present files are
   not yet universally treated as degraded.
-- Two-node (or three-node) live datapath proof between stand hosts is still
-  missing; peer endpoint configuration is covered locally, but the actual
-  encrypted session and packet forwarding are not yet proved.
 - Reboot persistence is now covered by a local deterministic contract; the next
   remote stand pass should confirm the same behavior on real hardware/cloud.
 
 ## Next Step
 
-1. Add a contract or remote-stand proof that exercises live two-node datapath
-   and encrypted session continuity.
-2. Decide whether start should continue to allow `auto_reconcile=armed` success
+1. Fix DNS-apply and bound-transit start contract blockers with minimal
+   product changes and targeted tests.
+2. Re-run full two-host datapath proof through the transparent WEAVE tunnel.
+3. Decide whether start should continue to allow `auto_reconcile=armed` success
    semantics or switch that path to a stricter degraded/non-zero contract.

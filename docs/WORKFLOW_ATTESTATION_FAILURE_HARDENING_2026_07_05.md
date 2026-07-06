@@ -114,6 +114,23 @@ stand proof:
   peer listen port was occupied; deterministic contract smoke now proves the
   same override path locally.
 
+## Live Mesh Preflight Evidence (2026-07-06)
+
+- `chimera-cli mesh connect-probe` from the laptop to the secondary VPS
+  returned `success=true`.
+- `chimera-cli mesh launch-preflight` from the laptop to the secondary VPS
+  returned `status=ready`, `ready_for_real_launch=true`,
+  `connect_probe_success=true`.
+- `chimera-cli mesh launch-preflight-verify` across the laptop → secondary VPS
+  report and the secondary VPS → primary VPS listener report returned
+  `status=ready`, `all_ready=true`, `blockers=[]`.
+- Captured artifacts:
+  - `docs/CHIMERA_PATH_PROOF.json`
+  - `docs/CHIMERA_CHANNEL_AUDIT.json`
+  - `docs/mesh_evidence_2026-07-06/`
+- These artifacts prove real peer egress from the laptop and peer ingress on the
+  secondary VPS. They do **not** yet prove transparent tunneled IP forwarding.
+
 ## Truth Boundary
 
 - Local contract evidence for start/stop/update/install rollback, operator-
@@ -135,9 +152,15 @@ stand proof:
   paths and can look healthier than it is.
 - Consumer-side stale artifact precedence is still weaker than the verified CLI
   discovery path in `mesh_launch_preflight_auto_bind.sh`.
-- Two-node (or three-node) live datapath proof between stand hosts is still
-  missing; peer endpoint configuration is covered locally, but the actual
-  encrypted session and packet forwarding between nodes are not yet proved.
+- Real two-node live datapath proof is partially complete: peer egress from the
+  laptop and peer ingress on the secondary VPS are proven with `connect-probe`
+  and `launch-preflight`, but transparent tunneled IP forwarding, DNS-to-route
+  binding, and sealed transit are not yet exercised.
+- Datapath apply on the VPS aborts because `chimera-cli up --apply-dns` cannot
+  overwrite the systemd-resolved `/etc/resolv.conf` symlink.
+- Enabling `CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true` without a generated
+  transit-lane-bindings file causes the node service to fail; the current stand
+  proof uses `ALLOW_BOUND_TRANSIT=false` as a workaround.
 - Reboot persistence is now covered locally; a future pass should align remote
   stand proof with the same deterministic contract if the implementation
   changes.
