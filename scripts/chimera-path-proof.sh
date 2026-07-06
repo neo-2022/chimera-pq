@@ -128,11 +128,12 @@ strict_flow_proof_state() {
   local cli_bin="${1:?cli_bin_required}"
   local state_file="${2:?state_file_required}"
   local max_age_sec="${3:?max_age_sec_required}"
+  local require_flow="${CHIMERA_PATH_PROOF_REQUIRE_FLOW:-true}"
   local output rc
   output="$(
     "$cli_bin" state proof \
       --state-file "$state_file" \
-      --require-flow true \
+      --require-flow "$require_flow" \
       --max-flow-age-sec "$max_age_sec" \
       2>/dev/null
   )" && rc=0 || rc=$?
@@ -234,7 +235,11 @@ main() {
   if [[ "$flow_proof_state" == "ok" ]]; then
     path_mode="chimera_transparent_datapath"
     chimera_datapath_evidence="true"
-    truth_boundary="strict CHIMERA flow-proof plus ordinary target outcomes provide CHIMERA/WEAVE datapath evidence; direct curl remains an external baseline only"
+    if [[ "${CHIMERA_PATH_PROOF_REQUIRE_FLOW:-true}" == "true" ]]; then
+      truth_boundary="strict CHIMERA flow-proof plus ordinary target outcomes provide CHIMERA/WEAVE datapath evidence; direct curl remains an external baseline only"
+    else
+      truth_boundary="CHIMERA datapath state proof passed without flow sidecar; ordinary target outcomes provide evidence that the transparent datapath is active; flow sidecar generation is pending"
+    fi
     datapath_attempted="true"
     datapath_total="$total"
     datapath_passed="$passed"
