@@ -1,35 +1,48 @@
 {
   "kind": "chimera_path_proof",
-  "status": "preflight_ok",
-  "reason": "mesh_connect_probe_and_launch_preflight_success",
-  "mode": "mesh_peer_egress_to_peer_ingress",
-  "chimera_datapath_evidence": false,
-  "truth_boundary": "Successful TCP/TLS handshake from laptop to secondary VPS listener proves peer egress (laptop) and peer ingress (VPS).Transparent tunneled IP forwarding is not yet proven because full datapath apply is blocked by rootless DNS write failure on VPS and bound-transit start contract.",
-  "started_at": "2026-07-06T01:09:54Z",
-  "finished_at": "2026-07-06T01:09:54Z",
-  "network_state": "not_modified",
-  "direct_baseline": {
-    "target_ref": "direct#1",
-    "ok": false,
-    "http_code": "000",
-    "remote_ip_present": false,
-    "reason": "not_applicable_for_peer_probe"
+  "status": "partial",
+  "reason": "transparent_datapath_started_without_peer_forwarding",
+  "mode": "chimera_transparent_datapath",
+  "chimera_datapath_evidence": true,
+  "truth_boundary": "CHIMERA successfully started transparent datapath on a remote stand host: TUN device, policy route and DNS applied, runtime_state=up, rollback executed cleanly. External DNS resolution through the peer did not work because the peer was listener-only and did not forward traffic. The runtime does not yet generate a flow-proof sidecar.",
+  "started_at": "2026-07-06T05:59:23Z",
+  "finished_at": "2026-07-06T05:59:23Z",
+  "network_state": "modified_during_test_rolled_back",
+  "peer_forwarding_observed": false,
+  "rollback_observed": true,
+  "runtime_state_redacted": {
+    "status": "up",
+    "network_state": "modified",
+    "rollback_ready": true,
+    "secrets": "<redacted>",
+    "capture_mode": "tun",
+    "capture_reason": "TUN is available on this system",
+    "carrier_profile": "tls-tcp",
+    "carrier_addr": "<redacted>",
+    "carrier_server_name": "<redacted>",
+    "tun_applied": true,
+    "tun_device": "chimera0",
+    "tun_local_cidr": "<redacted>",
+    "tun_peer_cidr": "<redacted>",
+    "route_applied": true,
+    "route_cidr": "<redacted>",
+    "route_cidrs_applied": "<redacted>",
+    "route_policy": false,
+    "route_table": "51820",
+    "route_rule_priority": "11000",
+    "dns_applied": true,
+    "dns_server": "<redacted>",
+    "resolv_conf_path": "/etc/resolv.conf",
+    "dns_backup_path": "/etc/resolv.conf.chimera.bak"
   },
-  "datapath": {
-    "attempted": true,
-    "ok": true,
-    "path_kind": "peer_egress_to_peer_ingress",
-    "targets_total": 1,
-    "targets_passed": 1,
-    "targets_failed": 0,
-    "flow_proof": "connect_probe_success"
-  },
+  "start_status_line": "start_status=ok mode=systemd_user node_runtime=running node=started transparent_runtime=running datapath_apply=ok datapath_proof=ok recovery_state=not_needed peer_update_publish=skipped transit_lane_bindings_publish=skipped discovery_publish=skipped",
+  "stop_status_line": "transparent_redirect_cleanup=ok table=chimera_redirect\nstop_status=ok mode=systemd_user",
+  "state_proof_no_flow": "datapath_proof=ok",
   "external_reachability": {
-    "attempted": false,
+    "target": "<redacted>",
+    "attempted": true,
     "ok": false,
-    "targets_total": 0,
-    "targets_passed": 0,
-    "targets_failed": 0
+    "reason": "curl_resolving_timeout"
   },
   "mesh_preflight": {
     "laptop_to_vpsb": {
@@ -138,22 +151,16 @@
     }
   },
   "evidence": {
-    "preflight_report_laptop_to_vpsb": "docs/mesh_evidence_2026-07-06/laptop_to_vpsb_preflight.json",
-    "preflight_report_vpsb_to_vpsa": "docs/mesh_evidence_2026-07-06/vpsb_to_vpsa_preflight.json",
-    "pair_verify_report": "docs/mesh_evidence_2026-07-06/pair_verify.json",
-    "connect_probe_report_laptop_to_vpsb": "docs/mesh_evidence_2026-07-06/laptop_to_vpsb_connect_probe.json"
+    "redaction": "raw_runtime_state_routes_and_logs_are_in_mesh_evidence_dir",
+    "runtime_state": "docs/mesh_evidence_2026-07-06/vpsb_runtime_state_latest.json",
+    "route_dump": "docs/mesh_evidence_2026-07-06/ip_route_show.log",
+    "addr_dump": "docs/mesh_evidence_2026-07-06/ip_addr_show.log",
+    "rule_dump": "docs/mesh_evidence_2026-07-06/ip_rule_show.log",
+    "start_log": "docs/mesh_evidence_2026-07-06/start.log",
+    "stop_log": "docs/mesh_evidence_2026-07-06/stop.log",
+    "status_log": "docs/mesh_evidence_2026-07-06/status.log",
+    "state_proof_no_flow": "docs/mesh_evidence_2026-07-06/state_proof_no_flow.log",
+    "curl_log": "docs/mesh_evidence_2026-07-06/curl_example.org.log"
   },
-  "results": [
-    {
-      "target_ref": "peer#1",
-      "external_reachability": {
-        "ok": false,
-        "http_code": "000",
-        "remote_ip_present": false,
-        "reason": "peer_probe_only"
-      },
-      "row_pass": true,
-      "row_reason": "connect_probe_success"
-    }
-  ]
+  "results": []
 }

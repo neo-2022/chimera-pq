@@ -131,6 +131,19 @@ stand proof:
 - These artifacts prove real peer egress from the laptop and peer ingress on the
   secondary VPS. They do **not** yet prove transparent tunneled IP forwarding.
 
+## Live Transparent Datapath Start Evidence (2026-07-06)
+
+- `scripts/chimera-control.sh` patched on the secondary VPS to use
+  `CHIMERA_APPLY_DNS` and degrade the bound-transit start contract.
+- Secondary VPS start returned `start_status=ok` with
+  `transparent_runtime=running` and `datapath_proof=ok`.
+- Runtime state captured: `tun_applied=true`, `route_applied=true`,
+  `dns_applied=true`, TUN `chimera0`.
+- Stop/rollback completed cleanly and restored `/etc/resolv.conf`.
+- `chimera-cli state proof --require-flow false` returned `datapath_proof=ok`.
+- Flow-proof sidecar is not yet produced by the runtime, so `--require-flow
+  true` still reports `missing_flow_proof`.
+
 ## Truth Boundary
 
 - Local contract evidence for start/stop/update/install rollback, operator-
@@ -152,15 +165,19 @@ stand proof:
   paths and can look healthier than it is.
 - Consumer-side stale artifact precedence is still weaker than the verified CLI
   discovery path in `mesh_launch_preflight_auto_bind.sh`.
-- Real two-node live datapath proof is partially complete: peer egress from the
-  laptop and peer ingress on the secondary VPS are proven with `connect-probe`
-  and `launch-preflight`, but transparent tunneled IP forwarding, DNS-to-route
-  binding, and sealed transit are not yet exercised.
-- Datapath apply on the VPS aborts because `chimera-cli up --apply-dns` cannot
-  overwrite the systemd-resolved `/etc/resolv.conf` symlink.
+- Real two-node live datapath proof is partially complete: peer egress from
+  the laptop and peer ingress on the secondary VPS are proven; the secondary
+  VPS now starts the transparent datapath (TUN/route/DNS applied) and rolls
+  back cleanly, but packet forwarding through the peer and external reachability
+  are not yet proven.
+- The runtime does not yet generate a datapath flow-proof sidecar, so strict
+  flow proof cannot pass even though the datapath state is valid.
+- `chimera-cli up --apply-dns` requires an operator workaround on
+  systemd-resolved hosts; `CHIMERA_APPLY_DNS=false` is an escape hatch, but
+  then `dns_applied=false` prevents state proof from passing.
 - Enabling `CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true` without a generated
-  transit-lane-bindings file causes the node service to fail; the current stand
-  proof uses `ALLOW_BOUND_TRANSIT=false` as a workaround.
+  transit-lane-bindings file is tolerated by the control script but still
+  hard-fails inside the Rust runtime.
 - Reboot persistence is now covered locally; a future pass should align remote
   stand proof with the same deterministic contract if the implementation
   changes.

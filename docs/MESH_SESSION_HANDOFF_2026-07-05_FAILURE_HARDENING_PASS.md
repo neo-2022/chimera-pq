@@ -99,6 +99,25 @@
   peer listen port was occupied; deterministic local contract smoke now proves
   the same override path end-to-end.
 
+## Live Transparent Datapath Start Proof (Added 2026-07-06)
+
+- Product fix: `scripts/chimera-control.sh` now supports `CHIMERA_APPLY_DNS` env
+  var and degrades the bound-transit start contract instead of failing the node
+  service.
+- Patched control script was deployed to the secondary VPS stand.
+- Secondary VPS was reconfigured to egress to the primary VPS listener.
+- `chimera-control.sh start` returned `start_status=ok`,
+  `node_runtime=running`, `transparent_runtime=running`,
+  `runtime_state_status=up`, `datapath_apply=ok`, `datapath_proof=ok`.
+- Runtime state shows `tun_applied=true`, `route_applied=true`,
+  `dns_applied=true`, TUN device `chimera0`, route `0.0.0.0/1` via policy table.
+- `chimera-cli state proof --require-flow false` returned `datapath_proof=ok`.
+- Stop/rollback completed cleanly and restored the original resolv.conf symlink.
+- Captured additional artifacts in `docs/mesh_evidence_2026-07-06/`:
+  - `vpsb_runtime_state_latest.json`
+  - `start.log`, `stop.log`, `status.log`
+  - `ip_route_show.log`, `ip_addr_show.log`, `ip_rule_show.log`
+
 ## Truth Boundary
 
 - The local contract bundle for start/stop/update/install, broken-sensor
@@ -138,25 +157,27 @@
 
 ## Truth Boundary
 
-- Peer egress from the laptop and peer ingress on the secondary VPS are now
-  proven with real cross-Internet handshakes.
-- The primary VPS was used only as an additional listener so that the pair
-  verify command had a ready side-b report; it is not claimed as the target
-  two-node datapath.
-- Transparent tunneled IP forwarding, DNS-to-route binding, and sealed transit
-  are not yet proven because the full datapath apply fails on the VPS due to
-  `/etc/resolv.conf` being a systemd-resolved symlink and because the bound
-  transit start contract fails when enabled without a bindings file.
+- Peer egress from the laptop and peer ingress on the secondary VPS are proven
+  with real cross-Internet handshakes.
+- The secondary VPS now proves a full transparent datapath *start*: TUN,
+  policy route, and DNS applied, runtime state `up`, rollback clean.
+- The primary VPS was used as the peer endpoint for the secondary VPS egress
+  test; it did not forward traffic to the public Internet, so packet flow
+  through the tunnel and external reachability are not yet proven.
+- The runtime does not yet generate a flow-proof sidecar, so the strict flow
+  path proof cannot pass even though the datapath state is valid.
 - Runtime/publication truth and stale-artifact precedence remain open.
 
 ## Remaining High-Value Gaps
 
-- Close the DNS-apply blocker on systemd-resolved hosts (skip or external DNS
-  path) so `chimera-cli up --apply-dns` does not abort datapath apply.
-- Close the bound-transit start contract failure (`ALLOW_BOUND_TRANSIT=true`
-  without a generated transit-lane-bindings file causes node service failure).
-- Prove transparent tunneled IP forwarding and DNS-to-route binding between two
-  real stand hosts.
+- Add product support for systemd-resolved `/etc/resolv.conf` so DNS apply
+  works without an operator workaround; `CHIMERA_APPLY_DNS=false` is now a
+  documented short-term escape hatch.
+- Add runtime generation of a datapath flow-proof sidecar so `state proof
+  --require-flow true` and the path-proof script can pass on a valid
+  transparent datapath.
+- Prove packet forwarding / external reachability through the peer tunnel
+  between two real stand hosts.
 - Runtime/publication truth can still look healthier than it is in some
   background-reconcile paths; this still needs deeper negative-path coverage.
 - Consumer-side stale artifact precedence is still weaker than it should be for
