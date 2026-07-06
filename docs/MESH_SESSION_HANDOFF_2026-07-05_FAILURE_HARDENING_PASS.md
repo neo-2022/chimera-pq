@@ -72,6 +72,7 @@
   - `bash scripts/chimera_installer_gate.sh`
   - `bash scripts/chimera_port_conflict_recovery_smoke.sh`
   - `bash scripts/chimera_reboot_persistence_smoke.sh`
+  - `bash scripts/chimera_peer_endpoint_config_smoke.sh`
 
 - Process / guard bundle:
   - `just session-process-guard`
@@ -101,13 +102,15 @@
 ## Truth Boundary
 
 - The local contract bundle for start/stop/update/install, broken-sensor
-  listener self-heal, deterministic port-conflict recovery, and local
-  reboot-persistence recovery is green in this session.
+  listener self-heal, deterministic port-conflict recovery, local
+  reboot-persistence recovery, and two-node peer endpoint configuration is
+  green in this session.
 - Remote install/checksum/lifecycle, reboot recovery, disabled boot recovery,
   and stale-publication cleanup are proved on the three authorized stand hosts
   for `v0.1.170`.
-- This pass does **not** prove two-node live datapath continuity between stand
-  hosts.
+- This pass proves the installer can propagate a peer endpoint from node A to
+  node B in a deterministic local smoke, but does **not** yet prove live
+  two-node datapath continuity.
 - This pass does **not** close the remaining false-green publication semantics
   around `auto_reconcile=armed`.
 
@@ -118,13 +121,15 @@
 - Consumer-side stale artifact precedence is still weaker than it should be for
   some persisted selection/publication artifacts; stale-but-present files are
   not yet universally treated as degraded.
-- Two-node (or three-node) live datapath and peer discovery proof between stand
-  hosts is still missing.
+- Two-node (or three-node) live datapath proof between stand hosts is still
+  missing; peer endpoint configuration is covered locally, but the actual
+  encrypted session and packet forwarding are not yet proved.
 - Reboot persistence is now covered by a local deterministic contract; the next
   remote stand pass should confirm the same behavior on real hardware/cloud.
 
 ## Next Step
 
-1. Add a contract smoke that proves two-node local peer discovery and datapath.
+1. Add a contract or remote-stand proof that exercises live two-node datapath
+   and encrypted session continuity.
 2. Decide whether start should continue to allow `auto_reconcile=armed` success
    semantics or switch that path to a stricter degraded/non-zero contract.

@@ -441,6 +441,17 @@ chimera-reboot-persistence-smoke-selfcheck:
     rg -q 'Simulate a reboot' scripts/chimera_reboot_persistence_smoke.sh
     rg -q 'chimera_reboot_persistence_smoke=pass' scripts/chimera_reboot_persistence_smoke.sh
 
+chimera-peer-endpoint-config-smoke:
+    bash scripts/chimera_peer_endpoint_config_smoke.sh
+
+chimera-peer-endpoint-config-smoke-selfcheck:
+    test -x scripts/chimera_peer_endpoint_config_smoke.sh
+    bash -n scripts/chimera_peer_endpoint_config_smoke.sh
+    rg -q 'CHIMERA_PEER_EGRESS_SERVER=' scripts/chimera_peer_endpoint_config_smoke.sh
+    rg -q 'carrier\.addr' scripts/chimera_peer_endpoint_config_smoke.sh
+    rg -q 'peer\\.listen_addr' scripts/chimera_peer_endpoint_config_smoke.sh
+    rg -q 'chimera_peer_endpoint_config_smoke=pass' scripts/chimera_peer_endpoint_config_smoke.sh
+
 chimera-start-contract-smoke-selfcheck:
     test -x scripts/chimera_start_contract_smoke.sh
     bash -n scripts/chimera_start_contract_smoke.sh
@@ -2832,6 +2843,8 @@ session-process-guard:
     just chimera-port-conflict-recovery-smoke
     just chimera-reboot-persistence-smoke-selfcheck
     just chimera-reboot-persistence-smoke
+    just chimera-peer-endpoint-config-smoke-selfcheck
+    just chimera-peer-endpoint-config-smoke
     just chimera-route-status-contract-smoke-selfcheck
     just chimera-route-status-contract-smoke
     just ai-architect-artifact-guard-selfcheck
