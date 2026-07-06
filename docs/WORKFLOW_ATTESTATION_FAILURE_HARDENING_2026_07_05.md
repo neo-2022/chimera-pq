@@ -87,6 +87,7 @@ stand proof:
 - `bash scripts/chimera_installer_gate.sh`
 - `bash scripts/chimera_update_contract_smoke.sh`
 - `bash scripts/chimera_port_conflict_recovery_smoke.sh`
+- `bash scripts/chimera_reboot_persistence_smoke.sh`
 - `bash scripts/release_bundle_install_contract_smoke.sh`
 - `just session-process-guard`
 
@@ -115,10 +116,12 @@ stand proof:
 ## Truth Boundary
 
 - Local contract evidence for start/stop/update/install rollback, operator-
-  setting preservation, broken-sensor listener self-heal, and deterministic
-  port-conflict listener override is green in this session.
-- Remote install/checksum/lifecycle, reboot recovery, disabled boot recovery, and
-  stale-publication cleanup are proved on all three stand hosts for `v0.1.170`.
+  setting preservation, broken-sensor listener self-heal, deterministic
+  port-conflict listener override, and local reboot-persistence recovery is
+  green in this session.
+- Remote install/checksum/lifecycle, reboot recovery, disabled boot recovery,
+  and stale-publication cleanup are proved on all three stand hosts for
+  `v0.1.170`.
 - This workline does not prove two-node live datapath continuity yet.
 - This workline does not close the remaining false-green publication semantics
   around `auto_reconcile=armed`.
@@ -131,6 +134,9 @@ stand proof:
   discovery path in `mesh_launch_preflight_auto_bind.sh`.
 - Two-node (or three-node) live datapath proof between stand hosts is still
   missing.
+- Reboot persistence is now covered locally; a future pass should align remote
+  stand proof with the same deterministic contract if the implementation
+  changes.
 
 ## Related Stand-Only Reports
 

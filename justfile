@@ -428,6 +428,19 @@ chimera-port-conflict-recovery-smoke-selfcheck:
     rg -q 'fixed_listen_addr_port_is_blocked' scripts/chimera-control.sh
     rg -q 'repair_node_listener_bindings_for_retry' scripts/chimera-control.sh
 
+chimera-reboot-persistence-smoke:
+    bash scripts/chimera_reboot_persistence_smoke.sh
+
+chimera-reboot-persistence-smoke-selfcheck:
+    test -x scripts/chimera_reboot_persistence_smoke.sh
+    bash -n scripts/chimera_reboot_persistence_smoke.sh
+    rg -q 'runtime_boot_service_state=active' scripts/chimera_reboot_persistence_smoke.sh
+    rg -q 'runtime_state_status=up' scripts/chimera_reboot_persistence_smoke.sh
+    rg -q 'node_endpoint_unconfigured_listener_only' scripts/chimera_reboot_persistence_smoke.sh
+    rg -q 'CHIMERA_FAIL_CLOSED_ON_PARTIAL_START=0' scripts/chimera_reboot_persistence_smoke.sh
+    rg -q 'Simulate a reboot' scripts/chimera_reboot_persistence_smoke.sh
+    rg -q 'chimera_reboot_persistence_smoke=pass' scripts/chimera_reboot_persistence_smoke.sh
+
 chimera-start-contract-smoke-selfcheck:
     test -x scripts/chimera_start_contract_smoke.sh
     bash -n scripts/chimera_start_contract_smoke.sh
@@ -2817,6 +2830,8 @@ session-process-guard:
     just chimera-start-contract-smoke
     just chimera-port-conflict-recovery-smoke-selfcheck
     just chimera-port-conflict-recovery-smoke
+    just chimera-reboot-persistence-smoke-selfcheck
+    just chimera-reboot-persistence-smoke
     just chimera-route-status-contract-smoke-selfcheck
     just chimera-route-status-contract-smoke
     just ai-architect-artifact-guard-selfcheck

@@ -71,6 +71,7 @@
   - `bash scripts/chimera_update_contract_smoke.sh`
   - `bash scripts/chimera_installer_gate.sh`
   - `bash scripts/chimera_port_conflict_recovery_smoke.sh`
+  - `bash scripts/chimera_reboot_persistence_smoke.sh`
 
 - Process / guard bundle:
   - `just session-process-guard`
@@ -100,8 +101,8 @@
 ## Truth Boundary
 
 - The local contract bundle for start/stop/update/install, broken-sensor
-  listener self-heal, and deterministic port-conflict recovery is green in
-  this session.
+  listener self-heal, deterministic port-conflict recovery, and local
+  reboot-persistence recovery is green in this session.
 - Remote install/checksum/lifecycle, reboot recovery, disabled boot recovery,
   and stale-publication cleanup are proved on the three authorized stand hosts
   for `v0.1.170`.
@@ -119,11 +120,11 @@
   not yet universally treated as degraded.
 - Two-node (or three-node) live datapath and peer discovery proof between stand
   hosts is still missing.
+- Reboot persistence is now covered by a local deterministic contract; the next
+  remote stand pass should confirm the same behavior on real hardware/cloud.
 
 ## Next Step
 
-1. Add a contract smoke that proves reboot persistence locally without a
-   physical stand reboot.
-2. Add a contract smoke that proves two-node local peer discovery and datapath.
-3. Decide whether start should continue to allow `auto_reconcile=armed` success
+1. Add a contract smoke that proves two-node local peer discovery and datapath.
+2. Decide whether start should continue to allow `auto_reconcile=armed` success
    semantics or switch that path to a stricter degraded/non-zero contract.
