@@ -4046,14 +4046,28 @@ fn validate_datapath_state_proof(state_path: &Path) -> Result<(), &'static str> 
     if !value.is_object() {
         return Err("state_not_object");
     }
-    for field in [
-        "status",
-        "network_state",
-        "rollback_ready",
-        "tun_applied",
-        "route_applied",
-        "dns_applied",
-    ] {
+    let require_dns = std::env::var("CHIMERA_STATE_PROOF_REQUIRE_DNS")
+        .map(|v| v != "false")
+        .unwrap_or(true);
+    let required_fields: &[&str] = if require_dns {
+        &[
+            "status",
+            "network_state",
+            "rollback_ready",
+            "tun_applied",
+            "route_applied",
+            "dns_applied",
+        ]
+    } else {
+        &[
+            "status",
+            "network_state",
+            "rollback_ready",
+            "tun_applied",
+            "route_applied",
+        ]
+    };
+    for field in required_fields {
         state_required_key_status(&state_text, field)?;
     }
     if extract_state_string_field_from_value(&value, "status").as_deref() != Some("up") {
@@ -4072,7 +4086,9 @@ fn validate_datapath_state_proof(state_path: &Path) -> Result<(), &'static str> 
     if extract_state_bool_field_from_value(&value, "route_applied") != Some(true) {
         return Err("route_not_applied");
     }
-    if extract_state_bool_field_from_value(&value, "dns_applied") != Some(true) {
+    if require_dns
+        && extract_state_bool_field_from_value(&value, "dns_applied") != Some(true)
+    {
         return Err("dns_not_applied");
     }
     Ok(())

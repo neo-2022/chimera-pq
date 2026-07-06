@@ -129,8 +129,10 @@ strict_flow_proof_state() {
   local state_file="${2:?state_file_required}"
   local max_age_sec="${3:?max_age_sec_required}"
   local require_flow="${CHIMERA_PATH_PROOF_REQUIRE_FLOW:-true}"
+  local require_dns="${CHIMERA_PATH_PROOF_REQUIRE_DNS:-true}"
   local output rc
   output="$(
+    CHIMERA_STATE_PROOF_REQUIRE_DNS="$require_dns" \
     "$cli_bin" state proof \
       --state-file "$state_file" \
       --require-flow "$require_flow" \
