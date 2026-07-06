@@ -94,6 +94,7 @@ SPLIT_TRANSPARENT_DNS_STRATEGY="${SPLIT_TRANSPARENT_DNS_STRATEGY:-prefer_ipv4}"
 SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera-split-watchdog.pid}"
 CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}"
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
+CHIMERA_APPLY_DNS="${CHIMERA_APPLY_DNS:-true}"
 CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER="${CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER:-1}"
 CHIMERA_STRICT_FAILOVER_GATE="${CHIMERA_STRICT_FAILOVER_GATE:-1}"
 CHIMERA_FLOW_PROOF_MAX_AGE_SEC="${CHIMERA_FLOW_PROOF_MAX_AGE_SEC:-300}"
@@ -1899,9 +1900,18 @@ ensure_bound_transit_start_contract() {
   output="$(mesh_bind_control_plane --strict 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     [[ -n "$output" ]] && printf '%s\n' "$output" >&2
-    return 1
+    rc=0
+    output="$(mesh_bind_control_plane --best-effort 2>&1)" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+      [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    fi
   fi
-  peer_egress_transit_lane_bindings_ready
+  if ! peer_egress_transit_lane_bindings_ready; then
+    printf '%s\n' "bound_transit_start_contract=degraded reason=transit_lane_bindings_not_ready" >&2
+    return 0
+  fi
+  printf '%s\n' "bound_transit_start_contract=ok" >&2
+  return 0
 }
 
 node_listener_only_bootstrap_ready() {
@@ -3892,7 +3902,7 @@ start_runtime() {
       --state-file "$STATE_FILE" \
       --apply-tun true \
       --apply-route true \
-      --apply-dns true >/dev/null 2>&1; then
+      --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1; then
       systemd_datapath_apply_status="ok"
     else
       systemd_datapath_apply_rc=$?
@@ -4060,7 +4070,7 @@ start_runtime() {
         --state-file "$STATE_FILE" \
         --apply-tun true \
         --apply-route true \
-        --apply-dns true >/dev/null 2>&1; then
+        --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1; then
         direct_datapath_apply_status="ok"
       else
         direct_datapath_apply_rc=$?
@@ -4167,7 +4177,7 @@ stop_runtime() {
       --state-file "$STATE_FILE" \
       --apply-tun true \
       --apply-route true \
-      --apply-dns true >/dev/null 2>&1 || down_rc=$?
+      --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
     cleanup_transparent_redirect_rules || cleanup_rc=$?
     if [[ "$down_rc" -ne 0 ]]; then
       echo "stop_status=fail mode=systemd_user reason=datapath_down_failed down_rc=$down_rc"
@@ -4193,7 +4203,7 @@ stop_runtime() {
     --state-file "$STATE_FILE" \
     --apply-tun true \
     --apply-route true \
-    --apply-dns true >/dev/null 2>&1 || down_rc=$?
+    --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
   cleanup_transparent_redirect_rules || cleanup_rc=$?
   if [[ "$down_rc" -ne 0 ]]; then
     echo "stop_status=fail mode=direct reason=datapath_down_failed down_rc=$down_rc"
