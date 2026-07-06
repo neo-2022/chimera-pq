@@ -30,6 +30,7 @@ struct Options {
     bypass_cidrs_v4: Vec<String>,
     capture_cidrs_v4: Vec<String>,
     capture_tcp_ports: Vec<u16>,
+    capture_skuids: Vec<u32>,
     run_ms: Option<u64>,
     print_only: bool,
 }
@@ -71,6 +72,7 @@ impl Options {
         let mut bypass_cidrs_v4 = default_bypass_cidrs_v4();
         let mut capture_cidrs_v4 = Vec::new();
         let mut capture_tcp_ports = Vec::new();
+        let mut capture_skuids = parse_uid_list_env("CHIMERA_CAPTURE_SKUID").unwrap_or_default();
         let mut run_ms = env_value("CHIMERA_TRANSPARENT_RUNTIME_RUN_MS")
             .map(|value| parse_positive_u64(&value, "run-ms"))
             .transpose()?;
@@ -154,6 +156,11 @@ impl Options {
                     )?);
                     index += 2;
                 }
+                "--capture-skuid" => {
+                    capture_skuids
+                        .push(parse_u32(&arg_value(args, index, flag)?, "capture-skuid")?);
+                    index += 2;
+                }
                 "--no-default-bypass" => {
                     bypass_cidrs_v4.clear();
                     index += 1;
@@ -209,6 +216,7 @@ impl Options {
             bypass_cidrs_v4,
             capture_cidrs_v4,
             capture_tcp_ports,
+            capture_skuids,
             run_ms,
             print_only,
         })
@@ -224,6 +232,7 @@ impl Options {
             bypass_cidrs_v4: self.bypass_cidrs_v4.clone(),
             capture_cidrs_v4: self.capture_cidrs_v4.clone(),
             capture_tcp_ports: self.capture_tcp_ports.clone(),
+            capture_skuids: self.capture_skuids.clone(),
         }
     }
 }
@@ -373,6 +382,18 @@ fn env_value(name: &str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+fn parse_uid_list_env(name: &str) -> Option<Vec<u32>> {
+    env::var(name).ok().map(|value| {
+        value
+            .split(',')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(|item| parse_u32(item, name).unwrap_or_else(|_| 0))
+            .filter(|uid| *uid != 0)
+            .collect::<Vec<u32>>()
+    })
 }
 
 fn required_value(value: Option<String>, error: &str) -> Result<String, String> {

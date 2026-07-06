@@ -10,6 +10,7 @@ pub struct TransparentRedirectPlan {
     pub bypass_cidrs_v4: Vec<String>,
     pub capture_cidrs_v4: Vec<String>,
     pub capture_tcp_ports: Vec<u16>,
+    pub capture_skuids: Vec<u32>,
 }
 
 impl TransparentRedirectPlan {
@@ -40,17 +41,24 @@ impl TransparentRedirectPlan {
     pub fn render_apply_nft(&self) -> ChimeraResult<String> {
         self.validate()?;
         let bypass = render_bypass_rules(&self.bypass_cidrs_v4);
-        let redirect = render_redirect_rules(
-            &self.capture_cidrs_v4,
-            &self.capture_tcp_ports,
-            self.listen_port,
-        );
+        let uid_rules = render_skuid_rules(&self.capture_skuids, self.listen_port);
+        let has_cidr_or_port =
+            !self.capture_cidrs_v4.is_empty() || !self.capture_tcp_ports.is_empty();
+        let redirect = if !self.capture_skuids.is_empty() && !has_cidr_or_port {
+            String::new()
+        } else {
+            render_redirect_rules(
+                &self.capture_cidrs_v4,
+                &self.capture_tcp_ports,
+                self.listen_port,
+            )
+        };
         let mark_bypass = self
             .service_fwmark
             .map(|mark| format!("    meta mark 0x{mark:x} return\n"))
             .unwrap_or_default();
         Ok(format!(
-            "table inet {table} {{\n  chain {chain} {{\n    type nat hook output priority dstnat; policy accept;\n{mark_bypass}    meta skuid {uid} return\n    oifname \"lo\" return\n{bypass}{redirect}  }}\n}}\n",
+            "table inet {table} {{\n  chain {chain} {{\n    type nat hook output priority dstnat; policy accept;\n{mark_bypass}    meta skuid {uid} return\n    oifname \"lo\" return\n{bypass}{uid_rules}{redirect}  }}\n}}\n",
             table = self.table_name,
             chain = self.chain_name,
             uid = self.exempt_uid,
@@ -85,6 +93,21 @@ fn render_bypass_rules(cidr_list: &[String]) -> String {
         out.push_str("    ip daddr ");
         out.push_str(cidr);
         out.push_str(" return\n");
+    }
+    out
+}
+
+fn render_skuid_rules(skuid_list: &[u32], listen_port: u16) -> String {
+    if skuid_list.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    for uid in skuid_list {
+        out.push_str("    meta l4proto tcp meta skuid ");
+        out.push_str(&uid.to_string());
+        out.push_str(" redirect to :");
+        out.push_str(&listen_port.to_string());
+        out.push('\n');
     }
     out
 }
@@ -199,6 +222,7 @@ mod tests {
             bypass_cidrs_v4: default_bypass_cidrs_v4(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
+            capture_skuids: Vec::new(),
         };
         let nft = plan.render_apply_nft().unwrap_or_else(|error| {
             unreachable!("plan should render: {error}");
@@ -219,6 +243,7 @@ mod tests {
             bypass_cidrs_v4: default_bypass_cidrs_v4(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
+            capture_skuids: Vec::new(),
         };
         let nft = plan.render_apply_nft().unwrap_or_else(|error| {
             unreachable!("plan should render: {error}");
@@ -238,6 +263,7 @@ mod tests {
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
+            capture_skuids: Vec::new(),
         };
         let nft = plan.render_delete_nft().unwrap_or_else(|error| {
             unreachable!("plan should render: {error}");
@@ -256,6 +282,7 @@ mod tests {
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
+            capture_skuids: Vec::new(),
         };
         assert!(plan.render_apply_nft().is_err());
     }
@@ -271,6 +298,7 @@ mod tests {
             bypass_cidrs_v4: vec!["bad".to_string()],
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
+            capture_skuids: Vec::new(),
         };
         assert!(plan.render_apply_nft().is_err());
     }
@@ -286,6 +314,7 @@ mod tests {
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: vec!["203.0.113.10/32".to_string()],
             capture_tcp_ports: Vec::new(),
+            capture_skuids: Vec::new(),
         };
         let nft = plan.render_apply_nft().unwrap_or_else(|error| {
             unreachable!("plan should render: {error}");
@@ -305,10 +334,30 @@ mod tests {
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: vec!["203.0.113.10/32".to_string()],
             capture_tcp_ports: vec![18143],
+            capture_skuids: Vec::new(),
         };
         let nft = plan.render_apply_nft().unwrap_or_else(|error| {
             unreachable!("plan should render: {error}");
         });
         assert!(nft.contains("ip daddr 203.0.113.10/32 tcp dport 18143 redirect to :18124"));
+    }
+
+    #[test]
+    fn render_apply_can_capture_by_skuid() {
+        let plan = TransparentRedirectPlan {
+            table_name: "chimera_redirect".to_string(),
+            chain_name: "output".to_string(),
+            listen_port: 18124,
+            exempt_uid: 0,
+            service_fwmark: None,
+            bypass_cidrs_v4: default_bypass_cidrs_v4(),
+            capture_cidrs_v4: Vec::new(),
+            capture_tcp_ports: Vec::new(),
+            capture_skuids: vec![4242],
+        };
+        let nft = plan
+            .render_apply_nft()
+            .unwrap_or_else(|error| unreachable!("plan should render: {error}"));
+        assert!(nft.contains("meta l4proto tcp meta skuid 4242 redirect to :18124"));
     }
 }

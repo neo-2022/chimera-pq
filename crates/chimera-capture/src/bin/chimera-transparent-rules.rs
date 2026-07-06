@@ -164,6 +164,7 @@ impl Options {
             bypass_cidrs_v4: self.bypass_cidrs_v4.clone(),
             capture_cidrs_v4: self.capture_cidrs_v4.clone(),
             capture_tcp_ports: self.capture_tcp_ports.clone(),
+            capture_skuids: Vec::new(),
         }
     }
 }
