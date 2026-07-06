@@ -24,6 +24,7 @@ struct Options {
     table_name: String,
     chain_name: String,
     exempt_uid: u32,
+    service_fwmark: Option<u32>,
     transparent_uid: Option<u32>,
     transparent_gid: Option<u32>,
     bypass_cidrs_v4: Vec<String>,
@@ -57,6 +58,9 @@ impl Options {
             env_value("CHIMERA_REDIRECT_CHAIN").unwrap_or_else(|| "output".to_string());
         let mut exempt_uid = env_value("CHIMERA_REDIRECT_EXEMPT_UID")
             .map(|value| parse_u32(&value, "exempt-uid"))
+            .transpose()?;
+        let mut service_fwmark = env_value("CHIMERA_REDIRECT_SERVICE_FWMARK")
+            .map(|value| parse_u32(&value, "service-fwmark"))
             .transpose()?;
         let mut transparent_uid = env_value("CHIMERA_TRANSPARENT_RUNTIME_UID")
             .map(|value| parse_u32(&value, "transparent-uid"))
@@ -114,6 +118,11 @@ impl Options {
                 }
                 "--exempt-uid" => {
                     exempt_uid = Some(parse_u32(&arg_value(args, index, flag)?, "exempt-uid")?);
+                    index += 2;
+                }
+                "--service-fwmark" => {
+                    service_fwmark =
+                        Some(parse_u32(&arg_value(args, index, flag)?, "service-fwmark")?);
                     index += 2;
                 }
                 "--transparent-uid" => {
@@ -194,6 +203,7 @@ impl Options {
             table_name,
             chain_name,
             exempt_uid,
+            service_fwmark,
             transparent_uid,
             transparent_gid,
             bypass_cidrs_v4,
@@ -210,6 +220,7 @@ impl Options {
             chain_name: self.chain_name.clone(),
             listen_port: parse_listen_port(&self.listen).unwrap_or(0),
             exempt_uid: self.exempt_uid,
+            service_fwmark: self.service_fwmark,
             bypass_cidrs_v4: self.bypass_cidrs_v4.clone(),
             capture_cidrs_v4: self.capture_cidrs_v4.clone(),
             capture_tcp_ports: self.capture_tcp_ports.clone(),
@@ -392,9 +403,12 @@ fn parse_u16(value: &str, name: &str) -> Result<u16, String> {
 }
 
 fn parse_u32(value: &str, name: &str) -> Result<u32, String> {
-    value
-        .parse::<u32>()
-        .map_err(|_| format!("{name} must be a non-negative integer"))
+    if value.starts_with("0x") || value.starts_with("0X") {
+        u32::from_str_radix(&value[2..], 16)
+    } else {
+        value.parse::<u32>()
+    }
+    .map_err(|_| format!("{name} must be a non-negative integer"))
 }
 
 #[cfg(test)]

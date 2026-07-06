@@ -3,6 +3,8 @@ use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::thread;
 use std::time::Duration;
 
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::Mark;
 use socket2::{Domain, Protocol, SockRef, Socket, Type};
 
 use crate::peer_egress::options::{SECURE_PLAINTEXT_CHUNK_LEN, TCP_BUFFER_BYTES};
@@ -20,11 +22,39 @@ pub fn connect_tcp(target: &str, timeout_ms: u64) -> Result<TcpStream, String> {
     let mut last_error = String::new();
     for addr in addrs {
         match TcpStream::connect_timeout(&addr, timeout) {
-            Ok(stream) => return Ok(stream),
+            Ok(stream) => {
+                apply_service_fwmark(&stream);
+                return Ok(stream);
+            }
             Err(error) => last_error = format!("{addr}: {error}"),
         }
     }
     Err(last_error)
+}
+
+fn apply_service_fwmark(stream: &TcpStream) {
+    let Ok(value) = std::env::var("CHIMERA_SERVICE_FWMARK") else {
+        return;
+    };
+    let Some(mark) = parse_optional_fwmark(&value) else {
+        eprintln!("event=peer_egress_warn reason=invalid CHIMERA_SERVICE_FWMARK value={value}");
+        return;
+    };
+    if let Err(error) = setsockopt(stream, Mark, &mark) {
+        eprintln!("event=peer_egress_warn reason=set SO_MARK failed mark={mark}: {error}");
+    }
+}
+
+fn parse_optional_fwmark(value: &str) -> Option<u32> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with("0x") || trimmed.starts_with("0X") {
+        u32::from_str_radix(&trimmed[2..], 16).ok()
+    } else {
+        trimmed.parse::<u32>().ok()
+    }
 }
 
 pub fn tune_tcp(stream: &TcpStream) -> Result<(), String> {

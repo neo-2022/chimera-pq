@@ -6,6 +6,7 @@ pub struct TransparentRedirectPlan {
     pub chain_name: String,
     pub listen_port: u16,
     pub exempt_uid: u32,
+    pub service_fwmark: Option<u32>,
     pub bypass_cidrs_v4: Vec<String>,
     pub capture_cidrs_v4: Vec<String>,
     pub capture_tcp_ports: Vec<u16>,
@@ -44,11 +45,16 @@ impl TransparentRedirectPlan {
             &self.capture_tcp_ports,
             self.listen_port,
         );
+        let mark_bypass = self
+            .service_fwmark
+            .map(|mark| format!("    meta mark 0x{mark:x} return\n"))
+            .unwrap_or_default();
         Ok(format!(
-            "table inet {table} {{\n  chain {chain} {{\n    type nat hook output priority dstnat; policy accept;\n    meta skuid {uid} return\n    oifname \"lo\" return\n{bypass}{redirect}  }}\n}}\n",
+            "table inet {table} {{\n  chain {chain} {{\n    type nat hook output priority dstnat; policy accept;\n{mark_bypass}    meta skuid {uid} return\n    oifname \"lo\" return\n{bypass}{redirect}  }}\n}}\n",
             table = self.table_name,
             chain = self.chain_name,
             uid = self.exempt_uid,
+            mark_bypass = mark_bypass,
             bypass = bypass,
             redirect = redirect,
         ))
@@ -189,6 +195,7 @@ mod tests {
             chain_name: "output".to_string(),
             listen_port: 18124,
             exempt_uid: 4242,
+            service_fwmark: None,
             bypass_cidrs_v4: default_bypass_cidrs_v4(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
@@ -202,12 +209,32 @@ mod tests {
     }
 
     #[test]
+    fn render_apply_contains_service_fwmark_bypass() {
+        let plan = TransparentRedirectPlan {
+            table_name: "chimera_redirect".to_string(),
+            chain_name: "output".to_string(),
+            listen_port: 18124,
+            exempt_uid: 4242,
+            service_fwmark: Some(0x5244),
+            bypass_cidrs_v4: default_bypass_cidrs_v4(),
+            capture_cidrs_v4: Vec::new(),
+            capture_tcp_ports: Vec::new(),
+        };
+        let nft = plan.render_apply_nft().unwrap_or_else(|error| {
+            unreachable!("plan should render: {error}");
+        });
+        assert!(nft.contains("meta mark 0x5244 return"));
+        assert!(nft.contains("meta skuid 4242 return"));
+    }
+
+    #[test]
     fn render_delete_targets_only_chimera_table() {
         let plan = TransparentRedirectPlan {
             table_name: "chimera_redirect".to_string(),
             chain_name: "output".to_string(),
             listen_port: 18124,
             exempt_uid: 4242,
+            service_fwmark: None,
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
@@ -225,6 +252,7 @@ mod tests {
             chain_name: "output".to_string(),
             listen_port: 18124,
             exempt_uid: 4242,
+            service_fwmark: None,
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
@@ -239,6 +267,7 @@ mod tests {
             chain_name: "output".to_string(),
             listen_port: 18124,
             exempt_uid: 4242,
+            service_fwmark: None,
             bypass_cidrs_v4: vec!["bad".to_string()],
             capture_cidrs_v4: Vec::new(),
             capture_tcp_ports: Vec::new(),
@@ -253,6 +282,7 @@ mod tests {
             chain_name: "output".to_string(),
             listen_port: 18124,
             exempt_uid: 4242,
+            service_fwmark: None,
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: vec!["203.0.113.10/32".to_string()],
             capture_tcp_ports: Vec::new(),
@@ -271,6 +301,7 @@ mod tests {
             chain_name: "output".to_string(),
             listen_port: 18124,
             exempt_uid: 4242,
+            service_fwmark: None,
             bypass_cidrs_v4: Vec::new(),
             capture_cidrs_v4: vec!["203.0.113.10/32".to_string()],
             capture_tcp_ports: vec![18143],

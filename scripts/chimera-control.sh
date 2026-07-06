@@ -95,6 +95,9 @@ SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XD
 CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}"
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
 CHIMERA_APPLY_DNS="${CHIMERA_APPLY_DNS:-true}"
+CHIMERA_SERVICE_FWMARK="${CHIMERA_SERVICE_FWMARK:-0x5244}"
+CHIMERA_ROUTE_FWMARK="${CHIMERA_ROUTE_FWMARK:-0x5244}"
+CHIMERA_ROUTE_CIDR="${CHIMERA_ROUTE_CIDR:-0.0.0.0/1,128.0.0.0/1}"
 CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER="${CHIMERA_REQUIRE_UPSTREAM_FOR_FAILOVER:-1}"
 CHIMERA_STRICT_FAILOVER_GATE="${CHIMERA_STRICT_FAILOVER_GATE:-1}"
 CHIMERA_FLOW_PROOF_MAX_AGE_SEC="${CHIMERA_FLOW_PROOF_MAX_AGE_SEC:-300}"
@@ -1195,7 +1198,7 @@ heal_node_peer_egress_env_bindings() {
 
 repair_node_listener_bindings_for_retry() {
   local repaired=1
-  local desired_local_override="127.0.0.1:0"
+  local desired_local_override="127.0.0.1:18135"
   local desired_peer_override="0.0.0.0:0"
   local current_local_override current_peer_override
   if ! node_listener_bindings_need_preemptive_repair; then
@@ -1293,6 +1296,9 @@ node_service_prestart_self_heal() {
   fi
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
   heal_node_peer_egress_env_bindings
+  ensure_peer_egress_local_listen_aligned
+  ensure_peer_egress_service_fwmark
+  ensure_transparent_runtime_service_fwmark
   if node_listener_bindings_need_preemptive_repair; then
     repair_node_listener_bindings_for_retry >/dev/null 2>&1 || true
   else
@@ -2006,6 +2012,70 @@ load_cli_privilege_env() {
     # shellcheck disable=SC1090
     source "$TRANSPARENT_RUNTIME_ENV_FILE"
   fi
+}
+
+route_fwmark_env_value() {
+  local mark="${CHIMERA_ROUTE_FWMARK:-}"
+  if [[ -z "$mark" && -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+    mark="$(awk -F= '/^CHIMERA_REDIRECT_SERVICE_FWMARK=/{print $2; exit}' "$TRANSPARENT_RUNTIME_ENV_FILE" 2>/dev/null || true)"
+  fi
+  if [[ -z "$mark" ]]; then
+    mark="${CHIMERA_SERVICE_FWMARK:-0x5244}"
+  fi
+  trim_ascii "$mark"
+}
+
+service_fwmark_env_value() {
+  local mark="${CHIMERA_SERVICE_FWMARK:-}"
+  if [[ -z "$mark" && -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+    mark="$(awk -F= '/^CHIMERA_REDIRECT_SERVICE_FWMARK=/{print $2; exit}' "$TRANSPARENT_RUNTIME_ENV_FILE" 2>/dev/null || true)"
+  fi
+  trim_ascii "${mark:-0x5244}"
+}
+
+ensure_peer_egress_service_fwmark() {
+  local mark
+  mark="$(service_fwmark_env_value)"
+  [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
+  if ! grep -q '^CHIMERA_SERVICE_FWMARK=' "$PEER_EGRESS_ENV_FILE" 2>/dev/null; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_SERVICE_FWMARK' "$mark"
+  fi
+}
+
+ensure_transparent_runtime_service_fwmark() {
+  local mark
+  mark="$(service_fwmark_env_value)"
+  [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]] || return 0
+  if ! grep -q '^CHIMERA_REDIRECT_SERVICE_FWMARK=' "$TRANSPARENT_RUNTIME_ENV_FILE" 2>/dev/null; then
+    upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_REDIRECT_SERVICE_FWMARK' "$mark"
+  fi
+}
+
+ensure_peer_egress_local_listen_aligned() {
+  local desired="127.0.0.1:18135"
+  local current
+  [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
+  current="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_LOCAL_LISTEN)")"
+  if [[ -z "$current" || "$current" == "127.0.0.1:0" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN' "$desired"
+  fi
+}
+
+run_chimera_cli_up_with_retry() {
+  local max_attempts=15 wait_seconds=2 attempt rc=2
+  for ((attempt=1; attempt<=max_attempts; attempt++)); do
+    if run_chimera_cli up "$@" >/dev/null 2>&1; then
+      return 0
+    else
+      rc=$?
+      if [[ "$rc" -eq 2 && "$attempt" -lt "$max_attempts" ]]; then
+        sleep "$wait_seconds"
+        continue
+      fi
+      return "$rc"
+    fi
+  done
+  return "$rc"
 }
 
 should_run_chimera_cli_with_sudo() {
@@ -3777,6 +3847,9 @@ start_runtime() {
   clear_stale_publication_runtime_state
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
   heal_node_peer_egress_env_bindings
+  ensure_peer_egress_local_listen_aligned
+  ensure_peer_egress_service_fwmark
+  ensure_transparent_runtime_service_fwmark
   if node_listener_bindings_need_preemptive_repair; then
     repair_node_listener_bindings_for_retry >/dev/null 2>&1 || true
   else
@@ -3795,6 +3868,8 @@ start_runtime() {
     echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped reason=datapath_unconfigured"
     return 2
   fi
+  local route_fwmark
+  route_fwmark="$(route_fwmark_env_value)"
   if ! cleanup_stale_tun_without_state; then
     site_auto_watch_stop >/dev/null 2>&1 || true
     echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped reason=stale_tun_cleanup_failed"
@@ -3897,11 +3972,16 @@ start_runtime() {
       echo "start_status=fail mode=systemd_user node_runtime=stopped node=$node_status transparent_runtime=stopped datapath_apply=skipped datapath_proof=stale_state_cleanup_failed reason=stale_state_cleanup_failed"
       return 1
     fi
-    if run_chimera_cli up \
+    if run_chimera_cli_up_with_retry \
       --config "$(node_config_path)" \
       --state-file "$STATE_FILE" \
       --apply-tun true \
       --apply-route true \
+      --route-policy true \
+      --route-table 51820 \
+      --route-rule-priority 11000 \
+      --route-fwmark "$route_fwmark" \
+      --route-cidr "$CHIMERA_ROUTE_CIDR" \
       --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1; then
       systemd_datapath_apply_status="ok"
     else
@@ -4065,11 +4145,16 @@ start_runtime() {
       return 1
     fi
     if [[ "$direct_datapath_status" == "started" ]]; then
-      if run_chimera_cli up \
+      if run_chimera_cli_up_with_retry \
         --config "$(node_config_path)" \
         --state-file "$STATE_FILE" \
         --apply-tun true \
         --apply-route true \
+        --route-policy true \
+        --route-table 51820 \
+        --route-rule-priority 11000 \
+        --route-fwmark "$route_fwmark" \
+        --route-cidr "$CHIMERA_ROUTE_CIDR" \
         --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1; then
         direct_datapath_apply_status="ok"
       else
@@ -4168,6 +4253,8 @@ stop_runtime() {
   site_auto_watch_stop >/dev/null 2>&1 || true
   local cleanup_rc=0
   local down_rc=0
+  local route_fwmark
+  route_fwmark="$(route_fwmark_env_value)"
   if systemd_user_ready; then
     systemctl --user stop "$DATAPATH_SERVICE_UNIT" "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
     systemctl --user stop "$NODE_SERVICE_UNIT" "$LEGACY_NODE_COMPAT_SERVICE_UNIT" >/dev/null 2>&1 || true
@@ -4177,6 +4264,11 @@ stop_runtime() {
       --state-file "$STATE_FILE" \
       --apply-tun true \
       --apply-route true \
+      --route-policy true \
+      --route-table 51820 \
+      --route-rule-priority 11000 \
+      --route-fwmark "$route_fwmark" \
+      --route-cidr "$CHIMERA_ROUTE_CIDR" \
       --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
     cleanup_transparent_redirect_rules || cleanup_rc=$?
     if [[ "$down_rc" -ne 0 ]]; then
@@ -4203,6 +4295,11 @@ stop_runtime() {
     --state-file "$STATE_FILE" \
     --apply-tun true \
     --apply-route true \
+    --route-policy true \
+    --route-table 51820 \
+    --route-rule-priority 11000 \
+    --route-fwmark "$route_fwmark" \
+    --route-cidr "$CHIMERA_ROUTE_CIDR" \
     --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
   cleanup_transparent_redirect_rules || cleanup_rc=$?
   if [[ "$down_rc" -ne 0 ]]; then

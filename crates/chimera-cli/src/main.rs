@@ -98,6 +98,7 @@ struct UpDownOptions {
     route_policy: bool,
     route_table: String,
     route_rule_priority: String,
+    route_fwmark: Option<u32>,
     apply_dns: bool,
     dns_server: String,
     resolv_conf_path: String,
@@ -148,10 +149,10 @@ const DIAG_EXPORT_USAGE_EN: &str = "usage: chimera [--lang en|ru] diag export [-
 const DIAG_EXPORT_USAGE_RU: &str = "использование: chimera [--lang en|ru] diag export [--config <файл_node_config>] [--age <секунды>] [--packets <число>] [--out <файл>]";
 const POLICY_USAGE_EN: &str = "usage: chimera [--lang en|ru] policy validate <policy_file>";
 const POLICY_USAGE_RU: &str = "использование: chimera [--lang en|ru] policy validate <файл_policy>";
-const UP_USAGE_EN: &str = "usage: chimera [--lang en|ru] up [--state-file <file>] [--config <node_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
-const UP_USAGE_RU: &str = "использование: chimera [--lang en|ru] up [--state-file <файл>] [--config <файл_node_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
-const DOWN_USAGE_EN: &str = "usage: chimera [--lang en|ru] down [--state-file <file>] [--config <node_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
-const DOWN_USAGE_RU: &str = "использование: chimera [--lang en|ru] down [--state-file <файл>] [--config <файл_node_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
+const UP_USAGE_EN: &str = "usage: chimera [--lang en|ru] up [--state-file <file>] [--config <node_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--route-fwmark <mark>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
+const UP_USAGE_RU: &str = "использование: chimera [--lang en|ru] up [--state-file <файл>] [--config <файл_node_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--route-fwmark <mark>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
+const DOWN_USAGE_EN: &str = "usage: chimera [--lang en|ru] down [--state-file <file>] [--config <node_config_file>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <name>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--route-fwmark <mark>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <path>]";
+const DOWN_USAGE_RU: &str = "использование: chimera [--lang en|ru] down [--state-file <файл>] [--config <файл_node_config>] [--skip-connect-check <true|false>] [--apply-tun <true|false>] [--tun-name <имя>] [--tun-local-cidr <cidr>] [--tun-peer-cidr <cidr>] [--apply-route <true|false>] [--route-cidr <cidr[,cidr2,...]>] [--route-policy <true|false>] [--route-table <id>] [--route-rule-priority <pref>] [--route-fwmark <mark>] [--apply-dns <true|false>] [--dns-server <ip>] [--resolv-conf <путь>]";
 const ROLLBACK_USAGE_EN: &str = "usage: chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <file>] [--json] [--out <file>]";
 const ROLLBACK_USAGE_RU: &str = "использование: chimera [--lang en|ru] rollback <status|clean|recover> [--state-file <файл>] [--json] [--out <файл>]";
 const STATE_USAGE_EN: &str = "usage: chimera [--lang en|ru] state proof [--state-file <file>] [--flow-file <file>] [--require-flow <true|false>] [--max-flow-age-sec <seconds>]";
@@ -3017,6 +3018,18 @@ fn render_unknown_command(lang: Language, command: &str) -> String {
     }
 }
 
+fn parse_optional_fwmark(value: &str) -> Option<u32> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with("0x") || trimmed.starts_with("0X") {
+        u32::from_str_radix(&trimmed[2..], 16).ok()
+    } else {
+        trimmed.parse::<u32>().ok()
+    }
+}
+
 fn parse_up_down_options(args: &[String]) -> Result<UpDownOptions, ()> {
     let mut options = UpDownOptions {
         state_path: "docs/runtime_state_latest.json".to_string(),
@@ -3031,6 +3044,9 @@ fn parse_up_down_options(args: &[String]) -> Result<UpDownOptions, ()> {
         route_policy: false,
         route_table: "51820".to_string(),
         route_rule_priority: "11000".to_string(),
+        route_fwmark: std::env::var("CHIMERA_ROUTE_FWMARK")
+            .ok()
+            .and_then(|value| parse_optional_fwmark(&value)),
         apply_dns: false,
         dns_server: "1.1.1.1".to_string(),
         resolv_conf_path: "/etc/resolv.conf".to_string(),
@@ -3106,6 +3122,14 @@ fn parse_up_down_options(args: &[String]) -> Result<UpDownOptions, ()> {
                 options.route_rule_priority = args.get(index + 1).cloned().ok_or(())?;
                 index += 2;
             }
+            "--route-fwmark" => {
+                let value = args.get(index + 1).cloned().ok_or(())?;
+                options.route_fwmark = parse_optional_fwmark(&value);
+                if options.route_fwmark.is_none() {
+                    return Err(());
+                }
+                index += 2;
+            }
             "--apply-dns" => {
                 options.apply_dns = match args.get(index + 1).map(String::as_str) {
                     Some("true") => true,
@@ -3126,6 +3150,9 @@ fn parse_up_down_options(args: &[String]) -> Result<UpDownOptions, ()> {
         }
     }
     if options.route_policy && !options.apply_route {
+        return Err(());
+    }
+    if options.route_fwmark.is_some() && !options.route_policy {
         return Err(());
     }
     Ok(options)
@@ -3366,6 +3393,7 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
                     options.route_policy,
                     &options.route_table,
                     &options.route_rule_priority,
+                    options.route_fwmark,
                 );
                 if tun_applied {
                     let _ = remove_tun_interface(&options.tun_name);
@@ -3379,6 +3407,30 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
             applied_route_cidrs.push(route_cidr.clone());
         }
         route_applied = true;
+        if options.route_policy {
+            if let Some(fwmark) = options.route_fwmark {
+                if let Err(error) = apply_policy_route_fwmark(fwmark) {
+                    let _ = rollback_applied_routes(
+                        &applied_route_cidrs,
+                        &options.tun_name,
+                        options.route_policy,
+                        &options.route_table,
+                        &options.route_rule_priority,
+                        options.route_fwmark,
+                    );
+                    if tun_applied {
+                        let _ = remove_tun_interface(&options.tun_name);
+                    }
+                    match lang {
+                        Language::En => eprintln!("Cannot apply route fwmark rule: {error}"),
+                        Language::Ru => eprintln!(
+                            "Не удалось применить fwmark-правило маршрута: {error}"
+                        ),
+                    }
+                    return 1;
+                }
+            }
+        }
         network_state = "modified";
     }
     let mut dns_applied = false;
@@ -3397,6 +3449,7 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
                     options.route_policy,
                     &options.route_table,
                     &options.route_rule_priority,
+                    options.route_fwmark,
                 );
             }
             if tun_applied {
@@ -3416,8 +3469,12 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
     } else {
         applied_route_cidrs.join(",")
     };
+    let route_fwmark_json = options
+        .route_fwmark
+        .map(|fwmark| format!("0x{fwmark:x}"))
+        .unwrap_or_default();
     let state_json = format!(
-        "{{\"status\":\"up\",\"network_state\":\"{}\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"{}\",\"tun_applied\":{},\"tun_device\":\"{}\",\"tun_local_cidr\":\"{}\",\"tun_peer_cidr\":\"{}\",\"route_applied\":{},\"route_cidr\":\"{}\",\"route_cidrs_applied\":\"{}\",\"route_policy\":{},\"route_table\":\"{}\",\"route_rule_priority\":\"{}\",\"dns_applied\":{},\"dns_server\":\"{}\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
+        "{{\"status\":\"up\",\"network_state\":\"{}\",\"rollback_ready\":true,\"secrets\":\"<redacted>\",\"capture_mode\":\"{}\",\"capture_reason\":\"{}\",\"carrier_profile\":\"{}\",\"carrier_addr\":\"{}\",\"carrier_server_name\":\"{}\",\"tun_applied\":{},\"tun_device\":\"{}\",\"tun_local_cidr\":\"{}\",\"tun_peer_cidr\":\"{}\",\"route_applied\":{},\"route_cidr\":\"{}\",\"route_cidrs_applied\":\"{}\",\"route_policy\":{},\"route_table\":\"{}\",\"route_rule_priority\":\"{}\",\"route_fwmark\":\"{}\",\"route_fwmark_priority\":\"100\",\"dns_applied\":{},\"dns_server\":\"{}\",\"resolv_conf_path\":\"{}\",\"dns_backup_path\":\"{}\"}}\n",
         network_state,
         capture_mode_label_en(runtime_state.capture_plan.mode),
         escape_json(&runtime_state.capture_plan.reason),
@@ -3434,6 +3491,7 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
         options.route_policy,
         escape_json(&options.route_table),
         escape_json(&options.route_rule_priority),
+        escape_json(&route_fwmark_json),
         dns_applied,
         escape_json(&options.dns_server),
         escape_json(&options.resolv_conf_path),
@@ -3451,6 +3509,7 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
                 options.route_policy,
                 &options.route_table,
                 &options.route_rule_priority,
+                options.route_fwmark,
             );
         }
         if tun_applied {
@@ -3726,12 +3785,39 @@ fn remove_policy_route_via_tun(
     }
 }
 
+fn apply_policy_route_fwmark(fwmark: u32) -> Result<(), String> {
+    run_ip_command(&[
+        "rule",
+        "add",
+        "fwmark",
+        &format!("0x{fwmark:x}"),
+        "pref",
+        "100",
+        "table",
+        "main",
+    ])
+}
+
+fn remove_policy_route_fwmark(fwmark: u32) -> Result<(), String> {
+    run_ip_delete_command(&[
+        "rule",
+        "del",
+        "fwmark",
+        &format!("0x{fwmark:x}"),
+        "pref",
+        "100",
+        "table",
+        "main",
+    ])
+}
+
 fn rollback_applied_routes(
     route_cidrs: &[String],
     tun_name: &str,
     route_policy: bool,
     route_table: &str,
     route_rule_priority: &str,
+    route_fwmark: Option<u32>,
 ) -> Result<(), String> {
     let mut errors: Vec<String> = Vec::new();
     for route_cidr in route_cidrs.iter().rev() {
@@ -3742,6 +3828,13 @@ fn rollback_applied_routes(
         };
         if let Err(error) = rollback_result {
             errors.push(format!("{route_cidr}: {error}"));
+        }
+    }
+    if route_policy {
+        if let Some(fwmark) = route_fwmark {
+            if let Err(error) = remove_policy_route_fwmark(fwmark) {
+                errors.push(format!("fwmark 0x{fwmark:x}: {error}"));
+            }
         }
     }
     if errors.is_empty() {
@@ -4524,12 +4617,18 @@ fn rollback_from_state_file(
             .and_then(|v| extract_state_string_field_from_value(v, "route_rule_priority"))
             .or_else(|| extract_state_string_field(&state_text, "route_rule_priority"))
             .unwrap_or_else(|| fallback_options.route_rule_priority.clone());
+        let route_fwmark = state_json
+            .as_ref()
+            .and_then(|v| extract_state_string_field_from_value(v, "route_fwmark"))
+            .or_else(|| extract_state_string_field(&state_text, "route_fwmark"))
+            .and_then(|value| parse_optional_fwmark(&value));
         let route_rollback_result = rollback_applied_routes(
             &route_cidrs,
             &tun_name,
             route_policy,
             &route_table,
             &route_rule_priority,
+            route_fwmark,
         );
         if let Err(error) = route_rollback_result {
             errors.push(format!("route rollback failed: {error}"));

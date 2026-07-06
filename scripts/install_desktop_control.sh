@@ -834,7 +834,7 @@ configure_peer_egress_env() {
   local transit_lane_bindings_file="${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-${previous_transit_lane_bindings_file:-}}"
   allow_bound_transit="$(normalize_peer_env_bool "$allow_bound_transit")"
   local desired_peer_listen="${4:-0.0.0.0:0}"
-  local desired_local_listen="${5:-127.0.0.1:0}"
+  local desired_local_listen="${5:-127.0.0.1:18135}"
   local effective_node_listen=""
   local reset_legacy_auto_listens=0
   if [[ "$mode" == "node" && -f "$ROOT_DIR/configs/mesh-node.conf" ]]; then
@@ -887,6 +887,7 @@ configure_peer_egress_env() {
   upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_TOKEN' "$invite_token"
   upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_POOL' "$pool"
   upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_CONNECTIONS' "$connections"
+  upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_SERVICE_FWMARK' "${CHIMERA_SERVICE_FWMARK:-0x5244}"
   upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_AEAD' "$aead"
   upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT' "$allow_pool_transit"
   upsert_env_kv "$PEER_EGRESS_ENV_FILE" 'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT' "$allow_bound_transit"
@@ -929,6 +930,7 @@ configure_transparent_runtime_env() {
   local initial_read_timeout_ms="${CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS 500)}"
   local redirect_table="${CHIMERA_REDIRECT_TABLE:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_REDIRECT_TABLE chimera_redirect)}"
   local redirect_chain="${CHIMERA_REDIRECT_CHAIN:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_REDIRECT_CHAIN output)}"
+  local service_fwmark="${CHIMERA_REDIRECT_SERVICE_FWMARK:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_REDIRECT_SERVICE_FWMARK 0x5244)}"
   local nft_privilege_mode="${CHIMERA_NFT_PRIVILEGE_MODE:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_NFT_PRIVILEGE_MODE sudo)}"
   local runner_use_sudo="${CHIMERA_RUNNER_USE_SUDO:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_RUNNER_USE_SUDO 1)}"
   mkdir -p "$(dirname "$TRANSPARENT_RUNTIME_ENV_FILE")"
@@ -941,6 +943,7 @@ configure_transparent_runtime_env() {
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS' "$initial_read_timeout_ms"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_REDIRECT_TABLE' "$redirect_table"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_REDIRECT_CHAIN' "$redirect_chain"
+  upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_REDIRECT_SERVICE_FWMARK' "$service_fwmark"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_REDIRECT_EXEMPT_UID' "${CHIMERA_REDIRECT_EXEMPT_UID:-$exempt_uid}"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_TRANSPARENT_RUNTIME_UID' "${CHIMERA_TRANSPARENT_RUNTIME_UID:-$transparent_uid}"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_TRANSPARENT_RUNTIME_GID' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-$transparent_gid}"
@@ -982,10 +985,10 @@ if [[ "$bootstrap_authority_present" -eq 1 && -z "${CONFIGURED_PEER_ENDPOINT:-}"
 fi
 if [[ -n "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "$CONFIGURED_PEER_ENDPOINT" "$selected_invite_token" "$node_peer_listen" "127.0.0.1:0"
+  configure_peer_egress_env "node" "$CONFIGURED_PEER_ENDPOINT" "$selected_invite_token" "$node_peer_listen" "127.0.0.1:18135"
 else
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "$node_peer_listen" "127.0.0.1:0"
+  configure_peer_egress_env "node" "" "${selected_invite_token:-${CHIMERA_PEER_EGRESS_TOKEN:-}}" "$node_peer_listen" "127.0.0.1:18135"
 fi
 if [[ "$bootstrap_authority_present" -eq 1 ]]; then
   run_control_plane_step mesh-seed-control-plane --strict

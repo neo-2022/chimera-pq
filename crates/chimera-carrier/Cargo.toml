@@ -13,5 +13,6 @@ chimera-core = { path = "../chimera-core" }
 chimera-crypto = { path = "../chimera-crypto" }
 chimera-mesh = { path = "../chimera-mesh" }
 chimera-session = { path = "../chimera-session" }
+nix = { version = "0.31.3", features = ["socket"] }
 sha2 = "0.10"
 socket2 = "0.6"

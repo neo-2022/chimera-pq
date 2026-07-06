@@ -1121,7 +1121,7 @@ EOF
   [[ -f "$node_conf" ]] || fail "installer_node_auto_peer_listen_migrates_legacy_env_missing_node_conf"
   rg -q '^peer\.listen_addr = auto$' "$node_conf" || fail "installer_node_auto_peer_listen_migrates_legacy_env_node_conf_not_auto"
   rg -q '^CHIMERA_PEER_EGRESS_PEER_LISTEN=0\.0\.0\.0:0$' "$env_file" || fail "installer_node_auto_peer_listen_migrates_legacy_env_peer_listen_not_reset"
-  rg -q '^CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127\.0\.0\.1:0$' "$env_file" || fail "installer_node_auto_peer_listen_migrates_legacy_env_local_listen_not_reset"
+  rg -q '^CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127\.0\.0\.1:18135$' "$env_file" || fail "installer_node_auto_peer_listen_migrates_legacy_env_local_listen_not_reset"
 
   rm -rf "$tmp_dir"
 }

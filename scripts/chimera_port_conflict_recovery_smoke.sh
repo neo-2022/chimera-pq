@@ -41,7 +41,7 @@ EOF
 # Peer egress env with the same fixed port.
 cat >"$peer_env" <<EOF
 CHIMERA_PEER_EGRESS_MODE=node
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:$BLOCKED_PORT
 CHIMERA_PEER_EGRESS_STATE_FILE=$cache_dir/chimera/peer-egress.state
 CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$cache_dir/chimera/peer-egress.state
@@ -102,7 +102,7 @@ set -e
 [[ -f "$override_env" ]] || fail "runtime listener override file not created; output=$output"
 [[ "$(cat "$override_env")" == *"CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0"* ]] \
   || fail "peer listen override did not reset to auto-listen"
-[[ "$(cat "$override_env")" == *"CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0"* ]] \
+[[ "$(cat "$override_env")" == *"CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135"* ]] \
   || fail "local listen override did not reset to auto-listen"
 [[ -f "$autofix_log" ]] || fail "autofix log not created"
 [[ "$(cat "$autofix_log")" == *"node_listener_reset"* ]] \

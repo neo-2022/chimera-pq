@@ -177,6 +177,7 @@ dependencies = [
  "chimera-crypto",
  "chimera-mesh",
  "chimera-session",
+ "nix",
  "sha2",
  "socket2",
 ]

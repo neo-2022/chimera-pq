@@ -228,7 +228,7 @@ EOF
 
   cat >"$config_dir/chimera/peer-egress.env" <<EOF
 CHIMERA_PEER_EGRESS_MODE=node
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 CHIMERA_PEER_EGRESS_STATE_FILE=$tmp_dir/peer-egress.state
 CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$tmp_dir/peer-egress.state
@@ -322,7 +322,7 @@ EOF
 
   cat >"$config_dir/chimera/peer-egress.env" <<EOF
 CHIMERA_PEER_EGRESS_MODE=node
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 CHIMERA_PEER_EGRESS_STATE_FILE=$tmp_dir/peer-egress.state
 CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$tmp_dir/peer-egress.state
@@ -2203,7 +2203,7 @@ EOF
   grep -q '^peer.listen_addr = 9443$' "$node_conf" || fail "repair_node_listener_bindings_for_retry_case: operator node listen was overwritten"
   grep -q '^CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:22180$' "$peer_env" || fail "repair_node_listener_bindings_for_retry_case: operator local listen was overwritten"
   grep -q '^CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:9443$' "$peer_env" || fail "repair_node_listener_bindings_for_retry_case: operator peer listen was overwritten"
-  grep -q '^CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0$' "$override_file" || fail "repair_node_listener_bindings_for_retry_case: runtime local listen override missing"
+  grep -q '^CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135$' "$override_file" || fail "repair_node_listener_bindings_for_retry_case: runtime local listen override missing"
   grep -q '^CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0$' "$override_file" || fail "repair_node_listener_bindings_for_retry_case: runtime peer listen override missing"
   grep -q 'runtime_repair=node_listener_reset' "$autofix_log" || fail "repair_node_listener_bindings_for_retry_case: autofix log missing node listener reset"
 
@@ -2281,7 +2281,7 @@ EOF
   grep -Fxq 'CHIMERA_PEER_EGRESS_SERVER=new-peer.example:18142' "$peer_env" || fail "node_service_preflight_heals_blocked_fixed_listener_case: peer env endpoint not refreshed"
   grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:9444' "$peer_env" || fail "node_service_preflight_heals_blocked_fixed_listener_case: operator local listen was overwritten"
   grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:9443' "$peer_env" || fail "node_service_preflight_heals_blocked_fixed_listener_case: operator peer listen was overwritten"
-  grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0' "$override_file" || fail "node_service_preflight_heals_blocked_fixed_listener_case: runtime local override missing"
+  grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135' "$override_file" || fail "node_service_preflight_heals_blocked_fixed_listener_case: runtime local override missing"
   grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0' "$override_file" || fail "node_service_preflight_heals_blocked_fixed_listener_case: runtime peer override missing"
   grep -q 'runtime_repair=node_listener_reset' "$autofix_log" || fail "node_service_preflight_heals_blocked_fixed_listener_case: autofix log missing node listener reset"
 
@@ -2323,7 +2323,7 @@ CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:9444
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:9443
 EOF
   cat >"$override_file" <<'EOF'
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 EOF
   cat >"$bin_dir/ss" <<'EOF'
@@ -2397,7 +2397,7 @@ EOF
   cat >"$peer_env" <<'EOF'
 CHIMERA_PEER_EGRESS_MODE=node
 CHIMERA_PEER_EGRESS_SERVER=carrier.mesh:443
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 EOF
   cat >"$transparent_env" <<'EOF'
@@ -2608,7 +2608,7 @@ case "\${1:-}" in
         if grep -Fxq 'peer.listen_addr = 9443' "$node_conf" \
           && grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:9444' "$peer_env" \
           && grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:9443' "$peer_env" \
-          && grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0' "$override_file" \
+          && grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135' "$override_file" \
           && grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0' "$override_file"; then
           echo active
         else
@@ -2693,7 +2693,7 @@ EOF
   grep -Fxq 'peer.listen_addr = 9443' "$node_conf" || fail "systemd_start_retry_heals_fixed_listener_case: operator node listen was overwritten output=$output"
   grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:9444' "$peer_env" || fail "systemd_start_retry_heals_fixed_listener_case: operator local listen was overwritten output=$output"
   grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:9443' "$peer_env" || fail "systemd_start_retry_heals_fixed_listener_case: operator peer listen was overwritten output=$output"
-  grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0' "$override_file" || fail "systemd_start_retry_heals_fixed_listener_case: runtime local override missing output=$output"
+  grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135' "$override_file" || fail "systemd_start_retry_heals_fixed_listener_case: runtime local override missing output=$output"
   grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0' "$override_file" || fail "systemd_start_retry_heals_fixed_listener_case: runtime peer override missing output=$output"
   [[ "$(grep -c '^--user start chimera-node.service$' "$systemctl_log")" -eq 1 ]] || fail "systemd_start_retry_heals_fixed_listener_case: node service should start cleanly after preflight repair output=$output"
   grep -q 'runtime_repair=node_listener_reset' "$autofix_log" || fail "systemd_start_retry_heals_fixed_listener_case: autofix log missing node listener reset"
@@ -2730,7 +2730,7 @@ EOF
   cat >"$peer_env" <<'EOF'
 CHIMERA_PEER_EGRESS_MODE=node
 CHIMERA_PEER_EGRESS_SERVER=old-peer.example:443
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 EOF
   cat >"$bootstrap_env" <<'EOF'
@@ -2923,7 +2923,7 @@ EOF
   cat >"$peer_env" <<'EOF'
 CHIMERA_PEER_EGRESS_MODE=node
 CHIMERA_PEER_EGRESS_SERVER=carrier.mesh:443
-CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
 CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 EOF
   cat >"$transparent_env" <<'EOF'
@@ -4019,7 +4019,7 @@ EOF
   set -e
 
   [[ "$rc" -eq 0 ]] || fail "node_service_preflight_heals_blocked_fixed_listener_without_ss_case: helper failed rc=$rc output=$output"
-  grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:0' "$override_file" || fail "node_service_preflight_heals_blocked_fixed_listener_without_ss_case: runtime local override missing"
+  grep -Fxq 'CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135' "$override_file" || fail "node_service_preflight_heals_blocked_fixed_listener_without_ss_case: runtime local override missing"
   grep -Fxq 'CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0' "$override_file" || fail "node_service_preflight_heals_blocked_fixed_listener_without_ss_case: runtime peer override missing"
 
   rm -rf "$tmp_dir"
