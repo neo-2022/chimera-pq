@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The contract smoke exercises the full-tunnel datapath path.  Since
+# `chimera-control.sh` now defaults apply flags to false unless the caller (or
+# the installed systemd unit) explicitly sets them, force true here so the tests
+# continue to validate the apply/rollback behaviour.
+export CHIMERA_APPLY_TUN=true
+export CHIMERA_APPLY_ROUTE=true
+export CHIMERA_APPLY_DNS=true
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 fail() {
