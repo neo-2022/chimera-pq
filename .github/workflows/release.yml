@@ -88,7 +88,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Release Gate Tools
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        shell: bash
+        run: |
+          if command -v rg >/dev/null 2>&1; then
+            echo "ripgrep already installed: $(command -v rg)"
+            exit 0
+          fi
+          sudo apt-get update || echo "warning: apt-get update failed, continuing"
+          sudo apt-get install -y ripgrep || echo "warning: apt-get install ripgrep failed"
+          command -v rg >/dev/null 2>&1
 
       - name: Installer Contract Gate
         run: |
