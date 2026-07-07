@@ -1202,6 +1202,40 @@ heal_node_peer_egress_env_bindings() {
   fi
 }
 
+heal_node_carrier_addr_from_peer_egress_env() {
+  local node_conf peer_server raw addr_part port_part current_addr expected_addr
+  local remote_peer_spec node_id region load_score reliability_score new_spec
+  [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
+  peer_server="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_SERVER 2>/dev/null || true)")"
+  [[ -n "$peer_server" && "$peer_server" != *\$\{* && "$peer_server" != *example* ]] || return 0
+  expected_addr="$(normalize_node_connect_addr "$peer_server")"
+  raw="$(raw_node_endpoint_host_port "$peer_server")"
+  addr_part="${raw%:*}"
+  port_part="${raw##*:}"
+  [[ -n "$addr_part" && "$port_part" =~ ^[0-9]+$ && "$port_part" -ge 1 && "$port_part" -le 65535 ]] || return 0
+  node_conf="$(node_config_path)"
+  [[ -f "$node_conf" ]] || return 0
+  current_addr="$(read_node_config_kv "$node_conf" "carrier.addr")"
+  if [[ "$current_addr" != "$expected_addr" ]]; then
+    upsert_node_config_kv "$node_conf" "carrier.addr" "$expected_addr"
+    upsert_node_config_kv "$node_conf" "carrier.server_name" "$addr_part"
+    echo "healed_node_carrier_addr=$expected_addr"
+  fi
+  if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+    remote_peer_spec="$(trim_ascii_line "$(read_existing_env_kv_from_file "$BOOTSTRAP_ENV_FILE" CHIMERA_MESH_REMOTE_PEER_SPEC 2>/dev/null || true)")"
+    if [[ -n "$remote_peer_spec" ]]; then
+      IFS='@' read -r node_id _ region load_score reliability_score <<<"$remote_peer_spec"
+      if [[ -n "$node_id" && -n "$region" && -n "$load_score" && -n "$reliability_score" ]]; then
+        new_spec="${node_id}@${addr_part}:${port_part}@${region}@${load_score}@${reliability_score}"
+        if [[ "$remote_peer_spec" != "$new_spec" ]]; then
+          upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_REMOTE_PEER_SPEC" "$new_spec"
+          echo "healed_bootstrap_remote_peer_spec=${new_spec/@port/:${port_part}}"
+        fi
+      fi
+    fi
+  fi
+}
+
 repair_node_listener_bindings_for_retry() {
   local repaired=1
   local desired_local_override="127.0.0.1:18135"
@@ -1302,6 +1336,7 @@ node_service_prestart_self_heal() {
   fi
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
   heal_node_peer_egress_env_bindings
+  heal_node_carrier_addr_from_peer_egress_env >/dev/null 2>&1 || true
   ensure_peer_egress_local_listen_aligned
   ensure_peer_egress_service_fwmark
   ensure_transparent_runtime_service_fwmark
@@ -3869,6 +3904,7 @@ start_runtime() {
   clear_stale_publication_runtime_state
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
   heal_node_peer_egress_env_bindings
+  heal_node_carrier_addr_from_peer_egress_env >/dev/null 2>&1 || true
   ensure_peer_egress_local_listen_aligned
   ensure_peer_egress_service_fwmark
   ensure_transparent_runtime_service_fwmark
@@ -4019,6 +4055,9 @@ start_runtime() {
       systemd_up_args+=(--apply-route false)
     fi
     systemd_up_args+=(--apply-dns "${CHIMERA_APPLY_DNS}")
+    if [[ "${CHIMERA_APPLY_TUN}" == "false" && "${CHIMERA_APPLY_ROUTE}" == "false" && "${CHIMERA_APPLY_DNS}" == "false" ]]; then
+      systemd_up_args+=(--skip-connect-check true)
+    fi
     if run_chimera_cli_up_with_retry "${systemd_up_args[@]}" >/dev/null 2>&1; then
       systemd_datapath_apply_status="ok"
     else
@@ -4207,6 +4246,9 @@ start_runtime() {
         direct_up_args+=(--apply-route false)
       fi
       direct_up_args+=(--apply-dns ${CHIMERA_APPLY_DNS})
+      if [[ "${CHIMERA_APPLY_TUN}" == "false" && "${CHIMERA_APPLY_ROUTE}" == "false" && "${CHIMERA_APPLY_DNS}" == "false" ]]; then
+        direct_up_args+=(--skip-connect-check true)
+      fi
       if run_chimera_cli_up_with_retry "${direct_up_args[@]}" >/dev/null 2>&1; then
         direct_datapath_apply_status="ok"
       else
