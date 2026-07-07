@@ -97,7 +97,12 @@ if [[ -n "$policy_payload" ]] && ! policy_payload_has_route_binding "$policy_pay
   exit 0
 fi
 
-if [[ -z "$remote_peer_spec" ]]; then
+discovery_configured=0
+if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}${CHIMERA_MESH_NODES_DISCOVERY_URLS:-}" ]]; then
+  discovery_configured=1
+fi
+
+if [[ -z "$remote_peer_spec" && "$discovery_configured" -eq 0 ]]; then
   remote_node="$(trim_ascii "${CHIMERA_MESH_REMOTE_NODE:-}")"
   remote_endpoint="$(trim_ascii "${CHIMERA_MESH_REMOTE_ENDPOINT:-}")"
   remote_region="$(trim_ascii "${CHIMERA_MESH_REMOTE_REGION:-}")"
@@ -113,7 +118,7 @@ if [[ -z "$remote_peer_spec" ]]; then
   validate_score "CHIMERA_MESH_REMOTE_RELIABILITY_SCORE" "$remote_reliability"
   remote_peer_spec="${remote_node}@${remote_endpoint}@${remote_region}@${remote_load}@${remote_reliability}"
 fi
-validate_peer_spec "$remote_peer_spec"
+[[ -n "$remote_peer_spec" ]] && validate_peer_spec "$remote_peer_spec"
 
 mkdir -p "$(dirname "$OUT_FILE")"
 tmp_file="$(mktemp)"
@@ -125,7 +130,9 @@ tmp_file="$(mktemp)"
   else
     write_env_kv "CHIMERA_MESH_TRAFFIC_PROFILE" "$traffic_profile"
   fi
-  write_env_kv "CHIMERA_MESH_REMOTE_PEER_SPEC" "$remote_peer_spec"
+  if [[ -n "$remote_peer_spec" ]]; then
+    write_env_kv "CHIMERA_MESH_REMOTE_PEER_SPEC" "$remote_peer_spec"
+  fi
   if [[ -n "$extra_peers" ]]; then
     write_env_kv "CHIMERA_MESH_EXTRA_PEERS" "$extra_peers"
   fi

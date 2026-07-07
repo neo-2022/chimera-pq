@@ -932,6 +932,10 @@ seed_mesh_control_plane_authority_from_bootstrap() {
     return 0
   fi
   if [[ -z "$remote_peer_spec" ]]; then
+    if mesh_discovery_source_present; then
+      printf '%s\n' "mesh_control_plane_seed=ok reason=dynamic_discovery" >&2
+      return 0
+    fi
     printf '%s\n' "mesh_control_plane_seed=skipped reason=missing_authoritative_peer_list" >&2
     [[ "$strict_seed" == "1" ]] && return 1
     return 0
