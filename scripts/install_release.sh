@@ -18,6 +18,7 @@ LEGACY_NODE_COMPAT_SERVICE_UNIT="${LEGACY_NODE_COMPAT_SERVICE_UNIT:-${CHIMERA_LE
 LEGACY_DATAPATH_COMPAT_SERVICE_UNIT="${LEGACY_DATAPATH_COMPAT_SERVICE_UNIT:-${CHIMERA_LEGACY_DATAPATH_SERVICE_UNIT:-chimera-client.service}}"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR="$SYSTEMD_USER_DIR/default.target.wants"
+CHIMERA_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
 sha256_file() {
@@ -133,7 +134,10 @@ tracked_external_state_paths() {
     "$APPLICATIONS_DIR/chimera-control.desktop" \
     "$LOCAL_BIN/chimera" \
     "$LOCAL_BIN/chimera.sh" \
-    "$LOCAL_BIN/chimera-sh"
+    "$LOCAL_BIN/chimera-sh" \
+    "${CHIMERA_HOME}/configs/mesh-node.conf" \
+    "$CHIMERA_CACHE_DIR/peer-egress.state" \
+    "$CHIMERA_CACHE_DIR/peer-update.state.json"
 }
 
 snapshot_external_state() {

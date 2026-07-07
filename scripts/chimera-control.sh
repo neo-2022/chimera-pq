@@ -1397,6 +1397,13 @@ refresh_node_peer_target_from_bootstrap() {
       fi
     fi
   fi
+  if [[ -z "$candidate" && -f "$PEER_EGRESS_ENV_FILE" ]]; then
+    local peer_server=""
+    peer_server="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_SERVER 2>/dev/null || true)")"
+    if [[ -n "$peer_server" && "$peer_server" != *\$\{* && "$peer_server" != *example* ]]; then
+      candidate="$peer_server"
+    fi
+  fi
   [[ -n "$candidate" ]] || return 1
 
   raw_candidate="$(raw_node_endpoint_host_port "$candidate")"
