@@ -94,9 +94,23 @@ SPLIT_TRANSPARENT_DNS_STRATEGY="${SPLIT_TRANSPARENT_DNS_STRATEGY:-prefer_ipv4}"
 SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/chimera-split-watchdog.pid}"
 CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}"
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
-CHIMERA_APPLY_DNS="${CHIMERA_APPLY_DNS:-true}"
-CHIMERA_APPLY_TUN="${CHIMERA_APPLY_TUN:-true}"
-CHIMERA_APPLY_ROUTE="${CHIMERA_APPLY_ROUTE:-true}"
+
+# Inherit split-tunnel/full-tunnel apply flags from the systemd user manager
+# environment when they are present and the caller has not overridden them.
+# This lets `chimera-sh -start` from an ordinary shell use the same policy
+# that is baked into the installed chimera-runtime.service unit.
+chimera_apply_flag_default() {
+  local key="${1:?key_required}"
+  local value=""
+  if [[ -z "${!key:-}" ]] && command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    value="$(systemctl --user show-environment 2>/dev/null | awk -F= -v k="$key" '$1 == k { sub(/^[^=]+=/, ""); print; exit }')"
+  fi
+  printf '%s' "${value:-true}"
+}
+
+CHIMERA_APPLY_DNS="${CHIMERA_APPLY_DNS:-$(chimera_apply_flag_default CHIMERA_APPLY_DNS)}"
+CHIMERA_APPLY_TUN="${CHIMERA_APPLY_TUN:-$(chimera_apply_flag_default CHIMERA_APPLY_TUN)}"
+CHIMERA_APPLY_ROUTE="${CHIMERA_APPLY_ROUTE:-$(chimera_apply_flag_default CHIMERA_APPLY_ROUTE)}"
 CHIMERA_SERVICE_FWMARK="${CHIMERA_SERVICE_FWMARK:-0x5244}"
 CHIMERA_ROUTE_FWMARK="${CHIMERA_ROUTE_FWMARK:-0x5244}"
 CHIMERA_ROUTE_CIDR="${CHIMERA_ROUTE_CIDR:-0.0.0.0/1,128.0.0.0/1}"
