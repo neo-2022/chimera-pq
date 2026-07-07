@@ -1560,6 +1560,9 @@ configure_peer_update_env() {
       listen="${CHIMERA_PEER_UPDATE_LISTEN:-$listen}"
     fi
   fi
+  if [[ -z "$base_url" && -f "$PEER_UPDATE_ENV_FILE" ]]; then
+    base_url="$(trim_ascii_line "$(read_existing_env_kv_from_file "$PEER_UPDATE_ENV_FILE" CHIMERA_PEER_UPDATE_BASE_URL 2>/dev/null || true)")"
+  fi
   existing_listen="$(trim_ascii_line "$(read_existing_env_kv_from_file "$PEER_UPDATE_ENV_FILE" CHIMERA_PEER_UPDATE_LISTEN)")"
   if [[ "${CHIMERA_PEER_UPDATE_LISTEN+set}" != "set" ]] \
     && ! node_config_value_is_placeholder "$existing_listen"; then
