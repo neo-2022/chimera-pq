@@ -342,8 +342,10 @@ elif [[ "${BUNDLE_SOURCE}" == https://* || "${BUNDLE_SOURCE}" == http://* ]]; th
   trap 'rm -rf "$TMP_DIR"' EXIT
   TMP_ARCHIVE="${TMP_DIR}/chimera-release.tar.gz"
   TMP_CHECKSUM="${TMP_DIR}/chimera-release.tar.gz.sha256"
-  local install_attempt install_max_attempts="${CHIMERA_INSTALL_VERIFY_ATTEMPTS:-3}"
-  local archive_url checksum_url
+  install_attempt=""
+  install_max_attempts="${CHIMERA_INSTALL_VERIFY_ATTEMPTS:-3}"
+  archive_url=""
+  checksum_url=""
   for (( install_attempt=1; install_attempt<=install_max_attempts; install_attempt++ )); do
     archive_url="$(cache_buster_url "${BUNDLE_SOURCE}")"
     if [[ "$install_attempt" -gt 1 ]]; then
