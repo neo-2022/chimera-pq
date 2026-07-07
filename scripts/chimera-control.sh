@@ -2316,6 +2316,9 @@ clear_stale_publication_runtime_state() {
 }
 
 partial_start_fail_closed() {
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}${CHIMERA_MESH_NODES_DISCOVERY_URLS:-}" || -s "${CHIMERA_MESH_NODES_DISCOVERY_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh_nodes_discovery_urls.list}" ]]; then
+    return 1
+  fi
   [[ "${CHIMERA_FAIL_CLOSED_ON_PARTIAL_START:-1}" != "0" ]]
 }
 
