@@ -479,6 +479,9 @@ publish_mesh_discovery_snapshot() {
     --out "$discovery_out"
     --pubkey-out "$pubkey_out"
   )
+  if [[ -n "${CHIMERA_MESH_LOCAL_NODE_REGION:-}" ]]; then
+    advertise_args+=(--region "${CHIMERA_MESH_LOCAL_NODE_REGION}")
+  fi
   if [[ -f "$PEER_UPDATE_STATE_FILE" ]]; then
     advertise_args+=(--update-state-file "$PEER_UPDATE_STATE_FILE")
   fi
@@ -2517,9 +2520,30 @@ wait_for_file() {
   return 1
 }
 
+kill_existing_runner_by_needle() {
+  local needle="${1:?needle_required}"
+  local pid=""
+  local pids=""
+  if command -v pgrep >/dev/null 2>&1; then
+    pids="$(pgrep -f "$needle" 2>/dev/null || true)"
+  elif command -v ps >/dev/null 2>&1; then
+    pids="$(ps -eo pid,args 2>/dev/null | awk -v needle="$needle" -v self="$$" '
+      index($0, needle) && $1 != self && index($0, "awk") == 0 { print $1 }
+    ' || true)"
+  fi
+  for pid in $pids; do
+    [[ "$pid" == "$$" ]] && continue
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 0.2
+    kill -0 "$pid" >/dev/null 2>&1 && kill -9 "$pid" >/dev/null 2>&1 || true
+  done
+}
+
 stop_runner_background() {
   local name="${1:?name_required}"
   local pid_file="${2:?pid_file_required}"
+  local fallback_needle=""
 
   if [[ -f "$pid_file" ]]; then
     local pid
@@ -2553,6 +2577,16 @@ stop_runner_background() {
       kill -0 "$pid" >/dev/null 2>&1 && kill -9 "$pid" >/dev/null 2>&1 || true
     fi
     rm -f "$pid_file"
+  fi
+  local target_name="$name"
+  case "$name" in
+    peer_egress) target_name="peer-egress" ;;
+    peer_update) target_name="peer-update" ;;
+    transparent_runtime) target_name="transparent-runtime" ;;
+  esac
+  fallback_needle="$(runner_cmdline_needle_for_target "$target_name" 2>/dev/null || true)"
+  if [[ -n "$fallback_needle" ]]; then
+    kill_existing_runner_by_needle "$fallback_needle" >/dev/null 2>&1 || true
   fi
   echo "${name}_status=stopped"
 }

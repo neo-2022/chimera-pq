@@ -70,6 +70,12 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
     let region = extract_flag_value(args, "--region")
         .map(str::to_string)
         .or_else(|| {
+            std::env::var("CHIMERA_MESH_LOCAL_NODE_REGION")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .or_else(|| {
             inventory
                 .nodes
                 .iter()
