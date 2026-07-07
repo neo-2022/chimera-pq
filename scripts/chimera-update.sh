@@ -714,6 +714,9 @@ auto_update_if_needed() {
     set -e
     case "$update_rc" in
       0)
+        if [[ "$update_failed" -ne 0 ]]; then
+          return 1
+        fi
         return 0
         ;;
       4)

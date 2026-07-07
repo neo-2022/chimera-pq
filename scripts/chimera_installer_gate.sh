@@ -1415,7 +1415,7 @@ EOF
   rg -q '^CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_profile_not_persisted"
   rg -q '^CHIMERA_PEER_UPDATE_BASE_URL=https://node\.example$' "$tmp_dir/config/chimera/mesh_bootstrap.env" || fail "installer_seeded_mesh_bootstrap_update_base_not_persisted"
   grep -q '^mesh-seed-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_seed_not_strict"
-  grep -q '^mesh-bind-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_bind_not_strict"
+  grep -q '^mesh-bind-control-plane --best-effort$' "$control_log" || fail "installer_seeded_mesh_bootstrap_bind_not_best_effort"
   rm -rf "$tmp_dir"
 }
 
@@ -1700,7 +1700,7 @@ EOF
   [[ "$persisted_keyring" == "key-a:pubkey-a,key-b:pubkey-b" ]] || fail "installer_seeded_mesh_bootstrap_keyring_not_persisted"
   grep -q -- '--discovery-keyring key-a:pubkey-a,key-b:pubkey-b' "$cli_log" || fail "installer_seeded_mesh_bootstrap_keyring_not_used"
   grep -q '^mesh-seed-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_keyring_seed_not_strict"
-  grep -q '^mesh-bind-control-plane --strict$' "$control_log" || fail "installer_seeded_mesh_bootstrap_keyring_bind_not_strict"
+  grep -q '^mesh-bind-control-plane --best-effort$' "$control_log" || fail "installer_seeded_mesh_bootstrap_keyring_bind_not_best_effort"
   rm -rf "$tmp_dir"
 }
 
@@ -1826,7 +1826,7 @@ EOF
   [[ -f "$node_conf" ]] || fail "installer_direct_peer_spec_endpoint_missing_node_conf"
   rg -q '^carrier\.addr = tcp://198\.51\.100\.66:443$' "$node_conf" || fail "installer_direct_peer_spec_endpoint_carrier_addr_not_refreshed"
   grep -q '^mesh-seed-control-plane --strict$' "$control_log" || fail "installer_direct_peer_spec_endpoint_seed_not_strict"
-  grep -q '^mesh-bind-control-plane --strict$' "$control_log" || fail "installer_direct_peer_spec_endpoint_bind_not_strict"
+  grep -q '^mesh-bind-control-plane --best-effort$' "$control_log" || fail "installer_direct_peer_spec_endpoint_bind_not_best_effort"
   rm -rf "$tmp_dir"
 }
 

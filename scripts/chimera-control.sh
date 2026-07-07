@@ -3920,8 +3920,7 @@ doctor_run() {
     return 2
   fi
   if peer_egress_bound_transit_requested \
-    && ( ! bound_transit_authoritative_peer_source_present >/dev/null 2>&1 \
-      || ! ensure_bound_transit_start_contract >/dev/null 2>&1 ); then
+    && ! ensure_bound_transit_start_contract >/dev/null 2>&1; then
     write_doctor_fail_json "$out_file" "bound_transit_unready" "true"
     echo "doctor_status=fail reason=bound_transit_unready" >&2
     return 2

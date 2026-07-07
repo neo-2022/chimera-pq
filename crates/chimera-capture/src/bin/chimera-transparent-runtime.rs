@@ -392,13 +392,7 @@ fn run_nft(script: &str) -> Result<(), String> {
 }
 
 fn delete_table(name: &str) {
-    let _ = Command::new("nft")
-        .arg("delete")
-        .arg("table")
-        .arg(format!("inet {name}"))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    let _ = run_nft_script(&format!("delete table inet {name}"));
 }
 
 fn install_signal_handlers(stopping: Arc<AtomicBool>) -> Result<(), String> {

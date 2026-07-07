@@ -8,6 +8,7 @@ StartLimitBurst=3
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+Restart=on-failure
 WorkingDirectory=__CHIMERA_ROOT__
 Environment=CHIMERA_FAIL_CLOSED_ON_PARTIAL_START=0
 Environment=CHIMERA_APPLY_TUN=false

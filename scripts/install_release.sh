@@ -48,18 +48,16 @@ cache_buster_url() {
 download_url_to_file() {
   local url="${1:?url_required}"
   local dest="${2:?dest_required}"
-  local max_time="${CHIMERA_INSTALL_DOWNLOAD_MAX_TIME_SEC:-120}"
   if command -v curl >/dev/null 2>&1; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time "$max_time" -o "$dest" "$url"
+      curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 -o "$dest" "$url"
     then
       return 0
     fi
   fi
   if command -v wget >/dev/null 2>&1; then
-    local wget_read_timeout="${CHIMERA_INSTALL_DOWNLOAD_MAX_TIME_SEC:-120}"
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
-      wget --no-config --tries=3 --timeout=10 --dns-timeout=10 --connect-timeout=10 --read-timeout="$wget_read_timeout" --waitretry=1 -qO "$dest" "$url"
+      wget --no-config --tries=3 --timeout=10 --dns-timeout=10 --connect-timeout=10 --read-timeout=60 --waitretry=1 -qO "$dest" "$url"
     then
       return 0
     fi
