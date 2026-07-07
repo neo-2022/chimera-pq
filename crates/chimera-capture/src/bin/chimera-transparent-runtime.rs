@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::env;
+use std::net::ToSocketAddrs;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::{
@@ -75,6 +76,8 @@ impl Options {
         let mut capture_tcp_ports =
             parse_u16_list_env("CHIMERA_CAPTURE_TCP_PORTS").unwrap_or_default();
         let mut capture_skuids = parse_uid_list_env("CHIMERA_CAPTURE_SKUID").unwrap_or_default();
+        let mut capture_domains =
+            parse_string_list_env("CHIMERA_CAPTURE_DOMAIN").unwrap_or_default();
         let mut run_ms = env_value("CHIMERA_TRANSPARENT_RUNTIME_RUN_MS")
             .map(|value| parse_positive_u64(&value, "run-ms"))
             .transpose()?;
@@ -163,6 +166,10 @@ impl Options {
                         .push(parse_u32(&arg_value(args, index, flag)?, "capture-skuid")?);
                     index += 2;
                 }
+                "--capture-domain" => {
+                    capture_domains.push(arg_value(args, index, flag)?);
+                    index += 2;
+                }
                 "--no-default-bypass" => {
                     bypass_cidrs_v4.clear();
                     index += 1;
@@ -190,6 +197,9 @@ impl Options {
         }
         if direct_mode != "disabled" {
             return Err("direct-mode must be disabled".to_string());
+        }
+        if !capture_domains.is_empty() {
+            capture_cidrs_v4.extend(resolve_domains_to_cidrs(&capture_domains)?);
         }
         let exempt_uid = exempt_uid.or(transparent_uid).ok_or_else(|| {
             "missing --exempt-uid/--transparent-uid or CHIMERA_REDIRECT_EXEMPT_UID".to_string()
@@ -237,6 +247,28 @@ impl Options {
             capture_skuids: self.capture_skuids.clone(),
         }
     }
+}
+
+fn resolve_domains_to_cidrs(domains: &[String]) -> Result<Vec<String>, String> {
+    let mut cidrs = Vec::new();
+    for domain in domains {
+        let mut seen_ipv4 = false;
+        let socket_addrs = format!("{domain}:443")
+            .to_socket_addrs()
+            .map_err(|error| format!("failed to resolve domain '{domain}': {error}"))?;
+        for addr in socket_addrs {
+            if let std::net::SocketAddr::V4(v4) = addr {
+                cidrs.push(format!("{}/32", v4.ip()));
+                seen_ipv4 = true;
+            }
+        }
+        if !seen_ipv4 {
+            return Err(format!(
+                "domain '{domain}' did not resolve to any IPv4 address"
+            ));
+        }
+    }
+    Ok(cidrs)
 }
 
 fn main() {
