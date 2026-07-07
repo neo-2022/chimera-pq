@@ -35,6 +35,16 @@ sha256_file() {
   return 1
 }
 
+cache_buster_url() {
+  local url="${1:?url_required}"
+  local stamp="ts=$(date +%s%N 2>/dev/null || date +%s)"
+  if [[ "$url" == *"?"* ]]; then
+    printf '%s&%s\n' "$url" "$stamp"
+  else
+    printf '%s?%s\n' "$url" "$stamp"
+  fi
+}
+
 download_url_to_file() {
   local url="${1:?url_required}"
   local dest="${2:?dest_required}"
@@ -275,6 +285,10 @@ install_prepared_release_tree() {
     cleanup_external_state_snapshot "$external_state_snapshot"
     return 1
   fi
+  if [[ "$had_previous" == "1" ]]; then
+    rm -f "$CHIMERA_CACHE_DIR/peer-egress.state" "$CHIMERA_CACHE_DIR/peer-update.state.json"
+    echo "install: cleared stale runtime state"
+  fi
   printf '%s\n' "$LOCAL_BIN" > "$CHIMERA_HOME/$INSTALL_LOCAL_BIN_FILE"
   cleanup_external_state_snapshot "$external_state_snapshot"
   if [[ -n "$backup_home" ]]; then
@@ -329,23 +343,26 @@ elif [[ "${BUNDLE_SOURCE}" == https://* || "${BUNDLE_SOURCE}" == http://* ]]; th
   TMP_ARCHIVE="${TMP_DIR}/chimera-release.tar.gz"
   TMP_CHECKSUM="${TMP_DIR}/chimera-release.tar.gz.sha256"
   local install_attempt install_max_attempts="${CHIMERA_INSTALL_VERIFY_ATTEMPTS:-3}"
+  local archive_url checksum_url
   for (( install_attempt=1; install_attempt<=install_max_attempts; install_attempt++ )); do
+    archive_url="$(cache_buster_url "${BUNDLE_SOURCE}")"
     if [[ "$install_attempt" -gt 1 ]]; then
       echo "install: verification mismatch, retrying attempt ${install_attempt}/${install_max_attempts}" >&2
       sleep "${CHIMERA_INSTALL_VERIFY_RETRY_SEC:-5}"
       rm -f "$TMP_ARCHIVE" "$TMP_CHECKSUM"
     fi
-    if ! download_url_to_file "${BUNDLE_SOURCE}" "${TMP_ARCHIVE}"; then
+    if ! download_url_to_file "$archive_url" "${TMP_ARCHIVE}"; then
       echo "error: release archive download unavailable" >&2
       exit 2
     fi
     if [[ -n "${CHIMERA_RELEASE_CHECKSUM_URL:-}" ]]; then
-      if ! download_url_to_file "${CHIMERA_RELEASE_CHECKSUM_URL}" "${TMP_CHECKSUM}"; then
+      checksum_url="$(cache_buster_url "${CHIMERA_RELEASE_CHECKSUM_URL}")"
+      if ! download_url_to_file "$checksum_url" "${TMP_CHECKSUM}"; then
         echo "error: remote release checksum is unavailable" >&2
         exit 2
       fi
       CHECKSUM_SOURCE="$TMP_CHECKSUM"
-    elif download_url_to_file "${BUNDLE_SOURCE}.sha256" "${TMP_CHECKSUM}" 2>/dev/null; then
+    elif download_url_to_file "$(cache_buster_url "${BUNDLE_SOURCE}.sha256")" "${TMP_CHECKSUM}" 2>/dev/null; then
       CHECKSUM_SOURCE="$TMP_CHECKSUM"
     else
       echo "error: remote release checksum is unavailable" >&2

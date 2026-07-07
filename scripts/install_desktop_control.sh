@@ -992,7 +992,7 @@ else
 fi
 if [[ "$bootstrap_authority_present" -eq 1 ]]; then
   run_control_plane_step mesh-seed-control-plane --strict
-  run_control_plane_step mesh-bind-control-plane --strict
+  run_control_plane_step mesh-bind-control-plane --best-effort
 else
   "$ROOT_DIR/scripts/chimera-control.sh" mesh-seed-control-plane --best-effort >/dev/null 2>&1 || true
   "$ROOT_DIR/scripts/chimera-control.sh" mesh-bind-control-plane --best-effort >/dev/null 2>&1 || true
