@@ -474,6 +474,7 @@ publish_mesh_discovery_snapshot() {
   fi
   local advertise_args=(
     mesh nodes advertise
+    --skip-discovery
     --state-file "$state_path"
     --out "$discovery_out"
     --pubkey-out "$pubkey_out"
@@ -4064,6 +4065,9 @@ start_runtime() {
         listener_only_node_status="stopped"
         listener_only_transparent_runtime="stopped"
       else
+        if mesh_discovery_source_present; then
+          site_auto_watch_start >/dev/null 2>&1 || true
+        fi
         refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
       fi
       echo "start_status=partial mode=listener_only node_runtime=$listener_only_node_runtime node=$listener_only_node_status transparent_runtime=$listener_only_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$listener_only_fail_closed reason=node_endpoint_unconfigured_listener_only"
@@ -4084,6 +4088,9 @@ start_runtime() {
         self_loop_node_status="stopped"
         self_loop_transparent_runtime="stopped"
       else
+        if mesh_discovery_source_present; then
+          site_auto_watch_start >/dev/null 2>&1 || true
+        fi
         refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
       fi
       echo "start_status=partial mode=listener_only node_runtime=$self_loop_node_runtime node=$self_loop_node_status transparent_runtime=$self_loop_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$self_loop_fail_closed reason=self_loop_listener_only"
@@ -4271,6 +4278,11 @@ start_runtime() {
       direct_listener_node_runtime="stopped"
       direct_listener_node_status="stopped"
       direct_listener_transparent_runtime="stopped"
+    else
+      if mesh_discovery_source_present; then
+        site_auto_watch_start >/dev/null 2>&1 || true
+      fi
+      refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
     fi
     echo "start_status=partial mode=listener_only node_runtime=$direct_listener_node_runtime node=$direct_listener_node_status transparent_runtime=$direct_listener_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$direct_listener_fail_closed reason=node_endpoint_unconfigured_listener_only"
     return "$direct_listener_exit_rc"
@@ -4289,6 +4301,11 @@ start_runtime() {
       direct_self_loop_node_runtime="stopped"
       direct_self_loop_node_status="stopped"
       direct_self_loop_transparent_runtime="stopped"
+    else
+      if mesh_discovery_source_present; then
+        site_auto_watch_start >/dev/null 2>&1 || true
+      fi
+      refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
     fi
     echo "start_status=partial mode=listener_only node_runtime=$direct_self_loop_node_runtime node=$direct_self_loop_node_status transparent_runtime=$direct_self_loop_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$direct_self_loop_fail_closed reason=self_loop_listener_only"
     return "$direct_self_loop_exit_rc"

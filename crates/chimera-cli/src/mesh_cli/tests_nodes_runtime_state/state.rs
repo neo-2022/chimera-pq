@@ -171,6 +171,49 @@ fn nodes_advertise_writes_signed_discovery_snapshot() {
 }
 
 #[test]
+fn nodes_advertise_ignores_unreachable_discovery_with_skip_discovery_flag() {
+    let mut out_path = std::env::temp_dir();
+    out_path.push(format!(
+        "chimera_mesh_discovery_skip_{}.json",
+        random_u64()
+    ));
+    let mut pubkey_path = std::env::temp_dir();
+    pubkey_path.push(format!(
+        "chimera_mesh_discovery_skip_{}.pub",
+        random_u64()
+    ));
+    let mut keypair_path = std::env::temp_dir();
+    keypair_path.push(format!(
+        "chimera_mesh_discovery_skip_{}.keypair",
+        random_u64()
+    ));
+    let endpoint = "198.51.100.99:12345";
+    let args = vec![
+        "advertise".to_string(),
+        "--node-id".to_string(),
+        "node-skip-1".to_string(),
+        "--endpoint".to_string(),
+        endpoint.to_string(),
+        "--discovery-url".to_string(),
+        "http://127.0.0.1:1/mesh_nodes.discovery.json".to_string(),
+        "--skip-discovery".to_string(),
+        "--out".to_string(),
+        out_path.display().to_string(),
+        "--pubkey-out".to_string(),
+        pubkey_path.display().to_string(),
+        "--keypair-path".to_string(),
+        keypair_path.display().to_string(),
+    ];
+    assert_eq!(mesh_nodes_command(&args), 0);
+    let body = fs::read_to_string(&out_path).unwrap_or_else(|err| unreachable!("{err}"));
+    assert!(body.contains("\"node_id\":\"node-skip-1\""));
+    assert!(body.contains(endpoint));
+    let _ = fs::remove_file(out_path);
+    let _ = fs::remove_file(pubkey_path);
+    let _ = fs::remove_file(keypair_path);
+}
+
+#[test]
 fn nodes_advertise_writes_invite_token_for_matching_node() {
     let mut out_path = std::env::temp_dir();
     out_path.push(format!(

@@ -75,6 +75,7 @@ pub(crate) fn load_mesh_nodes_inventory(args: &[String]) -> Result<MeshNodesInve
         inventory = parse_inventory_config_text(&text)?;
         inventory.source = MeshNodesInventorySource::Config;
     }
+    let skip_discovery = extract_flag_value(args, "--skip-discovery").is_some();
     let discovery_urls = {
         let cli_urls = extract_flag_values(args, "--discovery-url");
         if !cli_urls.is_empty() {
@@ -88,7 +89,7 @@ pub(crate) fn load_mesh_nodes_inventory(args: &[String]) -> Result<MeshNodesInve
             }
         }
     };
-    if !discovery_urls.is_empty() {
+    if !skip_discovery && !discovery_urls.is_empty() {
         let discovery_pubkey = extract_flag_value(args, "--discovery-pubkey")
             .map(str::to_string)
             .or_else(|| config_discovery_pubkey(args))
