@@ -1970,8 +1970,9 @@ EOF
   )"
   rc=$?
   set -e
-  [[ "$rc" -ne 0 ]] || fail "installer_authoritative_seed_requires_resolved_endpoint_should_fail"
-  [[ "$output" == *"authoritative mesh seed did not resolve a peer endpoint during install"* ]] || fail "installer_authoritative_seed_requires_resolved_endpoint_reason_missing"
+  [[ "$rc" -eq 0 ]] || fail "installer_authoritative_seed_with_dynamic_discovery_should_pass"
+  [[ "$output" == *"peer_config_node_endpoint=none"* ]] || fail "installer_dynamic_discovery_peer_only_mode_missing"
+  [[ "$output" == *"peer_config_carrier_addr=none mode=peer_only"* ]] || fail "installer_dynamic_discovery_peer_only_carrier_addr_missing"
   grep -q -- '--discovery-keyring key-a:pubkey-a' "$cli_log" || fail "installer_authoritative_seed_requires_resolved_endpoint_keyring_not_used"
   rm -rf "$tmp_dir"
 }

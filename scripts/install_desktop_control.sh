@@ -262,6 +262,7 @@ load_bootstrap_env_if_present() {
     value="$(read_existing_env_kv_from_file "$BOOTSTRAP_ENV_FILE" "$key")"
     if grep -q "^${key}=" "$BOOTSTRAP_ENV_FILE" 2>/dev/null; then
       printf -v "$key" '%s' "$value"
+      export "$key"
     fi
   done <<'EOF'
 CHIMERA_MESH_NODES_DISCOVERY_URL
@@ -979,7 +980,11 @@ else
   bootstrap_authority_rc=$?
 fi
 [[ "$bootstrap_authority_rc" -eq 2 ]] && exit 2
-if [[ "$bootstrap_authority_present" -eq 1 && -z "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
+installer_dynamic_discovery_configured=0
+if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}${CHIMERA_MESH_NODES_DISCOVERY_URLS:-}" || -s "$MESH_DISCOVERY_URLS_FILE" ]]; then
+  installer_dynamic_discovery_configured=1
+fi
+if [[ "$bootstrap_authority_present" -eq 1 && -z "${CONFIGURED_PEER_ENDPOINT:-}" && "$installer_dynamic_discovery_configured" -eq 0 ]]; then
   echo "error: authoritative mesh seed did not resolve a peer endpoint during install" >&2
   exit 2
 fi
