@@ -328,26 +328,37 @@ elif [[ "${BUNDLE_SOURCE}" == https://* || "${BUNDLE_SOURCE}" == http://* ]]; th
   trap 'rm -rf "$TMP_DIR"' EXIT
   TMP_ARCHIVE="${TMP_DIR}/chimera-release.tar.gz"
   TMP_CHECKSUM="${TMP_DIR}/chimera-release.tar.gz.sha256"
-  if ! download_url_to_file "${BUNDLE_SOURCE}" "${TMP_ARCHIVE}"; then
-    echo "error: release archive download unavailable" >&2
-    exit 2
-  fi
-  if [[ -n "${CHIMERA_RELEASE_CHECKSUM_URL:-}" ]]; then
-    if ! download_url_to_file "${CHIMERA_RELEASE_CHECKSUM_URL}" "${TMP_CHECKSUM}"; then
+  local install_attempt install_max_attempts="${CHIMERA_INSTALL_VERIFY_ATTEMPTS:-3}"
+  for (( install_attempt=1; install_attempt<=install_max_attempts; install_attempt++ )); do
+    if [[ "$install_attempt" -gt 1 ]]; then
+      echo "install: verification mismatch, retrying attempt ${install_attempt}/${install_max_attempts}" >&2
+      sleep "${CHIMERA_INSTALL_VERIFY_RETRY_SEC:-5}"
+      rm -f "$TMP_ARCHIVE" "$TMP_CHECKSUM"
+    fi
+    if ! download_url_to_file "${BUNDLE_SOURCE}" "${TMP_ARCHIVE}"; then
+      echo "error: release archive download unavailable" >&2
+      exit 2
+    fi
+    if [[ -n "${CHIMERA_RELEASE_CHECKSUM_URL:-}" ]]; then
+      if ! download_url_to_file "${CHIMERA_RELEASE_CHECKSUM_URL}" "${TMP_CHECKSUM}"; then
+        echo "error: remote release checksum is unavailable" >&2
+        exit 2
+      fi
+      CHECKSUM_SOURCE="$TMP_CHECKSUM"
+    elif download_url_to_file "${BUNDLE_SOURCE}.sha256" "${TMP_CHECKSUM}" 2>/dev/null; then
+      CHECKSUM_SOURCE="$TMP_CHECKSUM"
+    else
       echo "error: remote release checksum is unavailable" >&2
       exit 2
     fi
-    CHECKSUM_SOURCE="$TMP_CHECKSUM"
-  elif download_url_to_file "${BUNDLE_SOURCE}.sha256" "${TMP_CHECKSUM}" 2>/dev/null; then
-    CHECKSUM_SOURCE="$TMP_CHECKSUM"
-  else
-    echo "error: remote release checksum is unavailable" >&2
-    exit 2
-  fi
-  if ! install_from_archive "$TMP_ARCHIVE" "$CHECKSUM_SOURCE"; then
-    echo "error: release archive verification failed" >&2
-    exit 3
-  fi
+    if install_from_archive "$TMP_ARCHIVE" "$CHECKSUM_SOURCE"; then
+      break
+    fi
+    if [[ "$install_attempt" -eq "$install_max_attempts" ]]; then
+      echo "error: release archive verification failed" >&2
+      exit 3
+    fi
+  done
 else
   echo "error: cannot find release at ${BUNDLE_SOURCE}" >&2
   echo "usage: ${0} [<path-to-tarball> | <path-to-release-dir> | <url>]" >&2
