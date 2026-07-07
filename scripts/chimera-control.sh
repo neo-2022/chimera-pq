@@ -4057,6 +4057,8 @@ start_runtime() {
         listener_only_node_runtime="stopped"
         listener_only_node_status="stopped"
         listener_only_transparent_runtime="stopped"
+      else
+        refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
       fi
       echo "start_status=partial mode=listener_only node_runtime=$listener_only_node_runtime node=$listener_only_node_status transparent_runtime=$listener_only_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$listener_only_fail_closed reason=node_endpoint_unconfigured_listener_only"
       return "$listener_only_exit_rc"
@@ -4075,6 +4077,8 @@ start_runtime() {
         self_loop_node_runtime="stopped"
         self_loop_node_status="stopped"
         self_loop_transparent_runtime="stopped"
+      else
+        refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
       fi
       echo "start_status=partial mode=listener_only node_runtime=$self_loop_node_runtime node=$self_loop_node_status transparent_runtime=$self_loop_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$self_loop_fail_closed reason=self_loop_listener_only"
       return "$self_loop_exit_rc"
