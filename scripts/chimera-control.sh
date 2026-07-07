@@ -1582,6 +1582,9 @@ configure_peer_update_env() {
 
 peer_update_runtime_configured() {
   local base_url="${CHIMERA_PEER_UPDATE_BASE_URL:-}"
+  if [[ -z "$base_url" && -f "$PEER_UPDATE_ENV_FILE" ]]; then
+    base_url="$(trim_ascii_line "$(read_peer_update_env_kv CHIMERA_PEER_UPDATE_BASE_URL 2>/dev/null || true)")"
+  fi
   if [[ -z "$base_url" && -f "$BOOTSTRAP_ENV_FILE" ]]; then
     load_bootstrap_env_if_present || return $?
     base_url="${CHIMERA_PEER_UPDATE_BASE_URL:-}"
