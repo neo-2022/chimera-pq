@@ -1203,13 +1203,50 @@ node_listener_bindings_need_preemptive_repair() {
   fixed_listen_addr_port_is_blocked "$current_peer_listen"
 }
 
+configure_peer_egress_dynamic_lanes_from_bootstrap() {
+  [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
+  local mode="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_MODE)")"
+  [[ "$mode" == "node" ]] || return 0
+  if ! mesh_discovery_source_present; then
+    return 0
+  fi
+  local lane_document_path="${CHIMERA_PEER_EGRESS_LANE_DOCUMENT_PATH:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress-lane-document.v1}"
+  upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT" "true"
+  upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE" "$lane_document_path"
+  upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_LANE_DOCUMENT_PATH" "$lane_document_path"
+  remove_env_kv_from_file "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_SERVER"
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_URL:-}" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_URL" "$CHIMERA_MESH_NODES_DISCOVERY_URL"
+  fi
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_PUBKEY:-}" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_PUBKEY" "$CHIMERA_MESH_NODES_DISCOVERY_PUBKEY"
+  fi
+  if [[ -n "${CHIMERA_MESH_NODES_DISCOVERY_KEYRING:-}" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_NODES_DISCOVERY_KEYRING" "$CHIMERA_MESH_NODES_DISCOVERY_KEYRING"
+  fi
+  if [[ -n "${CHIMERA_MESH_NAMESPACE:-}" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_NAMESPACE" "$CHIMERA_MESH_NAMESPACE"
+  fi
+  if [[ -n "${CHIMERA_MESH_SELF_NODE_ID:-}" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_SELF_NODE_ID" "$CHIMERA_MESH_SELF_NODE_ID"
+  fi
+  if [[ -n "${CHIMERA_MESH_POLICY_PAYLOAD:-}" ]]; then
+    upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_POLICY_PAYLOAD" "$CHIMERA_MESH_POLICY_PAYLOAD"
+  fi
+  return 0
+}
+
 heal_node_peer_egress_env_bindings() {
   local mode expected_peer_listen current_peer_listen
   [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
   mode="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_MODE)")"
   [[ "$mode" == "node" ]] || return 0
   [[ -n "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]] && return 0
-  expected_peer_listen="$(normalize_node_peer_listen_value "$(node_configured_listen_addr)")"
+  if mesh_discovery_source_present; then
+    expected_peer_listen="0.0.0.0:0"
+  else
+    expected_peer_listen="$(normalize_node_peer_listen_value "$(node_configured_listen_addr)")"
+  fi
   current_peer_listen="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_PEER_LISTEN)")"
   if [[ "$current_peer_listen" != "$expected_peer_listen" ]]; then
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_PEER_LISTEN" "$expected_peer_listen"
@@ -1349,6 +1386,7 @@ node_service_prestart_self_heal() {
     load_bootstrap_env_if_present || return $?
   fi
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
+  configure_peer_egress_dynamic_lanes_from_bootstrap
   heal_node_peer_egress_env_bindings
   heal_node_carrier_addr_from_peer_egress_env >/dev/null 2>&1 || true
   ensure_peer_egress_local_listen_aligned
@@ -1475,8 +1513,11 @@ refresh_node_peer_target_from_bootstrap() {
   if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
     local peer_mode
     peer_mode="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_MODE)")"
-    if [[ "$peer_mode" == "node" && "${CHIMERA_PEER_EGRESS_SERVER+set}" != "set" ]]; then
+    if [[ "$peer_mode" == "node" && "${CHIMERA_PEER_EGRESS_SERVER+set}" != "set" ]] && ! mesh_discovery_source_present; then
       upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_SERVER" "$raw_candidate"
+    fi
+    if [[ "$peer_mode" == "node" ]] && mesh_discovery_source_present; then
+      remove_env_kv_from_file "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_SERVER"
     fi
   fi
   printf '%s\n' "$raw_candidate" >"$ROOT_DIR/configs/chimera_runtime_endpoint.txt"

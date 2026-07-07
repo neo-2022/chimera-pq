@@ -1,4 +1,6 @@
 use std::io::Read;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::Duration;
 
@@ -7,6 +9,9 @@ use crate::peer_egress::aggregate_ingress::{
 };
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
+use crate::peer_egress::mesh_lane_driver::{
+    MeshLaneDriverOptions, run_mesh_lane_driver, run_mesh_lane_driver_once,
+};
 use crate::peer_egress::modes::{
     handle_local_client_with_lane_document_and_first_byte,
     handle_local_client_with_peer_pool_and_first_byte,
@@ -43,7 +48,45 @@ fn classify_local_ingress(first_byte: u8) -> LocalIngressBranch {
     }
 }
 
-pub fn run_node(options: Options) -> Result<(), String> {
+pub fn run_node(mut options: Options) -> Result<(), String> {
+    let mut dynamic_lanes_enabled = false;
+    let mut lane_driver_cancel: Option<Arc<AtomicBool>> = None;
+    if options.discovery_configured() {
+        let driver_options = match build_mesh_lane_driver_options(&options) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!(
+                    "event=mesh_lane_driver_config_error reason_class={}",
+                    redacted_log_reason(&error)
+                );
+                Err(error)?
+            }
+        };
+        if let Some(parent) = std::path::Path::new(&driver_options.lane_document_path).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match run_mesh_lane_driver_once(&driver_options) {
+            Ok(()) => {
+                options.allow_bound_transit = true;
+                options.transit_lane_bindings_file =
+                    Some(driver_options.lane_document_path.clone());
+                dynamic_lanes_enabled = true;
+                let cancel = Arc::new(AtomicBool::new(false));
+                let cancel_worker = cancel.clone();
+                let driver_thread_options = driver_options;
+                thread::spawn(move || {
+                    run_mesh_lane_driver(driver_thread_options, cancel_worker);
+                });
+                lane_driver_cancel = Some(cancel);
+            }
+            Err(error) => {
+                eprintln!(
+                    "event=mesh_lane_driver_initial_failed reason_class={}",
+                    redacted_log_reason(&error)
+                );
+            }
+        }
+    }
     let startup_contract = validate_node_startup_contract(&options)?;
     let peer_listen = startup_contract.peer_listen.clone();
     let local_listen = startup_contract.local_listen.clone();
@@ -75,6 +118,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
 
     let token = options.token.clone();
     let aead = options.aead;
+    let _lane_driver_cancel = lane_driver_cancel;
     let peer_pool = new_shared_pool();
     let transit_dispatcher = new_shared_transit_dispatcher();
     let aggregate_ingress =
@@ -116,7 +160,7 @@ pub fn run_node(options: Options) -> Result<(), String> {
         }
     });
 
-    if startup_contract.outbound_bootstrap_configured {
+    if startup_contract.outbound_bootstrap_configured && !dynamic_lanes_enabled {
         for _ in 0..options.pool {
             let worker = options.clone();
             let outbound_pool = peer_pool.clone();
@@ -284,6 +328,34 @@ pub fn run_node(options: Options) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn build_mesh_lane_driver_options(options: &Options) -> Result<MeshLaneDriverOptions, String> {
+    let discovery_url = options
+        .discovery_url
+        .as_deref()
+        .ok_or_else(|| "mesh lane driver requires discovery URL".to_string())?
+        .to_string();
+    let lane_document_path = options
+        .lane_document_path
+        .as_deref()
+        .ok_or_else(|| "mesh lane driver requires lane document path".to_string())?
+        .to_string();
+    Ok(MeshLaneDriverOptions {
+        namespace: options.mesh_namespace.clone(),
+        self_node_id: options.mesh_self_node_id.clone(),
+        policy_payload: options.mesh_policy_payload.clone(),
+        lane_document_path,
+        discovery_urls: discovery_url
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .collect(),
+        discovery_keyring: options.discovery_keyring_map()?,
+        discovery_timeout_ms: options.discovery_timeout_ms,
+        poll_interval_ms: options.discovery_poll_interval_ms,
+    })
 }
 
 #[cfg(test)]

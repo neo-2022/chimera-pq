@@ -173,13 +173,19 @@ dependencies = [
 name = "chimera-carrier"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "chimera-core",
  "chimera-crypto",
  "chimera-mesh",
  "chimera-session",
+ "ed25519-dalek",
  "nix",
+ "rand",
+ "ring",
+ "serde_json",
  "sha2",
  "socket2",
+ "ureq",
 ]
 
 [[package]]

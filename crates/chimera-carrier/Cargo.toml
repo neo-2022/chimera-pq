@@ -9,10 +9,18 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+base64 = "0.22"
 chimera-core = { path = "../chimera-core" }
 chimera-crypto = { path = "../chimera-crypto" }
 chimera-mesh = { path = "../chimera-mesh" }
 chimera-session = { path = "../chimera-session" }
 nix = { version = "0.31.3", features = ["socket"] }
+ring = "0.17"
+serde_json = "1.0"
 sha2 = "0.10"
 socket2 = "0.6"
+ureq = "2.10"
+
+[dev-dependencies]
+ed25519-dalek = "2.2"
+rand = "0.8"

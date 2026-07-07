@@ -8,11 +8,13 @@ pub(crate) mod aggregate_reassembly;
 #[allow(dead_code)]
 pub(crate) mod aggregate_wire;
 pub(crate) mod bound_transit;
+pub(crate) mod discovery_fetch;
 pub mod handshake;
 pub mod lane_binding;
 pub(crate) mod lane_document;
 pub mod live_bindings;
 pub mod live_lane_selection;
+pub(crate) mod mesh_lane_driver;
 pub mod modes;
 pub mod net;
 pub mod node;

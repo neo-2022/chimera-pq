@@ -78,6 +78,15 @@ pub struct Options {
     pub transit_packet_number: u64,
     pub transit_route_id: Option<u64>,
     pub transit_lane_index: Option<usize>,
+    pub discovery_url: Option<String>,
+    pub discovery_pubkey: Option<String>,
+    pub discovery_keyring: Option<String>,
+    pub mesh_namespace: String,
+    pub mesh_self_node_id: String,
+    pub mesh_policy_payload: String,
+    pub lane_document_path: Option<String>,
+    pub discovery_poll_interval_ms: u64,
+    pub discovery_timeout_ms: u64,
 }
 
 pub(super) fn env_value(name: &str) -> Option<String> {
@@ -179,6 +188,21 @@ impl Options {
             env_value("CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE");
         let mut transit_relay_guard = TransitRelayGuardOptionValues::from_env()?;
         let mut transit_proof_args: Vec<(String, String)> = Vec::new();
+        let mut discovery_url = env_value("CHIMERA_MESH_NODES_DISCOVERY_URL");
+        let mut discovery_pubkey = env_value("CHIMERA_MESH_NODES_DISCOVERY_PUBKEY");
+        let mut discovery_keyring = env_value("CHIMERA_MESH_NODES_DISCOVERY_KEYRING");
+        let mut mesh_namespace = env_value("CHIMERA_MESH_NAMESPACE");
+        let mut mesh_self_node_id = env_value("CHIMERA_MESH_SELF_NODE_ID");
+        let mut mesh_policy_payload = env_value("CHIMERA_MESH_POLICY_PAYLOAD");
+        let mut lane_document_path = env_value("CHIMERA_PEER_EGRESS_LANE_DOCUMENT_PATH");
+        let mut discovery_poll_interval_ms = env_value("CHIMERA_MESH_DISCOVERY_POLL_INTERVAL_MS")
+            .map(|value| parse_positive_u64(&value, "discovery-poll-interval-ms"))
+            .transpose()?
+            .unwrap_or(30_000);
+        let mut discovery_timeout_ms = env_value("CHIMERA_MESH_DISCOVERY_TIMEOUT_MS")
+            .map(|value| parse_positive_u64(&value, "discovery-timeout-ms"))
+            .transpose()?
+            .unwrap_or(5_000);
         let mut index = 0usize;
         while index < args.len() {
             let flag = args[index].as_str();
@@ -220,6 +244,20 @@ impl Options {
                 "--transit-lane-bindings-file" => {
                     transit_lane_bindings_file = Some(value.clone());
                 }
+                "--discovery-url" => discovery_url = Some(value.clone()),
+                "--discovery-pubkey" => discovery_pubkey = Some(value.clone()),
+                "--discovery-keyring" => discovery_keyring = Some(value.clone()),
+                "--mesh-namespace" => mesh_namespace = Some(value.clone()),
+                "--mesh-self-node-id" => mesh_self_node_id = Some(value.clone()),
+                "--mesh-policy-payload" => mesh_policy_payload = Some(value.clone()),
+                "--lane-document-path" => lane_document_path = Some(value.clone()),
+                "--discovery-poll-interval-ms" => {
+                    discovery_poll_interval_ms =
+                        parse_positive_u64(value, "discovery-poll-interval-ms")?;
+                }
+                "--discovery-timeout-ms" => {
+                    discovery_timeout_ms = parse_positive_u64(value, "discovery-timeout-ms")?;
+                }
                 flag if transit_relay_guard.apply_flag(flag, value)? => {}
                 flag if TransitProofOptions::is_flag(flag) => {
                     transit_proof_args.push((flag.to_string(), value.clone()));
@@ -232,6 +270,28 @@ impl Options {
             index += 2;
         }
         let mode = mode.ok_or_else(|| "missing --mode".to_string())?;
+        let mesh_namespace = mesh_namespace.unwrap_or_else(|| "chimera-mesh".to_string());
+        let mesh_self_node_id = mesh_self_node_id
+            .or_else(|| env_value("HOSTNAME"))
+            .unwrap_or_else(|| "chimera-node".to_string());
+        let mesh_policy_payload = mesh_policy_payload.unwrap_or_default();
+        let discovery_configured = discovery_url.is_some();
+        if discovery_configured {
+            if discovery_pubkey.is_none() && discovery_keyring.is_none() {
+                return Err(
+                    "discovery requires --discovery-pubkey or --discovery-keyring".to_string(),
+                );
+            }
+            if lane_document_path.is_none() {
+                return Err("discovery requires --lane-document-path".to_string());
+            }
+            if mesh_policy_payload.is_empty() {
+                return Err("discovery requires --mesh-policy-payload".to_string());
+            }
+            if !mesh_policy_payload.contains("mesh_route_binding_id") {
+                return Err("mesh policy payload must contain mesh_route_binding_id for carrier lane bindings".to_string());
+            }
+        }
         let transit_proof = if matches!(mode, Mode::SealedTransitInject | Mode::BoundTransitInject)
         {
             let mut transit_proof = TransitProofOptions::from_env()?;
@@ -341,6 +401,15 @@ impl Options {
             transit_packet_number: transit_proof.packet_number,
             transit_route_id: transit_proof.route_id,
             transit_lane_index: transit_proof.lane_index,
+            discovery_url,
+            discovery_pubkey,
+            discovery_keyring,
+            mesh_namespace,
+            mesh_self_node_id,
+            mesh_policy_payload,
+            lane_document_path,
+            discovery_poll_interval_ms,
+            discovery_timeout_ms,
         })
     }
 
@@ -350,6 +419,36 @@ impl Options {
             max_bytes_per_direction: self.transit_max_bytes_per_direction,
             idle_timeout_ms: self.transit_idle_timeout_ms,
         }
+    }
+
+    pub fn discovery_configured(&self) -> bool {
+        self.discovery_url.is_some()
+    }
+
+    pub fn discovery_keyring_map(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, String>, String> {
+        let mut keyring = std::collections::BTreeMap::new();
+        if let Some(raw) = &self.discovery_keyring {
+            for entry in raw.split(',').map(str::trim).filter(|v| !v.is_empty()) {
+                let (key_id, pubkey) = entry
+                    .split_once(':')
+                    .ok_or_else(|| "discovery keyring entry must be key_id:base64".to_string())?;
+                if key_id.trim().is_empty() || pubkey.trim().is_empty() {
+                    return Err(
+                        "discovery keyring entry must have non-empty key_id and pubkey".to_string(),
+                    );
+                }
+                keyring.insert(key_id.trim().to_string(), pubkey.trim().to_string());
+            }
+        }
+        if let Some(pubkey) = &self.discovery_pubkey {
+            keyring.insert("default".to_string(), pubkey.clone());
+        }
+        if keyring.is_empty() {
+            return Err("discovery keyring is required".to_string());
+        }
+        Ok(keyring)
     }
 }
 

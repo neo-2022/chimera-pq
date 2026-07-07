@@ -161,6 +161,15 @@ mod tests {
             transit_packet_number: 1,
             transit_route_id: None,
             transit_lane_index: None,
+            discovery_url: None,
+            discovery_pubkey: None,
+            discovery_keyring: None,
+            mesh_namespace: "chimera-mesh".to_string(),
+            mesh_self_node_id: "test".to_string(),
+            mesh_policy_payload: String::new(),
+            lane_document_path: None,
+            discovery_poll_interval_ms: 30_000,
+            discovery_timeout_ms: 5_000,
         }
     }
 
