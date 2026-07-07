@@ -1239,6 +1239,9 @@ configure_peer_egress_dynamic_lanes_from_bootstrap() {
   if [[ -n "${CHIMERA_MESH_SELF_NODE_ID:-}" ]]; then
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_SELF_NODE_ID" "$CHIMERA_MESH_SELF_NODE_ID"
   fi
+  if [[ -z "${CHIMERA_MESH_POLICY_PAYLOAD:-}" && -n "${CHIMERA_MESH_TRAFFIC_PROFILE:-}" ]]; then
+    CHIMERA_MESH_POLICY_PAYLOAD="mesh_traffic_profile=${CHIMERA_MESH_TRAFFIC_PROFILE};mesh_route_binding_id=1"
+  fi
   if [[ -n "${CHIMERA_MESH_POLICY_PAYLOAD:-}" ]]; then
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_POLICY_PAYLOAD" "$CHIMERA_MESH_POLICY_PAYLOAD"
   fi
