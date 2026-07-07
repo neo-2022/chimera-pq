@@ -52,10 +52,20 @@ fn validate_node_startup_contract_with_contract(
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty());
-        let Some(lane_file) = lane_file else {
-            if options.server.trim().is_empty() {
-                // Fresh installs may enable bound transit before a first peer source
-                // exists. Allow the node to boot as a listener until authority appears.
+        let server_empty = options.server.trim().is_empty();
+        let discovery_configured = options.discovery_configured();
+        let lane_file_ready = lane_file.map_or(false, |path| {
+            std::fs::metadata(Path::new(path))
+                .map(|metadata| metadata.is_file() && metadata.len() > 0)
+                .unwrap_or(false)
+        });
+        if !lane_file_ready {
+            let bootstrap_pending = server_empty
+                && (discovery_configured || lane_file.is_none());
+            if bootstrap_pending {
+                // Fresh installs or dynamic-discovery nodes may enable bound transit
+                // before a first lane document exists. Allow the node to boot as a
+                // listener until authority appears.
                 contract
                     .validate_symmetric()
                     .map_err(|error| format!("WEAVE node symmetric contract invalid: {error}"))?;
@@ -72,16 +82,6 @@ fn validate_node_startup_contract_with_contract(
                     capabilities,
                 });
             }
-            return Err(
-                "WEAVE node bound transit requires a non-empty transit lane bindings file when allow_bound_transit=true"
-                    .to_string(),
-            );
-        };
-        let metadata = std::fs::metadata(Path::new(lane_file)).map_err(|_| {
-            "WEAVE node bound transit requires an existing transit lane bindings file when allow_bound_transit=true"
-                .to_string()
-        })?;
-        if !metadata.is_file() || metadata.len() == 0 {
             return Err(
                 "WEAVE node bound transit requires a non-empty transit lane bindings file when allow_bound_transit=true"
                     .to_string(),

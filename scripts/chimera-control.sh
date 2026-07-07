@@ -276,6 +276,7 @@ load_bootstrap_env_if_present() {
     value="$(read_existing_env_kv_from_file "$BOOTSTRAP_ENV_FILE" "$key")"
     if grep -q "^${key}=" "$BOOTSTRAP_ENV_FILE" 2>/dev/null; then
       printf -v "$key" '%s' "$value"
+      export "$key"
     fi
   done <<'EOF'
 CHIMERA_MESH_NODES_DISCOVERY_URL
@@ -1227,6 +1228,9 @@ configure_peer_egress_dynamic_lanes_from_bootstrap() {
   fi
   if [[ -n "${CHIMERA_MESH_NAMESPACE:-}" ]]; then
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_NAMESPACE" "$CHIMERA_MESH_NAMESPACE"
+  fi
+  if [[ -z "${CHIMERA_MESH_SELF_NODE_ID:-}" && -n "${CHIMERA_MESH_LOCAL_NODE:-}" ]]; then
+    CHIMERA_MESH_SELF_NODE_ID="$CHIMERA_MESH_LOCAL_NODE"
   fi
   if [[ -n "${CHIMERA_MESH_SELF_NODE_ID:-}" ]]; then
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_SELF_NODE_ID" "$CHIMERA_MESH_SELF_NODE_ID"

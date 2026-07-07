@@ -6,13 +6,14 @@ pub(super) fn validate_live_transit_lane_document_contract(
     document: &TransitLaneDocument,
 ) -> Result<(), String> {
     if document.is_empty() {
+        let no_explicit_lane_file = options
+            .transit_lane_bindings_file
+            .as_deref()
+            .map(str::trim)
+            .is_none_or(str::is_empty);
         let bound_transit_bootstrap_pending = options.allow_bound_transit
             && options.server.trim().is_empty()
-            && options
-                .transit_lane_bindings_file
-                .as_deref()
-                .map(str::trim)
-                .is_none_or(str::is_empty);
+            && (options.discovery_configured() || no_explicit_lane_file);
         if options.allow_bound_transit && !bound_transit_bootstrap_pending {
             return Err(
                 "live sealed transit lane document requires non-empty bindings when allow_bound_transit=true"

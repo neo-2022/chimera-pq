@@ -50,6 +50,7 @@ impl LiveTransitLaneRegistry {
     ) -> Result<Self, String> {
         let initial = Arc::new(load_live_transit_lane_document(
             options.transit_lane_bindings_file.as_deref(),
+            options.discovery_configured(),
         )?);
         validate_live_transit_lane_document_contract(options, &initial)?;
         let snapshot = Arc::new(Mutex::new(Ok(Arc::clone(&initial))));
@@ -89,18 +90,30 @@ struct LiveTransitLaneWorker {
 
 pub fn load_live_transit_lane_registrations(
     transit_lane_bindings_file: Option<&str>,
+    discovery_configured: bool,
 ) -> Result<Vec<TransitLaneRegistration>, String> {
     match transit_lane_bindings_file {
-        Some(path) => load_transit_lane_registrations(path),
+        Some(path) => {
+            if discovery_configured && !std::path::Path::new(path).exists() {
+                return Ok(Vec::new());
+            }
+            load_transit_lane_registrations(path)
+        }
         None => Ok(Vec::new()),
     }
 }
 
 pub fn load_live_transit_lane_document(
     transit_lane_bindings_file: Option<&str>,
+    discovery_configured: bool,
 ) -> Result<TransitLaneDocument, String> {
     match transit_lane_bindings_file {
-        Some(path) => load_transit_lane_document(path),
+        Some(path) => {
+            if discovery_configured && !std::path::Path::new(path).exists() {
+                return Ok(TransitLaneDocument::new(Vec::new(), None));
+            }
+            load_transit_lane_document(path)
+        }
         None => Ok(TransitLaneDocument::new(Vec::new(), None)),
     }
 }
@@ -199,7 +212,7 @@ fn watch_live_transit_lane_registrations(
 
     loop {
         thread::sleep(LIVE_TRANSIT_LANE_POLL_INTERVAL);
-        match load_transit_lane_document(&path) {
+        match load_live_transit_lane_document(Some(&path), options.discovery_configured()) {
             Ok(document) => {
                 match validate_live_transit_lane_document_contract(&options, &document) {
                     Ok(()) => apply_live_transit_lane_reload(
