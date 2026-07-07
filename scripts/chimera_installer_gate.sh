@@ -2269,7 +2269,7 @@ rg -n -F 'chimera-node.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null 
 rg -n -F 'chimera-datapath.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_datapath_unit_guard"
 rg -n -F 'chimera-runtime.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_runtime_unit_guard"
 rg -n -F 'chimera-site-watch.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_site_watch_unit_guard"
-rg -n '__service-poststart-node' "$ROOT_DIR/deploy/systemd-user/chimera-node.service" >/dev/null || fail "node_unit_missing_poststart_reconcile_hook"
+! rg -n '__service-poststart-node' "$ROOT_DIR/deploy/systemd-user/chimera-node.service" >/dev/null || fail "node_unit_still_has_blocking_poststart_reconcile_hook"
 rg -n '__site-auto-watch-loop' "$ROOT_DIR/deploy/systemd-user/chimera-site-watch.service" >/dev/null || fail "site_watch_unit_missing_watch_loop_exec"
 rg -n -F 'build_bin chimera-gateway chimera-node' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_binary_build_guard"
 rg -n -F 'target/release/chimera-node' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_binary_source_guard"

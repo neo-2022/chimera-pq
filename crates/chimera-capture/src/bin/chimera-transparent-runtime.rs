@@ -70,8 +70,10 @@ impl Options {
             .map(|value| parse_u32(&value, "transparent-gid"))
             .transpose()?;
         let mut bypass_cidrs_v4 = default_bypass_cidrs_v4();
-        let mut capture_cidrs_v4 = Vec::new();
-        let mut capture_tcp_ports = Vec::new();
+        let mut capture_cidrs_v4 =
+            parse_string_list_env("CHIMERA_CAPTURE_CIDR_V4").unwrap_or_default();
+        let mut capture_tcp_ports =
+            parse_u16_list_env("CHIMERA_CAPTURE_TCP_PORTS").unwrap_or_default();
         let mut capture_skuids = parse_uid_list_env("CHIMERA_CAPTURE_SKUID").unwrap_or_default();
         let mut run_ms = env_value("CHIMERA_TRANSPARENT_RUNTIME_RUN_MS")
             .map(|value| parse_positive_u64(&value, "run-ms"))
@@ -266,6 +268,7 @@ fn run(options: Options) -> Result<(), String> {
 
     let stopping = Arc::new(AtomicBool::new(false));
     install_signal_handlers(Arc::clone(&stopping))?;
+    delete_table(&options.table_name);
     run_nft(&apply)?;
     println!(
         "chimera_transparent_runtime=rules_applied table={} listen={} exempt_uid={}",
@@ -356,6 +359,16 @@ fn run_nft(script: &str) -> Result<(), String> {
     run_nft_script(script)
 }
 
+fn delete_table(name: &str) {
+    let _ = Command::new("nft")
+        .arg("delete")
+        .arg("table")
+        .arg(format!("inet {name}"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
 fn install_signal_handlers(stopping: Arc<AtomicBool>) -> Result<(), String> {
     ctrlc::set_handler(move || {
         stopping.store(true, Ordering::SeqCst);
@@ -393,6 +406,29 @@ fn parse_uid_list_env(name: &str) -> Option<Vec<u32>> {
             .map(|item| parse_u32(item, name).unwrap_or_else(|_| 0))
             .filter(|uid| *uid != 0)
             .collect::<Vec<u32>>()
+    })
+}
+
+fn parse_string_list_env(name: &str) -> Option<Vec<String>> {
+    env::var(name).ok().map(|value| {
+        value
+            .split(',')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(|item| item.to_string())
+            .collect::<Vec<String>>()
+    })
+}
+
+fn parse_u16_list_env(name: &str) -> Option<Vec<u16>> {
+    env::var(name).ok().map(|value| {
+        value
+            .split(',')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(|item| parse_u16(item, name).unwrap_or_else(|_| 0))
+            .filter(|port| *port != 0)
+            .collect::<Vec<u16>>()
     })
 }
 

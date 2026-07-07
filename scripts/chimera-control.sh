@@ -95,6 +95,8 @@ SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XD
 CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}"
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
 CHIMERA_APPLY_DNS="${CHIMERA_APPLY_DNS:-true}"
+CHIMERA_APPLY_TUN="${CHIMERA_APPLY_TUN:-true}"
+CHIMERA_APPLY_ROUTE="${CHIMERA_APPLY_ROUTE:-true}"
 CHIMERA_SERVICE_FWMARK="${CHIMERA_SERVICE_FWMARK:-0x5244}"
 CHIMERA_ROUTE_FWMARK="${CHIMERA_ROUTE_FWMARK:-0x5244}"
 CHIMERA_ROUTE_CIDR="${CHIMERA_ROUTE_CIDR:-0.0.0.0/1,128.0.0.0/1}"
@@ -154,7 +156,7 @@ upsert_env_kv() {
     printf '%s=%s\n' "$key" "$quoted_value" >>"$tmp_file"
   fi
   cat "$tmp_file" >"$file"
-  rm -f "$tmp_file"
+  /bin/rm -f -- "$tmp_file"
 }
 
 shell_quote_env_value() {
@@ -471,6 +473,10 @@ publish_mesh_discovery_snapshot() {
   CHIMERA_MESH_SELF_NODE_ID="$self_node_id" \
   "$CHIMERA_RUNNER" cli "${advertise_args[@]}" >/dev/null 2>&1 || {
     clear_mesh_discovery_snapshot_runtime_state
+    if ! mesh_discovery_source_present; then
+      mesh_discovery_snapshot_publish_skip "$strict_publish" "discovery_source_not_configured" 0
+      return 0
+    fi
     return 1
   }
   if [[ ! -s "$discovery_out" || ! -s "$pubkey_out" ]]; then
@@ -1302,7 +1308,7 @@ node_service_prestart_self_heal() {
   if node_listener_bindings_need_preemptive_repair; then
     repair_node_listener_bindings_for_retry >/dev/null 2>&1 || true
   else
-    clear_node_listener_runtime_overrides
+    clear_node_listener_runtime_overrides || true
   fi
   return 0
 }
@@ -1840,8 +1846,8 @@ clear_runtime_listener_override_kv() {
 }
 
 clear_node_listener_runtime_overrides() {
-  clear_runtime_listener_override_kv "CHIMERA_PEER_EGRESS_LOCAL_LISTEN"
-  clear_runtime_listener_override_kv "CHIMERA_PEER_EGRESS_PEER_LISTEN"
+  clear_runtime_listener_override_kv "CHIMERA_PEER_EGRESS_LOCAL_LISTEN" || true
+  clear_runtime_listener_override_kv "CHIMERA_PEER_EGRESS_PEER_LISTEN" || true
 }
 
 clear_peer_update_listener_runtime_override() {
@@ -2308,8 +2314,17 @@ recover_saved_runtime_state_if_present() {
         clear_runtime_generated_state
         ;;
       *)
-        PRESTART_SAVED_STATE_RECOVERY="invalid"
-        return 2
+        if [[ "${CHIMERA_FAIL_CLOSED_ON_PARTIAL_START:-1}" == "0" ]]; then
+          if ! remove_state_file_for_datapath_apply; then
+            PRESTART_SAVED_STATE_RECOVERY="cleanup_failed"
+            return 1
+          fi
+          PRESTART_SAVED_STATE_RECOVERY="cleanup_only_forced"
+          clear_runtime_generated_state
+        else
+          PRESTART_SAVED_STATE_RECOVERY="invalid"
+          return 2
+        fi
         ;;
     esac
   fi
@@ -3850,11 +3865,14 @@ start_runtime() {
   ensure_peer_egress_local_listen_aligned
   ensure_peer_egress_service_fwmark
   ensure_transparent_runtime_service_fwmark
+  # Best-effort listener repair/cleanup must not abort start under set -e.
+  set +e
   if node_listener_bindings_need_preemptive_repair; then
     repair_node_listener_bindings_for_retry >/dev/null 2>&1 || true
   else
-    clear_node_listener_runtime_overrides
+    clear_node_listener_runtime_overrides || true
   fi
+  set -e
   if ! ensure_bound_transit_start_contract; then
     site_auto_watch_stop >/dev/null 2>&1 || true
     echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped mesh_ready=false reason=bound_transit_unready"
@@ -3870,6 +3888,10 @@ start_runtime() {
   fi
   local route_fwmark
   route_fwmark="$(route_fwmark_env_value)"
+  : "${CHIMERA_APPLY_TUN:=true}"
+  : "${CHIMERA_APPLY_ROUTE:=true}"
+  : "${CHIMERA_APPLY_DNS:=true}"
+  export CHIMERA_APPLY_TUN CHIMERA_APPLY_ROUTE CHIMERA_APPLY_DNS
   if ! cleanup_stale_tun_without_state; then
     site_auto_watch_stop >/dev/null 2>&1 || true
     echo "start_status=fail mode=preflight node_runtime=stopped transparent_runtime=stopped reason=stale_tun_cleanup_failed"
@@ -3972,17 +3994,25 @@ start_runtime() {
       echo "start_status=fail mode=systemd_user node_runtime=stopped node=$node_status transparent_runtime=stopped datapath_apply=skipped datapath_proof=stale_state_cleanup_failed reason=stale_state_cleanup_failed"
       return 1
     fi
-    if run_chimera_cli_up_with_retry \
-      --config "$(node_config_path)" \
-      --state-file "$STATE_FILE" \
-      --apply-tun true \
-      --apply-route true \
-      --route-policy true \
-      --route-table 51820 \
-      --route-rule-priority 11000 \
-      --route-fwmark "$route_fwmark" \
-      --route-cidr "$CHIMERA_ROUTE_CIDR" \
-      --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1; then
+    local -a systemd_up_args=(
+      --config "$(node_config_path)"
+      --state-file "$STATE_FILE"
+      --apply-tun "${CHIMERA_APPLY_TUN}"
+    )
+    if [[ "${CHIMERA_APPLY_ROUTE}" == "true" ]]; then
+      systemd_up_args+=(
+        --apply-route true
+        --route-policy true
+        --route-table 51820
+        --route-rule-priority 11000
+        --route-fwmark "$route_fwmark"
+        --route-cidr "$CHIMERA_ROUTE_CIDR"
+      )
+    else
+      systemd_up_args+=(--apply-route false)
+    fi
+    systemd_up_args+=(--apply-dns "${CHIMERA_APPLY_DNS}")
+    if run_chimera_cli_up_with_retry "${systemd_up_args[@]}" >/dev/null 2>&1; then
       systemd_datapath_apply_status="ok"
     else
       systemd_datapath_apply_rc=$?
@@ -3991,7 +4021,14 @@ start_runtime() {
     if [[ "$systemd_datapath_apply_status" == "ok" ]]; then
       systemd_datapath_proof_status="$(datapath_apply_proof_state || true)"
       if [[ "$systemd_datapath_proof_status" != "ok" ]]; then
-        systemd_datapath_apply_status="unverified"
+        if [[ "$systemd_datapath_proof_status" == "network_not_modified" \
+          && "${CHIMERA_APPLY_TUN}" == "false" \
+          && "${CHIMERA_APPLY_ROUTE}" == "false" \
+          && "${CHIMERA_APPLY_DNS}" == "false" ]]; then
+          systemd_datapath_proof_status="ok"
+        else
+          systemd_datapath_apply_status="unverified"
+        fi
       fi
     fi
     if [[ "$systemd_datapath_apply_status" != "ok" ]]; then
@@ -4145,17 +4182,25 @@ start_runtime() {
       return 1
     fi
     if [[ "$direct_datapath_status" == "started" ]]; then
-      if run_chimera_cli_up_with_retry \
-        --config "$(node_config_path)" \
-        --state-file "$STATE_FILE" \
-        --apply-tun true \
-        --apply-route true \
-        --route-policy true \
-        --route-table 51820 \
-        --route-rule-priority 11000 \
-        --route-fwmark "$route_fwmark" \
-        --route-cidr "$CHIMERA_ROUTE_CIDR" \
-        --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1; then
+      local -a direct_up_args=(
+        --config "$(node_config_path)"
+        --state-file "$STATE_FILE"
+        --apply-tun ${CHIMERA_APPLY_TUN}
+      )
+      if [[ "${CHIMERA_APPLY_ROUTE}" == "true" ]]; then
+        direct_up_args+=(
+          --apply-route true
+          --route-policy true
+          --route-table 51820
+          --route-rule-priority 11000
+          --route-fwmark "$route_fwmark"
+          --route-cidr "$CHIMERA_ROUTE_CIDR"
+        )
+      else
+        direct_up_args+=(--apply-route false)
+      fi
+      direct_up_args+=(--apply-dns ${CHIMERA_APPLY_DNS})
+      if run_chimera_cli_up_with_retry "${direct_up_args[@]}" >/dev/null 2>&1; then
         direct_datapath_apply_status="ok"
       else
         direct_datapath_apply_rc=$?
@@ -4165,7 +4210,14 @@ start_runtime() {
     if [[ "$direct_datapath_apply_status" == "ok" ]]; then
       direct_datapath_proof_status="$(datapath_apply_proof_state || true)"
       if [[ "$direct_datapath_proof_status" != "ok" ]]; then
-        direct_datapath_apply_status="unverified"
+        if [[ "$direct_datapath_proof_status" == "network_not_modified" \
+          && "${CHIMERA_APPLY_TUN}" == "false" \
+          && "${CHIMERA_APPLY_ROUTE}" == "false" \
+          && "${CHIMERA_APPLY_DNS}" == "false" ]]; then
+          direct_datapath_proof_status="ok"
+        else
+          direct_datapath_apply_status="unverified"
+        fi
       fi
     fi
   else

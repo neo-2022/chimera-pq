@@ -11,7 +11,6 @@ Type=simple
 WorkingDirectory=__CHIMERA_ROOT__
 ExecStartPre=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __service-preflight-node'
 ExecStart=/usr/bin/env bash -lc 'set -euo pipefail; env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/peer-egress.env"; override_file="${XDG_CACHE_HOME:-$HOME/.cache}/chimera/runtime_listener_overrides.env"; if [[ ! -f "$env_file" ]]; then echo "error: missing peer-egress env: $env_file" >&2; exit 1; fi; set -a; source "$env_file"; if [[ -f "$override_file" ]]; then source "$override_file"; fi; exec ./scripts/chimera-runner.sh peer-egress'
-ExecStartPost=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __service-poststart-node'
 ExecStop=/usr/bin/env bash -lc 'true'
 Restart=on-failure
 RestartSec=2
