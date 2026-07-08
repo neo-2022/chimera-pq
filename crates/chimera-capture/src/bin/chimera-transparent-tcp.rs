@@ -449,8 +449,10 @@ mod tests {
             "--direct-mode".to_string(),
             "auto".to_string(),
         ];
-        let error = Options::parse(&args).unwrap_err();
-        assert!(error.contains("direct-mode auto is forbidden"));
+        assert!(
+            Options::parse(&args)
+                .is_err_and(|error| error.contains("direct-mode auto is forbidden"))
+        );
     }
 
     #[test]
