@@ -192,7 +192,7 @@ write_env_kv() {
 
 bootstrap_env_key_allowed() {
   case "${1:-}" in
-    CHIMERA_MESH_NODES_DISCOVERY_URL|CHIMERA_MESH_NODES_DISCOVERY_URLS|CHIMERA_MESH_NODES_DISCOVERY_PUBKEY|CHIMERA_MESH_NODES_DISCOVERY_KEYRING|CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS|CHIMERA_MESH_NAMESPACE|CHIMERA_MESH_LOCAL_NODE|CHIMERA_MESH_LOCAL_NODE_REGION|CHIMERA_MESH_POLICY_PAYLOAD|CHIMERA_MESH_TRAFFIC_PROFILE|CHIMERA_MESH_REMOTE_PEER_SPEC|CHIMERA_MESH_EXTRA_PEERS|CHIMERA_MESH_REMOTE_NODE|CHIMERA_MESH_REMOTE_ENDPOINT|CHIMERA_MESH_REMOTE_REGION|CHIMERA_MESH_REMOTE_LOAD_SCORE|CHIMERA_MESH_REMOTE_RELIABILITY_SCORE|CHIMERA_PEER_UPDATE_BASE_URL|CHIMERA_PEER_UPDATE_LISTEN)
+    CHIMERA_MESH_NODES_DISCOVERY_URL|CHIMERA_MESH_NODES_DISCOVERY_URLS|CHIMERA_MESH_NODES_DISCOVERY_PUBKEY|CHIMERA_MESH_NODES_DISCOVERY_KEYRING|CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS|CHIMERA_MESH_NAMESPACE|CHIMERA_MESH_LOCAL_NODE|CHIMERA_MESH_LOCAL_NODE_REGION|CHIMERA_MESH_LOCAL_NODE_COUNTRY_CODE|CHIMERA_MESH_POLICY_PAYLOAD|CHIMERA_MESH_TRAFFIC_PROFILE|CHIMERA_MESH_REMOTE_PEER_SPEC|CHIMERA_MESH_EXTRA_PEERS|CHIMERA_MESH_REMOTE_NODE|CHIMERA_MESH_REMOTE_ENDPOINT|CHIMERA_MESH_REMOTE_REGION|CHIMERA_MESH_REMOTE_LOAD_SCORE|CHIMERA_MESH_REMOTE_RELIABILITY_SCORE|CHIMERA_PEER_UPDATE_BASE_URL|CHIMERA_PEER_UPDATE_LISTEN)
       return 0
       ;;
   esac
@@ -287,6 +287,7 @@ CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS
 CHIMERA_MESH_NAMESPACE
 CHIMERA_MESH_LOCAL_NODE
 CHIMERA_MESH_LOCAL_NODE_REGION
+CHIMERA_MESH_LOCAL_NODE_COUNTRY_CODE
 CHIMERA_MESH_POLICY_PAYLOAD
 CHIMERA_MESH_TRAFFIC_PROFILE
 CHIMERA_MESH_REMOTE_PEER_SPEC
@@ -541,7 +542,7 @@ validate_mesh_control_plane_env_file_for_source() {
     key="${line%%=*}"
     rhs="${line#*=}"
     case "$key" in
-      CHIMERA_MESH_NAMESPACE|CHIMERA_MESH_LOCAL_NODE|CHIMERA_MESH_LOCAL_NODE_REGION|CHIMERA_MESH_POLICY_PAYLOAD|CHIMERA_MESH_TRAFFIC_PROFILE|CHIMERA_MESH_REMOTE_PEER_SPEC|CHIMERA_MESH_EXTRA_PEERS) ;;
+      CHIMERA_MESH_NAMESPACE|CHIMERA_MESH_LOCAL_NODE|CHIMERA_MESH_LOCAL_NODE_REGION|CHIMERA_MESH_LOCAL_NODE_COUNTRY_CODE|CHIMERA_MESH_POLICY_PAYLOAD|CHIMERA_MESH_TRAFFIC_PROFILE|CHIMERA_MESH_REMOTE_PEER_SPEC|CHIMERA_MESH_EXTRA_PEERS) ;;
       *) return 1 ;;
     esac
     if printf '%s' "$rhs" | LC_ALL=C grep -q '[[:cntrl:]]'; then
@@ -679,6 +680,50 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
     return $?
   else
     rc=$?
+  fi
+
+  # If the configured peer spec is stale or incompatible with the current
+  # route planner (e.g. region no longer allowed), try to re-derive a fresh
+  # spec from the discovery inventory and retry exactly once.
+  if [[ -n "$peer_spec" ]]; then
+    local fresh_peer_spec=""
+    fresh_peer_spec="$(selected_mesh_remote_peer_spec_from_inventory 2>/dev/null || true)"
+    fresh_peer_spec="$(trim_ascii "$fresh_peer_spec")"
+    if [[ -n "$fresh_peer_spec" && "$fresh_peer_spec" != "$peer_spec" ]]; then
+      peer_spec="$fresh_peer_spec"
+      peer_args=("$peer_spec")
+      if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+        upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_REMOTE_PEER_SPEC" "$peer_spec"
+      fi
+      CHIMERA_MESH_REMOTE_PEER_SPEC="$peer_spec"
+      export CHIMERA_MESH_REMOTE_PEER_SPEC
+
+      route_args=(
+        mesh route-explain
+        --namespace "$namespace"
+        --node "$local_node"
+      )
+      if [[ -n "$policy_payload" ]]; then
+        route_args+=(--policy-payload "$policy_payload")
+      else
+        route_args+=(--traffic-profile "$traffic_profile")
+      fi
+      for peer_spec_retry in "${peer_args[@]}"; do
+        route_args+=(--peer "$peer_spec_retry")
+      done
+      route_args+=(--transit-lane-bindings-out "$out_file")
+      if run_chimera_cli "${route_args[@]}" >/dev/null 2>&1; then
+        if [[ -s "$out_file" ]]; then
+          upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE" "$out_file"
+          printf '%s\n' "peer_egress_transit_lane_bindings_publish=ok reason=reconciled" >&2
+          return 0
+        fi
+        peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "generated_file_missing" 1 "" "$out_file"
+        return $?
+      else
+        rc=$?
+      fi
+    fi
   fi
 
   peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "control_plane_derivation_failed" "$rc" " exit=$rc" "$out_file"

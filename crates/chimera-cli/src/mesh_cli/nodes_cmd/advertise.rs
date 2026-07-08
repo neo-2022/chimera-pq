@@ -50,6 +50,12 @@ pub(super) fn advertise_node(args: &[String], inventory: &MeshNodesInventory) ->
     let country_code = extract_flag_value(args, "--country-code")
         .map(str::to_string)
         .or_else(|| {
+            std::env::var("CHIMERA_MESH_LOCAL_NODE_COUNTRY_CODE")
+                .ok()
+                .map(|value| value.trim().to_ascii_uppercase())
+                .filter(|value| !value.is_empty())
+        })
+        .or_else(|| {
             inventory
                 .nodes
                 .iter()
