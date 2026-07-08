@@ -15,7 +15,7 @@ use crate::peer_egress::mesh_lane_driver::{
 use crate::peer_egress::modes::{
     handle_local_client_with_lane_document_and_first_byte,
     handle_local_client_with_peer_pool_and_first_byte,
-    outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress,
+    outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress, serve_peer_pool_worker,
 };
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
@@ -159,6 +159,52 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
             }
         }
     });
+
+    for _ in 0..options.pool {
+        let pool_worker_options = options.clone();
+        let pool_worker_pool = peer_pool.clone();
+        let pool_worker_dispatcher = transit_dispatcher.clone();
+        let pool_worker_aggregate = aggregate_ingress.clone();
+        let pool_worker_lane_registry = live_transit_lane_registry.clone();
+        thread::spawn(move || {
+            loop {
+                let peer = match pool_worker_pool.pop_wait() {
+                    Ok(peer) => peer,
+                    Err(error) => {
+                        eprintln!(
+                            "event=peer_pool_pop_failed reason_class={}",
+                            redacted_log_reason(&error)
+                        );
+                        thread::sleep(Duration::from_secs(1));
+                        continue;
+                    }
+                };
+                let lane_document = match pool_worker_lane_registry.snapshot() {
+                    Ok(doc) => Some(doc),
+                    Err(error) => {
+                        eprintln!(
+                            "event=peer_pool_lane_snapshot_failed reason_class={}",
+                            redacted_log_reason(&error)
+                        );
+                        None
+                    }
+                };
+                if let Err(error) = serve_peer_pool_worker(
+                    &pool_worker_options,
+                    None,
+                    Some(pool_worker_dispatcher.clone()),
+                    lane_document.as_deref(),
+                    Some(pool_worker_aggregate.clone()),
+                    peer,
+                ) {
+                    eprintln!(
+                        "event=peer_pool_worker_error reason_class={}",
+                        redacted_log_reason(&error)
+                    );
+                }
+            }
+        });
+    }
 
     if startup_contract.outbound_bootstrap_configured && !dynamic_lanes_enabled {
         for _ in 0..options.pool {

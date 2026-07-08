@@ -394,6 +394,82 @@ fn forward_peer_sealed_transit_with_document_or_pool_and_limits(
     )
 }
 
+pub(crate) fn serve_peer_pool_worker(
+    options: &Options,
+    next_hops: Option<SharedPeerPool>,
+    next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
+    lane_document: Option<&TransitLaneDocument>,
+    aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
+    mut peer: SecurePeerStream,
+) -> Result<(), String> {
+    let transit_limits = options.transit_relay_limits();
+    transit_limits.validate()?;
+    let previous_read_timeout = peer
+        .stream
+        .read_timeout()
+        .map_err(|error| format!("read first peer timeout failed: {error}"))?;
+    peer.stream
+        .set_read_timeout(Some(transit_limits.idle_timeout()))
+        .map_err(|error| format!("set first peer read timeout failed: {error}"))?;
+    let first_message = read_peer_message(&mut peer, 512)?;
+    let destination = match first_message {
+        PeerMessage::Connect(destination) => {
+            peer.stream
+                .set_read_timeout(previous_read_timeout)
+                .map_err(|error| format!("restore peer read timeout failed: {error}"))?;
+            destination
+        }
+        PeerMessage::SealedTransit(frame) => {
+            return forward_peer_sealed_transit_with_document_or_pool_and_limits(
+                peer,
+                PeerTransitPolicy::from_bool(options.allow_pool_transit),
+                next_hops,
+                next_hop_dispatcher,
+                lane_document,
+                frame,
+                transit_limits,
+            );
+        }
+        PeerMessage::BoundSealedTransit(frame) => {
+            return crate::peer_egress::transit::forward_bound_peer_sealed_transit_to_next_hop_with_limits(
+                peer,
+                BoundPeerTransitPolicy::from_bool(options.allow_bound_transit),
+                next_hop_dispatcher,
+                frame,
+                transit_limits,
+            );
+        }
+        PeerMessage::AggregateSealedTransit(shard) => {
+            handle_aggregate_peer_ingress_shard(
+                shard,
+                aggregate_ingress,
+                PeerTransitPolicy::from_bool(options.allow_pool_transit),
+                next_hops,
+                next_hop_dispatcher,
+                lane_document,
+                transit_limits,
+            )?;
+            return Ok(());
+        }
+        PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
+    };
+    let target_addr = destination.connect_addr();
+    let destination_id = destination.redacted_label();
+    eprintln!(
+        "event=peer_pool_request_received request=<redacted> destination_id={destination_id}"
+    );
+    eprintln!(
+        "event=peer_pool_target_connecting target=<redacted> destination_id={destination_id}"
+    );
+    let target = connect_tcp(&target_addr, options.connect_timeout_ms)
+        .map_err(|error| format!("connect peer pool target failed: {error}"))?;
+    tune_tcp(&target)?;
+    eprintln!("event=peer_pool_target_connected target=<redacted> destination_id={destination_id}");
+    write_ack_ok(&mut peer)?;
+    eprintln!("event=peer_pool_connect_ack_sent target=<redacted> destination_id={destination_id}");
+    pipe_secure_peer_with_plain(peer, target)
+}
+
 #[cfg(test)]
 #[path = "modes_tests/local_egress.rs"]
 mod local_egress_tests;
