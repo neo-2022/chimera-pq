@@ -61,9 +61,11 @@ fn all_traffic_profiles_include_route_binding_id() {
         ];
         let parsed =
             parse_mesh_route_explain_options(&args).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(parsed
-            .policy_payload
-            .contains(&format!("mesh_route_binding_id={route_binding_id}")));
+        assert!(
+            parsed
+                .policy_payload
+                .contains(&format!("mesh_route_binding_id={route_binding_id}"))
+        );
     }
 }
 

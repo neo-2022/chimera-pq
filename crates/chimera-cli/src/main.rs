@@ -3241,6 +3241,7 @@ fn parse_bool_flag(raw: &str) -> Option<bool> {
     }
 }
 
+#[allow(clippy::collapsible_if)]
 fn up_command(lang: Language, args: &[String]) -> i32 {
     let options = match parse_up_down_options(args) {
         Ok(options) => options,
@@ -3423,9 +3424,9 @@ fn up_command(lang: Language, args: &[String]) -> i32 {
                     }
                     match lang {
                         Language::En => eprintln!("Cannot apply route fwmark rule: {error}"),
-                        Language::Ru => eprintln!(
-                            "Не удалось применить fwmark-правило маршрута: {error}"
-                        ),
+                        Language::Ru => {
+                            eprintln!("Не удалось применить fwmark-правило маршрута: {error}")
+                        }
                     }
                     return 1;
                 }
@@ -3811,6 +3812,7 @@ fn remove_policy_route_fwmark(fwmark: u32) -> Result<(), String> {
     ])
 }
 
+#[allow(clippy::collapsible_if)]
 fn rollback_applied_routes(
     route_cidrs: &[String],
     tun_name: &str,
@@ -4179,9 +4181,7 @@ fn validate_datapath_state_proof(state_path: &Path) -> Result<(), &'static str> 
     if extract_state_bool_field_from_value(&value, "route_applied") != Some(true) {
         return Err("route_not_applied");
     }
-    if require_dns
-        && extract_state_bool_field_from_value(&value, "dns_applied") != Some(true)
-    {
+    if require_dns && extract_state_bool_field_from_value(&value, "dns_applied") != Some(true) {
         return Err("dns_not_applied");
     }
     Ok(())

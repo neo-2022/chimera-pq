@@ -173,15 +173,9 @@ fn nodes_advertise_writes_signed_discovery_snapshot() {
 #[test]
 fn nodes_advertise_ignores_unreachable_discovery_with_skip_discovery_flag() {
     let mut out_path = std::env::temp_dir();
-    out_path.push(format!(
-        "chimera_mesh_discovery_skip_{}.json",
-        random_u64()
-    ));
+    out_path.push(format!("chimera_mesh_discovery_skip_{}.json", random_u64()));
     let mut pubkey_path = std::env::temp_dir();
-    pubkey_path.push(format!(
-        "chimera_mesh_discovery_skip_{}.pub",
-        random_u64()
-    ));
+    pubkey_path.push(format!("chimera_mesh_discovery_skip_{}.pub", random_u64()));
     let mut keypair_path = std::env::temp_dir();
     keypair_path.push(format!(
         "chimera_mesh_discovery_skip_{}.keypair",
@@ -295,7 +289,8 @@ fn nodes_advertise_writes_invite_token_for_matching_node() {
         .and_then(serde_json::Value::as_array)
         .unwrap_or_else(|| unreachable!("nodes array missing"));
     assert_eq!(
-        nodes.first()
+        nodes
+            .first()
             .and_then(|node| node.get("invite_token"))
             .and_then(serde_json::Value::as_str),
         Some("invite-token-123")

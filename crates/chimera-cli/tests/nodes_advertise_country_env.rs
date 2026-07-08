@@ -4,7 +4,11 @@ use std::process::Command;
 
 fn chimera_cli_bin() -> String {
     env::var("CARGO_BIN_EXE_chimera-cli").unwrap_or_else(|_| {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/chimera-cli").to_string()
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../target/debug/chimera-cli"
+        )
+        .to_string()
     })
 }
 

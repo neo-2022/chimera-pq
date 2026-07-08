@@ -61,6 +61,34 @@ pub fn serve_release(
         "chimera_peer_update_serve=ready listen={} version={} sha256={} update_bootstrap_url={}",
         listen, version, checksum, update_bootstrap_url
     );
+    if let Some(state_file) = state_file {
+        let state_file = state_file.to_path_buf();
+        let listen = listen.clone();
+        let public_base_url = public_base_url.clone();
+        let version = version.clone();
+        let checksum = checksum.clone();
+        thread::spawn(move || {
+            let refresh_interval = Duration::from_secs(60);
+            loop {
+                thread::sleep(refresh_interval);
+                let update_bootstrap_url = public_base_url
+                    .as_deref()
+                    .map(|base_url| join_url(base_url, "/chimera.sh"));
+                if let Err(error) = write_peer_update_state_file(
+                    &state_file,
+                    &listen,
+                    public_base_url.as_deref(),
+                    update_bootstrap_url.as_deref(),
+                    &version,
+                    &checksum,
+                ) {
+                    eprintln!("chimera_peer_update_state_refresh=fail reason={error}");
+                } else {
+                    eprintln!("chimera_peer_update_state_refresh=ok");
+                }
+            }
+        });
+    }
     let root = Arc::new(root.to_path_buf());
     let active_connections = Arc::new(AtomicUsize::new(0));
     for incoming in listener.incoming() {

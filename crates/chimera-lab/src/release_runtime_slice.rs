@@ -102,7 +102,10 @@ mod tests {
         detect_github_release_ssh_runtime_slice_proven_from_paths,
         github_release_ssh_runtime_slice_text_is_proven,
     };
-    use std::{env, fs, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        env, fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn valid_text() -> String {
         let mut text = String::new();
@@ -155,9 +158,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let temp_dir = env::temp_dir().join(format!(
-            "chimera_release_runtime_slice_{unique}"
-        ));
+        let temp_dir = env::temp_dir().join(format!("chimera_release_runtime_slice_{unique}"));
         fs::create_dir_all(&temp_dir).unwrap();
         let latest_path = temp_dir.join("latest.md");
         let older_path = temp_dir.join("older.md");
@@ -174,7 +175,9 @@ mod tests {
             latest_path.to_string_lossy().to_string(),
             older_path.to_string_lossy().to_string(),
         ];
-        assert!(!detect_github_release_ssh_runtime_slice_proven_from_paths(&paths));
+        assert!(!detect_github_release_ssh_runtime_slice_proven_from_paths(
+            &paths
+        ));
         let _ = fs::remove_file(latest_path);
         let _ = fs::remove_file(older_path);
         let _ = fs::remove_dir(temp_dir);

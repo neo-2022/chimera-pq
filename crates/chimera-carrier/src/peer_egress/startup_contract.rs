@@ -54,14 +54,13 @@ fn validate_node_startup_contract_with_contract(
             .filter(|value| !value.is_empty());
         let server_empty = options.server.trim().is_empty();
         let discovery_configured = options.discovery_configured();
-        let lane_file_ready = lane_file.map_or(false, |path| {
+        let lane_file_ready = lane_file.is_some_and(|path| {
             std::fs::metadata(Path::new(path))
                 .map(|metadata| metadata.is_file() && metadata.len() > 0)
                 .unwrap_or(false)
         });
         if !lane_file_ready {
-            let bootstrap_pending = server_empty
-                && (discovery_configured || lane_file.is_none());
+            let bootstrap_pending = server_empty && (discovery_configured || lane_file.is_none());
             if bootstrap_pending {
                 // Fresh installs or dynamic-discovery nodes may enable bound transit
                 // before a first lane document exists. Allow the node to boot as a

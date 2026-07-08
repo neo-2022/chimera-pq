@@ -1,7 +1,7 @@
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::Command;
 
-use chimera_mesh::{select_best_mesh_node, MeshNode, MeshNodeListFilter};
+use chimera_mesh::{MeshNode, MeshNodeListFilter, select_best_mesh_node};
 
 use super::nodes_inventory::MeshNodesInventory;
 use super::nodes_render::{fmt_ms, fmt_pct};

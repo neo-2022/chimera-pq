@@ -483,7 +483,9 @@ fn validate_runtime_datapath_logic(
     let probe_smoke_ok = report_obj
         .get("runtime_real_world_probe_smoke_ok")
         .and_then(Value::as_bool)
-        .ok_or_else(|| "ship readiness json guard: invalid runtime_real_world_probe_smoke_ok".to_string())?;
+        .ok_or_else(|| {
+            "ship readiness json guard: invalid runtime_real_world_probe_smoke_ok".to_string()
+        })?;
 
     if ![
         "external_reachability_without_system_proxy",
@@ -714,10 +716,7 @@ mod tests {
             "runtime_real_world_datapath_release_ok".to_string(),
             json!(true),
         );
-        m.insert(
-            "runtime_real_world_probe_smoke_ok".to_string(),
-            json!(true),
-        );
+        m.insert("runtime_real_world_probe_smoke_ok".to_string(), json!(true));
         m.insert(
             "runtime_real_world_external_reachability_probe_ok".to_string(),
             json!(false),
@@ -891,10 +890,7 @@ mod tests {
     #[test]
     fn runtime_datapath_logic_rejects_snapshot_probe_smoke_claim() {
         let mut payload = Map::new();
-        payload.insert(
-            "runtime_real_world_probe_smoke_ok".to_string(),
-            json!(true),
-        );
+        payload.insert("runtime_real_world_probe_smoke_ok".to_string(), json!(true));
         payload.insert(
             "runtime_real_world_datapath_targets_total".to_string(),
             json!(0),
