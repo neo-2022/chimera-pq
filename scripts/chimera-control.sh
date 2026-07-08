@@ -910,19 +910,50 @@ selected_mesh_remote_peer_spec_from_inventory() {
     mesh_nodes_args+=(--discovery-keyring "$CHIMERA_MESH_NODES_DISCOVERY_KEYRING")
   fi
   mesh_nodes_args+=(--probe-timeout-ms "${CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS:-4000}")
-  if run_chimera_cli mesh nodes select "${mesh_nodes_args[@]}" >/dev/null 2>&1; then
+  # Always re-select the current best discovery node so the returned peer spec
+  # reflects the live endpoint/port. A stale selected node would otherwise keep
+  # returning a cached endpoint after the remote peer listen port changes.
+  best_node_id="$(run_chimera_cli mesh nodes best "${mesh_nodes_args[@]}" 2>/dev/null | sed -n 's/^node_id=\([^[:space:]]*\).*/\1/p' | head -n1 | tr -d '[:space:]' || true)"
+  if [[ -n "$best_node_id" ]]; then
+    run_chimera_cli mesh nodes select --id "$best_node_id" "${mesh_nodes_args[@]}" >/dev/null 2>&1 || true
     peer_spec="$(run_chimera_cli mesh nodes selected-peer-spec "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '\r\n' || true)"
-  fi
-  if [[ -z "$peer_spec" ]]; then
-    best_node_id="$(run_chimera_cli mesh nodes best "${mesh_nodes_args[@]}" 2>/dev/null | sed -n 's/^node_id=\([^[:space:]]*\).*/\1/p' | head -n1 | tr -d '[:space:]' || true)"
-    if [[ -n "$best_node_id" ]]; then
-      run_chimera_cli mesh nodes select --id "$best_node_id" "${mesh_nodes_args[@]}" >/dev/null 2>&1 || true
-      peer_spec="$(run_chimera_cli mesh nodes selected-peer-spec "${mesh_nodes_args[@]}" 2>/dev/null | head -n1 | tr -d '\r\n' || true)"
-    fi
   fi
   peer_spec="$(trim_ascii "$peer_spec")"
   [[ -n "$peer_spec" ]] || return 1
   printf '%s\n' "$peer_spec"
+}
+
+peer_egress_transit_lane_bindings_peer_endpoint_drifted() {
+  local current_peer_spec="" current_endpoint="" bindings_file="" configured_endpoint=""
+  if ! mesh_discovery_source_present; then
+    return 1
+  fi
+  current_peer_spec="$(selected_mesh_remote_peer_spec_from_inventory 2>/dev/null || true)"
+  current_peer_spec="$(trim_ascii "$current_peer_spec")"
+  [[ -n "$current_peer_spec" ]] || return 0
+  current_endpoint="${current_peer_spec#*@}"
+  current_endpoint="${current_endpoint%%@*}"
+  [[ -n "$current_endpoint" ]] || return 0
+
+  bindings_file=""
+  if [[ -f "$PEER_EGRESS_ENV_FILE" ]]; then
+    bindings_file="$(awk -F= '
+      index($0, "CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=") == 1 {
+        print substr($0, length("CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=") + 1)
+        exit
+      }
+    ' "$PEER_EGRESS_ENV_FILE" 2>/dev/null || true)"
+  fi
+  bindings_file="$(trim_ascii "${bindings_file:-${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress-transit-lane-bindings.csv}}")"
+  [[ -s "$bindings_file" ]] || return 0
+
+  configured_endpoint="$(awk -F'\t' '/^# chimera_plan_selected_peer[[:space:]]/ { print $4; exit }' "$bindings_file" 2>/dev/null | tr -d '[:space:]' || true)"
+  [[ -n "$configured_endpoint" ]] || return 0
+
+  if [[ "$configured_endpoint" != "$current_endpoint" ]]; then
+    return 0
+  fi
+  return 1
 }
 
 seed_mesh_control_plane_authority_from_bootstrap() {
@@ -3755,6 +3786,9 @@ site_auto_watch_run_once() {
     watch_rc=1
   }
   if peer_egress_bound_transit_requested; then
+    bindings_mode="strict"
+  fi
+  if peer_egress_transit_lane_bindings_peer_endpoint_drifted; then
     bindings_mode="strict"
   fi
   publish_peer_egress_transit_lane_bindings_from_control_plane "$bindings_mode" || {
