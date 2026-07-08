@@ -133,6 +133,25 @@ pub(crate) fn parse_mesh_dps_payload(payload: &str) -> Result<MeshDpsPayloadPars
                 }
                 route_binding_id = MeshRouteBindingId::new(parsed).ok();
             }
+            "mesh_traffic_profile" => match value.to_ascii_lowercase().as_str() {
+                "high_speed_anonymous" | "speed_first" => {
+                    path_profile_override = Some(MeshPathProfile::Fast);
+                    multipath_mode = Some(MultipathMode::FlowShard);
+                }
+                "privacy_first" | "low_latency_private" => {
+                    path_profile_override = Some(MeshPathProfile::Balanced);
+                    multipath_mode = Some(MultipathMode::FlowShard);
+                }
+                "balanced" => {
+                    path_profile_override = Some(MeshPathProfile::Balanced);
+                }
+                "resilient" => {
+                    path_profile_override = Some(MeshPathProfile::Resilient);
+                }
+                _ => {
+                    return Err(format!("mesh traffic_profile unknown value '{value}'"));
+                }
+            },
             _ => {
                 if key_norm.starts_with("mesh_") {
                     return Err(format!(

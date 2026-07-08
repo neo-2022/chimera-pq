@@ -87,6 +87,62 @@ fn dps_multipath_flow_shard_raises_peer_limits_when_not_overridden() {
 }
 
 #[test]
+fn dps_traffic_profile_high_speed_anonymous_maps_to_fast_flow_shard() {
+    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
+        .unwrap_or_else(|e| unreachable!("runtime bootstrap should succeed: {e}"));
+    let records = vec![MeshDiscoveryRecord {
+        node_id: "node-a".to_string(),
+        endpoint: "198.51.100.31:443".to_string(),
+        region: "eu".to_string(),
+        load_score: 20,
+        reliability_score: 90,
+    }];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let payload =
+        "mesh_allowed_regions=eu;mesh_traffic_profile=high_speed_anonymous;mesh_route_binding_id=1";
+    let plan = runtime
+        .plan_path_from_dps_payload(&req, payload)
+        .unwrap_or_else(|e| unreachable!("planning should succeed: {e}"));
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("path_profile=fast"))
+    );
+    assert!(
+        plan.explain
+            .iter()
+            .any(|line| line.contains("multipath_schedule_mode=flow_shard"))
+    );
+}
+
+#[test]
+fn dps_traffic_profile_unknown_value_is_rejected() {
+    let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
+        .unwrap_or_else(|e| unreachable!("runtime bootstrap should succeed: {e}"));
+    let records = vec![MeshDiscoveryRecord {
+        node_id: "node-a".to_string(),
+        endpoint: "198.51.100.31:443".to_string(),
+        region: "eu".to_string(),
+        load_score: 20,
+        reliability_score: 90,
+    }];
+    assert!(runtime.merge_discovery("seed-b", &records).is_ok());
+    let req = MeshJoinRequest {
+        namespace: "cef-public".to_string(),
+        node_name: "node-client".to_string(),
+        invite_token: None,
+    };
+    let payload =
+        "mesh_allowed_regions=eu;mesh_traffic_profile=unknown_profile;mesh_route_binding_id=1";
+    assert!(runtime.plan_path_from_dps_payload(&req, payload).is_err());
+}
+
+#[test]
 fn dps_multipath_aggregate_clamps_selected_per_region_to_explicit_max_peers() {
     let mut runtime = MeshRuntime::bootstrap("cef-public", "seed-a")
         .unwrap_or_else(|e| unreachable!("runtime bootstrap should succeed: {e}"));

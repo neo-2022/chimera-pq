@@ -632,6 +632,23 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
     return $?
   fi
 
+  # When mesh discovery is configured, prefer the live inventory endpoint over
+  # a possibly stale bootstrap peer spec so transit lane bindings stay aligned
+  # with the current discovery snapshot. If discovery is unreachable, the
+  # configured spec remains as a fallback.
+  local discovery_peer_spec=""
+  if mesh_discovery_source_present; then
+    discovery_peer_spec="$(selected_mesh_remote_peer_spec_from_inventory 2>/dev/null || true)"
+    discovery_peer_spec="$(trim_ascii "$discovery_peer_spec")"
+    if [[ -n "$discovery_peer_spec" ]]; then
+      CHIMERA_MESH_REMOTE_PEER_SPEC="$discovery_peer_spec"
+      export CHIMERA_MESH_REMOTE_PEER_SPEC
+      if [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+        upsert_env_kv "$BOOTSTRAP_ENV_FILE" "CHIMERA_MESH_REMOTE_PEER_SPEC" "$discovery_peer_spec"
+      fi
+    fi
+  fi
+
   peer_args=()
   if [[ -n "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}" ]]; then
     peer_spec="$(trim_ascii "${CHIMERA_MESH_REMOTE_PEER_SPEC:-}")"
@@ -1290,7 +1307,23 @@ configure_peer_egress_dynamic_lanes_from_bootstrap() {
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_SELF_NODE_ID" "$CHIMERA_MESH_SELF_NODE_ID"
   fi
   if [[ -z "${CHIMERA_MESH_POLICY_PAYLOAD:-}" && -n "${CHIMERA_MESH_TRAFFIC_PROFILE:-}" ]]; then
-    CHIMERA_MESH_POLICY_PAYLOAD="mesh_traffic_profile=${CHIMERA_MESH_TRAFFIC_PROFILE};mesh_route_binding_id=1"
+    case "${CHIMERA_MESH_TRAFFIC_PROFILE}" in
+      high_speed_anonymous|speed_first)
+        CHIMERA_MESH_POLICY_PAYLOAD="mesh_path_profile=fast;mesh_multipath_mode=flow_shard;mesh_route_binding_id=1"
+        ;;
+      privacy_first|low_latency_private)
+        CHIMERA_MESH_POLICY_PAYLOAD="mesh_path_profile=balanced;mesh_multipath_mode=flow_shard;mesh_route_binding_id=1"
+        ;;
+      balanced)
+        CHIMERA_MESH_POLICY_PAYLOAD="mesh_path_profile=balanced;mesh_route_binding_id=1"
+        ;;
+      resilient)
+        CHIMERA_MESH_POLICY_PAYLOAD="mesh_path_profile=resilient;mesh_route_binding_id=1"
+        ;;
+      *)
+        CHIMERA_MESH_POLICY_PAYLOAD="mesh_traffic_profile=${CHIMERA_MESH_TRAFFIC_PROFILE};mesh_route_binding_id=1"
+        ;;
+    esac
   fi
   if [[ -n "${CHIMERA_MESH_POLICY_PAYLOAD:-}" ]]; then
     upsert_env_kv "$PEER_EGRESS_ENV_FILE" "CHIMERA_MESH_POLICY_PAYLOAD" "$CHIMERA_MESH_POLICY_PAYLOAD"
