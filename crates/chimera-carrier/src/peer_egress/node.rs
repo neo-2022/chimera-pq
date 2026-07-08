@@ -65,27 +65,28 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
         if let Some(parent) = std::path::Path::new(&driver_options.lane_document_path).parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        match run_mesh_lane_driver_once(&driver_options) {
-            Ok(()) => {
-                options.allow_bound_transit = true;
-                options.transit_lane_bindings_file =
-                    Some(driver_options.lane_document_path.clone());
-                dynamic_lanes_enabled = true;
-                let cancel = Arc::new(AtomicBool::new(false));
-                let cancel_worker = cancel.clone();
-                let driver_thread_options = driver_options;
-                thread::spawn(move || {
-                    run_mesh_lane_driver(driver_thread_options, cancel_worker);
-                });
-                lane_driver_cancel = Some(cancel);
-            }
-            Err(error) => {
-                eprintln!(
-                    "event=mesh_lane_driver_initial_failed reason_class={}",
-                    redacted_log_reason(&error)
-                );
-            }
+        let initial_driver_result = run_mesh_lane_driver_once(&driver_options);
+        if let Err(ref error) = initial_driver_result {
+            eprintln!(
+                "event=mesh_lane_driver_initial_failed reason_class={}",
+                redacted_log_reason(error)
+            );
         }
+        // Always enable dynamic lane reloads when discovery is configured. A
+        // transient failure during the initial fetch should not leave the node
+        // pinned to a stale lane document; the background driver retries on
+        // its poll interval and will refresh the document once discovery is
+        // reachable.
+        options.allow_bound_transit = true;
+        options.transit_lane_bindings_file = Some(driver_options.lane_document_path.clone());
+        dynamic_lanes_enabled = true;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_worker = cancel.clone();
+        let driver_thread_options = driver_options;
+        thread::spawn(move || {
+            run_mesh_lane_driver(driver_thread_options, cancel_worker);
+        });
+        lane_driver_cancel = Some(cancel);
     }
     let startup_contract = validate_node_startup_contract(&options)?;
     let peer_listen = startup_contract.peer_listen.clone();
