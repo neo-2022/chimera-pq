@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
@@ -159,7 +158,6 @@ fn parse_discovery_envelope<'a>(
     if nonce.trim().is_empty() {
         return Err("mesh discovery envelope nonce must be non-empty".to_string());
     }
-    remember_discovery_nonce(nonce)?;
     let key_id = object
         .get("key_id")
         .and_then(Value::as_str)
@@ -198,25 +196,6 @@ fn current_unix_seconds() -> Result<u64, String> {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .map_err(|error| format!("system clock error: {error}"))
-}
-
-fn remember_discovery_nonce(nonce: &str) -> Result<(), String> {
-    const MAX_TRACKED_NONCES: usize = 4096;
-    static NONCES: OnceLock<Mutex<BTreeSet<String>>> = OnceLock::new();
-    let cache = NONCES.get_or_init(|| Mutex::new(BTreeSet::new()));
-    let mut guard = cache
-        .lock()
-        .map_err(|_| "mesh discovery nonce cache lock poisoned".to_string())?;
-    if guard.contains(nonce) {
-        return Err("mesh discovery anti-replay rejected duplicate nonce".to_string());
-    }
-    if guard.len() >= MAX_TRACKED_NONCES
-        && let Some(oldest) = guard.first().cloned()
-    {
-        guard.remove(&oldest);
-    }
-    guard.insert(nonce.to_string());
-    Ok(())
 }
 
 fn verify_discovery_signature(
