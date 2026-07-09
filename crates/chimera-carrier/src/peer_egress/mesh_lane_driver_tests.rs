@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
+use std::sync::mpsc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
@@ -9,20 +10,19 @@ use ed25519_dalek::{Signer, SigningKey};
 use crate::peer_egress::lane_binding::load_transit_lane_document;
 use crate::peer_egress::mesh_lane_driver::{MeshLaneDriverOptions, run_mesh_lane_driver_once};
 
-fn now_unix() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+fn now_unix() -> Result<u64, BoxError> {
+    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
-fn signed_discovery_body(node_id: &str, node_endpoint: &str) -> (String, String) {
+fn signed_discovery_body(node_id: &str, node_endpoint: &str) -> Result<(String, String), BoxError> {
     let seed: [u8; 32] = rand::random();
     let signing_key = SigningKey::from_bytes(&seed);
     let verifying_key = signing_key.verifying_key();
     let pubkey_b64 = base64::engine::general_purpose::STANDARD.encode(verifying_key.to_bytes());
 
-    let issued_at = now_unix();
+    let issued_at = now_unix()?;
     let expires_at = issued_at + 120;
     let nonce = format!("lane-driver-test-{}-{}", issued_at, rand::random::<u64>());
     let nodes = serde_json::json!([
@@ -35,7 +35,7 @@ fn signed_discovery_body(node_id: &str, node_endpoint: &str) -> (String, String)
             "loss_pct": 1.0
         }
     ]);
-    let nodes_compact = serde_json::to_string(&nodes).unwrap();
+    let nodes_compact = serde_json::to_string(&nodes)?;
     let message = format!(
         "contract_version=1\nissued_at_unix={issued_at}\nexpires_at_unix={expires_at}\nnonce={nonce}\nnodes={nodes_compact}\n"
     );
@@ -52,19 +52,25 @@ fn signed_discovery_body(node_id: &str, node_endpoint: &str) -> (String, String)
         "signature": signature_b64,
     });
 
-    (serde_json::to_string(&envelope).unwrap(), pubkey_b64)
+    Ok((serde_json::to_string(&envelope)?, pubkey_b64))
 }
 
-fn serve_one_json(body: String) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
+fn serve_one_json(
+    body: String,
+) -> Result<(String, std::thread::JoinHandle<Result<(), BoxError>>), BoxError> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+    let (tx, rx) = mpsc::channel::<String>();
+
+    let handle = std::thread::spawn(move || -> Result<(), BoxError> {
+        tx.send(format!("http://{}", addr))?;
+
+        let (mut stream, _) = listener.accept()?;
         let mut reader = BufReader::new(&mut stream);
         let mut headers = String::new();
         loop {
             let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
+            reader.read_line(&mut line)?;
             if line == "\r\n" || line.is_empty() {
                 break;
             }
@@ -75,25 +81,28 @@ fn serve_one_json(body: String) -> String {
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).unwrap();
+        stream.write_all(response.as_bytes())?;
+        Ok(())
     });
-    format!("http://{}", addr)
+
+    let url = rx.recv()?;
+    Ok((url, handle))
 }
 
 #[test]
-fn mesh_lane_driver_plans_carrier_lanes_from_discovery_snapshot() {
+fn mesh_lane_driver_plans_carrier_lanes_from_discovery_snapshot() -> Result<(), BoxError> {
     let endpoint = "198.51.100.31:18143";
-    let (body, pubkey) = signed_discovery_body("remote-node", endpoint);
-    let url = serve_one_json(body);
+    let (body, pubkey) = signed_discovery_body("remote-node", endpoint)?;
+    let (url, handle) = serve_one_json(body)?;
 
     let mut keyring = BTreeMap::new();
     keyring.insert("default".to_string(), pubkey);
 
     let lane_document_path = std::env::temp_dir()
         .join(format!(
-            "chimera-lane-driver-{}-{}.v1",
+            "chimera-lane-driver-{}-{}",
             std::process::id(),
-            now_unix()
+            now_unix()?
         ))
         .to_string_lossy()
         .to_string();
@@ -117,32 +126,35 @@ fn mesh_lane_driver_plans_carrier_lanes_from_discovery_snapshot() {
         poll_interval_ms: 30_000,
     };
 
-    run_mesh_lane_driver_once(&options).unwrap();
+    run_mesh_lane_driver_once(&options)?;
 
-    let document = load_transit_lane_document(&lane_document_path).unwrap();
-    let plan = document.require_mesh_path_plan_ref().unwrap();
+    let document = load_transit_lane_document(&lane_document_path)?;
+    let plan = document.require_mesh_path_plan_ref()?;
     assert_eq!(plan.multipath_schedule.active_lane_count, 1);
     assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 1);
     assert_eq!(
         plan.multipath_schedule.carrier_lane_bindings[0].carrier_endpoint,
         endpoint
     );
+
+    handle.join().map_err(|_| "server thread panicked")??;
+    Ok(())
 }
 
 #[test]
-fn mesh_lane_driver_filters_self_node() {
+fn mesh_lane_driver_filters_self_node() -> Result<(), BoxError> {
     let endpoint = "198.51.100.31:18143";
-    let (body, pubkey) = signed_discovery_body("local-node", endpoint);
-    let url = serve_one_json(body);
+    let (body, pubkey) = signed_discovery_body("local-node", endpoint)?;
+    let (url, handle) = serve_one_json(body)?;
 
     let mut keyring = BTreeMap::new();
     keyring.insert("default".to_string(), pubkey);
 
     let lane_document_path = std::env::temp_dir()
         .join(format!(
-            "chimera-lane-driver-self-{}-{}.v1",
+            "chimera-lane-driver-self-{}-{}",
             std::process::id(),
-            now_unix()
+            now_unix()?
         ))
         .to_string_lossy()
         .to_string();
@@ -168,5 +180,9 @@ fn mesh_lane_driver_filters_self_node() {
 
     let result = run_mesh_lane_driver_once(&options);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("no remote peers"));
+    let err = result.err().ok_or("expected an error")?;
+    assert!(err.contains("no remote peers"));
+
+    handle.join().map_err(|_| "server thread panicked")??;
+    Ok(())
 }

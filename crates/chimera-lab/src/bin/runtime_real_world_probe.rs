@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn temp_test_dir(name: &str) -> PathBuf {
+    fn temp_test_dir(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|value| value.as_nanos())
@@ -762,44 +762,50 @@ mod tests {
             std::process::id(),
             unique
         ));
-        fs::create_dir_all(&dir).unwrap();
-        dir
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 
     #[cfg(unix)]
-    fn write_executable_script(path: &PathBuf, body: &str) {
-        fs::write(path, body).unwrap();
-        let mut permissions = fs::metadata(path).unwrap().permissions();
+    fn write_executable_script(
+        path: &PathBuf,
+        body: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        fs::write(path, body)?;
+        let mut permissions = fs::metadata(path)?.permissions();
         permissions.set_mode(0o755);
-        fs::set_permissions(path, permissions).unwrap();
+        fs::set_permissions(path, permissions)?;
+        Ok(())
     }
 
     #[cfg(unix)]
     #[test]
-    fn resolve_cli_bin_accepts_explicit_executable_path() {
-        let dir = temp_test_dir("resolve_cli_bin");
+    fn resolve_cli_bin_accepts_explicit_executable_path() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = temp_test_dir("resolve_cli_bin")?;
         let cli_path = dir.join("chimera-cli");
-        write_executable_script(&cli_path, "#!/bin/sh\nexit 0\n");
+        write_executable_script(&cli_path, "#!/bin/sh\nexit 0\n")?;
         let mut cfg = BTreeMap::new();
         cfg.insert(
             "CHIMERA_REAL_WORLD_CLI".to_string(),
             cli_path.display().to_string(),
         );
         assert_eq!(resolve_cli_bin(&cfg), Some(cli_path.display().to_string()));
-        fs::remove_dir_all(dir).unwrap();
+        fs::remove_dir_all(dir)?;
+        Ok(())
     }
 
     #[cfg(unix)]
     #[test]
-    fn strict_flow_proof_ok_uses_cli_contract() {
-        let dir = temp_test_dir("strict_flow_proof_ok");
+    fn strict_flow_proof_ok_uses_cli_contract() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = temp_test_dir("strict_flow_proof_ok")?;
         let cli_path = dir.join("chimera-cli");
         let state_path = dir.join("runtime_state.json");
-        fs::write(&state_path, "{}").unwrap();
+        fs::write(&state_path, "{}")?;
         write_executable_script(
             &cli_path,
             "#!/bin/sh\nprintf 'datapath_proof=ok\\n'\nexit 0\n",
-        );
+        )?;
         let mut cfg = BTreeMap::new();
         cfg.insert(
             "CHIMERA_REAL_WORLD_CLI".to_string(),
@@ -814,20 +820,21 @@ mod tests {
             "120".to_string(),
         );
         assert!(strict_flow_proof_ok(&cfg));
-        fs::remove_dir_all(dir).unwrap();
+        fs::remove_dir_all(dir)?;
+        Ok(())
     }
 
     #[cfg(unix)]
     #[test]
-    fn strict_flow_proof_ok_rejects_non_ok_cli_result() {
-        let dir = temp_test_dir("strict_flow_proof_fail");
+    fn strict_flow_proof_ok_rejects_non_ok_cli_result() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = temp_test_dir("strict_flow_proof_fail")?;
         let cli_path = dir.join("chimera-cli");
         let state_path = dir.join("runtime_state.json");
-        fs::write(&state_path, "{}").unwrap();
+        fs::write(&state_path, "{}")?;
         write_executable_script(
             &cli_path,
             "#!/bin/sh\nprintf 'datapath_proof=missing_flow_proof\\n'\nexit 1\n",
-        );
+        )?;
         let mut cfg = BTreeMap::new();
         cfg.insert(
             "CHIMERA_REAL_WORLD_CLI".to_string(),
@@ -838,6 +845,7 @@ mod tests {
             state_path.display().to_string(),
         );
         assert!(!strict_flow_proof_ok(&cfg));
-        fs::remove_dir_all(dir).unwrap();
+        fs::remove_dir_all(dir)?;
+        Ok(())
     }
 }

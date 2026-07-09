@@ -153,13 +153,10 @@ mod tests {
     }
 
     #[test]
-    fn detect_uses_latest_proof_only() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+    fn detect_uses_latest_proof_only() -> Result<(), Box<dyn std::error::Error>> {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let temp_dir = env::temp_dir().join(format!("chimera_release_runtime_slice_{unique}"));
-        fs::create_dir_all(&temp_dir).unwrap();
+        fs::create_dir_all(&temp_dir)?;
         let latest_path = temp_dir.join("latest.md");
         let older_path = temp_dir.join("older.md");
         fs::write(
@@ -168,10 +165,9 @@ mod tests {
                 "doctor_reason=node_endpoint_unconfigured",
                 "doctor_reason=client_endpoint_unconfigured",
             ),
-        )
-        .unwrap();
-        fs::write(&older_path, valid_text()).unwrap();
-        let paths = vec![
+        )?;
+        fs::write(&older_path, valid_text())?;
+        let paths = [
             latest_path.to_string_lossy().to_string(),
             older_path.to_string_lossy().to_string(),
         ];
@@ -181,5 +177,6 @@ mod tests {
         let _ = fs::remove_file(latest_path);
         let _ = fs::remove_file(older_path);
         let _ = fs::remove_dir(temp_dir);
+        Ok(())
     }
 }

@@ -6122,20 +6122,21 @@ yt = exact:www.youtube.com => direct\n";
     }
 
     #[test]
-    fn datapath_state_proof_accepts_valid_state() {
+    fn datapath_state_proof_accepts_valid_state() -> Result<(), Box<dyn std::error::Error>> {
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_datapath_state_proof_valid.json");
         std::fs::write(
             &path,
             r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(crate::validate_datapath_state_proof(&path), Ok(()));
         let _ = std::fs::remove_file(path);
+        Ok(())
     }
 
     #[test]
-    fn datapath_state_proof_rejects_missing_invalid_and_weak_state() {
+    fn datapath_state_proof_rejects_missing_invalid_and_weak_state()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_datapath_state_proof_invalid.json");
         let _ = std::fs::remove_file(&path);
@@ -6143,7 +6144,7 @@ yt = exact:www.youtube.com => direct\n";
             crate::validate_datapath_state_proof(&path),
             Err("missing_state")
         );
-        std::fs::write(&path, "{not json").unwrap();
+        std::fs::write(&path, "{not json")?;
         assert_eq!(
             crate::validate_datapath_state_proof(&path),
             Err("state_invalid_json")
@@ -6151,8 +6152,7 @@ yt = exact:www.youtube.com => direct\n";
         std::fs::write(
             &path,
             r#"{"status":"up","network_state":"not_modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             crate::validate_datapath_state_proof(&path),
             Err("network_not_modified")
@@ -6160,42 +6160,44 @@ yt = exact:www.youtube.com => direct\n";
         std::fs::write(
             &path,
             r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":false}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             crate::validate_datapath_state_proof(&path),
             Err("dns_not_applied")
         );
         let _ = std::fs::remove_file(path);
+        Ok(())
     }
 
     #[test]
-    fn datapath_state_proof_rejects_duplicate_required_keys() {
+    fn datapath_state_proof_rejects_duplicate_required_keys()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_datapath_state_proof_duplicate.json");
         std::fs::write(
             &path,
             r#"{"status":"down","status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             crate::validate_datapath_state_proof(&path),
             Err("duplicate_field")
         );
         let _ = std::fs::remove_file(path);
+        Ok(())
     }
 
     #[test]
-    fn datapath_flow_proof_requires_fresh_valid_sidecar() {
+    fn datapath_flow_proof_requires_fresh_valid_sidecar() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_datapath_flow_proof_valid.json");
         std::fs::write(
             &path,
             r#"{"status":"ok","kind":"chimera_datapath_flow_proof","flow_id":"flow#1","path_kind":"local_egress_via_secure_peer","transparent_flow_observed":true,"counter_delta_ok":true,"secure_peer_egress_observed":true,"secure_peer_bytes_delta_ok":true,"network_state":"modified"}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(crate::validate_datapath_flow_proof(&path, 300), Ok(()));
         let _ = std::fs::remove_file(path);
+        Ok(())
     }
 
     #[test]
@@ -6210,23 +6212,25 @@ yt = exact:www.youtube.com => direct\n";
     }
 
     #[test]
-    fn datapath_flow_proof_rejects_duplicate_required_keys() {
+    fn datapath_flow_proof_rejects_duplicate_required_keys()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_datapath_flow_proof_duplicate.json");
         std::fs::write(
             &path,
             r#"{"status":"ok","kind":"chimera_datapath_flow_proof","flow_id":"flow#1","path_kind":"local_egress_via_secure_peer","transparent_flow_observed":true,"counter_delta_ok":true,"secure_peer_egress_observed":true,"secure_peer_bytes_delta_ok":true,"network_state":"modified","network_state":"modified"}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             crate::validate_datapath_flow_proof(&path, 300),
             Err("flow_duplicate_field")
         );
         let _ = std::fs::remove_file(path);
+        Ok(())
     }
 
     #[test]
-    fn state_proof_command_requires_flow_when_requested() {
+    fn state_proof_command_requires_flow_when_requested() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut state_path = std::env::temp_dir();
         state_path.push("chimera_cli_state_proof_command_flow.json");
         let flow_path = std::path::PathBuf::from(format!("{}.flow.json", state_path.display()));
@@ -6235,9 +6239,8 @@ yt = exact:www.youtube.com => direct\n";
         std::fs::write(
             &state_path,
             r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
-        )
-        .unwrap();
-        let args = vec![
+        )?;
+        let args = [
             "proof".to_string(),
             "--state-file".to_string(),
             state_path.to_string_lossy().to_string(),
@@ -6251,22 +6254,23 @@ yt = exact:www.youtube.com => direct\n";
         std::fs::write(
             &flow_path,
             r#"{"status":"ok","kind":"chimera_datapath_flow_proof","flow_id":"flow#1","path_kind":"local_egress_via_secure_peer","transparent_flow_observed":true,"counter_delta_ok":true,"secure_peer_egress_observed":true,"secure_peer_bytes_delta_ok":true,"network_state":"modified"}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             crate::state_command(Language::En, Some("proof"), &args[1..]),
             0
         );
         let _ = std::fs::remove_file(state_path);
         let _ = std::fs::remove_file(flow_path);
+        Ok(())
     }
 
     #[test]
-    fn state_proof_command_returns_nonzero_without_valid_state() {
+    fn state_proof_command_returns_nonzero_without_valid_state()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut path = std::env::temp_dir();
         path.push("chimera_cli_state_proof_command.json");
         let _ = std::fs::remove_file(&path);
-        let args = vec![
+        let args = [
             "proof".to_string(),
             "--state-file".to_string(),
             path.to_string_lossy().to_string(),
@@ -6278,13 +6282,13 @@ yt = exact:www.youtube.com => direct\n";
         std::fs::write(
             &path,
             r#"{"status":"up","network_state":"modified","rollback_ready":true,"tun_applied":true,"route_applied":true,"dns_applied":true}"#,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             crate::state_command(Language::En, Some("proof"), &args[1..]),
             0
         );
         let _ = std::fs::remove_file(path);
+        Ok(())
     }
 
     #[test]
