@@ -1373,10 +1373,12 @@ heal_node_peer_egress_env_bindings() {
   mode="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_MODE)")"
   [[ "$mode" == "node" ]] || return 0
   [[ -n "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]] && return 0
-  if mesh_discovery_source_present; then
+  expected_peer_listen="$(normalize_node_peer_listen_value "$(node_configured_listen_addr)")"
+  # When discovery is configured and the operator did not pick an explicit,
+  # stable listen address, fall back to a dynamic port so the node can bind an
+  # ephemeral port and advertise it through discovery.
+  if mesh_discovery_source_present && [[ "$expected_peer_listen" == "0.0.0.0:0" ]]; then
     expected_peer_listen="0.0.0.0:0"
-  else
-    expected_peer_listen="$(normalize_node_peer_listen_value "$(node_configured_listen_addr)")"
   fi
   current_peer_listen="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_PEER_LISTEN)")"
   if [[ "$current_peer_listen" != "$expected_peer_listen" ]]; then
