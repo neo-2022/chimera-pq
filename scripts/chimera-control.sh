@@ -55,6 +55,8 @@ SITE_ADAPTIVE_DB_FILE="${SITE_ADAPTIVE_DB_FILE:-${XDG_CONFIG_HOME:-$HOME/.config
 SITE_AUTO_SEEDS_FILE="${SITE_AUTO_SEEDS_FILE:-$ROOT_DIR/configs/auto_failover_seeds.txt}"
 SITE_AUTOWATCH_PID_FILE="${SITE_AUTOWATCH_PID_FILE:-${XDG_RUNTIME_DIR:-/tmp}/chimera-site-autowatch.pid}"
 SITE_AUTOWATCH_INTERVAL_SEC="${SITE_AUTOWATCH_INTERVAL_SEC:-60}"
+SITE_AUTOWATCH_HOT_INTERVAL_SEC="${SITE_AUTOWATCH_HOT_INTERVAL_SEC:-1}"
+SITE_AUTOWATCH_HOT_CHECKSUM_FILE="${SITE_AUTOWATCH_HOT_CHECKSUM_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/site-autowatch-hot.checksum}"
 SITE_AUTOWATCH_FAILURE_BUDGET="${SITE_AUTOWATCH_FAILURE_BUDGET:-3}"
 SITE_AUTOWATCH_ENABLED="${SITE_AUTOWATCH_ENABLED:-1}"
 SITE_AUTO_DISCOVERY_ENABLED="${SITE_AUTO_DISCOVERY_ENABLED:-1}"
@@ -3818,21 +3820,85 @@ site_auto_watch_failure_budget() {
   printf '%s\n' "$budget"
 }
 
+# Compute a stable checksum of the runtime state files that affect the
+# published discovery snapshot and transit lane bindings.  A change here
+# means a peer-egress restart or peer-update refresh has happened and we
+# should republish immediately instead of waiting for the next interval.
+site_auto_watch_hot_state_checksum() {
+  local -a files=()
+  [[ -f "$PEER_EGRESS_STATE_FILE" ]] && files+=("$PEER_EGRESS_STATE_FILE")
+  [[ -f "$PEER_UPDATE_STATE_FILE" ]] && files+=("$PEER_UPDATE_STATE_FILE")
+  if [[ "${#files[@]}" -eq 0 ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  sha256sum -- "${files[@]}" 2>/dev/null \
+    | awk '{print $1}' \
+    | sort \
+    | sha256sum \
+    | awk '{print $1}'
+}
+
+site_auto_watch_hot_checksum_path() {
+  printf '%s\n' "$SITE_AUTOWATCH_HOT_CHECKSUM_FILE"
+}
+
+site_auto_watch_hot_checksum_save() {
+  local checksum_path
+  checksum_path="$(site_auto_watch_hot_checksum_path)"
+  ensure_parent_dir "$checksum_path"
+  site_auto_watch_hot_state_checksum > "$checksum_path" 2>/dev/null || true
+}
+
+# Return 0 when at least one hot-watched state file changed since the last
+# saved checksum.  The new checksum is written before returning so callers
+# can run the full watch cycle immediately.
+site_auto_watch_hot_publish_if_changed() {
+  local current="" last=""
+  local checksum_path
+  checksum_path="$(site_auto_watch_hot_checksum_path)"
+  current="$(site_auto_watch_hot_state_checksum)"
+  if [[ -f "$checksum_path" ]]; then
+    last="$(tr -d '[:space:]' < "$checksum_path" 2>/dev/null || true)"
+  fi
+  if [[ "$current" == "$last" ]]; then
+    return 1
+  fi
+  ensure_parent_dir "$checksum_path"
+  printf '%s\n' "$current" > "$checksum_path"
+  return 0
+}
+
 site_auto_watch_loop() {
   local consecutive_failures=0
   local failure_budget
+  local hot_interval
   failure_budget="$(site_auto_watch_failure_budget)"
+  hot_interval="${SITE_AUTOWATCH_HOT_INTERVAL_SEC:-1}"
+  # Ensure a clean baseline on every fresh loop start.
+  rm -f "$(site_auto_watch_hot_checksum_path)" 2>/dev/null || true
   while true; do
+    local run_rc=0
     if site_auto_watch_run_once >/dev/null 2>&1; then
       consecutive_failures=0
     else
+      run_rc=$?
       consecutive_failures=$((consecutive_failures + 1))
       if (( consecutive_failures >= failure_budget )); then
         echo "site_auto_watch_loop=fail consecutive_failures=$consecutive_failures failure_budget=$failure_budget" >&2
         return 1
       fi
     fi
-    sleep "$SITE_AUTOWATCH_INTERVAL_SEC"
+    site_auto_watch_hot_checksum_save
+    local elapsed=0
+    while (( elapsed < SITE_AUTOWATCH_INTERVAL_SEC )); do
+      if site_auto_watch_hot_publish_if_changed; then
+        echo "site_auto_watch_hot_publish_triggered reason=state_file_changed elapsed_sec=$elapsed"
+        break
+      fi
+      sleep "$hot_interval"
+      elapsed=$((elapsed + hot_interval))
+    done
   done
 }
 
@@ -3850,7 +3916,7 @@ site_auto_watch_status() {
     local service_state
     service_state="$(systemctl --user is-active "$SITE_AUTOWATCH_SERVICE_UNIT" 2>/dev/null || true)"
     if [[ "$service_state" == "active" ]]; then
-      echo "site_auto_watch_status=running mode=systemd_user service_state=$service_state interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC"
+      echo "site_auto_watch_status=running mode=systemd_user service_state=$service_state interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC hot_interval_sec=$SITE_AUTOWATCH_HOT_INTERVAL_SEC"
     else
       echo "site_auto_watch_status=stopped mode=systemd_user service_state=${service_state:-unknown}"
     fi
@@ -3860,7 +3926,7 @@ site_auto_watch_status() {
   if [[ -f "$SITE_AUTOWATCH_PID_FILE" ]]; then
     pid="$(tr -d '[:space:]' <"$SITE_AUTOWATCH_PID_FILE")"
     if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
-      echo "site_auto_watch_status=running mode=direct pid=$pid interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC"
+      echo "site_auto_watch_status=running mode=direct pid=$pid interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC hot_interval_sec=$SITE_AUTOWATCH_HOT_INTERVAL_SEC"
       return 0
     fi
   fi
@@ -3878,7 +3944,7 @@ site_auto_watch_start() {
       return 1
     }
     if wait_for_systemd_unit_stable_active "$SITE_AUTOWATCH_SERVICE_UNIT" 20 3; then
-      echo "site_auto_watch_status=running mode=systemd_user service_state=active interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC"
+      echo "site_auto_watch_status=running mode=systemd_user service_state=active interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC hot_interval_sec=$SITE_AUTOWATCH_HOT_INTERVAL_SEC"
       return 0
     fi
     echo "site_auto_watch_status=failed mode=systemd_user"
@@ -3888,7 +3954,7 @@ site_auto_watch_start() {
     local pid
     pid="$(tr -d '[:space:]' <"$SITE_AUTOWATCH_PID_FILE" 2>/dev/null || true)"
     if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
-      echo "site_auto_watch_status=running mode=direct pid=$pid interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC"
+      echo "site_auto_watch_status=running mode=direct pid=$pid interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC hot_interval_sec=$SITE_AUTOWATCH_HOT_INTERVAL_SEC"
       return 0
     fi
   fi
@@ -3897,7 +3963,7 @@ site_auto_watch_start() {
   local pid=$!
   printf '%s\n' "$pid" >"$SITE_AUTOWATCH_PID_FILE"
   if kill -0 "$pid" >/dev/null 2>&1; then
-    echo "site_auto_watch_status=started mode=direct pid=$pid interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC"
+    echo "site_auto_watch_status=started mode=direct pid=$pid interval_sec=$SITE_AUTOWATCH_INTERVAL_SEC hot_interval_sec=$SITE_AUTOWATCH_HOT_INTERVAL_SEC"
     return 0
   fi
   rm -f "$SITE_AUTOWATCH_PID_FILE"

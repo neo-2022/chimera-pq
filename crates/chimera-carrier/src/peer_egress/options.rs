@@ -198,7 +198,7 @@ impl Options {
         let mut discovery_poll_interval_ms = env_value("CHIMERA_MESH_DISCOVERY_POLL_INTERVAL_MS")
             .map(|value| parse_positive_u64(&value, "discovery-poll-interval-ms"))
             .transpose()?
-            .unwrap_or(30_000);
+            .unwrap_or(10_000);
         let mut discovery_timeout_ms = env_value("CHIMERA_MESH_DISCOVERY_TIMEOUT_MS")
             .map(|value| parse_positive_u64(&value, "discovery-timeout-ms"))
             .transpose()?
