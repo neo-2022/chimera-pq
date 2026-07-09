@@ -1072,6 +1072,13 @@ ln -sfn "$ROOT_DIR/scripts/chimera.sh" "$LOCAL_BIN_DIR/chimera.sh"
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   systemctl --user daemon-reload
+  # If CHIMERA services are already running, restart them so updated unit files
+  # (e.g. site-watch BindsTo changes) take effect immediately.
+  for unit in "$NODE_SERVICE_UNIT" "$DATAPATH_SERVICE_UNIT" "$SITE_AUTOWATCH_SERVICE_UNIT"; do
+    if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+      systemctl --user restart "$unit" >/dev/null 2>&1 || true
+    fi
+  done
 fi
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
