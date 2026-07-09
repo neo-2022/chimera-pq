@@ -3832,7 +3832,9 @@ site_auto_watch_failure_budget() {
 site_auto_watch_hot_state_checksum() {
   local -a files=()
   [[ -f "$PEER_EGRESS_STATE_FILE" ]] && files+=("$PEER_EGRESS_STATE_FILE")
-  [[ -f "$PEER_UPDATE_STATE_FILE" ]] && files+=("$PEER_UPDATE_STATE_FILE")
+  # NOTE: peer-update.state.json is written by the discovery publish step inside
+  # site_auto_watch_run_once, so it must NOT be watched here; watching it would
+  # create a self-trigger feedback loop.
   if [[ "${#files[@]}" -eq 0 ]]; then
     printf 'none\n'
     return 0
