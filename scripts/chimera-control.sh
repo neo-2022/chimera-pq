@@ -470,6 +470,9 @@ publish_mesh_discovery_snapshot() {
     source "$UPSTREAM_ENV_FILE"
     self_node_id="${CHIMERA_MESH_SELF_NODE_ID:-}"
   fi
+  if [[ -z "$self_node_id" && -f "$PEER_EGRESS_ENV_FILE" ]]; then
+    self_node_id="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_MESH_SELF_NODE_ID)")"
+  fi
   self_node_id="${self_node_id:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)}"
   advertise_invite_token="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_TOKEN)")"
   if ! wait_for_file "$state_path" 5; then
