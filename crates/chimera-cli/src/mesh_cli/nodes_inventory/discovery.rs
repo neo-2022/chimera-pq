@@ -25,7 +25,9 @@ pub(super) fn discovery_url_from_env() -> Option<String> {
 pub(super) fn discovery_urls_from_env() -> Vec<String> {
     let mut urls = Vec::new();
     if let Some(url) = discovery_url_from_env() {
-        urls.push(url);
+        // Singular env/config value may contain a comma-separated URL list;
+        // plural sources are processed the same way for consistency.
+        urls.extend(split_discovery_urls(&url));
     }
     if let Ok(value) = env::var("CHIMERA_MESH_NODES_DISCOVERY_URLS") {
         urls.extend(split_discovery_urls(&value));
