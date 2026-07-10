@@ -31,6 +31,8 @@ struct Options {
     direct_mode: DirectMode,
     direct_timeout_ms: u64,
     initial_read_timeout_ms: u64,
+    connect_retry_count: usize,
+    connect_retry_delay_ms: u64,
     #[cfg(test)]
     static_destination: Option<String>,
 }
@@ -55,6 +57,14 @@ impl Options {
                 .map(|value| parse_positive_u64(&value, "initial-read-timeout-ms"))
                 .transpose()?
                 .unwrap_or(500);
+        let mut connect_retry_count = env_value("CHIMERA_TRANSPARENT_TCP_CONNECT_RETRY_COUNT")
+            .map(|value| parse_non_negative_usize(&value, "connect-retry-count"))
+            .transpose()?
+            .unwrap_or(2);
+        let mut connect_retry_delay_ms = env_value("CHIMERA_TRANSPARENT_TCP_CONNECT_RETRY_DELAY_MS")
+            .map(|value| parse_positive_u64(&value, "connect-retry-delay-ms"))
+            .transpose()?
+            .unwrap_or(150);
 
         let mut index = 0usize;
         while index < args.len() {
@@ -73,7 +83,15 @@ impl Options {
                     direct_timeout_ms = parse_positive_u64(value, "direct-timeout-ms")?;
                 }
                 "--initial-read-timeout-ms" => {
-                    initial_read_timeout_ms = parse_positive_u64(value, "initial-read-timeout-ms")?;
+                    initial_read_timeout_ms =
+                        parse_positive_u64(value, "initial-read-timeout-ms")?;
+                }
+                "--connect-retry-count" => {
+                    connect_retry_count = parse_non_negative_usize(value, "connect-retry-count")?;
+                }
+                "--connect-retry-delay-ms" => {
+                    connect_retry_delay_ms =
+                        parse_positive_u64(value, "connect-retry-delay-ms")?;
                 }
                 _ => return Err(format!("unknown flag: {flag}")),
             }
@@ -90,6 +108,8 @@ impl Options {
             direct_mode,
             direct_timeout_ms,
             initial_read_timeout_ms,
+            connect_retry_count,
+            connect_retry_delay_ms,
             #[cfg(test)]
             static_destination: None,
         })
@@ -136,12 +156,14 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
     eprintln!("event=transparent_flow_accepted destination_state=resolved");
     match options.direct_mode {
         DirectMode::Disabled => {
-            let transit = connect_transit_with_fallback(
+            let transit = connect_transit_with_retry(
                 &options.transit_local,
                 options.transit_fallback.as_deref(),
                 &destination,
                 &initial,
                 options.direct_timeout_ms,
+                options.connect_retry_count,
+                options.connect_retry_delay_ms,
             )?;
             eprintln!(
                 "event=transparent_route_selected route=transit reason=direct_mode_disabled destination_state=resolved"
@@ -149,6 +171,43 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
             relay_plain(client, transit)
         }
     }
+}
+
+fn connect_transit_with_retry(
+    transit_local: &str,
+    transit_fallback: Option<&str>,
+    destination: &SocketAddr,
+    initial: &[u8],
+    timeout_ms: u64,
+    retry_count: usize,
+    retry_delay_ms: u64,
+) -> Result<TcpStream, String> {
+    let mut last_error = String::new();
+    for attempt in 0..=retry_count {
+        match connect_transit_with_fallback(
+            transit_local,
+            transit_fallback,
+            destination,
+            initial,
+            timeout_ms,
+        ) {
+            Ok(stream) => return Ok(stream),
+            Err(error) => {
+                last_error = error;
+                eprintln!(
+                    "event=transparent_transit_retry attempt={attempt} max={retry_count} retry_delay_ms={retry_delay_ms} reason=\"{last_error}\""
+                );
+                if attempt < retry_count {
+                    thread::sleep(Duration::from_millis(retry_delay_ms));
+                }
+            }
+        }
+    }
+    Err(format!(
+        "transparent_transit_retry_exhausted attempts={} last_reason=\"{}\"",
+        retry_count + 1,
+        last_error
+    ))
 }
 
 fn connect_transit_with_fallback(
@@ -376,6 +435,12 @@ fn parse_positive_u64(value: &str, name: &str) -> Result<u64, String> {
     Ok(parsed)
 }
 
+fn parse_non_negative_usize(value: &str, name: &str) -> Result<usize, String> {
+    value
+        .parse::<usize>()
+        .map_err(|_| format!("{name} must be a non-negative integer"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -385,6 +450,20 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::thread;
+
+    fn base_options(transit_local: &str) -> Options {
+        Options {
+            listen: "127.0.0.1:0".to_string(),
+            transit_local: transit_local.to_string(),
+            transit_fallback: None,
+            direct_mode: DirectMode::Disabled,
+            direct_timeout_ms: 500,
+            initial_read_timeout_ms: 500,
+            connect_retry_count: 0,
+            connect_retry_delay_ms: 50,
+            static_destination: None,
+        }
+    }
 
     #[test]
     fn options_parse_runtime_values() {
@@ -399,6 +478,10 @@ mod tests {
             "100".to_string(),
             "--initial-read-timeout-ms".to_string(),
             "50".to_string(),
+            "--connect-retry-count".to_string(),
+            "1".to_string(),
+            "--connect-retry-delay-ms".to_string(),
+            "75".to_string(),
         ];
         let parsed = Options::parse(&args).unwrap_or_else(|error| {
             unreachable!("options should parse: {error}");
@@ -408,6 +491,8 @@ mod tests {
         assert_eq!(parsed.direct_mode, DirectMode::Disabled);
         assert_eq!(parsed.direct_timeout_ms, 100);
         assert_eq!(parsed.initial_read_timeout_ms, 50);
+        assert_eq!(parsed.connect_retry_count, 1);
+        assert_eq!(parsed.connect_retry_delay_ms, 75);
         assert_eq!(parsed.static_destination, None);
         assert_eq!(parsed.transit_fallback, None);
     }
@@ -455,21 +540,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn transparent_tcp_direct_disabled_uses_transit_without_direct_probe() {
-        let direct_target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("direct target listener should bind: {error}");
-        });
-        let direct_target_addr = direct_target.local_addr().unwrap_or_else(|error| {
-            unreachable!("direct target addr should be available: {error}");
-        });
-
-        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
-            unreachable!("transit listener should bind: {error}");
-        });
-        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
-            unreachable!("transit addr should be available: {error}");
-        });
+    fn start_echo_transit(transit: TcpListener, prefix: &'static [u8]) {
         thread::spawn(move || {
             let Ok((mut stream, _)) = transit.accept() else {
                 return;
@@ -488,9 +559,27 @@ mod tests {
             let Ok(n) = stream.read(&mut buf) else {
                 return;
             };
-            let _ = stream.write_all(b"forced-transit:");
+            let _ = stream.write_all(prefix);
             let _ = stream.write_all(&buf[..n]);
         });
+    }
+
+    #[test]
+    fn transparent_tcp_direct_disabled_uses_transit_without_direct_probe() {
+        let direct_target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("direct target listener should bind: {error}");
+        });
+        let direct_target_addr = direct_target.local_addr().unwrap_or_else(|error| {
+            unreachable!("direct target addr should be available: {error}");
+        });
+
+        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transit listener should bind: {error}");
+        });
+        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("transit addr should be available: {error}");
+        });
+        start_echo_transit(transit, b"forced-transit:");
 
         let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
             unreachable!("transparent listener should bind: {error}");
@@ -498,15 +587,9 @@ mod tests {
         let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
             unreachable!("transparent addr should be available: {error}");
         });
-        let options = Options {
-            listen: transparent_addr.to_string(),
-            transit_local: transit_addr.to_string(),
-            transit_fallback: None,
-            direct_mode: DirectMode::Disabled,
-            direct_timeout_ms: 500,
-            initial_read_timeout_ms: 500,
-            static_destination: Some(direct_target_addr.to_string()),
-        };
+        let mut options = base_options(&transit_addr.to_string());
+        options.listen = transparent_addr.to_string();
+        options.static_destination = Some(direct_target_addr.to_string());
         thread::spawn(move || {
             let Ok((client, _)) = transparent.accept() else {
                 return;
@@ -536,27 +619,7 @@ mod tests {
         let transit_addr = transit.local_addr().unwrap_or_else(|error| {
             unreachable!("fallback transit addr should be available: {error}");
         });
-        thread::spawn(move || {
-            let Ok((mut stream, _)) = transit.accept() else {
-                return;
-            };
-            let mut magic = [0_u8; super::LOCAL_MAGIC.len()];
-            if stream.read_exact(&mut magic).is_err() || magic != super::LOCAL_MAGIC {
-                return;
-            }
-            if read_line_limited(&mut stream, 128).is_err() {
-                return;
-            }
-            if stream.write_all(b"OK\n").is_err() {
-                return;
-            }
-            let mut buf = [0_u8; 16];
-            let Ok(n) = stream.read(&mut buf) else {
-                return;
-            };
-            let _ = stream.write_all(b"fallback-works:");
-            let _ = stream.write_all(&buf[..n]);
-        });
+        start_echo_transit(transit, b"fallback-works:");
 
         let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
             unreachable!("transparent listener should bind: {error}");
@@ -572,15 +635,10 @@ mod tests {
         });
         drop(closed_transit);
 
-        let options = Options {
-            listen: transparent_addr.to_string(),
-            transit_local: closed_transit_addr.to_string(),
-            transit_fallback: Some(transit_addr.to_string()),
-            direct_mode: DirectMode::Disabled,
-            direct_timeout_ms: 500,
-            initial_read_timeout_ms: 500,
-            static_destination: Some("127.0.0.1:80".to_string()),
-        };
+        let mut options = base_options(&closed_transit_addr.to_string());
+        options.listen = transparent_addr.to_string();
+        options.transit_fallback = Some(transit_addr.to_string());
+        options.static_destination = Some("127.0.0.1:80".to_string());
         thread::spawn(move || {
             let Ok((client, _)) = transparent.accept() else {
                 return;
@@ -602,6 +660,62 @@ mod tests {
     }
 
     #[test]
+    fn transparent_tcp_retries_transit_until_success() {
+        // First transit listener accepts and immediately closes (dead peer).
+        // Second transit listener succeeds.
+        let dead_transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("dead transit listener should bind: {error}");
+        });
+        let dead_transit_addr = dead_transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("dead transit addr should be available: {error}");
+        });
+        thread::spawn(move || {
+            let Ok((stream, _)) = dead_transit.accept() else { return };
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        });
+
+        let alive_transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("alive transit listener should bind: {error}");
+        });
+        let alive_transit_addr = alive_transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("alive transit addr should be available: {error}");
+        });
+        start_echo_transit(alive_transit, b"retry-ok:");
+
+        let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transparent listener should bind: {error}");
+        });
+        let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
+            unreachable!("transparent addr should be available: {error}");
+        });
+
+        let mut options = base_options(&dead_transit_addr.to_string());
+        options.listen = transparent_addr.to_string();
+        options.transit_fallback = Some(alive_transit_addr.to_string());
+        options.connect_retry_count = 2;
+        options.connect_retry_delay_ms = 50;
+        options.static_destination = Some("127.0.0.1:80".to_string());
+        thread::spawn(move || {
+            let Ok((client, _)) = transparent.accept() else {
+                return;
+            };
+            let _ = handle_client(client, &options);
+        });
+
+        let mut client = TcpStream::connect(transparent_addr).unwrap_or_else(|error| {
+            unreachable!("client should connect to transparent listener: {error}");
+        });
+        client.write_all(b"hello").unwrap_or_else(|error| {
+            unreachable!("client write should work: {error}");
+        });
+        let mut reply = [0_u8; 32];
+        let n = client.read(&mut reply).unwrap_or_else(|error| {
+            unreachable!("client read should work: {error}");
+        });
+        assert_eq!(&reply[..n], b"retry-ok:hello");
+    }
+
+    #[test]
     fn transparent_destination_rejects_manual_proxy_ingress() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
             unreachable!("listener should bind: {error}");
@@ -615,15 +729,7 @@ mod tests {
         let (server, _) = listener.accept().unwrap_or_else(|error| {
             unreachable!("server should accept: {error}");
         });
-        let options = Options {
-            listen: listener_addr.to_string(),
-            transit_local: "127.0.0.1:1".to_string(),
-            transit_fallback: None,
-            direct_mode: DirectMode::Disabled,
-            direct_timeout_ms: 100,
-            initial_read_timeout_ms: 100,
-            static_destination: None,
-        };
+        let options = base_options("127.0.0.1:1");
 
         let error = match resolve_destination(
             &server,

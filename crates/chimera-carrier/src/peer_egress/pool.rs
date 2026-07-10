@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use chimera_mesh::MeshMultipathFlowKey;
 
@@ -97,6 +98,70 @@ impl PeerPool {
             return peers
                 .remove(slot)
                 .ok_or_else(|| "peer pool unexpectedly empty".to_string());
+        }
+    }
+
+    pub fn pop_wait_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<Option<SecurePeerStream>, String> {
+        let deadline = Instant::now().checked_add(timeout).ok_or_else(|| {
+            "peer pool wait timeout overflow".to_string()
+        })?;
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|_| "peer pool lock poisoned".to_string())?;
+        loop {
+            if let Some(stream) = peers.pop_front() {
+                return Ok(Some(stream));
+            }
+            if Instant::now() >= deadline {
+                return Ok(None);
+            }
+            let (guard, wait_result) = self
+                .ready
+                .wait_timeout(peers, timeout)
+                .map_err(|_| "peer pool wait_timeout poisoned".to_string())?;
+            peers = guard;
+            if wait_result.timed_out() && peers.is_empty() {
+                return Ok(None);
+            }
+        }
+    }
+
+    pub fn pop_wait_timeout_for_flow_key(
+        &self,
+        flow_key: MeshMultipathFlowKey,
+        timeout: Duration,
+    ) -> Result<Option<SecurePeerStream>, String> {
+        let deadline = Instant::now().checked_add(timeout).ok_or_else(|| {
+            "peer pool wait timeout overflow".to_string()
+        })?;
+        let mut peers = self
+            .peers
+            .lock()
+            .map_err(|_| "peer pool lock poisoned".to_string())?;
+        loop {
+            if !peers.is_empty() {
+                let slot = flow_key.select_slot_index(peers.len())?;
+                return Ok(peers.remove(slot));
+            }
+            if Instant::now() >= deadline {
+                return Ok(None);
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Ok(None);
+            }
+            let (guard, wait_result) = self
+                .ready
+                .wait_timeout(peers, remaining)
+                .map_err(|_| "peer pool wait_timeout poisoned".to_string())?;
+            peers = guard;
+            if wait_result.timed_out() && peers.is_empty() {
+                return Ok(None);
+            }
         }
     }
 }

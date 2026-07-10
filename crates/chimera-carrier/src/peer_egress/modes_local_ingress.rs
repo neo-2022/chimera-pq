@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::time::{Duration, Instant};
 
 use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
 use crate::peer_egress::live_lane_selection::{
@@ -8,7 +9,7 @@ use crate::peer_egress::live_lane_selection::{
 use crate::peer_egress::options::LOCAL_MAGIC;
 use crate::peer_egress::pool::SharedPeerPool;
 use crate::peer_egress::protocol::{
-    Destination, SecurePeerStream, read_native_connect_destination,
+    Destination, SecurePeerStream, read_native_connect_destination, redacted_log_reason,
 };
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_connect_message};
@@ -72,9 +73,59 @@ pub fn handle_local_client_with_peer_pool_and_first_byte(
     );
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
-    let peer = peer_pool.pop_wait_for_flow_key(flow_key)?;
-    eprintln!("event=local_ingress_paired_with_peer");
-    connect_local_client_via_peer(local, peer, destination)
+
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(peer_handshake_timeout_ms()))
+        .ok_or_else(|| "peer handshake deadline overflow".to_string())?;
+    let mut attempt: usize = 0;
+    let mut prefer_flow_key = true;
+
+    loop {
+        attempt += 1;
+        let now = Instant::now();
+        if now >= deadline {
+            return Err(format!(
+                "peer handshake deadline reached after {} ms; last attempt={}",
+                peer_handshake_timeout_ms(),
+                attempt.saturating_sub(1)
+            ));
+        }
+        let remaining = deadline.saturating_duration_since(now);
+        eprintln!(
+            "event=local_ingress_peer_select attempt={attempt} prefer_flow_key={prefer_flow_key} destination_id={destination_id}"
+        );
+        let maybe_peer = if prefer_flow_key {
+            peer_pool.pop_wait_timeout_for_flow_key(flow_key, remaining)?
+        } else {
+            peer_pool.pop_wait_timeout(remaining)?
+        };
+        let Some(mut peer) = maybe_peer else {
+            return Err(format!(
+                "peer pool wait timed out after {} ms (attempt {attempt})",
+                peer_handshake_timeout_ms()
+            ));
+        };
+        match handshake_peer_for_destination(&mut peer, &destination) {
+            Ok(()) => {
+                eprintln!(
+                    "event=local_ingress_paired_with_peer attempt={attempt} destination_id={destination_id}"
+                );
+                local
+                    .write_all(b"OK\n")
+                    .map_err(|error| format!("write native local ack failed: {error}"))?;
+                return crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer);
+            }
+            Err(error) => {
+                eprintln!(
+                    "event=local_ingress_peer_dead_discarded attempt={attempt} reason_class={} destination_id={destination_id}",
+                    redacted_log_reason(&error)
+                );
+                // After a dead peer, stop pinning this request to the same
+                // flow-key slot so the next iteration can pick any live peer.
+                prefer_flow_key = false;
+            }
+        }
+    }
 }
 
 pub fn handle_local_client_with_registrations_and_first_byte(
@@ -130,6 +181,22 @@ pub fn read_local_connect_destination(
     } else {
         Err("unsupported local ingress protocol; expected CHIMERA-LOCAL/1".to_string())
     }
+}
+
+fn peer_handshake_timeout_ms() -> u64 {
+    const DEFAULT: u64 = 6_000;
+    std::env::var("CHIMERA_PEER_EGRESS_HANDSHAKE_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT)
+}
+
+fn handshake_peer_for_destination(
+    peer: &mut SecurePeerStream,
+    destination: &Destination,
+) -> Result<(), String> {
+    write_connect_message(peer, destination)?;
+    require_peer_ack(peer)
 }
 
 pub(crate) fn connect_local_client_via_peer(
