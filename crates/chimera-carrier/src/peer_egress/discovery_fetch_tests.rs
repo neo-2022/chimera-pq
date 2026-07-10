@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use base64::Engine as _;
 use ed25519_dalek::{Signer, SigningKey};
 
-use super::parse_discovery_nodes_json;
+use super::{RemoteMeshNode, merge_discovery_nodes, parse_discovery_nodes_json};
 
 fn now_unix() -> Result<u64, Box<dyn std::error::Error>> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
@@ -97,4 +97,46 @@ fn parse_discovery_nodes_json_rejects_expired_snapshot() -> Result<(), Box<dyn s
         parse_discovery_nodes_json(&expired_json, &keyring, &BTreeSet::new(), &BTreeSet::new());
     assert!(result.is_err());
     Ok(())
+}
+
+#[test]
+fn merge_discovery_nodes_dedupes_by_node_id() {
+    let node_a = RemoteMeshNode {
+        node_id: "node-a".to_string(),
+        endpoint: "198.51.100.10:18142".to_string(),
+        update_bootstrap_url: None,
+        endpoint_generation: None,
+        country_code: "nl".to_string(),
+        loss_pct: None,
+        success_rate_1h: None,
+    };
+    let node_b = RemoteMeshNode {
+        node_id: "node-b".to_string(),
+        endpoint: "198.51.100.20:18142".to_string(),
+        update_bootstrap_url: None,
+        endpoint_generation: None,
+        country_code: "ru".to_string(),
+        loss_pct: None,
+        success_rate_1h: None,
+    };
+    let node_a_dup = RemoteMeshNode {
+        node_id: "node-a".to_string(),
+        endpoint: "198.51.100.99:18142".to_string(),
+        update_bootstrap_url: None,
+        endpoint_generation: None,
+        country_code: "nl".to_string(),
+        loss_pct: None,
+        success_rate_1h: None,
+    };
+
+    let merged = merge_discovery_nodes(vec![vec![node_a], vec![node_b, node_a_dup]]);
+    assert_eq!(merged.len(), 2);
+    let ids: Vec<&str> = merged.iter().map(|node| node.node_id.as_str()).collect();
+    assert!(ids.contains(&"node-a"));
+    assert!(ids.contains(&"node-b"));
+    let a_endpoint = merged
+        .iter()
+        .find(|node| node.node_id == "node-a")
+        .map(|node| node.endpoint.as_str());
+    assert_eq!(a_endpoint, Some("198.51.100.10:18142"));
 }

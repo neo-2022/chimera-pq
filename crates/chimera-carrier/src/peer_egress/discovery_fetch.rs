@@ -46,23 +46,46 @@ pub struct DiscoveryFetchOptions {
 pub fn fetch_discovery_nodes(
     options: &DiscoveryFetchOptions,
 ) -> Result<Vec<RemoteMeshNode>, String> {
-    let mut retryable_errors = Vec::new();
+    if options.urls.is_empty() {
+        return Err("mesh discovery requires at least one URL".to_string());
+    }
+
+    let mut errors: Vec<String> = Vec::new();
+    let mut batches: Vec<Vec<RemoteMeshNode>> = Vec::new();
+
     for url in &options.urls {
         match fetch_discovery_nodes_from_url(url, options) {
-            Ok(nodes) => return Ok(nodes),
-            Err(error) if discovery_fetch_error_is_retryable(&error) => {
-                retryable_errors.push(format!("{url}: {error}"));
-            }
-            Err(error) => return Err(error),
+            Ok(nodes) => batches.push(nodes),
+            Err(error) => errors.push(format!("{url}: {error}")),
         }
     }
-    if retryable_errors.is_empty() {
-        return Ok(Vec::new());
+
+    let merged = merge_discovery_nodes(batches);
+
+    if merged.is_empty() {
+        if errors.is_empty() {
+            return Ok(Vec::new());
+        }
+        return Err(format!(
+            "mesh discovery request failed for all sources: {}",
+            errors.join("; ")
+        ));
     }
-    Err(format!(
-        "mesh discovery request failed for all sources: {}",
-        retryable_errors.join("; ")
-    ))
+
+    Ok(merged)
+}
+
+fn merge_discovery_nodes<I>(batches: I) -> Vec<RemoteMeshNode>
+where
+    I: IntoIterator<Item = Vec<RemoteMeshNode>>,
+{
+    let mut merged: BTreeMap<String, RemoteMeshNode> = BTreeMap::new();
+    for batch in batches {
+        for node in batch {
+            let _ = merged.entry(node.node_id.clone()).or_insert(node);
+        }
+    }
+    merged.into_values().collect()
 }
 
 fn fetch_discovery_nodes_from_url(
@@ -314,11 +337,6 @@ fn json_optional_u64(record: &Value, keys: &[&str]) -> Result<Option<u64>, Strin
         }
     }
     Ok(None)
-}
-
-fn discovery_fetch_error_is_retryable(error: &str) -> bool {
-    error.starts_with("mesh discovery request failed:")
-        || error.starts_with("mesh discovery read body failed:")
 }
 
 #[cfg(test)]
