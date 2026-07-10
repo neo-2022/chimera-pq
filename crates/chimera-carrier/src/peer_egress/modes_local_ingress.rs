@@ -162,13 +162,56 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
     let plan = document.require_mesh_path_plan_ref()?;
-    match select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key) {
-        Ok(binding) => {
-            let peer = dispatcher.pop_for(binding)?;
-            eprintln!("event=local_ingress_paired_with_peer");
-            connect_local_client_via_peer(local, peer, destination)
+    let binding = select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+        .map_err(|reason| format!("local ingress lane selection failed: {reason}"))?;
+
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(peer_handshake_timeout_ms()))
+        .ok_or_else(|| "peer handshake deadline overflow".to_string())?;
+    let mut attempt: usize = 0;
+
+    loop {
+        attempt += 1;
+        let now = Instant::now();
+        if now >= deadline {
+            return Err(format!(
+                "lane document peer handshake deadline reached after {} ms; last attempt={}",
+                peer_handshake_timeout_ms(),
+                attempt.saturating_sub(1)
+            ));
         }
-        Err(reason) => Err(format!("local ingress lane selection failed: {reason}")),
+        match dispatcher.pop_for(binding) {
+            Ok(mut peer) => {
+                match handshake_peer_for_destination(&mut peer, &destination) {
+                    Ok(()) => {
+                        eprintln!(
+                            "event=local_ingress_paired_with_peer attempt={attempt} destination_id={destination_id}"
+                        );
+                        local
+                            .write_all(b"OK\n")
+                            .map_err(|error| format!("write native local ack failed: {error}"))?;
+                        return crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer);
+                    }
+                    Err(error) => {
+                        eprintln!(
+                            "event=local_ingress_peer_dead_discarded attempt={attempt} reason_class={} destination_id={destination_id}",
+                            redacted_log_reason(&error)
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!(
+                    "event=local_ingress_lane_peer_wait attempt={attempt} reason_class={} destination_id={destination_id}",
+                    redacted_log_reason(&error)
+                );
+            }
+        }
+        // Short backoff before trying the same lane again; a fresh peer may be
+        // registered by the pool loop before the deadline expires.
+        if Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 }
 
