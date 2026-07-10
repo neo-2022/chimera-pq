@@ -96,23 +96,31 @@ pub(super) fn fetch_discovery_nodes_from_any(
     revoked_key_ids: &BTreeSet<String>,
     revoked_node_ids: &BTreeSet<String>,
 ) -> Result<Vec<MeshNode>, String> {
+    let mut merged: std::collections::BTreeMap<String, MeshNode> =
+        std::collections::BTreeMap::new();
     let mut retryable_errors = Vec::new();
+    let mut any_ok = false;
     for url in urls {
         match fetch_discovery_nodes(url, discovery_keyring, revoked_key_ids, revoked_node_ids) {
-            Ok(nodes) => return Ok(nodes),
+            Ok(nodes) => {
+                any_ok = true;
+                for node in nodes {
+                    merged.insert(node.node_id.0.clone(), node);
+                }
+            }
             Err(error) if discovery_fetch_error_is_retryable(&error) => {
                 retryable_errors.push(format!("{url}: {error}"));
             }
             Err(error) => return Err(error),
         }
     }
-    if retryable_errors.is_empty() {
-        return Ok(Vec::new());
+    if !any_ok && !retryable_errors.is_empty() {
+        return Err(format!(
+            "mesh discovery request failed for all sources: {}",
+            retryable_errors.join("; ")
+        ));
     }
-    Err(format!(
-        "mesh discovery request failed for all sources: {}",
-        retryable_errors.join("; ")
-    ))
+    Ok(merged.into_values().collect())
 }
 
 fn parse_discovery_nodes_json(
