@@ -192,8 +192,10 @@ Phase 1C focus:
 
 ## Phase 2 Evidence (cross-version update)
 
+### Local-release alignment
+
 All stand nodes were upgraded from v0.1.206 to v0.1.207 via the local-release
-alignment path:
+path:
 
 ```text
 status=pass
@@ -205,23 +207,49 @@ test_command=scripts/mesh_stabilization_harness.sh (env vars omitted)
 blockers=none
 ```
 
-Procedure:
+After local-tarball alignment and a ~30 s mesh settle, three consecutive
+harness runs showed mesh/direct pass for all three nodes.
 
-1. Recorded v0.1.206 baseline with harness: all six mesh/direct probes passed.
-2. Stopped CHIMERA on each stand node, installed `chimera-pq-release.tar.gz`
-   with `CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1`, reloaded systemd user units,
-   and started `chimera-runtime`.
-3. Allowed ~30 s mesh settle time after the last node upgrade.
-4. Ran harness three consecutive times; all runs showed mesh/direct pass for
-   all three nodes.
+### GitHub delivery proof
+
+A signed GitHub release `v0.1.207` was published:
+
+```text
+release_url=https://github.com/neo-2022/chimera-pq/releases/tag/v0.1.207
+assets=chimera-pq-0.1.207.tar.gz, chimera-pq-0.1.207.tar.gz.sha256,
+       chimera-pq-release.tar.gz, chimera-pq-release.tar.gz.sha256, chimera.sh
+```
+
+One-command install from GitHub Latest was verified on each stand node:
+
+```bash
+bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install'
+```
+
+Result:
+
+```text
+status=pass
+version=0.1.207
+remote_stand_used=true
+ssh_ok=true
+nodes=amai,vdsina,laptop
+bundle_sha256=3e81ab0d74aacc185d884c65ed453e6cb0ef6987ac716138ae425cf6cbbbf89e
+services_active=true
+```
+
+The first GitHub install attempt on NL served an older bundle for the
+`latest/download/chimera-pq-release.tar.gz` path because the release had
+not yet included the generic-name asset. After uploading
+`chimera-pq-release.tar.gz` and its checksum to the release, the canonical
+one-command install delivered v0.1.207 on all three nodes.
 
 Observations:
 
-- Immediate post-upgrade harness showed transient asymmetric failures
-  (one node's mesh or direct probe timing out). These recovered within the
-  ~30 s settle window and are consistent with the ≤5 s reconnect requirement
-  plus routing/DNS convergence on the public-seed nodes.
-- Final three consecutive harness runs are the acceptance evidence.
+- Immediate post-upgrade/post-install harness runs showed transient asymmetric
+  failures (one node's mesh or direct probe timing out). These recovered within
+  the ~30 s settle window.
+- Final consecutive harness runs after settle are the acceptance evidence.
 
 ## Phase 4 Evidence (soak / benchmark)
 
@@ -255,17 +283,21 @@ Phase 4 soak/throughput gate: **pass**.
 
 ## Phase 3 Status (sealed multi-hop transit)
 
+**Status: partial**
+
 Unit tests in `crates/chimera-carrier/src/peer_egress/transit*` cover sealed
-opaque forwarding and assert that transit nodes never expose payload bytes.
-Runtime evidence of a true multi-hop path (e.g. laptop → NL → RU → target)
-is pending operator configuration or a dedicated harness.
+opaque forwarding and assert that transit nodes never expose payload bytes;
+all pass.
+
+Runtime evidence of a true multi-hop path (e.g. laptop → NL → RU → target) is
+not yet collected. The NAT topology on the current stand makes a forced
+laptop → NL → RU → Internet path non-trivial to arrange without changing
+live peer-egress policy on a public seed. A dedicated harness and a
+purpose-built multi-hop scenario will be needed to close this gate fully.
 
 ## Blockers / Open Questions
 
 - `chimera-lab` `current_workline_attestation_guard` unit tests are currently
   failing (pre-existing). These are unrelated to mesh-node runtime and must not
   block stabilization, but they must be tracked.
-- Phase 4 throughput gate is not yet closed (~40 % vs required ≥ 50 %).
 - Phase 3 runtime multi-hop evidence is not yet collected.
-- GitHub Latest remains older than v0.1.207; final release publication to GitHub
-  is pending and required for the §11 release gate.
