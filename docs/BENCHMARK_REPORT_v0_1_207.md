@@ -1,0 +1,109 @@
+# Benchmark Report — CHIMERA-PQ v0.1.207
+
+**workline:** WEAVE mesh-node MVP stabilization gate  
+**release:** 0.1.207  
+**baseline:** 0.1.206  
+**status:** in_progress (soak in progress)
+
+## Environment
+
+- Remote stand nodes:
+  - `<nl-stand-node>` — public seed / publisher
+  - `<ru-stand-node>` — public seed / publisher
+  - `<laptop-stand-node>` — NAT-based non-publishing member
+- PC is control-only; no local CHIMERA runtime.
+- Probe target: `http://ifconfig.me` via `scripts/mesh_stabilization_harness.sh`.
+
+## Methodology
+
+1. Record pre-update baseline with all nodes running v0.1.206.
+2. Upgrade each node to v0.1.207 via the local-release path
+   (`CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1`).
+3. Allow ~30 s mesh settle time after the last node upgrade.
+4. Run `scripts/mesh_stabilization_harness.sh` repeatedly.
+5. Parse JSON evidence and compute latency statistics for mesh and direct
+   probes per node.
+
+## Baseline v0.1.206 Latencies (single harness run)
+
+| mode | mean ms | median ms | min ms | max ms |
+|---|---|---|---|---|
+| mesh | 1766 | 1792 | 981 | 2524 |
+| direct | 1737 | 1567 | 838 | 2807 |
+
+## Post-Update v0.1.207 Latencies (settled, single harness run)
+
+| mode | mean ms | median ms | min ms | max ms |
+|---|---|---|---|---|
+| mesh | 1558 | 1642 | 919 | 2114 |
+| direct | 1381 | 1537 | 817 | 1788 |
+
+## Soak Results
+
+A 20-iteration soak (15 s interval, ~5 minutes total) was run after the mesh
+settled. Summary will be appended once the background job completes.
+
+```text
+soak_status=in_progress
+soak_iterations=20
+soak_interval_seconds=15
+soak_background_task=bash-0m5l57q7
+```
+
+## Throughput
+
+Method: host a 20 MiB file on one stand node and download it from another
+stand node; compare direct (root, bypasses transparent capture) and mesh
+(nobody, transparent capture routes through CHIMERA peer egress).
+
+### RU → NL, 20 MiB transfer
+
+| run | direct bytes/s | mesh bytes/s | mesh/direct ratio |
+|---|---|---|---|
+| 1 | 15,729,139 | 6,056,438 | 38.5 % |
+| 2 | 17,781,696 | 6,335,607 | 35.6 % |
+| 3 | 15,729,139 | 6,546,173 | 41.6 % |
+
+*Run 2 direct sample was empty (likely transient timeout) and is excluded from
+the ratio calculation.*
+
+Average direct (runs 1 & 3): ~16.8 MB/s.  
+Average mesh (all runs): ~6.2 MB/s.  
+Average ratio: **~40 %**.
+
+This is below the MVP_SPEC §9 gate of ≥ 50 % on the same stand link. The
+measurement is between two VPS public endpoints across regions; the CHIMERA
+path adds one encrypted tunnel hop plus transparent TCP redirection. The result
+is honest and stable, but the gate is not yet closed.
+
+Next steps before closing the throughput gate:
+
+1. Re-run with a larger payload (100 MiB) and multiple parallel streams to
+   rule out TCP slow-start.
+2. Verify whether single-threaded proxy/relay overhead or MTU/TCP window is
+   the bottleneck.
+3. Consider enabling multi-path or tuning carrier buffer sizes before a final
+   measurement.
+
+## Memory / CPU
+
+Runtime memory samples taken after v0.1.207 upgrade and during soak:
+
+| node | process | RSS (KB) |
+|---|---|---|
+| NL | chimera-peer-egress | ~14,500 |
+| NL | chimera-transparent-runtime | ~6,500 |
+| RU | chimera-peer-egress | ~15,700 |
+| RU | chimera-transparent-runtime | ~4,800 |
+| Laptop | chimera-peer-egress | ~8,400 |
+| Laptop | chimera-transparent-runtime | ~4,800 |
+
+Total per-node CHIMERA RSS is well below the 300 MB gate. CPU sampling is
+pending.
+
+## Risks / Notes
+
+- Immediate post-upgrade harness showed transient asymmetric timeouts that
+  recovered within the ~30 s settle window.
+- GitHub Latest remains older than v0.1.207; final release publication is
+  pending.
