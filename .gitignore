@@ -14,6 +14,8 @@ state/
 .DS_Store
 # Local noncanonical CI gate snapshot.
 docs/CI_NONPRIVILEGED_GATE.json
+# Per-run remote stand stabilization evidence (operator artifacts; may contain stand IPs).
+docs/STABILIZATION_EVIDENCE_*.json
 !configs/*.conf
 !configs/*.example.conf
 !configs/*.env
