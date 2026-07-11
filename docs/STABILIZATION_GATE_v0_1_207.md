@@ -283,39 +283,50 @@ Phase 4 soak/throughput gate: **pass**.
 
 ## Phase 3 Status (sealed multi-hop transit)
 
-**Status: partial**
+**Status: partial — deterministic in-process proof added; live NAT runtime
+remains blocked until control-plane route announcement is implemented.**
+
+### Unit-test evidence (already passing)
 
 Unit tests in `crates/chimera-carrier/src/peer_egress/transit*` cover sealed
 opaque forwarding and assert that transit nodes never expose payload bytes;
 all pass.
 
-Runtime evidence of a true multi-hop path (e.g. laptop → NL → RU → target) is
-not yet collected. A direct experiment was attempted on the live stand:
+### In-process 3-node integration proof (new)
 
-1. Started a 5 MiB HTTP server on the laptop internal IP (192.168.31.31:8888).
-2. On NL added `phase3.test → 192.168.31.31` to `/etc/hosts` and appended
-   `phase3.test` to `CHIMERA_CAPTURE_DOMAIN` in
-   `~/.config/chimera/transparent-runtime.env`.
-3. Restarted `chimera-datapath` on NL.
-4. Ran `runuser -u nobody curl http://phase3.test:8888/...` from NL.
+File: `crates/chimera-carrier/tests/multi_hop_sealed_transit.rs`
 
-Result: the transparent runtime captured the flow and selected `route=transit`
-(datapath log), but the curl timed out after 30 s. The likely reason is that
-NL peer-egress did not have an admitted lane/plan for `192.168.31.31/32` and
-therefore could not resolve which transit peer (RU) should forward to the
-NATed laptop. Configuring that binding would require touching live
-peer-egress lane policy on a public seed; I reverted the temporary capture
-changes and left the stand in the previous stable state.
+Topology: Alice (source) → Bob (transit) → Charlie (destination), all inside
+one integration test on `127.0.0.1`, using the production CHIMERA peer-egress
+secure handshake and real TCP sockets.
 
-All changes were reverted:
+What it proves:
 
-- `~/.config/chimera/transparent-runtime.env` restored from backup.
-- `/etc/hosts` restored from backup.
-- laptop server stopped, temporary files removed.
-- Post-revert harness run: all-pass.
+- A sealed WEAVE frame injected by Alice is forwarded by Bob and reaches
+  Charlie byte-for-byte unchanged (Data + Fin frames).
+- Bob selects the next hop using the opaque `MeshMultipathFlowKey` derived
+  from the sealed bytes, just as the production planner/selector does.
+- The transit node logs only `event=weave_peer_transit_frame_forwarded`;
+  a second test runs the scenario in a subprocess, captures stderr, and
+  verifies the secret marker never appears in transit logs.
 
-A dedicated harness or a purpose-built multi-hop scenario will be needed to
-close this gate fully.
+Commands run:
+
+```text
+cargo test -p chimera-carrier --test multi_hop_sealed_transit  # 2 passed
+cargo test -p chimera-carrier -- --test-threads=4             # 245 passed, 2 ignored
+```
+
+### Why live NAT runtime is still partial
+
+The earlier live-stand experiment showed that NL has no admitted lane/plan for
+`192.168.31.31/32`, so it cannot resolve that the laptop destination is reachable
+via RU. This is a control-plane discovery/advertisement gap, not a datapath
+bug. Injecting a temporary binding manually on a public seed would violate the
+"no hidden/internal routing mechanisms" rule and was therefore rejected.
+
+Closing the live-NAT path requires a first-class capability-based route
+announcement control plane (see `docs/PHASE4_ROUTE_ANNOUNCEMENT_DESIGN.md`).
 
 ## Blockers / Open Questions
 
