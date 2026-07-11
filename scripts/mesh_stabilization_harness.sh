@@ -46,7 +46,7 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 EVIDENCE_FILE="${OUT_DIR}/STABILIZATION_EVIDENCE_${TIMESTAMP}.json"
 mkdir -p "$OUT_DIR"
 
-timestamp_ms() { date +%s%3N; }
+timestamp_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
 
 ssh_cmd() {
   local user="$1" host="$2"
@@ -63,9 +63,10 @@ probe_node_mesh() {
   local start_ms end_ms elapsed_ms result rc=0
   start_ms=$(timestamp_ms)
   if [[ "$user" == "root" ]]; then
-    result=$(ssh_cmd "$user" "$host" "runuser -u nobody -- curl -sS --max-time ${PROBE_TIMEOUT} '${PROBE_TARGET}'" 2>&1) || rc=$?
+    # Capture only the remote command's stdout+stderr; suppress SSH transport warnings
+    result=$(ssh_cmd "$user" "$host" "runuser -u nobody -- curl -sS --max-time ${PROBE_TIMEOUT} '${PROBE_TARGET}' 2>&1" 2>/dev/null) || rc=$?
   else
-    result=$(ssh_cmd "$user" "$host" "sudo -n -u nobody curl -sS --max-time ${PROBE_TIMEOUT} '${PROBE_TARGET}'" 2>&1) || rc=$?
+    result=$(ssh_cmd "$user" "$host" "sudo -n -u nobody curl -sS --max-time ${PROBE_TIMEOUT} '${PROBE_TARGET}' 2>&1" 2>/dev/null) || rc=$?
   fi
   end_ms=$(timestamp_ms)
   elapsed_ms=$((end_ms - start_ms))
@@ -86,7 +87,7 @@ probe_node_direct() {
   local user="$1" host="$2" label="$3"
   local start_ms end_ms elapsed_ms result rc=0
   start_ms=$(timestamp_ms)
-  result=$(ssh_cmd "$user" "$host" "curl -sS --max-time ${PROBE_TIMEOUT} '${PROBE_TARGET}'" 2>&1) || rc=$?
+  result=$(ssh_cmd "$user" "$host" "curl -sS --max-time ${PROBE_TIMEOUT} '${PROBE_TARGET}' 2>&1" 2>/dev/null) || rc=$?
   end_ms=$(timestamp_ms)
   elapsed_ms=$((end_ms - start_ms))
   cat <<JSON
@@ -105,7 +106,7 @@ ENTRIES+=("$(probe_node_direct "$LAPTOP_USER" "$LAPTOP_HOST" "laptop")")
 
 {
   echo '{"status":"running","remote_stand_used":true,"nodes":["amai","vdsina","laptop"],"probes":['
-  local first=1
+  first=1
   for entry in "${ENTRIES[@]}"; do
     if [[ "$first" -eq 1 ]]; then
       first=0
