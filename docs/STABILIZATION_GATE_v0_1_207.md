@@ -290,10 +290,32 @@ opaque forwarding and assert that transit nodes never expose payload bytes;
 all pass.
 
 Runtime evidence of a true multi-hop path (e.g. laptop → NL → RU → target) is
-not yet collected. The NAT topology on the current stand makes a forced
-laptop → NL → RU → Internet path non-trivial to arrange without changing
-live peer-egress policy on a public seed. A dedicated harness and a
-purpose-built multi-hop scenario will be needed to close this gate fully.
+not yet collected. A direct experiment was attempted on the live stand:
+
+1. Started a 5 MiB HTTP server on the laptop internal IP (192.168.31.31:8888).
+2. On NL added `phase3.test → 192.168.31.31` to `/etc/hosts` and appended
+   `phase3.test` to `CHIMERA_CAPTURE_DOMAIN` in
+   `~/.config/chimera/transparent-runtime.env`.
+3. Restarted `chimera-datapath` on NL.
+4. Ran `runuser -u nobody curl http://phase3.test:8888/...` from NL.
+
+Result: the transparent runtime captured the flow and selected `route=transit`
+(datapath log), but the curl timed out after 30 s. The likely reason is that
+NL peer-egress did not have an admitted lane/plan for `192.168.31.31/32` and
+therefore could not resolve which transit peer (RU) should forward to the
+NATed laptop. Configuring that binding would require touching live
+peer-egress lane policy on a public seed; I reverted the temporary capture
+changes and left the stand in the previous stable state.
+
+All changes were reverted:
+
+- `~/.config/chimera/transparent-runtime.env` restored from backup.
+- `/etc/hosts` restored from backup.
+- laptop server stopped, temporary files removed.
+- Post-revert harness run: all-pass.
+
+A dedicated harness or a purpose-built multi-hop scenario will be needed to
+close this gate fully.
 
 ## Blockers / Open Questions
 
