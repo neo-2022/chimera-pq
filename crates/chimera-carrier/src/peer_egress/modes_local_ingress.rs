@@ -119,6 +119,7 @@ pub fn handle_local_client_with_peer_pool_and_first_byte(
                 return crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer);
             }
             Err(error) => {
+                peer.mark_dead();
                 // The peer failed the handshake. Discard it by letting it drop
                 // out of scope; the pool never sees this stream again, so the
                 // same dead peer cannot be retried within this flow.
@@ -175,15 +176,16 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
         active_fallback_bindings(&plan.multipath_schedule, flow_key, initial_binding)
             .map_err(|error| format!("local ingress fallback binding enumeration failed: {error}"))?;
 
-    const MAX_ATTEMPTS_PER_LANE: usize = 3;
+    let mut candidate_bindings: Vec<TransitPathBinding> =
+        Vec::with_capacity(1 + fallback_bindings.len());
+    candidate_bindings.push(initial_binding);
+    candidate_bindings.extend(fallback_bindings);
+    let mut binding_index = 0usize;
 
     let deadline = Instant::now()
         .checked_add(Duration::from_millis(peer_handshake_timeout_ms()))
         .ok_or_else(|| "peer handshake deadline overflow".to_string())?;
     let mut attempt: usize = 0;
-    let mut current_binding = initial_binding;
-    let mut lane_attempt: usize = 0;
-    let mut fallback_index: usize = 0;
 
     loop {
         attempt += 1;
@@ -195,15 +197,12 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
                 attempt.saturating_sub(1)
             ));
         }
-        if lane_attempt >= MAX_ATTEMPTS_PER_LANE && fallback_index < fallback_bindings.len() {
-            current_binding = fallback_bindings[fallback_index];
-            fallback_index += 1;
-            lane_attempt = 0;
-            eprintln!(
-                "event=local_ingress_lane_fallback attempt={attempt} reason_class=lane_peer_retry_exhausted destination_id={destination_id}"
-            );
+        if binding_index >= candidate_bindings.len() {
+            binding_index = 0;
         }
-        match dispatcher.pop_for(current_binding) {
+        let binding = candidate_bindings[binding_index];
+        binding_index += 1;
+        match dispatcher.pop_for(binding) {
             Ok(mut peer) => {
                 match handshake_peer_for_destination(&mut peer, &destination) {
                     Ok(()) => {
@@ -216,7 +215,7 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
                         return crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer);
                     }
                     Err(error) => {
-                        lane_attempt += 1;
+                        peer.mark_dead();
                         eprintln!(
                             "event=local_ingress_peer_dead_discarded attempt={attempt} reason_class={} destination_id={destination_id}",
                             redacted_log_reason(&error)
@@ -225,15 +224,12 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
                 }
             }
             Err(error) => {
-                lane_attempt += 1;
                 eprintln!(
-                    "event=local_ingress_lane_peer_wait attempt={attempt} reason_class={} destination_id={destination_id}",
+                    "event=local_ingress_lane_peer_unavailable attempt={attempt} reason_class={} destination_id={destination_id}",
                     redacted_log_reason(&error)
                 );
             }
         }
-        // Short backoff before trying the same lane again; a fresh peer may be
-        // registered by the pool loop before the deadline expires.
         if Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(50));
         }

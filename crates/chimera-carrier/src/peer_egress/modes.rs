@@ -238,7 +238,7 @@ pub fn run_side_b(options: Options) -> Result<(), String> {
                         "event=outbound_peer_worker_error reason_class={}",
                         redacted_log_reason(&error)
                     );
-                    thread::sleep(Duration::from_secs(1));
+                    thread::sleep(Duration::from_millis(500));
                 }
             }
         });
@@ -284,6 +284,23 @@ pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
     )
 }
 
+
+fn connect_and_establish_outbound_peer(options: &Options) -> Result<SecurePeerStream, String> {
+    eprintln!("event=carrier_reconnect_attempt reason_class=carrier_peer_connect");
+    let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
+        .map_err(|error| format!("connect outbound peer failed: {error}"))?;
+    tune_tcp(&peer)?;
+    eprintln!("event=carrier_reconnect_tcp_connected");
+    peer.write_all(b"CHIMERA-PEER-EGRESS/1\n")
+        .map_err(|error| format!("write handshake failed: {error}"))?;
+    peer.write_all(options.token.as_bytes())
+        .and_then(|_| peer.write_all(b"\n"))
+        .map_err(|error| format!("write token failed: {error}"))?;
+    let peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
+    eprintln!("event=carrier_reconnect_success");
+    Ok(peer)
+}
+
 pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ingress(
     options: &Options,
     next_hops: Option<SharedPeerPool>,
@@ -291,16 +308,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
     lane_document: Option<&TransitLaneDocument>,
     aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
 ) -> Result<(), String> {
-    let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
-        .map_err(|error| format!("connect outbound peer failed: {error}"))?;
-    tune_tcp(&peer)?;
-    eprintln!("event=outbound_peer_connected");
-    peer.write_all(b"CHIMERA-PEER-EGRESS/1\n")
-        .map_err(|error| format!("write handshake failed: {error}"))?;
-    peer.write_all(options.token.as_bytes())
-        .and_then(|_| peer.write_all(b"\n"))
-        .map_err(|error| format!("write token failed: {error}"))?;
-    let mut peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
+    let mut peer = connect_and_establish_outbound_peer(options)?;
     let transit_limits = options.transit_relay_limits();
     transit_limits.validate()?;
     let previous_read_timeout = peer

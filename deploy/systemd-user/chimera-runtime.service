@@ -16,6 +16,7 @@ Environment=CHIMERA_APPLY_ROUTE=false
 Environment=CHIMERA_APPLY_DNS=false
 ExecStart=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh start'
 ExecStop=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh stop'
+ExecStopPost=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __execstoppost-cleanup'
 TimeoutStartSec=180
 TimeoutStopSec=60
 

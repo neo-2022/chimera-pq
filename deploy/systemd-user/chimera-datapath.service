@@ -13,6 +13,7 @@ WorkingDirectory=__CHIMERA_ROOT__
 ExecStartPre=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __service-preflight-datapath'
 ExecStart=/usr/bin/env bash -lc 'set -euo pipefail; env_file="${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env"; if [[ ! -f "$env_file" ]]; then echo "error: missing transparent-runtime env: $env_file" >&2; exit 1; fi; set -a; source "$env_file"; exec ./scripts/chimera-runner.sh transparent-runtime'
 ExecStop=/usr/bin/env bash -lc 'true'
+ExecStopPost=/usr/bin/env bash -lc 'exec ./scripts/chimera-control.sh __execstoppost-cleanup'
 Restart=on-failure
 RestartSec=2
 StandardOutput=append:%h/.cache/chimera/chimera_datapath.service.log

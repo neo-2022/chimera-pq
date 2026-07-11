@@ -67,22 +67,8 @@ fn test_peer_pair() -> Result<
     .map_err(|error| format!("derive test secrets failed: {error}"))?;
     let (left, right) = tcp_pair()?;
     Ok((
-        crate::peer_egress::protocol::SecurePeerStream {
-            stream: left,
-            send_secret: secrets.initiator_to_responder().clone(),
-            recv_secret: secrets.responder_to_initiator().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: AeadSuite::Chacha20Poly1305,
-        },
-        crate::peer_egress::protocol::SecurePeerStream {
-            stream: right,
-            send_secret: secrets.responder_to_initiator().clone(),
-            recv_secret: secrets.initiator_to_responder().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: AeadSuite::Chacha20Poly1305,
-        },
+        crate::peer_egress::protocol::SecurePeerStream::new(left, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), AeadSuite::Chacha20Poly1305),
+        crate::peer_egress::protocol::SecurePeerStream::new(right, secrets.responder_to_initiator().clone(), secrets.initiator_to_responder().clone(), AeadSuite::Chacha20Poly1305),
     ))
 }
 

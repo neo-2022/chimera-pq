@@ -176,7 +176,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                             "event=peer_pool_pop_failed reason_class={}",
                             redacted_log_reason(&error)
                         );
-                        thread::sleep(Duration::from_secs(1));
+                        thread::sleep(Duration::from_millis(500));
                         continue;
                     }
                 };
@@ -242,7 +242,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                             "event=weave_outbound_peer_worker_error reason_class={}",
                             redacted_log_reason(&error)
                         );
-                        thread::sleep(Duration::from_secs(1));
+                        thread::sleep(Duration::from_millis(500));
                     }
                 }
             });

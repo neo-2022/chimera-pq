@@ -41,22 +41,8 @@ fn test_peer_pair() -> Result<(SecurePeerStream, SecurePeerStream), String> {
     .map_err(|error| format!("derive test secrets failed: {error}"))?;
     let (left, right) = tcp_pair()?;
     Ok((
-        SecurePeerStream {
-            stream: left,
-            send_secret: secrets.initiator_to_responder().clone(),
-            recv_secret: secrets.responder_to_initiator().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: AeadSuite::Chacha20Poly1305,
-        },
-        SecurePeerStream {
-            stream: right,
-            send_secret: secrets.responder_to_initiator().clone(),
-            recv_secret: secrets.initiator_to_responder().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: AeadSuite::Chacha20Poly1305,
-        },
+        SecurePeerStream::new(left, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), AeadSuite::Chacha20Poly1305),
+        SecurePeerStream::new(right, secrets.responder_to_initiator().clone(), secrets.initiator_to_responder().clone(), AeadSuite::Chacha20Poly1305),
     ))
 }
 
@@ -70,7 +56,7 @@ fn mesh_route_id() -> MeshRouteBindingId {
     MeshRouteBindingId::new(401).unwrap_or_else(|error| unreachable!("{error}"))
 }
 
-fn active_lane(lane_id: usize) -> MeshCarrierLaneBinding {
+fn active_lane(lane_id: usize, weight_pct: u8, capacity_weight_pct: u8) -> MeshCarrierLaneBinding {
     let suffix = lane_id + 1;
     MeshCarrierLaneBinding {
         route_binding_id: mesh_route_id(),
@@ -78,8 +64,8 @@ fn active_lane(lane_id: usize) -> MeshCarrierLaneBinding {
         peer_node_id: format!("peer-{suffix}"),
         carrier_endpoint: format!("192.0.2.{suffix}:443"),
         role: MeshMultipathLaneRole::Active,
-        weight_pct: 40,
-        capacity_weight_pct: 40,
+        weight_pct,
+        capacity_weight_pct,
     }
 }
 
@@ -98,11 +84,14 @@ fn make_lane_document(active_lane_count: usize) -> Result<TransitLaneDocument, S
         return Err("test schedule must have at least one active lane".to_string());
     }
     let route_id = mesh_route_id();
+    let lane_weight_pct = (100 / active_lane_count).min(40) as u8;
+    let lane_capacity_weight_pct = lane_weight_pct;
+    let active_lane_with_pct = |lane_id: usize| active_lane(lane_id, lane_weight_pct, lane_capacity_weight_pct);
     let carrier_lane_bindings: Vec<MeshCarrierLaneBinding> = (0..active_lane_count)
-        .map(active_lane)
+        .map(active_lane_with_pct)
         .collect();
     let lanes: Vec<MeshMultipathLane> = (0..active_lane_count).map(mesh_multipath_lane).collect();
-    let total_capacity_weight_pct = (40 * active_lane_count) as u16;
+    let total_capacity_weight_pct = (lane_weight_pct as u16) * (active_lane_count as u16);
     let transit_capacity_budget_pct = total_capacity_weight_pct;
     let local_traffic_reserve_pct = 100_u8.saturating_sub(transit_capacity_budget_pct as u8);
 
@@ -323,6 +312,77 @@ fn peer_pool_discards_dead_peer_and_does_not_retry_same_stream() -> Result<(), S
     local_client
         .write_all(&LOCAL_MAGIC[1..])
         .and_then(|_| local_client.write_all(b"CONNECT pool-fallback.example.org 443\n"))
+        .map_err(|error| format!("write local connect failed: {error}"))?;
+    local_client
+        .shutdown(Shutdown::Write)
+        .map_err(|error| format!("shutdown local writer failed: {error}"))?;
+
+    let ack = crate::peer_egress::protocol::read_line_limited(&mut local_client, 16)?;
+    assert_eq!(ack, "OK");
+
+    worker
+        .join()
+        .map_err(|_| "local ingress worker panicked".to_string())??;
+    ack_worker
+        .join()
+        .map_err(|_| "ack worker panicked".to_string())??;
+    Ok(())
+}
+
+
+#[test]
+fn lane_document_repaths_through_all_admitted_bindings_until_live_peer() -> Result<(), String> {
+    let (mut local_client, local_server) = tcp_pair()?;
+    let document = make_lane_document(3)?;
+    let plan = document
+        .require_mesh_path_plan_ref()
+        .map_err(|error| format!("plan missing: {error}"))?;
+    let destination = Destination {
+        host: "lane-repath.example.org".to_string(),
+        port: 443,
+    };
+    let flow_key =
+        MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
+    let initial_binding = select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+        .map_err(|reason| format!("lane selection failed: {reason}"))?;
+    let fallback_bindings =
+        active_fallback_bindings(&plan.multipath_schedule, flow_key, initial_binding)?;
+    assert!(
+        fallback_bindings.len() >= 2,
+        "test needs at least two fallback lanes"
+    );
+
+    let dispatcher = new_shared_transit_dispatcher();
+    dispatcher.register(initial_binding, dead_peer_stream()?)?;
+    dispatcher.register(fallback_bindings[0], dead_peer_stream()?)?;
+    let (live_peer, mut live_remote) = test_peer_pair()?;
+    dispatcher.register(fallback_bindings[1], live_peer)?;
+
+    let ack_worker = thread::spawn(move || -> Result<(), String> {
+        let forwarded = live_remote.read_secure_payload()?;
+        assert!(forwarded.starts_with(b"CONNECT "));
+        live_remote.write_line("OK")?;
+        Ok(())
+    });
+
+    let dispatcher_for_worker = dispatcher.clone();
+    let document_for_worker = document.clone();
+    let worker = thread::spawn(move || {
+        handle_local_client_with_lane_document_and_first_byte(
+            local_server,
+            &document_for_worker,
+            dispatcher_for_worker,
+            LOCAL_MAGIC[0],
+        )
+    });
+
+    local_client
+        .set_read_timeout(Some(Duration::from_millis(600)))
+        .map_err(|error| format!("set local timeout failed: {error}"))?;
+    local_client
+        .write_all(&LOCAL_MAGIC[1..])
+        .and_then(|_| local_client.write_all(b"CONNECT lane-repath.example.org 443
+"))
         .map_err(|error| format!("write local connect failed: {error}"))?;
     local_client
         .shutdown(Shutdown::Write)

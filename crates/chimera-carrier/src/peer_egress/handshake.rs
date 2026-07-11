@@ -85,14 +85,12 @@ pub fn establish_secure_peer_client(
         x25519_shared_secret.as_bytes(),
         &pq_shared_secret,
     )?;
-    Ok(SecurePeerStream {
+    Ok(SecurePeerStream::new(
         stream,
-        send_secret: client_to_server,
-        recv_secret: server_to_client,
-        send_packet: 0,
-        recv_packet: 0,
+        client_to_server,
+        server_to_client,
         aead,
-    })
+    ))
 }
 
 pub fn establish_secure_peer_server(
@@ -154,14 +152,12 @@ pub fn establish_secure_peer_server(
         x25519_shared_secret.as_bytes(),
         &pq_shared_secret,
     )?;
-    Ok(SecurePeerStream {
+    Ok(SecurePeerStream::new(
         stream,
-        send_secret: server_to_client,
-        recv_secret: client_to_server,
-        send_packet: 0,
-        recv_packet: 0,
+        server_to_client,
+        client_to_server,
         aead,
-    })
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]

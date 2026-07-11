@@ -512,6 +512,7 @@ fn outbound_transit_lane_registration_worker(
     if cancel.load(Ordering::Relaxed) {
         return Ok(());
     }
+    eprintln!("event=carrier_reconnect_attempt reason_class=sealed_transit_lane_connect");
     let mut peer = connect_tcp(registration.endpoint(), options.connect_timeout_ms)
         .map_err(|error| format!("connect sealed transit lane failed: {error}"))?;
     tune_tcp(&peer)?;
@@ -522,6 +523,7 @@ fn outbound_transit_lane_registration_worker(
         .and_then(|_| peer.write_all(b"\n"))
         .map_err(|error| format!("write token failed: {error}"))?;
     let peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
+    eprintln!("event=carrier_reconnect_success");
     let ticket = dispatcher.register(registration.binding(), peer)?;
     eprintln!("event=outbound_transit_lane_registered binding=<opaque>");
     wait_until_transit_lane_claimed(&dispatcher, ticket, cancel)?;

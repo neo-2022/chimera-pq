@@ -1,9 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::peer_egress::protocol::SecurePeerStream;
 use crate::peer_egress::transit_binding::TransitPathBinding;
+
+const DEFAULT_PEER_IDLE_TIMEOUT_MS: u64 = 30_000;
+
+fn default_peer_idle_timeout() -> Duration {
+    Duration::from_millis(DEFAULT_PEER_IDLE_TIMEOUT_MS)
+}
 
 #[derive(Default)]
 pub struct TransitNextHopDispatcher {
@@ -57,6 +64,40 @@ impl fmt::Debug for TransitNextHopDispatcher {
 }
 
 impl TransitNextHopDispatcher {
+    fn idle_timeout(&self) -> Duration {
+        default_peer_idle_timeout()
+    }
+
+    fn is_peer_usable(&self, peer: &SecurePeerStream) -> bool {
+        peer.is_alive() && peer.idle_duration() <= self.idle_timeout()
+    }
+
+    fn prune_dead_entries(&self, queue: &mut VecDeque<TransitNextHopEntry>) {
+        while let Some(entry) = queue.front() {
+            if self.is_peer_usable(&entry.peer) {
+                return;
+            }
+            queue.pop_front();
+        }
+    }
+
+    fn pop_alive_from(
+        &self,
+        queue: &mut VecDeque<TransitNextHopEntry>,
+    ) -> Option<(TransitNextHopTicket, SecurePeerStream)> {
+        while let Some(entry) = queue.pop_front() {
+            if self.is_peer_usable(&entry.peer) {
+                return Some((entry.ticket, entry.peer));
+            }
+        }
+        None
+    }
+
+    fn any_alive_in_queue(&self, queue: &mut VecDeque<TransitNextHopEntry>) -> bool {
+        self.prune_dead_entries(queue);
+        !queue.is_empty()
+    }
+
     pub fn register(
         &self,
         binding: TransitPathBinding,
@@ -71,6 +112,7 @@ impl TransitNextHopDispatcher {
             .checked_add(1)
             .ok_or_else(|| "sealed transit dispatch ticket overflow".to_string())?;
         state.next_ticket_id = id;
+        peer.touch();
         let ticket = TransitNextHopTicket { binding, id };
         state
             .peers
@@ -85,20 +127,17 @@ impl TransitNextHopDispatcher {
             .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        let (entry, remove_binding) = {
-            let queue = state
-                .peers
-                .get_mut(&binding)
-                .ok_or_else(|| "sealed transit path binding unavailable".to_string())?;
-            let entry = queue
-                .pop_front()
-                .ok_or_else(|| "sealed transit path binding unavailable".to_string())?;
-            (entry, queue.is_empty())
-        };
-        if remove_binding {
+        let queue = state
+            .peers
+            .get_mut(&binding)
+            .ok_or_else(|| "sealed transit path binding unavailable".to_string())?;
+        let (_ticket, peer) = self
+            .pop_alive_from(queue)
+            .ok_or_else(|| "sealed transit path binding unavailable".to_string())?;
+        if queue.is_empty() {
             state.peers.remove(&binding);
         }
-        Ok(entry.peer)
+        Ok(peer)
     }
 
     pub fn pop_many_for(
@@ -117,10 +156,12 @@ impl TransitNextHopDispatcher {
             .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        if bindings
-            .iter()
-            .any(|binding| state.peers.get(binding).is_none_or(VecDeque::is_empty))
-        {
+        if bindings.iter().any(|binding| {
+            state
+                .peers
+                .get_mut(binding)
+                .is_none_or(|queue| !self.any_alive_in_queue(queue))
+        }) {
             return Err("sealed transit path binding set unavailable".to_string());
         }
 
@@ -131,39 +172,40 @@ impl TransitNextHopDispatcher {
                     .peers
                     .get_mut(binding)
                     .ok_or_else(|| "sealed transit path binding set unavailable".to_string())?;
-                let entry = queue
-                    .pop_front()
+                let entry = self
+                    .pop_alive_from(queue)
                     .ok_or_else(|| "sealed transit path binding set unavailable".to_string())?;
                 (entry, queue.is_empty())
             };
             if remove_binding {
                 state.peers.remove(binding);
             }
-            claimed.push((*binding, entry.peer));
+            claimed.push((*binding, entry.1));
         }
         Ok(claimed)
     }
 
     pub fn contains_binding(&self, binding: TransitPathBinding) -> Result<bool, String> {
-        let state = self
+        let mut state = self
             .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        Ok(state
-            .peers
-            .get(&binding)
-            .is_some_and(|queue| !queue.is_empty()))
+        if let Some(queue) = state.peers.get_mut(&binding) {
+            return Ok(self.any_alive_in_queue(queue));
+        }
+        Ok(false)
     }
 
     pub fn contains_ticket(&self, ticket: TransitNextHopTicket) -> Result<bool, String> {
-        let state = self
+        let mut state = self
             .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        Ok(state
-            .peers
-            .get(&ticket.binding)
-            .is_some_and(|queue| queue.iter().any(|entry| entry.ticket == ticket)))
+        if let Some(queue) = state.peers.get_mut(&ticket.binding) {
+            self.prune_dead_entries(queue);
+            return Ok(queue.iter().any(|entry| entry.ticket == ticket));
+        }
+        Ok(false)
     }
 
     pub fn clear_binding(&self, binding: TransitPathBinding) -> Result<usize, String> {
@@ -193,17 +235,30 @@ impl TransitNextHopDispatcher {
     }
 
     pub fn binding_depth(&self, binding: TransitPathBinding) -> Result<usize, String> {
-        let state = self
+        let mut state = self
             .state
             .lock()
             .map_err(|_| "sealed transit binding dispatcher lock poisoned".to_string())?;
-        Ok(state.peers.get(&binding).map_or(0, VecDeque::len))
+        if let Some(queue) = state.peers.get_mut(&binding) {
+            self.prune_dead_entries(queue);
+            return Ok(queue.len());
+        }
+        Ok(0)
     }
 }
 
 pub type SharedTransitNextHopDispatcher = Arc<TransitNextHopDispatcher>;
 
 pub fn new_shared_transit_dispatcher() -> SharedTransitNextHopDispatcher {
+    Arc::new(TransitNextHopDispatcher::default())
+}
+
+#[allow(dead_code)]
+pub fn new_shared_transit_dispatcher_with_timeout(
+    _idle_timeout: Duration,
+) -> SharedTransitNextHopDispatcher {
+    // Timeout is currently fixed at dispatcher creation through the default;
+    // this constructor reserves the testing seam.
     Arc::new(TransitNextHopDispatcher::default())
 }
 
@@ -242,14 +297,7 @@ mod tests {
             .accept()
             .map_err(|error| format!("accept test peer failed: {error}"))?;
         drop(server);
-        Ok(SecurePeerStream {
-            stream: client,
-            send_secret: secrets.initiator_to_responder().clone(),
-            recv_secret: secrets.responder_to_initiator().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: AeadSuite::Chacha20Poly1305,
-        })
+        Ok(SecurePeerStream::new(client, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), AeadSuite::Chacha20Poly1305))
     }
 
     #[test]
@@ -427,4 +475,20 @@ mod tests {
         assert!(dispatcher.pop_for(binding).is_err());
         Ok(())
     }
+
+    #[test]
+    fn dispatcher_skips_marked_dead_peer() -> Result<(), String> {
+        let dispatcher = TransitNextHopDispatcher::default();
+        let binding = binding(5, 1);
+        let alive = test_peer_stream()?;
+        let dead = test_peer_stream()?;
+        dead.mark_dead();
+        dispatcher.register(binding, dead)?;
+        dispatcher.register(binding, alive)?;
+        let selected = dispatcher.pop_for(binding)?;
+        assert!(selected.is_alive());
+        assert!(dispatcher.pop_for(binding).is_err());
+        Ok(())
+    }
+
 }

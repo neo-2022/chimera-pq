@@ -134,17 +134,7 @@ pub fn pipe_plain_with_secure_peer(
     let mut plain_read = plain
         .try_clone()
         .map_err(|error| format!("clone plain failed: {error}"))?;
-    let mut peer_write = SecurePeerStream {
-        stream: peer
-            .stream
-            .try_clone()
-            .map_err(|error| format!("clone peer failed: {error}"))?,
-        send_secret: peer.send_secret.clone(),
-        recv_secret: peer.recv_secret.clone(),
-        send_packet: peer.send_packet,
-        recv_packet: peer.recv_packet,
-        aead: peer.aead,
-    };
+    let mut peer_write = peer.try_clone_for_split()?;
     let a = thread::spawn(move || {
         let mut buf = vec![0_u8; SECURE_PLAINTEXT_CHUNK_LEN];
         loop {
@@ -155,10 +145,14 @@ pub fn pipe_plain_with_secure_peer(
                 }
                 Ok(n) => {
                     if peer_write.write_secure_payload(&buf[..n]).is_err() {
+                        peer_write.mark_dead();
                         break;
                     }
                 }
-                Err(_) => break,
+                Err(_) => {
+                    peer_write.mark_dead();
+                    break;
+                }
             }
         }
     });
@@ -168,10 +162,14 @@ pub fn pipe_plain_with_secure_peer(
                 Ok(payload) if payload.is_empty() => break,
                 Ok(payload) => {
                     if plain.write_all(&payload).is_err() {
+                        peer.mark_dead();
                         break;
                     }
                 }
-                Err(_) => break,
+                Err(_) => {
+                    peer.mark_dead();
+                    break;
+                }
             }
         }
         let _ = plain.shutdown(Shutdown::Write);

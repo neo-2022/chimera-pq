@@ -97,6 +97,17 @@ SPLIT_TRANSPARENT_WATCHDOG_PID_FILE="${SPLIT_TRANSPARENT_WATCHDOG_PID_FILE:-${XD
 CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION="${CHIMERA_ALLOW_WEAVE_COEXIST_MUTATION:-0}"
 CHIMERA_COEXIST_TRANSPARENT_CAPTURE="${CHIMERA_COEXIST_TRANSPARENT_CAPTURE:-1}"
 
+# OS-cleanup identifiers.  These must match the route priorities, tables and
+# tunnel names created by the Rust datapath (crates/chimera-cli/src/main.rs).
+CHIMERA_ROUTE_TABLE="${CHIMERA_ROUTE_TABLE:-51820}"
+CHIMERA_ROUTE_RULE_PRIORITY="${CHIMERA_ROUTE_RULE_PRIORITY:-11000}"
+CHIMERA_TUN_NAME="${CHIMERA_TUN_NAME:-chimera0}"
+
+# Forced-stop rollback cleanup helpers.  Loaded here so they can be called
+# both from normal control paths and from systemd ExecStopPost.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/chimera-control-cleanup.inc"
+
 # Inherit split-tunnel/full-tunnel apply flags from the current process
 # environment when they are present and the caller has not overridden them.
 # This honours `Environment=CHIMERA_APPLY_*=false` in the installed
@@ -4688,6 +4699,9 @@ stop_runtime() {
       --route-cidr "$CHIMERA_ROUTE_CIDR" \
       --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
     cleanup_transparent_redirect_rules || cleanup_rc=$?
+    # Belt-and-suspenders teardown for the systemd stop path (also covers a
+    # forced stop that bypassed the normal ExecStop sequence).
+    chimera_rollback_cleanup_core >/dev/null 2>&1 || true
     if [[ "$down_rc" -ne 0 ]]; then
       echo "stop_status=fail mode=systemd_user reason=datapath_down_failed down_rc=$down_rc"
       return 1
@@ -4719,6 +4733,8 @@ stop_runtime() {
     --route-cidr "$CHIMERA_ROUTE_CIDR" \
     --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
   cleanup_transparent_redirect_rules || cleanup_rc=$?
+  # Belt-and-suspenders teardown for the direct/standalone stop path.
+  chimera_rollback_cleanup_core >/dev/null 2>&1 || true
   if [[ "$down_rc" -ne 0 ]]; then
     echo "stop_status=fail mode=direct reason=datapath_down_failed down_rc=$down_rc"
     return 1
@@ -5168,6 +5184,12 @@ main() {
       ;;
     __service-poststart-node)
       node_service_poststart_reconcile
+      ;;
+    __execstoppost-cleanup)
+      chimera_execstoppost_cleanup
+      ;;
+    verify-rollback)
+      chimera_verify_rollback_state
       ;;
     -h|--help|help|"")
       usage

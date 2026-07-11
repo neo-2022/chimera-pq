@@ -6,21 +6,63 @@ use chimera_mesh::MeshMultipathFlowKey;
 
 use crate::peer_egress::protocol::SecurePeerStream;
 
-#[derive(Debug, Default)]
+const DEFAULT_PEER_IDLE_TIMEOUT_MS: u64 = 30_000;
+
+fn default_peer_idle_timeout() -> Duration {
+    Duration::from_millis(DEFAULT_PEER_IDLE_TIMEOUT_MS)
+}
+
+#[derive(Debug)]
 pub struct PeerPool {
     peers: Mutex<VecDeque<SecurePeerStream>>,
     ready: Condvar,
+    idle_timeout: Duration,
 }
 
 impl PeerPool {
+    pub fn new(idle_timeout: Duration) -> Self {
+        Self {
+            peers: Mutex::new(VecDeque::new()),
+            ready: Condvar::new(),
+            idle_timeout,
+        }
+    }
+
     pub fn push(&self, stream: SecurePeerStream) -> Result<(), String> {
         let mut peers = self
             .peers
             .lock()
             .map_err(|_| "peer pool lock poisoned".to_string())?;
+        stream.touch();
         peers.push_back(stream);
         self.ready.notify_one();
         Ok(())
+    }
+
+    fn is_peer_usable(&self, peer: &SecurePeerStream) -> bool {
+        peer.is_alive() && peer.idle_duration() <= self.idle_timeout
+    }
+
+    fn pop_front_alive(&self, peers: &mut VecDeque<SecurePeerStream>) -> Option<SecurePeerStream> {
+        while let Some(peer) = peers.pop_front() {
+            if self.is_peer_usable(&peer) {
+                return Some(peer);
+            }
+        }
+        None
+    }
+
+    fn remove_alive_at(
+        &self,
+        peers: &mut VecDeque<SecurePeerStream>,
+        index: usize,
+    ) -> Option<SecurePeerStream> {
+        let peer = peers.remove(index)?;
+        if self.is_peer_usable(&peer) {
+            Some(peer)
+        } else {
+            self.pop_front_alive(peers)
+        }
     }
 
     pub fn pop_wait(&self) -> Result<SecurePeerStream, String> {
@@ -29,7 +71,7 @@ impl PeerPool {
             .lock()
             .map_err(|_| "peer pool lock poisoned".to_string())?;
         loop {
-            if let Some(stream) = peers.pop_front() {
+            if let Some(stream) = self.pop_front_alive(&mut peers) {
                 return Ok(stream);
             }
             peers = self
@@ -44,7 +86,7 @@ impl PeerPool {
             .peers
             .lock()
             .map_err(|_| "peer pool lock poisoned".to_string())?;
-        Ok(peers.pop_front())
+        Ok(self.pop_front_alive(&mut peers))
     }
 
     pub fn try_pop_unique(&self) -> Result<UniquePeerPop, String> {
@@ -52,13 +94,12 @@ impl PeerPool {
             .peers
             .lock()
             .map_err(|_| "peer pool lock poisoned".to_string())?;
-        match peers.len() {
+        match peers.iter().filter(|p| self.is_peer_usable(p)).count() {
             0 => Ok(UniquePeerPop::Unavailable),
-            1 => {
-                Ok(UniquePeerPop::Ready(peers.pop_front().ok_or_else(
-                    || "peer pool unexpectedly empty".to_string(),
-                )?))
-            }
+            1 => Ok(UniquePeerPop::Ready(
+                self.pop_front_alive(&mut peers)
+                    .ok_or_else(|| "peer pool unexpectedly empty".to_string())?,
+            )),
             _ => Ok(UniquePeerPop::Ambiguous),
         }
     }
@@ -75,7 +116,7 @@ impl PeerPool {
             return Ok(None);
         }
         let slot = flow_key.select_slot_index(peers.len())?;
-        Ok(peers.remove(slot))
+        Ok(self.remove_alive_at(&mut peers, slot))
     }
 
     pub fn pop_wait_for_flow_key(
@@ -95,9 +136,9 @@ impl PeerPool {
                 continue;
             }
             let slot = flow_key.select_slot_index(peers.len())?;
-            return peers
-                .remove(slot)
-                .ok_or_else(|| "peer pool unexpectedly empty".to_string());
+            if let Some(stream) = self.remove_alive_at(&mut peers, slot) {
+                return Ok(stream);
+            }
         }
     }
 
@@ -113,15 +154,19 @@ impl PeerPool {
             .lock()
             .map_err(|_| "peer pool lock poisoned".to_string())?;
         loop {
-            if let Some(stream) = peers.pop_front() {
+            if let Some(stream) = self.pop_front_alive(&mut peers) {
                 return Ok(Some(stream));
             }
             if Instant::now() >= deadline {
                 return Ok(None);
             }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Ok(None);
+            }
             let (guard, wait_result) = self
                 .ready
-                .wait_timeout(peers, timeout)
+                .wait_timeout(peers, remaining.min(timeout))
                 .map_err(|_| "peer pool wait_timeout poisoned".to_string())?;
             peers = guard;
             if wait_result.timed_out() && peers.is_empty() {
@@ -145,7 +190,9 @@ impl PeerPool {
         loop {
             if !peers.is_empty() {
                 let slot = flow_key.select_slot_index(peers.len())?;
-                return Ok(peers.remove(slot));
+                if let Some(stream) = self.remove_alive_at(&mut peers, slot) {
+                    return Ok(Some(stream));
+                }
             }
             if Instant::now() >= deadline {
                 return Ok(None);
@@ -156,7 +203,7 @@ impl PeerPool {
             }
             let (guard, wait_result) = self
                 .ready
-                .wait_timeout(peers, remaining)
+                .wait_timeout(peers, remaining.min(timeout))
                 .map_err(|_| "peer pool wait_timeout poisoned".to_string())?;
             peers = guard;
             if wait_result.timed_out() && peers.is_empty() {
@@ -166,10 +213,20 @@ impl PeerPool {
     }
 }
 
+impl Default for PeerPool {
+    fn default() -> Self {
+        Self::new(default_peer_idle_timeout())
+    }
+}
+
 pub type SharedPeerPool = Arc<PeerPool>;
 
 pub fn new_shared_pool() -> SharedPeerPool {
     Arc::new(PeerPool::default())
+}
+
+pub fn new_shared_pool_with_timeout(idle_timeout: Duration) -> SharedPeerPool {
+    Arc::new(PeerPool::new(idle_timeout))
 }
 
 #[derive(Debug)]
@@ -183,6 +240,7 @@ pub enum UniquePeerPop {
 mod tests {
     use super::{PeerPool, SecurePeerStream};
     use chimera_mesh::MeshMultipathFlowKey;
+    use std::time::Duration;
 
     fn test_peer_stream() -> SecurePeerStream {
         let transcript = chimera_crypto::TranscriptHash::from_messages(&[b"peer-pool-test"]);
@@ -205,14 +263,7 @@ mod tests {
             .accept()
             .unwrap_or_else(|error| unreachable!("server accept failed: {error}"));
         drop(server);
-        SecurePeerStream {
-            stream: client,
-            send_secret: secrets.initiator_to_responder().clone(),
-            recv_secret: secrets.responder_to_initiator().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
-        }
+        SecurePeerStream::new(client, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), crate::peer_egress::options::AeadSuite::Chacha20Poly1305)
     }
 
     #[test]
@@ -275,14 +326,7 @@ mod tests {
             .local_addr()
             .map_err(|error| format!("client local addr failed: {error}"))?
             .port();
-        pool.push(SecurePeerStream {
-            stream: client,
-            send_secret: secrets.initiator_to_responder().clone(),
-            recv_secret: secrets.responder_to_initiator().clone(),
-            send_packet: 0,
-            recv_packet: 0,
-            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
-        })?;
+        pool.push(SecurePeerStream::new(client, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), crate::peer_egress::options::AeadSuite::Chacha20Poly1305))?;
         Ok(port)
     }
 
@@ -362,4 +406,52 @@ mod tests {
         assert_eq!(selected_port, port);
         Ok(())
     }
+
+    #[test]
+    fn try_pop_skips_marked_dead_peer() -> Result<(), String> {
+        let pool = PeerPool::new(Duration::from_secs(60));
+        let alive_port = push_test_peer(&pool, "alive-dead-test-alive")?;
+        let dead_port = push_test_peer(&pool, "alive-dead-test-dead")?;
+        {
+            let mut peers = pool
+                .peers
+                .lock()
+                .map_err(|_| "peer pool lock poisoned".to_string())?;
+            for peer in peers.iter_mut() {
+                if peer
+                    .stream
+                    .local_addr()
+                    .map_err(|error| format!("local addr failed: {error}"))?
+                    .port()
+                    == dead_port
+                {
+                    peer.mark_dead();
+                }
+            }
+        }
+        let selected = pool
+            .try_pop()?
+            .ok_or_else(|| "expected an alive peer from pool".to_string())?;
+        let selected_port = selected
+            .stream
+            .local_addr()
+            .map_err(|error| format!("selected local addr failed: {error}"))?
+            .port();
+        assert_eq!(selected_port, alive_port);
+        assert!(pool.try_pop()?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn try_pop_skips_peer_idle_longer_than_timeout() -> Result<(), String> {
+        let pool = PeerPool::new(Duration::from_millis(1));
+        let _port = push_test_peer(&pool, "idle-timeout-test")?;
+        std::thread::sleep(Duration::from_millis(5));
+        assert!(
+            pool.try_pop()?.is_none(),
+            "idle peer must be treated as dead"
+        );
+        Ok(())
+    }
+
 }

@@ -596,4 +596,94 @@ mod tests {
 
         assert_eq!(decision.outbound, OutboundMode::Transit);
     }
+
+    #[test]
+    fn rejects_empty_policy() {
+        for input in ["", "   ", "\n\n", "# comment only"] {
+            assert!(
+                parse_policy_text(input).is_err(),
+                "expected error for input {:?}",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_matcher_kind() {
+        let parsed = parse_policy_text("r = magic:example.org => direct");
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn rejects_empty_matcher_value() {
+        let parsed = parse_policy_text("r = exact: => direct");
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_cidr4_prefix() {
+        assert!(parse_policy_text("r = cidr4:10.0.0.0/33 => direct").is_err());
+        assert!(parse_policy_text("r = cidr4:10.0.0.0 => direct").is_err());
+        assert!(parse_policy_text("r = cidr4:notanip/8 => direct").is_err());
+    }
+
+    #[test]
+    fn cidr4_zero_prefix_matches_all_ipv4() {
+        let policy = Policy::new(vec![RouteRule {
+            id: "all4".to_string(),
+            matcher: RuleMatcher::CidrV4 {
+                network: Ipv4Addr::new(0, 0, 0, 0),
+                prefix: 0,
+            },
+            outbound: OutboundMode::Transit,
+        }]);
+        let decision = policy.decide(&FlowContext {
+            domain: None,
+            destination_ip: Some(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))),
+            protocol: Protocol::Udp,
+            port: Some(53),
+        });
+        assert_eq!(decision.outbound, OutboundMode::Transit);
+    }
+
+    #[test]
+    fn rejects_invalid_protoport() {
+        assert!(parse_policy_text("r = protoport:tcp/443a => direct").is_err());
+        assert!(parse_policy_text("r = protoport:nope/443 => direct").is_err());
+        assert!(parse_policy_text("r = protoport:tcp => direct").is_err());
+    }
+
+    #[test]
+    fn protocol_port_rule_does_not_match_other_protocol() {
+        let policy = Policy::new(vec![RouteRule {
+            id: "https".to_string(),
+            matcher: RuleMatcher::ProtocolPort {
+                protocol: Protocol::Tcp,
+                port: 443,
+            },
+            outbound: OutboundMode::Transit,
+        }]);
+        let decision = policy.decide(&FlowContext {
+            domain: None,
+            destination_ip: None,
+            protocol: Protocol::Udp,
+            port: Some(443),
+        });
+        assert_eq!(decision.outbound, OutboundMode::Direct);
+    }
+
+    #[test]
+    fn malformed_text_does_not_panic() {
+        // Random bytes, long lines, control characters, weird separators.
+        let bad_inputs = [
+            "\0\0\0 => direct",
+            "r = => => => direct",
+            "= = = =",
+            &"a".repeat(10_000),
+            "id = exact:\t\n\r => transit",
+        ];
+        for input in bad_inputs {
+            let _ = parse_policy_text(input);
+        }
+    }
 }

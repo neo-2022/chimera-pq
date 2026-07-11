@@ -25,6 +25,39 @@ use chimera_session::{RekeyPolicy, RekeyReason, RekeyState};
 mod diagnostic_redaction;
 mod mesh_cli;
 
+fn route_explain_dns_binding_ttl() -> Duration {
+    const DEFAULT_TTL_SECONDS: u64 = 60;
+    const MAX_TTL_SECONDS: u64 = 86_400;
+    match std::env::var("CHIMERA_ROUTE_EXPLAIN_DNS_BINDING_TTL_SECONDS") {
+        Ok(value) => value
+            .parse::<u64>()
+            .ok()
+            .filter(|&n| n > 0 && n <= MAX_TTL_SECONDS)
+            .map(Duration::from_secs)
+            .unwrap_or_else(|| {
+                eprintln!("warning: invalid CHIMERA_ROUTE_EXPLAIN_DNS_BINDING_TTL_SECONDS='{value}', using default {DEFAULT_TTL_SECONDS}");
+                Duration::from_secs(DEFAULT_TTL_SECONDS)
+            }),
+        Err(_) => Duration::from_secs(DEFAULT_TTL_SECONDS),
+    }
+}
+
+fn route_explain_failover_ttl_ticks() -> u32 {
+    const DEFAULT_TICKS: u32 = 10;
+    const MAX_TICKS: u32 = 10_000;
+    match std::env::var("CHIMERA_ROUTE_EXPLAIN_FAILOVER_TTL_TICKS") {
+        Ok(value) => value
+            .parse::<u32>()
+            .ok()
+            .filter(|&n| n > 0 && n <= MAX_TICKS)
+            .unwrap_or_else(|| {
+                eprintln!("warning: invalid CHIMERA_ROUTE_EXPLAIN_FAILOVER_TTL_TICKS='{value}', using default {DEFAULT_TICKS}");
+                DEFAULT_TICKS
+            }),
+        Err(_) => DEFAULT_TICKS,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Language {
     En,
@@ -1228,7 +1261,7 @@ fn route_command(
         store.insert(DnsBinding::new(
             bind_domain,
             bind_ip,
-            Duration::from_secs(60),
+            route_explain_dns_binding_ttl(),
             Instant::now(),
         ));
         if let Some(binding) = store.lookup(destination_ip, Instant::now()) {
@@ -1278,7 +1311,7 @@ fn route_command(
         let mut engine = match TransparentFailoverEngine::new(TransparentFailoverConfig {
             split_tunnel_default: config_flags.0,
             auto_failover: config_flags.1,
-            failover_ttl_ticks: 10,
+            failover_ttl_ticks: route_explain_failover_ttl_ticks(),
         }) {
             Ok(engine) => engine,
             Err(_) => {

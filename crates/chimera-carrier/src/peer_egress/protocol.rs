@@ -2,7 +2,9 @@ use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use crate::peer_egress::options::{AeadSuite, LOCAL_MAGIC, SECURE_MAX_CIPHERTEXT_LEN};
 use chimera_crypto::TrafficSecret;
@@ -83,9 +85,87 @@ pub struct SecurePeerStream {
     pub send_packet: u64,
     pub recv_packet: u64,
     pub aead: AeadSuite,
+    alive: Arc<AtomicBool>,
+    last_used: Arc<Mutex<Instant>>,
 }
 
 impl SecurePeerStream {
+    pub fn new(
+        stream: TcpStream,
+        send_secret: TrafficSecret,
+        recv_secret: TrafficSecret,
+        aead: AeadSuite,
+    ) -> Self {
+        Self {
+            stream,
+            send_secret,
+            recv_secret,
+            send_packet: 0,
+            recv_packet: 0,
+            aead,
+            alive: Arc::new(AtomicBool::new(true)),
+            last_used: Arc::new(Mutex::new(Instant::now())),
+        }
+    }
+
+    pub fn with_packet_numbers(
+        stream: TcpStream,
+        send_secret: TrafficSecret,
+        recv_secret: TrafficSecret,
+        aead: AeadSuite,
+        send_packet: u64,
+        recv_packet: u64,
+    ) -> Self {
+        Self {
+            stream,
+            send_secret,
+            recv_secret,
+            send_packet,
+            recv_packet,
+            aead,
+            alive: Arc::new(AtomicBool::new(true)),
+            last_used: Arc::new(Mutex::new(Instant::now())),
+        }
+    }
+
+    pub fn try_clone_for_split(&self) -> Result<Self, String> {
+        let stream = self
+            .stream
+            .try_clone()
+            .map_err(|error| format!("clone secure peer stream for split failed: {error}"))?;
+        Ok(Self {
+            stream,
+            send_secret: self.send_secret.clone(),
+            recv_secret: self.recv_secret.clone(),
+            send_packet: self.send_packet,
+            recv_packet: self.recv_packet,
+            aead: self.aead,
+            alive: Arc::clone(&self.alive),
+            last_used: Arc::clone(&self.last_used),
+        })
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.alive.load(Ordering::Relaxed)
+    }
+
+    pub fn mark_dead(&self) {
+        self.alive.store(false, Ordering::Relaxed);
+    }
+
+    pub fn touch(&self) {
+        if let Ok(mut guard) = self.last_used.lock() {
+            *guard = Instant::now();
+        }
+    }
+
+    pub fn idle_duration(&self) -> Duration {
+        self.last_used
+            .lock()
+            .map(|guard| guard.elapsed())
+            .unwrap_or_else(|_| Duration::MAX)
+    }
+
     pub fn write_line(&mut self, line: &str) -> Result<(), String> {
         let mut bytes = line.as_bytes().to_vec();
         bytes.push(b'\n');
@@ -372,14 +452,14 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("server accept failed: {error}"));
         drop(server);
 
-        let mut peer = SecurePeerStream {
-            stream: client,
-            send_secret: secrets.initiator_to_responder().clone(),
-            recv_secret: secrets.responder_to_initiator().clone(),
-            send_packet: u64::MAX,
-            recv_packet: 0,
-            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
-        };
+        let mut peer = SecurePeerStream::with_packet_numbers(
+            client,
+            secrets.initiator_to_responder().clone(),
+            secrets.responder_to_initiator().clone(),
+            crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+            u64::MAX,
+            0,
+        );
 
         let error = match peer.write_secure_payload(b"payload") {
             Ok(()) => unreachable!("packet counter overflow must fail"),
@@ -414,14 +494,14 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("server accept failed: {error}"));
 
         let mut writer = client;
-        let mut reader = SecurePeerStream {
-            stream: server,
-            send_secret: secrets.responder_to_initiator().clone(),
-            recv_secret: secrets.initiator_to_responder().clone(),
-            send_packet: 0,
-            recv_packet: u64::MAX,
-            aead: crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
-        };
+        let mut reader = SecurePeerStream::with_packet_numbers(
+            server,
+            secrets.responder_to_initiator().clone(),
+            secrets.initiator_to_responder().clone(),
+            crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+            0,
+            u64::MAX,
+        );
 
         let mut ciphertext = b"payload".to_vec();
         encrypt_secure_payload_in_place(
