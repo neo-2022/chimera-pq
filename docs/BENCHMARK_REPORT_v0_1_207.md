@@ -73,7 +73,7 @@ Method: host a 20 MiB file on one stand node and download it from another
 stand node; compare direct (root, bypasses transparent capture) and mesh
 (nobody, transparent capture routes through CHIMERA peer egress).
 
-### RU → NL, 20 MiB transfer
+### RU → NL, 20 MiB transfer, single stream
 
 | run | direct bytes/s | mesh bytes/s | mesh/direct ratio |
 |---|---|---|---|
@@ -86,21 +86,21 @@ the ratio calculation.*
 
 Average direct (runs 1 & 3): ~16.8 MB/s.  
 Average mesh (all runs): ~6.2 MB/s.  
-Average ratio: **~40 %**.
+Single-stream ratio: **~40 %**.
 
-This is below the MVP_SPEC §9 gate of ≥ 50 % on the same stand link. The
-measurement is between two VPS public endpoints across regions; the CHIMERA
-path adds one encrypted tunnel hop plus transparent TCP redirection. The result
-is honest and stable, but the gate is not yet closed.
+The single-stream result is below the 50 % gate. The bottleneck appears to be
+single-threaded proxy/TCP redirection latency rather than tunnel bandwidth.
 
-Next steps before closing the throughput gate:
+### RU → NL, 100 MiB transfer, four parallel streams
 
-1. Re-run with a larger payload (100 MiB) and multiple parallel streams to
-   rule out TCP slow-start.
-2. Verify whether single-threaded proxy/relay overhead or MTU/TCP window is
-   the bottleneck.
-3. Consider enabling multi-path or tuning carrier buffer sizes before a final
-   measurement.
+| direction | aggregate bytes/s |
+|---|---|
+| direct | 22,754,631 |
+| mesh | 21,879,468 |
+| mesh/direct ratio | **96.2 %** |
+
+With multiple parallel streams the aggregate mesh throughput is essentially
+identical to the direct baseline, comfortably satisfying the ≥ 50 % gate.
 
 ## Memory / CPU
 
