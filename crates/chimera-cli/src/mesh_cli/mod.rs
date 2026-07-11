@@ -31,6 +31,7 @@ mod route_explain_output;
 mod route_explain_pressure;
 mod route_explain_recovery;
 mod route_explain_recovery_projection;
+mod route_announce_cmd;
 mod route_explain_types;
 #[cfg(test)]
 mod tests_connect_launch_error_parity;
@@ -144,6 +145,7 @@ pub(crate) fn mesh_command(usage: &str, subcommand: Option<&str>, args: &[String
         "nodes" => nodes_cmd::mesh_nodes_command(args),
         "contracts" => contracts_cmd::mesh_contracts_command(usage, args),
         "route-explain" => mesh_route_explain_command(usage, args),
+        "route-announce" => route_announce_cmd::mesh_route_announce_command(usage, args),
         "connect-probe" => connect_probe_cmd::mesh_connect_probe_command(usage, args),
         "launch-preflight" => launch_preflight_cmd::mesh_launch_preflight_command(usage, args),
         "launch-preflight-verify" => {

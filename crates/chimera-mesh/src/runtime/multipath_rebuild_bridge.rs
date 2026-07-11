@@ -45,7 +45,8 @@ impl MeshRuntime {
             let mode = plan.multipath_schedule.mode;
             let route_binding_id = plan.multipath_schedule.route_binding_id;
             let demand = current_schedule_demand(&plan.multipath_schedule)?;
-            replace_multipath_schedule(plan, mode, route_binding_id, demand)?;
+            let announcements = plan.multipath_schedule.route_announcements.clone();
+            replace_multipath_schedule(plan, mode, route_binding_id, demand, &announcements)?;
         }
 
         decision.append_explain_to(&mut plan.explain);
@@ -65,10 +66,11 @@ impl MeshRuntime {
 
         if decision.rebuild_allowed {
             let route_binding_id = plan.multipath_schedule.route_binding_id;
+            let announcements = plan.multipath_schedule.route_announcements.clone();
             let mut rebuilt = self.plan_path(request, planning_policy)?;
             let mode = rebuilt.multipath_schedule.mode;
             let demand = current_schedule_demand(&rebuilt.multipath_schedule)?;
-            replace_multipath_schedule(&mut rebuilt, mode, route_binding_id, demand)?;
+            replace_multipath_schedule(&mut rebuilt, mode, route_binding_id, demand, &announcements)?;
             *plan = rebuilt;
         }
 
@@ -121,7 +123,8 @@ impl MeshRuntime {
             let mode = plan.multipath_schedule.mode;
             let route_binding_id = plan.multipath_schedule.route_binding_id;
             let demand = current_schedule_demand(&plan.multipath_schedule)?;
-            replace_multipath_schedule_core(plan, mode, route_binding_id, demand)?;
+            let announcements = plan.multipath_schedule.route_announcements.clone();
+            replace_multipath_schedule_core(plan, mode, route_binding_id, demand, &announcements)?;
         }
 
         Ok(decision)
@@ -139,10 +142,11 @@ impl MeshRuntime {
 
         if decision.rebuild_allowed {
             let route_binding_id = plan.multipath_schedule.route_binding_id;
+            let announcements = plan.multipath_schedule.route_announcements.clone();
             let mut rebuilt = self.plan_path_core(request, planning_policy)?;
             let mode = rebuilt.multipath_schedule.mode;
             let demand = current_schedule_demand(&rebuilt.multipath_schedule)?;
-            replace_multipath_schedule_core(&mut rebuilt, mode, route_binding_id, demand)?;
+            replace_multipath_schedule_core(&mut rebuilt, mode, route_binding_id, demand, &announcements)?;
             *plan = rebuilt;
         }
 

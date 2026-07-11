@@ -69,6 +69,7 @@ pub(super) fn apply_dps_multipath_schedule(
             schedule_mode_from_multipath_hint(mode),
             snapshot.route_binding_id(),
             hints.multipath_demand,
+            snapshot.route_announcements(),
         )?;
     }
     Ok(())
@@ -85,6 +86,7 @@ pub(super) fn apply_dps_multipath_schedule_core(
             schedule_mode_from_multipath_hint(mode),
             snapshot.route_binding_id(),
             hints.multipath_demand,
+            snapshot.route_announcements(),
         )?;
     }
     Ok(())

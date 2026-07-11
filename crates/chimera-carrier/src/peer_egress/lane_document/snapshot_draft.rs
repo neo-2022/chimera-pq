@@ -181,6 +181,7 @@ impl TransitLanePlanSnapshotDraft {
                 route_binding_id,
                 lanes,
                 carrier_lane_bindings,
+                route_announcements: Vec::new(),
                 active_lane_count,
                 standby_lane_count,
                 lane_admission_requested_active_lane_count: lane_requested,

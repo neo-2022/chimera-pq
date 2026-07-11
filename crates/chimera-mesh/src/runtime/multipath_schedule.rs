@@ -2,6 +2,7 @@ use super::*;
 use crate::multipath_model::{
     MeshCarrierLaneBinding, MeshMultipathLane, MeshMultipathLaneRole, MeshRouteBindingId,
 };
+use crate::route_announcement::RouteAnnouncement;
 
 use super::multipath_demand::{MultipathDemandPlan, plan_multipath_demand};
 use super::multipath_lane_admission::{
@@ -24,12 +25,14 @@ pub(super) fn build_multipath_schedule(
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
     demand: Option<MultipathDemand>,
+    announcements: &[RouteAnnouncement],
 ) -> Result<MeshMultipathSchedule, String> {
     build_multipath_schedule_with_reason(
         selected_peers,
         mode,
         route_binding_id,
         demand,
+        announcements,
         PLANNER_REBUILD_REASON_INITIAL_PLAN,
     )
 }
@@ -39,6 +42,7 @@ fn build_multipath_schedule_with_reason(
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
     demand: Option<MultipathDemand>,
+    announcements: &[RouteAnnouncement],
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
     let max_active_lane_count = max_active_lane_count_for_capacity(TRANSIT_CAPACITY_BUDGET_PCT);
@@ -56,6 +60,7 @@ fn build_multipath_schedule_with_reason(
         route_binding_id,
         demand_plan,
         lanes,
+        announcements,
         planner_rebuild_reason,
     )
 }
@@ -65,6 +70,7 @@ pub(super) fn replace_multipath_schedule(
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
     demand: Option<MultipathDemand>,
+    announcements: &[RouteAnnouncement],
 ) -> Result<(), String> {
     remove_multipath_schedule_explain(&mut plan.explain);
     plan.multipath_schedule = build_multipath_schedule_with_reason(
@@ -72,6 +78,7 @@ pub(super) fn replace_multipath_schedule(
         mode,
         route_binding_id,
         demand,
+        announcements,
         PLANNER_REBUILD_REASON_MULTIPATH_HINT_REPLAN,
     )?;
     append_multipath_schedule_explain(&mut plan.explain, &plan.multipath_schedule);
@@ -83,12 +90,14 @@ pub(super) fn replace_multipath_schedule_core(
     mode: MeshMultipathMode,
     route_binding_id: Option<MeshRouteBindingId>,
     demand: Option<MultipathDemand>,
+    announcements: &[RouteAnnouncement],
 ) -> Result<(), String> {
     plan.multipath_schedule = build_multipath_schedule_with_reason(
         &plan.selected_peers,
         mode,
         route_binding_id,
         demand,
+        announcements,
         PLANNER_REBUILD_REASON_MULTIPATH_HINT_REPLAN,
     )?;
     Ok(())
@@ -113,6 +122,18 @@ pub(super) fn append_multipath_schedule_explain(
     explain.push(format!(
         "multipath_schedule_carrier_bindings={}",
         schedule.carrier_lane_bindings.len()
+    ));
+    explain.push(format!(
+        "multipath_schedule_transit_bindings={}",
+        schedule
+            .carrier_lane_bindings
+            .iter()
+            .filter(|b| b.role == MeshMultipathLaneRole::Transit)
+            .count()
+    ));
+    explain.push(format!(
+        "multipath_schedule_route_announcements={}",
+        schedule.route_announcements.len()
     ));
     explain.push(format!(
         "multipath_schedule_route_binding_configured={}",
@@ -280,6 +301,7 @@ pub(super) fn schedule_from_lanes(
     route_binding_id: Option<MeshRouteBindingId>,
     demand_plan: MultipathDemandPlan,
     lanes: Vec<MeshMultipathLane>,
+    announcements: &[RouteAnnouncement],
     planner_rebuild_reason: &str,
 ) -> Result<MeshMultipathSchedule, String> {
     let max_active_lane_count = max_active_lane_count_for_capacity(TRANSIT_CAPACITY_BUDGET_PCT);
@@ -307,8 +329,25 @@ pub(super) fn schedule_from_lanes(
         .sum();
 
     let carrier_lane_bindings = match route_binding_id.as_ref() {
-        Some(route_binding_id) => carrier_lane_bindings(selected_peers, &lanes, *route_binding_id)?,
-        None => Vec::new(),
+        Some(route_binding_id) => {
+            let mut bindings = carrier_lane_bindings(selected_peers, &lanes, *route_binding_id)?;
+            let announcement_bindings = announcement_carrier_bindings(
+                selected_peers,
+                &lanes,
+                announcements,
+            )?;
+            bindings.extend(announcement_bindings);
+            bindings
+        }
+        None => {
+            if !announcements.is_empty() {
+                return Err(
+                    "mesh route announcements require a route_binding_id to build carrier bindings"
+                        .to_string(),
+                );
+            }
+            Vec::new()
+        }
     };
     let execution_status = if route_binding_id.is_some() && !carrier_lane_bindings.is_empty() {
         EXECUTION_STATUS_CARRIER_BINDING_READY
@@ -343,6 +382,7 @@ pub(super) fn schedule_from_lanes(
         execution_status: execution_status.to_string(),
         transit_payload_policy: TRANSIT_PAYLOAD_POLICY.to_string(),
         planner_rebuild_reason: planner_rebuild_reason.to_string(),
+        route_announcements: announcements.to_vec(),
     })
 }
 
@@ -369,6 +409,66 @@ fn carrier_lane_bindings(
             })
         })
         .collect()
+}
+
+fn announcement_carrier_bindings(
+    selected_peers: &[MeshPeerState],
+    lanes: &[MeshMultipathLane],
+    announcements: &[RouteAnnouncement],
+) -> Result<Vec<MeshCarrierLaneBinding>, String> {
+    let mut bound_peers: std::collections::BTreeSet<&str> = lanes
+        .iter()
+        .map(|lane| lane.peer_node_id.as_str())
+        .collect();
+    let max_lane_id = lanes.iter().map(|lane| lane.lane_id).max().unwrap_or(0);
+    let mut synthetic_index = 0usize;
+    let mut bindings = Vec::new();
+    for announcement in announcements {
+        let RouteAnnouncement::Static {
+            destination: _,
+            via,
+            route_binding_id,
+            ttl: _,
+            auth: _,
+        } = announcement;
+        if bound_peers.contains(via.0.as_str()) {
+            continue;
+        }
+        let peer = match selected_peers.iter().find(|peer| peer.node_id == via.0) {
+            Some(peer) => peer,
+            None => continue,
+        };
+        let binding_id = *route_binding_id;
+        let (lane_id, role, weight_pct, capacity_weight_pct) =
+            match lanes.iter().find(|lane| lane.peer_node_id == peer.node_id) {
+                Some(lane) => (
+                    lane.lane_id,
+                    lane.role,
+                    lane.weight_pct,
+                    lane.capacity_weight_pct,
+                ),
+                None => {
+                    synthetic_index += 1;
+                    (
+                        max_lane_id + synthetic_index,
+                        MeshMultipathLaneRole::Transit,
+                        0,
+                        0,
+                    )
+                }
+            };
+        bound_peers.insert(via.0.as_str());
+        bindings.push(MeshCarrierLaneBinding {
+            route_binding_id: binding_id,
+            lane_id,
+            peer_node_id: peer.node_id.clone(),
+            carrier_endpoint: peer.endpoint.clone(),
+            role,
+            weight_pct,
+            capacity_weight_pct,
+        });
+    }
+    Ok(bindings)
 }
 
 fn format_schedule_lanes(lanes: &[MeshMultipathLane]) -> String {

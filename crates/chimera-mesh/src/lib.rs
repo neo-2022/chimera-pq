@@ -14,6 +14,7 @@ mod policy;
 mod policy_hints;
 mod policy_parse;
 mod preemptive;
+mod route_announcement;
 mod runtime;
 mod weave_contract;
 
@@ -63,6 +64,10 @@ pub use runtime::{
 pub use weave_contract::{
     REQUIRED_WEAVE_NODE_CAPABILITIES, WeaveNodeCapability, WeaveNodeContract,
     WeaveSealedTransitFrame, forward_weave_transit_frame, validate_weave_sealed_transit_frame,
+};
+pub use route_announcement::{
+    CapabilityToken, IpCidr, PeerId, RouteAnnouncement, RouteDestination,
+    parse_route_announcements,
 };
 
 #[cfg(test)]

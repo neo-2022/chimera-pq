@@ -23,6 +23,7 @@ impl MeshMultipathMode {
 pub enum MeshMultipathLaneRole {
     Active,
     Standby,
+    Transit,
 }
 
 impl MeshMultipathLaneRole {
@@ -30,6 +31,7 @@ impl MeshMultipathLaneRole {
         match self {
             Self::Active => "active",
             Self::Standby => "standby",
+            Self::Transit => "transit",
         }
     }
 }
@@ -107,6 +109,7 @@ pub struct MeshMultipathSchedule {
     pub route_binding_id: Option<MeshRouteBindingId>,
     pub lanes: Vec<MeshMultipathLane>,
     pub carrier_lane_bindings: Vec<MeshCarrierLaneBinding>,
+    pub route_announcements: Vec<crate::route_announcement::RouteAnnouncement>,
     pub active_lane_count: usize,
     pub standby_lane_count: usize,
     pub lane_admission_requested_active_lane_count: usize,

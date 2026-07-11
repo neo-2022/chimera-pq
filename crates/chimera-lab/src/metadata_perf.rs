@@ -1682,6 +1682,7 @@ fn metadata_schedule(unsorted: bool) -> MeshMultipathSchedule {
         route_binding_id: Some(route_binding_id),
         lanes,
         carrier_lane_bindings,
+        route_announcements: Vec::new(),
         active_lane_count: ACTIVE_BINDING_COUNT,
         standby_lane_count: 0,
         lane_admission_requested_active_lane_count: ACTIVE_BINDING_COUNT,

@@ -9,5 +9,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+base64 = "0.22"
 chimera-core = { path = "../chimera-core" }
 chimera-session = { path = "../chimera-session" }

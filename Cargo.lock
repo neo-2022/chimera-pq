@@ -331,6 +331,7 @@ dependencies = [
 name = "chimera-mesh"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "chimera-core",
  "chimera-session",
 ]

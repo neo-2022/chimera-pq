@@ -100,6 +100,7 @@ fn make_lane_document(active_lane_count: usize) -> Result<TransitLaneDocument, S
         route_binding_id: Some(route_id),
         lanes,
         carrier_lane_bindings,
+        route_announcements: Vec::new(),
         active_lane_count,
         standby_lane_count: 0,
         lane_admission_requested_active_lane_count: active_lane_count,

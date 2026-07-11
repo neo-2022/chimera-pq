@@ -215,6 +215,7 @@ fn build_plan_outcome_from_runtime_state(
         multipath_mode,
         None,
         policy.multipath_demand,
+        &[],
     )?;
     if explain_mode.enabled() {
         multipath_schedule::append_multipath_schedule_explain(&mut explain, &multipath_schedule);

@@ -4,6 +4,10 @@ use crate::model::MeshPeerState;
 use crate::multipath_model::{
     MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode, MeshRouteBindingId,
 };
+use crate::route_announcement::{
+    CapabilityToken, PeerId, RouteAnnouncement, RouteDestination,
+};
+use std::time::Duration;
 
 fn peer(node_id: &str) -> MeshPeerState {
     MeshPeerState {
@@ -42,6 +46,7 @@ fn carrier_lane_binding_fails_closed_when_lane_peer_is_not_selected() -> Result<
             90,
         ),
         lanes,
+        &[],
         "initial_plan",
     ) {
         Ok(_) => {
@@ -57,6 +62,106 @@ fn carrier_lane_binding_fails_closed_when_lane_peer_is_not_selected() -> Result<
 }
 
 #[test]
+fn route_announcement_creates_transit_binding_for_selected_via_peer() -> Result<(), String> {
+    let selected_peers = vec![peer("active-node"), peer("via-node")];
+    let route_binding_id = MeshRouteBindingId::new(77)?;
+    let announcements = vec![RouteAnnouncement::Static {
+        destination: RouteDestination::Domain("example.com".to_string()),
+        via: PeerId::new("via-node")?,
+        route_binding_id,
+        ttl: Duration::from_secs(300),
+        auth: CapabilityToken::new(
+            PeerId::new("issuer")?,
+            RouteDestination::Domain("example.com".to_string()),
+            None,
+            vec![],
+        ),
+    }];
+
+    let schedule = build_multipath_schedule(
+        &selected_peers,
+        MeshMultipathMode::Off,
+        Some(route_binding_id),
+        None,
+        &announcements,
+    )?;
+
+    assert_eq!(schedule.route_announcements.len(), 1);
+    let transit = schedule
+        .carrier_lane_bindings
+        .iter()
+        .find(|binding| binding.peer_node_id == "via-node")
+        .ok_or("missing transit carrier binding for announced via peer")?;
+    assert_eq!(transit.role, MeshMultipathLaneRole::Transit);
+    assert_eq!(transit.route_binding_id, route_binding_id);
+    assert!(schedule
+        .carrier_lane_bindings
+        .iter()
+        .any(|binding| binding.peer_node_id == "active-node"
+            && binding.role == MeshMultipathLaneRole::Active));
+    Ok(())
+}
+
+#[test]
+fn route_announcement_requires_route_binding_id_to_build_bindings() {
+    let selected_peers = vec![peer("active-node"), peer("via-node")];
+    let announcements = vec![RouteAnnouncement::Static {
+        destination: RouteDestination::Domain("example.com".to_string()),
+        via: PeerId::new("via-node").unwrap(),
+        route_binding_id: MeshRouteBindingId::new(77).unwrap(),
+        ttl: Duration::from_secs(300),
+        auth: CapabilityToken::new(
+            PeerId::new("issuer").unwrap(),
+            RouteDestination::Domain("example.com".to_string()),
+            None,
+            vec![],
+        ),
+    }];
+
+    let result = build_multipath_schedule(
+        &selected_peers,
+        MeshMultipathMode::Off,
+        None,
+        None,
+        &announcements,
+    );
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn route_announcement_for_unknown_via_is_ignored() -> Result<(), String> {
+    let selected_peers = vec![peer("active-node")];
+    let route_binding_id = MeshRouteBindingId::new(77)?;
+    let announcements = vec![RouteAnnouncement::Static {
+        destination: RouteDestination::Domain("example.com".to_string()),
+        via: PeerId::new("unknown-node")?,
+        route_binding_id,
+        ttl: Duration::from_secs(300),
+        auth: CapabilityToken::new(
+            PeerId::new("issuer")?,
+            RouteDestination::Domain("example.com".to_string()),
+            None,
+            vec![],
+        ),
+    }];
+
+    let schedule = build_multipath_schedule(
+        &selected_peers,
+        MeshMultipathMode::Off,
+        Some(route_binding_id),
+        None,
+        &announcements,
+    )?;
+
+    assert!(schedule
+        .carrier_lane_bindings
+        .iter()
+        .all(|binding| binding.peer_node_id == "active-node"));
+    Ok(())
+}
+
+#[test]
 fn aggregate_buffered_limits_active_lanes_to_nonzero_capacity_slots() -> Result<(), String> {
     let selected_peers = (0..95)
         .map(|idx| peer(&format!("node-{idx}")))
@@ -67,6 +172,7 @@ fn aggregate_buffered_limits_active_lanes_to_nonzero_capacity_slots() -> Result<
         MeshMultipathMode::AggregateBuffered,
         Some(MeshRouteBindingId::new(78)?),
         None,
+        &[],
     )?;
 
     assert_eq!(

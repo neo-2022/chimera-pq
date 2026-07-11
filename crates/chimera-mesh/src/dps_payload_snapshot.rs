@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::multipath_model::MeshRouteBindingId;
+use crate::route_announcement::{parse_route_announcements, RouteAnnouncement};
 use crate::policy::{
     ContinuityPolicy, MeshPathPolicy, MeshPathProfile, MeshTrafficHints, MultipathDemand,
     MultipathMode, ShadowSwitchMode, TrafficClass,
@@ -17,6 +18,7 @@ pub(crate) struct MeshDpsPayloadSnapshot {
     mesh_policy_keys_fingerprint: String,
     traffic_hints: MeshTrafficHints,
     route_binding_id: Option<MeshRouteBindingId>,
+    route_announcements: Vec<RouteAnnouncement>,
     mesh_require_min_reliability_present: bool,
     mesh_max_load_score_present: bool,
     mesh_max_peers_present: bool,
@@ -49,6 +51,7 @@ pub(crate) fn parse_mesh_dps_payload(payload: &str) -> Result<MeshDpsPayloadPars
     let mut multipath_demand: Option<MultipathDemand> = None;
     let mut continuity_policy: Option<ContinuityPolicy> = None;
     let mut route_binding_id: Option<MeshRouteBindingId> = None;
+    let mut route_announcements: Vec<RouteAnnouncement> = Vec::new();
     let mut mesh_require_min_reliability_present = false;
     let mut mesh_max_load_score_present = false;
     let mut mesh_max_peers_present = false;
@@ -126,6 +129,9 @@ pub(crate) fn parse_mesh_dps_payload(payload: &str) -> Result<MeshDpsPayloadPars
             "mesh_continuity_policy" => {
                 continuity_policy = Some(ContinuityPolicy::from_dps_value(value)?);
             }
+            "mesh_announcements" => {
+                route_announcements = parse_route_announcements(value)?;
+            }
             "mesh_route_binding_id" => {
                 let parsed = parse_u64_field(value, key)?;
                 if parsed == 0 {
@@ -195,6 +201,7 @@ pub(crate) fn parse_mesh_dps_payload(payload: &str) -> Result<MeshDpsPayloadPars
             continuity_policy,
         ),
         route_binding_id,
+        route_announcements,
         mesh_require_min_reliability_present,
         mesh_max_load_score_present,
         mesh_max_peers_present,
@@ -219,6 +226,10 @@ impl MeshDpsPayloadSnapshot {
 
     pub(crate) fn route_binding_id(&self) -> Option<MeshRouteBindingId> {
         self.route_binding_id
+    }
+
+    pub(crate) fn route_announcements(&self) -> &[RouteAnnouncement] {
+        &self.route_announcements
     }
 
     pub(crate) fn has_mesh_policy_key(&self, expected_key: &str) -> bool {
