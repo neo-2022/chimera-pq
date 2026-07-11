@@ -223,12 +223,47 @@ Observations:
   plus routing/DNS convergence on the public-seed nodes.
 - Final three consecutive harness runs are the acceptance evidence.
 
+## Phase 4 Evidence (soak / benchmark)
+
+Soak and benchmark evidence was accumulated on the v0.1.207 stand deployment:
+
+```text
+status=partial
+version=0.1.207
+remote_stand_used=true
+ssh_ok=true
+nodes=amai,vdsina,laptop
+test_command=scripts/mesh_stabilization_harness.sh repeated (15 s interval)
+soak_complete_runs=20
+soak_all_pass_runs=14
+soak_fail_runs=6
+soak_per_probe_failures=7/120 (5.8 %)
+```
+
+Findings from `docs/BENCHMARK_REPORT_v0_1_207.md`:
+
+- Latency: mesh and direct probe latencies are similar to the v0.1.206 baseline
+  (mesh mean ~1.6 s, direct mean ~1.4 s).
+- Memory: per-node CHIMERA RSS is well below the 300 MB gate.
+- Throughput (RU → NL, 20 MiB): direct ~16.8 MB/s, mesh ~6.2 MB/s, average
+  ratio ~40 %. This does **not** meet the MVP_SPEC §9 ≥ 50 % gate yet.
+
+Phase 4 remains open until the throughput ratio is brought above 50 % or the
+measurement method is shown to be unfairly pessimistic.
+
+## Phase 3 Status (sealed multi-hop transit)
+
+Unit tests in `crates/chimera-carrier/src/peer_egress/transit*` cover sealed
+opaque forwarding and assert that transit nodes never expose payload bytes.
+Runtime evidence of a true multi-hop path (e.g. laptop → NL → RU → target)
+is pending operator configuration or a dedicated harness.
+
 ## Blockers / Open Questions
 
 - `chimera-lab` `current_workline_attestation_guard` unit tests are currently
   failing (pre-existing). These are unrelated to mesh-node runtime and must not
   block stabilization, but they must be tracked.
-- Phase 3 (sealed multi-hop transit) and Phase 4 (soak/benchmark) evidence still
-  need to be accumulated over longer background sessions.
+- Phase 4 throughput gate is not yet closed (~40 % vs required ≥ 50 %).
+- Phase 3 runtime multi-hop evidence is not yet collected.
 - GitHub Latest remains older than v0.1.207; final release publication to GitHub
   is pending and required for the §11 release gate.

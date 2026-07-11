@@ -40,15 +40,32 @@
 
 ## Soak Results
 
-A 20-iteration soak (15 s interval, ~5 minutes total) was run after the mesh
-settled. Summary will be appended once the background job completes.
+A soak run of up to 20 iterations (15 s interval) was executed after the mesh
+settled. The job was terminated by the 600 s shell limit after 17 iterations;
+using the full set of 20 evidence files in the soak window:
 
 ```text
-soak_status=in_progress
-soak_iterations=20
-soak_interval_seconds=15
-soak_background_task=bash-0m5l57q7
+soak_status=partial
+soak_complete_runs=20
+all_pass_runs=14
+fail_runs=6
+per_probe_failures=7/120 (5.8 %)
+version=0.1.207
 ```
+
+Failure distribution (per-probe, across 20 runs):
+
+| node | mode | failures |
+|---|---|---|
+| amai | direct | 2 |
+| amai | mesh | 1 |
+| vdsina | direct | 2 |
+| vdsina | mesh | 2 |
+| laptop | any | 0 |
+
+Most failures are timeouts to `ifconfig.me` and appear to be stand/network
+flakiness rather than a steady mesh regression. The laptop, which routes
+through the public seeds, did not fail once.
 
 ## Throughput
 
