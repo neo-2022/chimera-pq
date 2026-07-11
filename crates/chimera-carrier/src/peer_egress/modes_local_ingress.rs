@@ -2,7 +2,9 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
-use crate::peer_egress::lane_binding::{TransitLaneDocument, TransitLaneRegistration};
+use crate::peer_egress::lane_binding::{
+    TransitLaneDocument, TransitLaneRegistration, transit_path_binding_from_mesh_lane,
+};
 use crate::peer_egress::live_lane_selection::{
     select_carrier_binding_from_multipath_schedule, select_carrier_binding_from_registrations,
 };
@@ -11,9 +13,10 @@ use crate::peer_egress::pool::SharedPeerPool;
 use crate::peer_egress::protocol::{
     Destination, SecurePeerStream, read_native_connect_destination, redacted_log_reason,
 };
+use crate::peer_egress::transit_binding::TransitPathBinding;
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_connect_message};
-use chimera_mesh::MeshMultipathFlowKey;
+use chimera_mesh::{MeshMultipathFlowKey, MeshMultipathLaneRole, MeshMultipathSchedule};
 
 use super::tune_tcp;
 
@@ -116,6 +119,9 @@ pub fn handle_local_client_with_peer_pool_and_first_byte(
                 return crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer);
             }
             Err(error) => {
+                // The peer failed the handshake. Discard it by letting it drop
+                // out of scope; the pool never sees this stream again, so the
+                // same dead peer cannot be retried within this flow.
                 eprintln!(
                     "event=local_ingress_peer_dead_discarded attempt={attempt} reason_class={} destination_id={destination_id}",
                     redacted_log_reason(&error)
@@ -162,13 +168,22 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
     let plan = document.require_mesh_path_plan_ref()?;
-    let binding = select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
-        .map_err(|reason| format!("local ingress lane selection failed: {reason}"))?;
+    let initial_binding =
+        select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+            .map_err(|reason| format!("local ingress lane selection failed: {reason}"))?;
+    let fallback_bindings =
+        active_fallback_bindings(&plan.multipath_schedule, flow_key, initial_binding)
+            .map_err(|error| format!("local ingress fallback binding enumeration failed: {error}"))?;
+
+    const MAX_ATTEMPTS_PER_LANE: usize = 3;
 
     let deadline = Instant::now()
         .checked_add(Duration::from_millis(peer_handshake_timeout_ms()))
         .ok_or_else(|| "peer handshake deadline overflow".to_string())?;
     let mut attempt: usize = 0;
+    let mut current_binding = initial_binding;
+    let mut lane_attempt: usize = 0;
+    let mut fallback_index: usize = 0;
 
     loop {
         attempt += 1;
@@ -180,7 +195,15 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
                 attempt.saturating_sub(1)
             ));
         }
-        match dispatcher.pop_for(binding) {
+        if lane_attempt >= MAX_ATTEMPTS_PER_LANE && fallback_index < fallback_bindings.len() {
+            current_binding = fallback_bindings[fallback_index];
+            fallback_index += 1;
+            lane_attempt = 0;
+            eprintln!(
+                "event=local_ingress_lane_fallback attempt={attempt} reason_class=lane_peer_retry_exhausted destination_id={destination_id}"
+            );
+        }
+        match dispatcher.pop_for(current_binding) {
             Ok(mut peer) => {
                 match handshake_peer_for_destination(&mut peer, &destination) {
                     Ok(()) => {
@@ -193,6 +216,7 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
                         return crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer);
                     }
                     Err(error) => {
+                        lane_attempt += 1;
                         eprintln!(
                             "event=local_ingress_peer_dead_discarded attempt={attempt} reason_class={} destination_id={destination_id}",
                             redacted_log_reason(&error)
@@ -201,6 +225,7 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
                 }
             }
             Err(error) => {
+                lane_attempt += 1;
                 eprintln!(
                     "event=local_ingress_lane_peer_wait attempt={attempt} reason_class={} destination_id={destination_id}",
                     redacted_log_reason(&error)
@@ -213,6 +238,22 @@ pub fn handle_local_client_with_lane_document_and_first_byte(
             std::thread::sleep(Duration::from_millis(50));
         }
     }
+}
+
+fn active_fallback_bindings(
+    schedule: &MeshMultipathSchedule,
+    _flow_key: MeshMultipathFlowKey,
+    exclude: TransitPathBinding,
+) -> Result<Vec<TransitPathBinding>, String> {
+    let mut bindings: Vec<TransitPathBinding> = schedule
+        .carrier_lane_bindings
+        .iter()
+        .filter(|lane| lane.role == MeshMultipathLaneRole::Active)
+        .map(transit_path_binding_from_mesh_lane)
+        .collect::<Result<Vec<_>, _>>()?;
+    bindings.sort_by_key(|binding| binding.lane_id().get());
+    bindings.retain(|&binding| binding != exclude);
+    Ok(bindings)
 }
 
 pub fn read_local_connect_destination(
@@ -257,3 +298,7 @@ pub(crate) fn connect_local_client_via_peer(
         .map_err(|error| format!("write native local ack failed: {error}"))?;
     crate::peer_egress::net::pipe_plain_with_secure_peer(local, peer)
 }
+
+#[cfg(test)]
+#[path = "modes_local_ingress_tests.rs"]
+mod tests;

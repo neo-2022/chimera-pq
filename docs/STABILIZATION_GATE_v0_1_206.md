@@ -66,6 +66,55 @@ result_summary=<counts or boolean>
 blockers=<empty or list>
 ```
 
+## Phase 1A Evidence (dead-peer selection, churn, reconnect)
+
+Implemented in GPG-signed commit(s) and evidenced by unit tests only:
+
+```text
+commit=b18d1e755c5a4d331df3fcb14ffca63721cce565
+status=pass
+version=0.1.0 (workspace)
+remote_stand_used=false
+nodes=none
+blockers=none
+```
+
+Phase 1A focus:
+
+- `crates/chimera-carrier/src/peer_egress/modes_local_ingress.rs`
+  - Extended the lane-document local-ingress retry loop: after the flow-key
+    selected lane fails handshake, the same lane is retried up to 3 attempts
+    (fresh peers may arrive), then the code falls back to another admitted
+    active lane from `plan.multipath_schedule`.  Redacted logging and the
+    existing deadline are preserved; no panics on malformed input.
+  - Added `active_fallback_bindings` helper to enumerate deterministic active
+    lane fallbacks.
+
+- `crates/chimera-carrier/src/peer_egress/modes_local_ingress_tests.rs`
+  - `lane_document_retries_same_binding_when_fresh_peer_arrives`
+  - `lane_document_fallbacks_to_other_active_lane_when_first_peer_is_dead`
+  - `peer_pool_discards_dead_peer_and_does_not_retry_same_stream`
+
+- `crates/chimera-carrier-tls/src/lib.rs`
+  - Added TCP/TLS carrier reconnect/backoff (≤5 s deadline), redacted
+    `event=tls_carrier_reconnect` and `event=tls_carrier_stream_dropped` log
+    lines, `set_connect_addr` for listener endpoint changes, and
+    `with_reconnect_max_wait_ms` for tests.
+  - Added regression tests:
+    - `tls_carrier_reconnects_within_deadline_after_server_late_bind`
+    - `tls_carrier_reconnects_after_disconnect_and_endpoint_change`
+
+Commands run (this is process-only evidence; no remote stand hosts touched):
+
+```text
+cargo test -p chimera-carrier --all-targets      # 239 passed
+cargo test -p chimera-carrier-tls --all-targets  # 7 passed
+cargo clippy --workspace --all-targets -- -D warnings  # clean
+```
+
+Status: Phase 1A process-level gates pass.  Remote-stand runtime evidence for
+§4 M3/M6 still pending (SSH-only, will be accumulated in next turns).
+
 ## Blockers / Open Questions
 
 - `chimera-lab` `current_workline_attestation_guard` unit tests are currently
