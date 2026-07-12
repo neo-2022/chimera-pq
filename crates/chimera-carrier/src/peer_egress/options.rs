@@ -1,5 +1,6 @@
 use std::env;
 
+use base64::Engine as _;
 use crate::peer_egress::options_mode::parse_mode;
 pub use crate::peer_egress::options_mode::{Mode, mode_name};
 use crate::peer_egress::options_proof::TransitProofOptions;
@@ -81,6 +82,8 @@ pub struct Options {
     pub discovery_url: Option<String>,
     pub discovery_pubkey: Option<String>,
     pub discovery_keyring: Option<String>,
+    pub mesh_announcement_keyring: Option<String>,
+    pub mesh_announcement_signing_key: Option<String>,
     pub mesh_namespace: String,
     pub mesh_self_node_id: String,
     pub mesh_policy_payload: String,
@@ -191,6 +194,8 @@ impl Options {
         let mut discovery_url = env_value("CHIMERA_MESH_NODES_DISCOVERY_URL");
         let mut discovery_pubkey = env_value("CHIMERA_MESH_NODES_DISCOVERY_PUBKEY");
         let mut discovery_keyring = env_value("CHIMERA_MESH_NODES_DISCOVERY_KEYRING");
+        let mut mesh_announcement_keyring = env_value("CHIMERA_MESH_ANNOUNCEMENT_KEYRING");
+        let mut mesh_announcement_signing_key = env_value("CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY");
         let mut mesh_namespace = env_value("CHIMERA_MESH_NAMESPACE");
         let mut mesh_self_node_id = env_value("CHIMERA_MESH_SELF_NODE_ID");
         let mut mesh_policy_payload = env_value("CHIMERA_MESH_POLICY_PAYLOAD");
@@ -247,6 +252,8 @@ impl Options {
                 "--discovery-url" => discovery_url = Some(value.clone()),
                 "--discovery-pubkey" => discovery_pubkey = Some(value.clone()),
                 "--discovery-keyring" => discovery_keyring = Some(value.clone()),
+                "--mesh-announcement-keyring" => mesh_announcement_keyring = Some(value.clone()),
+                "--mesh-announcement-signing-key" => mesh_announcement_signing_key = Some(value.clone()),
                 "--mesh-namespace" => mesh_namespace = Some(value.clone()),
                 "--mesh-self-node-id" => mesh_self_node_id = Some(value.clone()),
                 "--mesh-policy-payload" => mesh_policy_payload = Some(value.clone()),
@@ -404,6 +411,8 @@ impl Options {
             discovery_url,
             discovery_pubkey,
             discovery_keyring,
+            mesh_announcement_keyring,
+            mesh_announcement_signing_key,
             mesh_namespace,
             mesh_self_node_id,
             mesh_policy_payload,
@@ -449,6 +458,52 @@ impl Options {
             return Err("discovery keyring is required".to_string());
         }
         Ok(keyring)
+    }
+
+    pub fn mesh_announcement_keyring_map(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, Vec<u8>>, String> {
+        let mut keyring = std::collections::BTreeMap::new();
+        if let Some(raw) = &self.mesh_announcement_keyring {
+            for entry in raw.split(',').map(str::trim).filter(|v| !v.is_empty()) {
+                let (peer_id, pubkey) = entry
+                    .split_once(':')
+                    .ok_or_else(|| "announcement keyring entry must be peer_id:base64".to_string())?;
+                if peer_id.trim().is_empty() || pubkey.trim().is_empty() {
+                    return Err(
+                        "announcement keyring entry must have non-empty peer_id and pubkey"
+                            .to_string(),
+                    );
+                }
+                let pubkey_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(pubkey.trim())
+                    .map_err(|error| format!("announcement keyring pubkey decode failed: {error}"))?;
+                if pubkey_bytes.len() != 32 {
+                    return Err(format!(
+                        "announcement keyring pubkey for {peer_id} must be 32 bytes, got {}",
+                        pubkey_bytes.len()
+                    ));
+                }
+                keyring.insert(peer_id.trim().to_string(), pubkey_bytes);
+            }
+        }
+        Ok(keyring)
+    }
+
+    pub fn mesh_announcement_signing_key_bytes(&self) -> Result<Option<Vec<u8>>, String> {
+        let Some(raw) = &self.mesh_announcement_signing_key else {
+            return Ok(None);
+        };
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(raw.trim())
+            .map_err(|error| format!("announcement signing key decode failed: {error}"))?;
+        if bytes.len() != 32 {
+            return Err(format!(
+                "announcement signing key must be 32 bytes, got {}",
+                bytes.len()
+            ));
+        }
+        Ok(Some(bytes))
     }
 }
 

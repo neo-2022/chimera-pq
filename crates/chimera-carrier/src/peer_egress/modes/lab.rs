@@ -88,6 +88,8 @@ pub fn run_bench(options: Options) -> Result<(), String> {
         discovery_url: None,
         discovery_pubkey: None,
         discovery_keyring: None,
+        mesh_announcement_keyring: None,
+        mesh_announcement_signing_key: None,
         mesh_namespace: "chimera-mesh".to_string(),
         mesh_self_node_id: "lab".to_string(),
         mesh_policy_payload: String::new(),

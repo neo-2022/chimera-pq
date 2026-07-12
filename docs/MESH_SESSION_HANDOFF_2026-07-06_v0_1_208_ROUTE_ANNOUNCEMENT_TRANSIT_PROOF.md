@@ -166,3 +166,78 @@ integration.
 
 - Stage 3: Ed25519 signing/verification of route announcements.
 - Stage 4: combined integration, full test matrix, and lifecycle attestation.
+
+## Stage 3 — Ed25519 PKI for route announcements (implementation complete)
+
+Changes committed on `main`:
+
+- `crates/chimera-mesh/Cargo.toml`:
+  - Added `ring` dependency for Ed25519 signing/verification.
+- `crates/chimera-mesh/src/route_announcement.rs`:
+  - Canonical signed message includes all stable route fields.
+  - `RouteAnnouncement::sign_with_ed25519_seed(seed)` creates an Ed25519 signature.
+  - `RouteAnnouncement::verify_with_ed25519_pubkey(pubkey)` checks the signature.
+  - Added unit tests: round-trip sign/verify, wrong key fails, empty signature fails,
+    tampered TTL fails.
+- `crates/chimera-carrier/src/peer_egress/options.rs`:
+  - New flags/env for `--mesh-announcement-keyring` and `--mesh-announcement-signing-key`.
+  - Helpers decode base64 pubkeys/seeds and enforce 32-byte Ed25519 length.
+- `crates/chimera-carrier/src/peer_egress/route_announcement_registry.rs`:
+  - `merge_received_announcements` now takes a trusted-key map.
+  - Signed announcements are verified before dedup/TTL.
+  - Bad signatures are rejected with redacted logs.
+  - Unsigned announcements are still accepted when no keyring is configured (backward
+    compatibility with Stage 1–2).
+  - `sign_local_announcements` signs a node's own announcements before sending.
+  - Added tests: valid signature accepted, bad signature rejected, unsigned accepted
+    without keyring, local announcements signed.
+- `crates/chimera-carrier/src/peer_egress/node.rs`:
+  - Node signs local announcements with `--mesh-announcement-signing-key` before
+    sending them over `ANNOUNCE`.
+- `crates/chimera-carrier/src/peer_egress/modes.rs`:
+  - Pool workers and outbound workers build the announcement keyring and verify
+    incoming `Announce` messages.
+- `crates/chimera-cli/src/mesh_cli/route_announce_cmd.rs`:
+  - Added `--mesh-announcement-signing-key` to sign generated route announcements.
+  - Legacy `--signature-base64` still works as a manual override.
+  - Added test verifying CLI produces a verifiable signature.
+
+### Test results
+
+```text
+cargo test -p chimera-mesh --lib          343 passed
+cargo test -p chimera-carrier --lib       249 passed
+cargo test -p chimera-cli                 437 passed + integration tests
+cargo test -p chimera-carrier --test multi_hop_sealed_transit  2 passed
+cargo build --release -p chimera-cli      succeeded
+```
+
+Selected new tests:
+
+- `route_announcement::tests::sign_and_verify_round_trip`
+- `route_announcement::tests::verify_fails_with_wrong_public_key`
+- `route_announcement::tests::verify_fails_when_signature_is_empty`
+- `route_announcement::tests::verify_fails_when_message_is_tampered`
+- `route_announcement_registry::tests::registry_accepts_valid_signed_announcement_and_rejects_bad_signature`
+- `route_announcement_registry::tests::unsigned_announcements_still_accepted_without_keyring`
+- `route_announcement_registry::tests::sign_then_verify_local_announcements`
+- `mesh_cli::route_announce_cmd::tests::build_payload_signs_announcement_when_signing_key_given`
+
+### Known limitations
+
+- Live Ed25519 signed exchange has not been run on the authorized SSH stand yet.
+- Stage 2 live verification is also pending; both will be covered in Stage 4.
+- `cargo clippy --workspace --all-targets` still fails on pre-existing `unwrap`/`expect`
+  in other test modules; the crates touched by this stage are now clippy-clean for
+  the library target and for all new test code.
+- `current_workline_attestation_guard` requires a full current-workline attestation
+  artifact (separate lifecycle file) and remains a pre-existing placeholder.
+
+## Remaining Work
+
+- Stage 4: combined integration, full test matrix, and lifecycle attestation.
+  - Restart RU/NL services with the new build.
+  - Run a closed-loop multi-hop sealed transit probe with live `ANNOUNCE` exchange and
+    Ed25519 verification enabled on both nodes.
+  - Update `docs/WORKFLOW_ATTESTATION.json` truth boundary and create current-workline
+    attestation artifact.

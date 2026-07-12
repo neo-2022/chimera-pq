@@ -11,7 +11,7 @@ use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_ser
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
 use crate::peer_egress::route_announcement_registry::{
     SharedRouteAnnouncementRegistry, local_announcements_from_options,
-    new_shared_route_announcement_registry,
+    new_shared_route_announcement_registry, sign_local_announcements,
 };
 use crate::peer_egress::wire::write_announce_message;
 use crate::peer_egress::mesh_lane_driver::{
@@ -58,7 +58,9 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
     let mut lane_driver_cancel: Option<Arc<AtomicBool>> = None;
     let route_announcement_registry: SharedRouteAnnouncementRegistry =
         new_shared_route_announcement_registry();
-    let local_announcements_to_share = local_announcements_from_options(&options);
+    let mut local_announcements_to_share = local_announcements_from_options(&options);
+    let signing_key = options.mesh_announcement_signing_key_bytes()?;
+    sign_local_announcements(&mut local_announcements_to_share, signing_key.as_deref())?;
     if options.discovery_configured() {
         let driver_options = match build_mesh_lane_driver_options(&options, Some(route_announcement_registry.clone())) {
             Ok(value) => value,

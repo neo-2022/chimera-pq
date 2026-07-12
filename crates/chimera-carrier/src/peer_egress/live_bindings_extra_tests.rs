@@ -49,6 +49,8 @@ fn options_with_lane_file(path: &str, allow_bound_transit: bool) -> Options {
         discovery_url: None,
         discovery_pubkey: None,
         discovery_keyring: None,
+        mesh_announcement_keyring: None,
+        mesh_announcement_signing_key: None,
         mesh_namespace: "chimera-mesh".to_string(),
         mesh_self_node_id: "test".to_string(),
         mesh_policy_payload: String::new(),

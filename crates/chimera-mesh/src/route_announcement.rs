@@ -2,6 +2,7 @@
 
 use crate::multipath_model::MeshRouteBindingId;
 use base64::Engine;
+use ring::signature::{Ed25519KeyPair, UnparsedPublicKey, ED25519};
 use std::fmt;
 use std::net::IpAddr;
 use std::time::{Duration, SystemTime};
@@ -46,6 +47,61 @@ impl RouteAnnouncement {
     pub fn auth(&self) -> &CapabilityToken {
         match self {
             Self::Static { auth, .. } => auth,
+        }
+    }
+
+    pub fn sign_with_ed25519_seed(&mut self, seed: &[u8]) -> Result<(), String> {
+        if seed.len() != 32 {
+            return Err(format!(
+                "ed25519 signing seed must be 32 bytes, got {}",
+                seed.len()
+            ));
+        }
+        let key_pair = Ed25519KeyPair::from_seed_unchecked(seed)
+            .map_err(|error| format!("invalid ed25519 seed: {error}"))?;
+        let signature = key_pair.sign(&self.signing_message());
+        match self {
+            Self::Static { auth, .. } => {
+                auth.signature = signature.as_ref().to_vec();
+            }
+        }
+        Ok(())
+    }
+
+    pub fn verify_with_ed25519_pubkey(&self, pubkey: &[u8]) -> Result<(), String> {
+        if pubkey.len() != 32 {
+            return Err(format!(
+                "ed25519 public key must be 32 bytes, got {}",
+                pubkey.len()
+            ));
+        }
+        let signature = self.auth().signature.clone();
+        if signature.is_empty() {
+            return Err("route announcement signature is empty".to_string());
+        }
+        let verifier = UnparsedPublicKey::new(&ED25519, pubkey);
+        verifier
+            .verify(&self.signing_message(), &signature)
+            .map_err(|_| "ed25519 route announcement signature verification failed".to_string())
+    }
+
+    fn signing_message(&self) -> Vec<u8> {
+        match self {
+            Self::Static {
+                destination,
+                via,
+                route_binding_id,
+                ttl,
+                auth,
+            } => format!(
+                "route_announcement:static:{}:{}:{}:{}:{}\n",
+                auth.issuer.as_str(),
+                destination.to_wire_string(),
+                via.as_str(),
+                ttl.as_secs(),
+                route_binding_id.get()
+            )
+            .into_bytes(),
         }
     }
 
@@ -359,6 +415,7 @@ fn now() -> SystemTime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ring::signature::KeyPair;
 
     fn sample_announcement() -> String {
         "static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA".to_string()
@@ -446,10 +503,82 @@ mod tests {
     }
 
     #[test]
-    fn format_includes_signature_when_present() {
-        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA")
-            .expect("parse");
+    fn format_includes_signature_when_present() -> Result<(), String> {
+        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA")?;
         let formatted = format_route_announcements(&parsed);
         assert!(formatted.contains("AAAA"), "formatted value must include base64 signature");
+        Ok(())
+    }
+
+    fn ed25519_keypair_from_seed(seed: &[u8]) -> Result<(Vec<u8>, Vec<u8>), String> {
+        let key_pair = Ed25519KeyPair::from_seed_unchecked(seed)
+            .map_err(|error| format!("test key pair failed: {error}"))?;
+        let public = key_pair.public_key().as_ref().to_vec();
+        let _signature = key_pair.sign(b"warmup");
+        Ok((public, _signature.as_ref().to_vec()))
+    }
+
+    #[test]
+    fn sign_and_verify_round_trip() -> Result<(), String> {
+        let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
+        let mut announcements = parse_route_announcements(
+            "static,cidr/192.168.31.0/24,peer-a,3600,7",
+        )?;
+        let announcement = &mut announcements[0];
+        announcement.sign_with_ed25519_seed(&[1u8; 32])?;
+        assert!(!announcement.auth().signature.is_empty());
+        announcement.verify_with_ed25519_pubkey(&public_key)?;
+        Ok(())
+    }
+
+    #[test]
+    fn verify_fails_with_wrong_public_key() -> Result<(), String> {
+        let (wrong_public_key, _) = ed25519_keypair_from_seed(&[2u8; 32])?;
+        let mut announcements = parse_route_announcements(
+            "static,cidr/192.168.31.0/24,peer-a,3600,7",
+        )?;
+        announcements[0].sign_with_ed25519_seed(&[1u8; 32])?;
+        assert!(announcements[0]
+            .verify_with_ed25519_pubkey(&wrong_public_key)
+            .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn verify_fails_when_signature_is_empty() -> Result<(), String> {
+        let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
+        let announcements = parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+        assert!(announcements[0]
+            .verify_with_ed25519_pubkey(&public_key)
+            .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn verify_fails_when_message_is_tampered() -> Result<(), String> {
+        let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
+        let mut announcements = parse_route_announcements(
+            "static,cidr/192.168.31.0/24,peer-a,3600,7",
+        )?;
+        announcements[0].sign_with_ed25519_seed(&[1u8; 32])?;
+        // Tamper with a copy that has a different TTL; the signature must not verify.
+        let mut tampered = announcements[0].clone();
+        tampered = match tampered {
+            RouteAnnouncement::Static {
+                destination,
+                via,
+                route_binding_id,
+                ttl: _,
+                auth,
+            } => RouteAnnouncement::Static {
+                destination,
+                via,
+                route_binding_id,
+                ttl: Duration::from_secs(9999),
+                auth,
+            },
+        };
+        assert!(tampered.verify_with_ed25519_pubkey(&public_key).is_err());
+        Ok(())
     }
 }

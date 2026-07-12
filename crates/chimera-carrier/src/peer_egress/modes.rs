@@ -313,6 +313,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
     aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
     route_announcement_registry: Option<SharedRouteAnnouncementRegistry>,
 ) -> Result<(), String> {
+    let trusted_keys = announce_keyring(options)?;
     let mut peer = connect_and_establish_outbound_peer(options)?;
     let transit_limits = options.transit_relay_limits();
     transit_limits.validate()?;
@@ -328,7 +329,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
         match &first_message {
             PeerMessage::Announce(announcements) => {
                 if let Some(registry) = &route_announcement_registry {
-                    merge_received_announcements(registry, announcements)?;
+                    merge_received_announcements(registry, announcements, trusted_keys.as_ref())?;
                 }
                 first_message = read_peer_message(&mut peer, 512)?;
                 continue;
@@ -431,6 +432,7 @@ pub(crate) fn serve_peer_pool_worker(
     route_announcement_registry: Option<SharedRouteAnnouncementRegistry>,
     mut peer: SecurePeerStream,
 ) -> Result<(), String> {
+    let trusted_keys = announce_keyring(options)?;
     let transit_limits = options.transit_relay_limits();
     transit_limits.validate()?;
     let previous_read_timeout = peer
@@ -445,7 +447,7 @@ pub(crate) fn serve_peer_pool_worker(
         match &first_message {
             PeerMessage::Announce(announcements) => {
                 if let Some(registry) = &route_announcement_registry {
-                    merge_received_announcements(registry, announcements)?;
+                    merge_received_announcements(registry, announcements, trusted_keys.as_ref())?;
                 }
                 first_message = read_peer_message(&mut peer, 512)?;
                 continue;
@@ -512,6 +514,17 @@ pub(crate) fn serve_peer_pool_worker(
     write_ack_ok(&mut peer)?;
     eprintln!("event=peer_pool_connect_ack_sent target=<redacted> destination_id={destination_id}");
     pipe_secure_peer_with_plain(peer, target)
+}
+
+fn announce_keyring(
+    options: &Options,
+) -> Result<Option<std::collections::BTreeMap<String, Vec<u8>>>, String> {
+    let map = options.mesh_announcement_keyring_map()?;
+    if map.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(map))
+    }
 }
 
 #[cfg(test)]

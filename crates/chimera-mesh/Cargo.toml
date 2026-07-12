@@ -12,3 +12,4 @@ workspace = true
 base64 = "0.22"
 chimera-core = { path = "../chimera-core" }
 chimera-session = { path = "../chimera-session" }
+ring = "0.17"

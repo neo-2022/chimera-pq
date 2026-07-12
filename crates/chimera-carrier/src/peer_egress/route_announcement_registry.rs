@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -14,6 +14,19 @@ pub fn new_shared_route_announcement_registry() -> SharedRouteAnnouncementRegist
 
 pub fn local_announcements_from_options(options: &Options) -> Vec<RouteAnnouncement> {
     parse_mesh_announcements_value(&options.mesh_policy_payload)
+}
+
+pub fn sign_local_announcements(
+    announcements: &mut [RouteAnnouncement],
+    signing_key: Option<&[u8]>,
+) -> Result<(), String> {
+    let Some(seed) = signing_key else {
+        return Ok(());
+    };
+    for announcement in announcements {
+        announcement.sign_with_ed25519_seed(seed)?;
+    }
+    Ok(())
 }
 
 fn parse_mesh_announcements_value(payload: &str) -> Vec<RouteAnnouncement> {
@@ -35,6 +48,7 @@ fn parse_mesh_announcements_value(payload: &str) -> Vec<RouteAnnouncement> {
 pub fn merge_received_announcements(
     registry: &SharedRouteAnnouncementRegistry,
     announcements: &[RouteAnnouncement],
+    trusted_keys: Option<&BTreeMap<String, Vec<u8>>>,
 ) -> Result<bool, String> {
     if announcements.is_empty() {
         return Ok(false);
@@ -46,6 +60,9 @@ pub fn merge_received_announcements(
     let mut keys: BTreeSet<String> = guard.iter().map(announcement_key).collect();
     let mut added = 0usize;
     for announcement in announcements {
+        if !verify_announcement_signature(announcement, trusted_keys) {
+            continue;
+        }
         if announcement.is_expired(now) {
             continue;
         }
@@ -56,6 +73,47 @@ pub fn merge_received_announcements(
         }
     }
     Ok(added > 0)
+}
+
+fn verify_announcement_signature(
+    announcement: &RouteAnnouncement,
+    trusted_keys: Option<&BTreeMap<String, Vec<u8>>>,
+) -> bool {
+    let signature = &announcement.auth().signature;
+    if signature.is_empty() {
+        // Unsigned announcements are still accepted for backward compatibility with
+        // Stage 1-2 configurations that do not yet use a keyring.
+        return true;
+    }
+    let Some(keyring) = trusted_keys else {
+        return true;
+    };
+    let issuer = announcement.auth().issuer.as_str();
+    let Some(pubkey) = keyring.get(issuer) else {
+        eprintln!(
+            "event=route_announcement_untrusted_issuer issuer=<redacted> reason=no_keyring_entry"
+        );
+        return true;
+    };
+    match announcement.verify_with_ed25519_pubkey(pubkey) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!(
+                "event=route_announcement_signature_rejected issuer=<redacted> reason={}",
+                redact_error(&error)
+            );
+            false
+        }
+    }
+}
+
+fn redact_error(error: &str) -> String {
+    // Keep the error class but avoid echoing raw key/signature bytes.
+    if error.len() > 64 {
+        format!("{:<.64}...", error)
+    } else {
+        error.to_string()
+    }
 }
 
 pub fn registry_announcements(registry: &SharedRouteAnnouncementRegistry) -> Vec<RouteAnnouncement> {
@@ -92,47 +150,145 @@ fn announcement_key(announcement: &RouteAnnouncement) -> String {
 mod tests {
     use super::*;
 
-    fn sample_announcements() -> Vec<RouteAnnouncement> {
+    fn sample_announcements() -> Result<Vec<RouteAnnouncement>, String> {
         parse_route_announcements(
             "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
         )
-        .expect("sample announcements must parse")
     }
 
     #[test]
-    fn registry_deduplicates_by_destination_via_binding() {
+    fn registry_deduplicates_by_destination_via_binding() -> Result<(), String> {
         let registry = new_shared_route_announcement_registry();
-        let first = sample_announcements();
+        let first = sample_announcements()?;
         let mut second = first.clone();
         second.push(
-            parse_route_announcements("static,cidr/10.0.0.0/8,vdsina,3600,9")
-                .expect("parse")
+            parse_route_announcements("static,cidr/10.0.0.0/8,vdsina,3600,9")?
                 .pop()
-                .unwrap(),
+                .ok_or_else(|| "parsed announcement missing".to_string())?,
         );
 
         assert!(
-            merge_received_announcements(&registry, &first).expect("merge first"),
+            merge_received_announcements(&registry, &first, None)?,
             "first merge should change registry"
         );
         assert!(
-            merge_received_announcements(&registry, &second).expect("merge second"),
+            merge_received_announcements(&registry, &second, None)?,
             "second merge should add the new announcement"
         );
 
         let all = registry_announcements(&registry);
         assert_eq!(all.len(), 3);
+        Ok(())
     }
 
     #[test]
-    fn registry_drops_expired_announcements() {
+    fn registry_drops_expired_announcements() -> Result<(), String> {
         let registry = new_shared_route_announcement_registry();
-        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,1,7")
-            .expect("parse");
+        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,1,7")?;
         std::thread::sleep(std::time::Duration::from_millis(1200));
         assert!(
-            !merge_received_announcements(&registry, &parsed).expect("merge"),
+            !merge_received_announcements(&registry, &parsed, None)?,
             "expired announcements should not change registry"
         );
+        Ok(())
+    }
+
+    fn forge_signature(
+        keypair: &ring::signature::Ed25519KeyPair,
+        announcement: &RouteAnnouncement,
+    ) -> Vec<u8> {
+        keypair.sign(&announcement.signing_message_for_test()).as_ref().to_vec()
+    }
+
+    #[test]
+    fn registry_accepts_valid_signed_announcement_and_rejects_bad_signature() -> Result<(), String> {
+        use ring::signature::Ed25519KeyPair;
+
+        let seed_a = [7u8; 32];
+        let keypair_a = Ed25519KeyPair::from_seed_unchecked(&seed_a)
+            .map_err(|error| format!("test keypair a: {error}"))?;
+        let pubkey_a = <Ed25519KeyPair as ring::signature::KeyPair>::public_key(&keypair_a)
+            .as_ref()
+            .to_vec();
+
+        let seed_b = [9u8; 32];
+        let keypair_b = Ed25519KeyPair::from_seed_unchecked(&seed_b)
+            .map_err(|error| format!("test keypair b: {error}"))?;
+
+        let mut good = parse_route_announcements("static,cidr/10.0.0.0/8,peer-a,3600,9")?
+            .pop()
+            .ok_or_else(|| "parsed announcement missing".to_string())?;
+        good.sign_with_ed25519_seed(&seed_a)?;
+
+        let mut bad = good.clone();
+        match &mut bad {
+            RouteAnnouncement::Static { auth, .. } => {
+                auth.signature = forge_signature(&keypair_b, &good);
+            }
+        }
+
+        let keyring: BTreeMap<String, Vec<u8>> =
+            std::iter::once(("peer-a".to_string(), pubkey_a)).collect();
+        let registry = new_shared_route_announcement_registry();
+
+        assert!(
+            merge_received_announcements(&registry, &[good], Some(&keyring))?,
+            "valid signed announcement should be added"
+        );
+        assert!(
+            !merge_received_announcements(&registry, &[bad], Some(&keyring))?,
+            "bad signature should be rejected"
+        );
+        assert_eq!(registry_announcements(&registry).len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn unsigned_announcements_still_accepted_without_keyring() -> Result<(), String> {
+        let registry = new_shared_route_announcement_registry();
+        let unsigned = parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+        assert!(
+            merge_received_announcements(&registry, &unsigned, None)?,
+            "unsigned announcements accepted when no keyring is configured"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn sign_then_verify_local_announcements() -> Result<(), String> {
+        let seed = [5u8; 32];
+        let mut announcements = parse_route_announcements(
+            "static,cidr/192.168.31.0/24,peer-a,3600,7",
+        )?;
+        sign_local_announcements(&mut announcements, Some(&seed))?;
+        assert!(!announcements[0].auth().signature.is_empty());
+        Ok(())
+    }
+
+    trait SigningMessageForTest {
+        fn signing_message_for_test(&self) -> Vec<u8>;
+    }
+
+    impl SigningMessageForTest for RouteAnnouncement {
+        fn signing_message_for_test(&self) -> Vec<u8> {
+            // Duplicate the canonical message to let tests forge signatures.
+            match self {
+                RouteAnnouncement::Static {
+                    destination,
+                    via,
+                    route_binding_id,
+                    ttl,
+                    auth,
+                } => format!(
+                    "route_announcement:static:{}:{}:{}:{}:{}\n",
+                    auth.issuer.as_str(),
+                    destination.to_wire_string(),
+                    via.as_str(),
+                    ttl.as_secs(),
+                    route_binding_id.get()
+                )
+                .into_bytes(),
+            }
+        }
     }
 }
