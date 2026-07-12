@@ -4699,9 +4699,6 @@ stop_runtime() {
       --route-cidr "$CHIMERA_ROUTE_CIDR" \
       --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
     cleanup_transparent_redirect_rules || cleanup_rc=$?
-    # Belt-and-suspenders teardown for the systemd stop path (also covers a
-    # forced stop that bypassed the normal ExecStop sequence).
-    chimera_rollback_cleanup_core >/dev/null 2>&1 || true
     if [[ "$down_rc" -ne 0 ]]; then
       echo "stop_status=fail mode=systemd_user reason=datapath_down_failed down_rc=$down_rc"
       return 1
@@ -4710,6 +4707,9 @@ stop_runtime() {
       echo "stop_status=fail mode=systemd_user reason=transparent_redirect_cleanup_failed"
       return 1
     fi
+    # Belt-and-suspenders teardown for the systemd stop path after a successful
+    # controlled down (forced-stop paths use ExecStopPost).
+    chimera_rollback_cleanup_core >/dev/null 2>&1 || true
     clear_runtime_generated_state
     echo "stop_status=ok mode=systemd_user"
     return 0
@@ -4733,8 +4733,6 @@ stop_runtime() {
     --route-cidr "$CHIMERA_ROUTE_CIDR" \
     --apply-dns ${CHIMERA_APPLY_DNS} >/dev/null 2>&1 || down_rc=$?
   cleanup_transparent_redirect_rules || cleanup_rc=$?
-  # Belt-and-suspenders teardown for the direct/standalone stop path.
-  chimera_rollback_cleanup_core >/dev/null 2>&1 || true
   if [[ "$down_rc" -ne 0 ]]; then
     echo "stop_status=fail mode=direct reason=datapath_down_failed down_rc=$down_rc"
     return 1
@@ -4743,6 +4741,9 @@ stop_runtime() {
     echo "stop_status=fail mode=direct reason=transparent_redirect_cleanup_failed"
     return 1
   fi
+  # Belt-and-suspenders teardown for the direct/standalone stop path after a
+  # successful controlled down.
+  chimera_rollback_cleanup_core >/dev/null 2>&1 || true
   clear_runtime_generated_state
   echo "stop_status=ok mode=direct"
 }

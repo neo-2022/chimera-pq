@@ -37,6 +37,7 @@ run_case() {
   cp "$ROOT_DIR/scripts/chimera-update-runtime-state.sh" "$install_root/scripts/chimera-update-runtime-state.sh"
   cp "$ROOT_DIR/scripts/chimera-update-rerun.sh" "$install_root/scripts/chimera-update-rerun.sh"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
   cp "$ROOT_DIR/deploy/systemd-user/chimera-runtime.service" "$install_root/deploy/systemd-user/chimera-runtime.service"
   cp "$ROOT_DIR/deploy/systemd-user/chimera-node.service" "$install_root/deploy/systemd-user/chimera-node.service"
@@ -222,6 +223,7 @@ run_systemd_bound_transit_missing_authority_does_not_block_start_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = tls
@@ -316,6 +318,7 @@ run_systemd_listener_only_unconfigured_endpoint_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = tls
@@ -418,6 +421,7 @@ run_systemd_apply_failure_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -585,6 +589,7 @@ run_systemd_cli_privilege_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -740,6 +745,7 @@ run_systemd_stale_tun_preflight_cleanup_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -906,6 +912,7 @@ run_systemd_listener_only_self_loop_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = tls
@@ -1033,6 +1040,7 @@ run_systemd_apply_state_proof_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -1241,6 +1249,7 @@ run_prestart_saved_state_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs" "$install_root/docs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -1475,6 +1484,7 @@ run_invalid_bootstrap_env_preflight_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_MESH_REMOTE_PEER_SPEC=$(touch /tmp/chimera_should_not_run)
 EOF
@@ -1703,6 +1713,7 @@ run_direct_apply_failure_case() {
 
   mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -1840,6 +1851,7 @@ run_peer_update_env_write_case() {
   cache_dir="$tmp_dir/cache/chimera"
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   bootstrap_env="$config_dir/mesh_bootstrap.env"
   peer_env="$config_dir/peer-update.env"
@@ -1878,6 +1890,7 @@ run_materialize_node_runtime_config_preserves_existing_case() {
   node_conf="$tmp_dir/mesh-node.conf"
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -1917,6 +1930,7 @@ run_peer_update_env_preserves_existing_listen_case() {
   cache_dir="$tmp_dir/cache/chimera"
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   bootstrap_env="$config_dir/mesh_bootstrap.env"
   peer_env="$config_dir/peer-update.env"
@@ -1971,6 +1985,7 @@ run_peer_update_runtime_restarts_stale_process_without_state_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_PEER_UPDATE_BASE_URL=http://198.51.100.10
@@ -2044,6 +2059,7 @@ run_direct_start_skips_datapath_when_node_fails_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir" "$runtime_dir" "$fake_bin"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -2112,6 +2128,7 @@ run_node_peer_listen_heal_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$node_conf" <<EOF
 carrier.profile = in-memory
 carrier.addr = carrier.mesh:443
@@ -2168,6 +2185,7 @@ run_repair_node_listener_bindings_for_retry_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir" "$bin_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = carrier.mesh:443
@@ -2237,6 +2255,7 @@ run_node_service_preflight_heals_blocked_fixed_listener_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -2313,6 +2332,7 @@ run_node_service_preflight_clears_stale_listener_override_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -2388,6 +2408,7 @@ run_public_start_second_attempt_repairs_fixed_peer_update_listen_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = carrier.mesh:443
@@ -2568,6 +2589,7 @@ run_systemd_start_retry_heals_fixed_listener_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = carrier.mesh:443
@@ -2725,6 +2747,7 @@ run_node_peer_endpoint_refresh_case() {
 
   mkdir -p "$install_root/scripts" "$install_root/configs" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = old-peer.example:443
@@ -2785,6 +2808,7 @@ run_peer_update_publication_heals_fixed_listen_once_case() {
 
   mkdir -p "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_PEER_UPDATE_BASE_URL=http://node.example:18179
 CHIMERA_PEER_UPDATE_LISTEN=0.0.0.0:18179
@@ -2864,6 +2888,7 @@ run_peer_update_invalid_base_url_preserves_existing_env_case() {
 
   mkdir -p "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_PEER_UPDATE_BASE_URL=not-a-url
 EOF
@@ -2915,6 +2940,7 @@ run_peer_update_publication_failure_degrades_start_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory
@@ -3042,6 +3068,7 @@ run_mesh_discovery_default_path_case() {
   install_root="$tmp_dir/chimera-release"
   mkdir -p "$install_root/scripts" "$tmp_dir/cache"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   expected_out="$tmp_dir/cache/chimera/mesh_nodes.discovery.json"
   expected_pub="$tmp_dir/cache/chimera/mesh_nodes.discovery.pubkey"
@@ -3077,6 +3104,7 @@ run_mesh_discovery_invite_token_env_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$state_file" <<'EOF'
 mode=node
 resolved_local_listen=127.0.0.1:45678
@@ -3144,6 +3172,7 @@ run_mesh_bootstrap_keyring_runtime_case() {
 
   mkdir -p "$install_root/scripts" "$install_root/configs" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
 carrier.profile = in-memory
 carrier.addr = 203.0.113.10:443
@@ -3246,6 +3275,7 @@ run_mesh_bootstrap_discovery_urls_runtime_case() {
 
   mkdir -p "$install_root/scripts" "$install_root/configs" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_MESH_NODES_DISCOVERY_URLS=https://seed-a.example/mesh_nodes.discovery.json,https://seed-b.example/mesh_nodes.discovery.json
@@ -3328,6 +3358,7 @@ run_mesh_bootstrap_direct_peer_spec_runtime_case() {
 
   mkdir -p "$install_root/scripts" "$install_root/configs" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_MESH_NAMESPACE=test-mesh
@@ -3374,6 +3405,7 @@ run_mesh_bind_uses_bootstrap_env_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_MESH_NAMESPACE=cef-public
 CHIMERA_MESH_LOCAL_NODE=test-local-node
@@ -3452,6 +3484,7 @@ run_publish_discovery_uses_bootstrap_keyring_case() {
 
   mkdir -p "$install_root/scripts" "$config_dir" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$bootstrap_env" <<'EOF'
 CHIMERA_MESH_NODES_DISCOVERY_KEYRING=default:key-a
 EOF
@@ -3537,6 +3570,7 @@ run_publish_discovery_strict_missing_state_clears_stale_case() {
 
   mkdir -p "$install_root/scripts" "$cache_dir" "$runtime_dir"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   printf '%s\n' '{"stale":true}' >"$discovery_out"
   printf '%s\n' 'stale-pubkey' >"$pubkey_out"
 
@@ -3568,6 +3602,7 @@ run_site_auto_watch_publishes_discovery_case() {
 
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   set +e
   output="$(
@@ -3605,6 +3640,7 @@ run_site_auto_watch_reports_publication_failure_case() {
   watch_log="$tmp_dir/watch.log"
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   set +e
   output="$(
@@ -3643,6 +3679,7 @@ run_site_auto_watch_uses_strict_publication_for_bound_transit_case() {
   watch_log="$tmp_dir/watch.log"
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   set +e
   output="$(
@@ -3679,6 +3716,7 @@ run_refresh_runtime_publication_reports_bound_transit_failure_case() {
   install_root="$tmp_dir/chimera-release"
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   set +e
   output="$(
@@ -3717,6 +3755,7 @@ run_site_auto_watch_loop_escalates_after_repeated_failure_case() {
   watch_log="$tmp_dir/watch.log"
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   set +e
   output="$(
@@ -3765,6 +3804,7 @@ run_start_rejects_direct_fallback_when_systemd_units_present_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$config_dir/systemd/user" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
 
   cat >"$node_conf" <<'EOF'
@@ -3911,6 +3951,7 @@ run_node_service_poststart_waits_for_datapath_proof_case() {
   watch_log="$tmp_dir/watch.log"
   mkdir -p "$install_root/scripts"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
 
   set +e
   output="$(
@@ -3943,6 +3984,7 @@ run_clear_runtime_generated_state_clears_transit_lane_bindings_case() {
   peer_env="$config_dir/peer-egress.env"
   mkdir -p "$install_root/scripts" "$config_dir" "$(dirname "$lane_file")"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$peer_env" <<EOF
 CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE=$lane_file
 EOF
@@ -3981,6 +4023,7 @@ run_node_service_preflight_heals_blocked_fixed_listener_without_ss_case() {
 
   mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
   cat >"$node_conf" <<'EOF'
 carrier.profile = in-memory

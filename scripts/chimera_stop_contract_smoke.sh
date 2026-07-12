@@ -12,6 +12,7 @@ make_install_root() {
   local install_root="${1:?install_root_required}"
   mkdir -p "$install_root/scripts" "$install_root/bin" "$install_root/configs" "$install_root/deploy/systemd-user" "$install_root/deploy/desktop" "$install_root/docs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cp "$ROOT_DIR/scripts/chimera-runner.sh" "$install_root/scripts/chimera-runner.sh"
   cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
 }

@@ -1,6 +1,7 @@
 [Unit]
 Description=CHIMERA Publication Watch (user service)
 After=chimera-node.service
+BindsTo=chimera-node.service
 PartOf=chimera-runtime.service
 StartLimitIntervalSec=60
 StartLimitBurst=3

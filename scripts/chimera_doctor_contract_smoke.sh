@@ -12,6 +12,7 @@ make_install_root() {
   local install_root="${1:?install_root_required}"
   mkdir -p "$install_root/scripts" "$install_root/bin" "$install_root/configs" "$install_root/docs"
   cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
   cat >"$install_root/bin/chimera-cli" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
