@@ -13,6 +13,7 @@ pub(crate) struct MeshRouteAnnounceOptions {
     multipath_mode: String,
     peers: Vec<String>,
     json_output: bool,
+    out_path: Option<String>,
 }
 
 pub(crate) fn mesh_route_announce_command(_usage: &str, args: &[String]) -> i32 {
@@ -78,7 +79,7 @@ pub(crate) fn mesh_route_announce_command(_usage: &str, args: &[String]) -> i32 
     let execution_status = &schedule.execution_status;
     let multipath_mode = schedule.mode.as_str();
 
-    if options.json_output {
+    let output = if options.json_output {
         let mut object = serde_json::Map::new();
         object.insert("status".to_string(), serde_json::Value::String("ok".to_string()));
         object.insert(
@@ -105,15 +106,26 @@ pub(crate) fn mesh_route_announce_command(_usage: &str, args: &[String]) -> i32 
             "multipath_mode".to_string(),
             serde_json::Value::String(multipath_mode.to_string()),
         );
-        println!("{}", serde_json::Value::Object(object));
+        serde_json::Value::Object(object).to_string()
     } else {
-        println!("status=ok");
-        println!("policy_payload={policy_payload}");
-        println!("route_announcement_count={route_announcement_count}");
-        println!("carrier_binding_count={carrier_binding_count}");
-        println!("transit_binding_count={transit_binding_count}");
-        println!("execution_status={execution_status}");
-        println!("multipath_mode={multipath_mode}");
+        format!(
+            "status=ok\n\
+             policy_payload={policy_payload}\n\
+             route_announcement_count={route_announcement_count}\n\
+             carrier_binding_count={carrier_binding_count}\n\
+             transit_binding_count={transit_binding_count}\n\
+             execution_status={execution_status}\n\
+             multipath_mode={multipath_mode}\n"
+        )
+    };
+
+    println!("{output}");
+
+    if let Some(path) = options.out_path.as_deref() {
+        if let Err(error) = std::fs::write(path, &output) {
+            eprintln!("mesh route-announce write failed: {error}");
+            return 1;
+        }
     }
 
     0
@@ -130,6 +142,7 @@ fn parse_options(args: &[String]) -> Result<MeshRouteAnnounceOptions, String> {
     let mut multipath_mode = "off".to_string();
     let mut peers: Vec<String> = Vec::new();
     let mut json_output = false;
+    let mut out_path = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -181,6 +194,7 @@ fn parse_options(args: &[String]) -> Result<MeshRouteAnnounceOptions, String> {
             "--multipath-mode" => {
                 multipath_mode = value.to_string();
             }
+            "--out" => set_once("--out", &mut out_path, value.to_string())?,
             "--peer" => peers.push(value.to_string()),
             _ => return Err(format!("unknown flag '{flag}'")),
         }
@@ -209,6 +223,7 @@ fn parse_options(args: &[String]) -> Result<MeshRouteAnnounceOptions, String> {
         multipath_mode,
         peers,
         json_output,
+        out_path,
     })
 }
 
@@ -301,10 +316,52 @@ mod tests {
         Ok(())
     }
 
+    fn temp_out_file() -> std::path::PathBuf {
+        let mut path = std::env::temp_dir();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        path.push(format!("chimera_route_announce_{ts}.txt"));
+        path
+    }
+
     #[test]
     fn command_runs_plan_and_reports_transit_binding() {
         let rc = mesh_route_announce_command("usage", &sample_args());
         assert_eq!(rc, 0, "route-announce command should succeed");
+    }
+
+    #[test]
+    fn command_writes_json_output_to_out_file() {
+        let out = temp_out_file();
+        let mut args = sample_args();
+        args.push("--json".to_string());
+        args.push("--out".to_string());
+        args.push(out.to_string_lossy().to_string());
+        let rc = mesh_route_announce_command("usage", &args);
+        assert_eq!(rc, 0);
+        let content = std::fs::read_to_string(&out).expect("out file should exist");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("valid json");
+        assert_eq!(parsed["status"], "ok");
+        assert_eq!(parsed["route_announcement_count"], 1);
+        assert_eq!(parsed["carrier_binding_count"], 2);
+        assert_eq!(parsed["transit_binding_count"], 1);
+        let _ = std::fs::remove_file(&out);
+    }
+
+    #[test]
+    fn command_writes_text_output_to_out_file() {
+        let out = temp_out_file();
+        let mut args = sample_args();
+        args.push("--out".to_string());
+        args.push(out.to_string_lossy().to_string());
+        let rc = mesh_route_announce_command("usage", &args);
+        assert_eq!(rc, 0);
+        let content = std::fs::read_to_string(&out).expect("out file should exist");
+        assert!(content.contains("status=ok"));
+        assert!(content.contains("transit_binding_count=1"));
+        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
