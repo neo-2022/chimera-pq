@@ -8,19 +8,22 @@
   "related_worklines": [
     {
       "workline_id": "phase4-route-announcement-hardening-2026-07-06",
-      "scope": "phase4_route_announcement_stage1_stage2_stage3",
+      "scope": "phase4_route_announcement_stage1_stage2_stage3_stage4_release",
       "status": "partial",
       "evidence": [
-        "docs/MESH_SESSION_HANDOFF_2026-07-06_v0_1_208_ROUTE_ANNOUNCEMENT_TRANSIT_PROOF.md"
+        "docs/MESH_SESSION_HANDOFF_2026-07-06_v0_1_208_ROUTE_ANNOUNCEMENT_TRANSIT_PROOF.md",
+        "docs/MESH_SESSION_HANDOFF_2026-07-13_v0_1_209_ROUTE_ANNOUNCEMENT_STAGE4_RELEASE.md"
       ],
       "truth_boundary": {
         "stage1_live_transit_proof": true,
-        "stage2_runtime_distribution": false,
-        "stage3_ed25519_verification": false,
+        "stage2_runtime_distribution": true,
+        "stage3_ed25519_verification": true,
+        "stage4_github_release_published": true,
+        "stage4_live_e2e_ed25519_announce_probe": false,
         "full_mvp_pass": false,
         "prod_ready": false
       },
-      "council_status": "pending_stage4_integration_review"
+      "council_status": "pending_stage4_live_e2e_probe"
     },
     {
       "workline_id": "github-release-runtime-gate-v0.1.138-2026-07-01",
