@@ -45,6 +45,14 @@ Commit `3f1cb62` on `main`:
   usage/help strings updated.
 - Cargo carriers/lab test fixtures updated for the new schedule field.
 
+Commit `3fa94f6` on `main`:
+
+- `crates/chimera-cli/src/mesh_cli/route_announce_cmd.rs` —
+  added optional `--out <file>` flag to `mesh route-announce`; writes the same
+  text/JSON report to a file in addition to stdout.
+- `crates/chimera-cli/src/main.rs` — updated English and Russian help lines
+  to show `[--out <file>] / [--out <файл>]`.
+
 ## Stand Proof
 
 All practical checks were performed remotely via SSH, with the local PC acting
@@ -126,7 +134,7 @@ active binding. The announcement is still parsed and stored.
 ```text
  cargo test -p chimera-mesh --lib          336 passed
  cargo test -p chimera-carrier --lib       (passed with new schedule field)
- cargo test -p chimera-cli                 435 passed
+ cargo test -p chimera-cli                 437 passed
  cargo test --workspace --lib              passed
  cargo test -p chimera-carrier --test multi_hop_sealed_transit  2 passed
  cargo build --release -p chimera-cli      succeeded
