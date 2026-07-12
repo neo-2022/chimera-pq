@@ -2,13 +2,16 @@
 
 **session_id:** handoff-2026-07-06-208-route-announcement-transit-proof
 **version:** 0.1.208
-**status:** stage_1_pass
+**status:** stage_1_pass / stage_2_code_complete
 
 ## Objective
 
-Execute Stage 1 of the approved Phase 4 Route Announcement hardening plan:
-prove that a route announcement creates a real multi-hop sealed transit data
-path on the authorized SSH-only stand.
+Execute Stage 1 of the approved Phase 4 Route Announcement hardening plan
+and Stage 2 runtime distribution of route announcements:
+- Stage 1: prove that a route announcement creates a real multi-hop sealed transit data
+  path on the authorized SSH-only stand.
+- Stage 2: add a secure peer `ANNOUNCE` wire message, registry, planner merge,
+  and unit/integration tests.
 
 ## Approach
 
@@ -107,9 +110,59 @@ Stage 1 acceptance criteria satisfied:
 - Evidence is recorded redacted (no raw payloads or secrets).
 - No local PC network state changed.
 
+## Stage 2 — Runtime Distribution (implementation complete)
+
+Changes committed on `main`:
+
+- `crates/chimera-carrier/src/peer_egress/wire.rs`:
+  - Added `PeerMessage::Announce(Vec<RouteAnnouncement>)`.
+  - Text-line wire form: `ANNOUNCE static,<dest>,<via>,<ttl>,<id>[,<base64_sig>]|...`.
+  - Added `write_announce_message` and parser path.
+- `crates/chimera-carrier/src/peer_egress/route_announcement_registry.rs`:
+  - `SharedRouteAnnouncementRegistry` with deduplication by
+    `(destination, via, route_binding_id)` and TTL expiry filtering.
+- `crates/chimera-mesh/src/runtime.rs` + rebuild trigger/model:
+  - Added `runtime_announcements` registry to `MeshRuntime` with
+    `merge_runtime_announcements`, deduplication, and a new
+    `RuntimeAnnouncementsChanged` rebuild cause.
+- `crates/chimera-mesh/src/runtime/plan_ops_dps_eval.rs`:
+  - Added `plan_path_from_dps_payload_with_announcements` so the carrier lane
+    driver can merge received announcements into the DPS snapshot before
+    planning.
+- `crates/chimera-carrier/src/peer_egress/mesh_lane_driver.rs`:
+  - Driver now passes the runtime registry into planning.
+- `crates/chimera-carrier/src/peer_egress/node.rs` and `live_bindings.rs`:
+  - Node sends its local announcement set after secure peer handshake on both
+    inbound and outbound lane workers.
+  - Pool workers consume `Announce` messages, merge them, then continue to
+    serve data traffic on the same peer connection.
+
+### Test results
+
+```text
+cargo test -p chimera-mesh --lib          336 passed
+cargo test -p chimera-carrier --lib       246 passed
+cargo test -p chimera-cli                 437 passed
+cargo test -p chimera-carrier --test multi_hop_sealed_transit  2 passed
+cargo build --release -p chimera-cli      succeeded
+```
+
+Added tests:
+
+- `peer_egress::wire::tests::peer_wire_messages_round_trip_announce`
+- `peer_egress::route_announcement_registry::tests::registry_deduplicates_by_destination_via_binding`
+- `peer_egress::route_announcement_registry::tests::registry_drops_expired_announcements`
+- `route_announcement::tests::format_and_parse_round_trip_preserves_announcement`
+- `route_announcement::tests::format_includes_signature_when_present`
+- `runtime::tests::runtime_announcements_create_transit_carrier_binding_in_plan`
+
+### Stage 2 live verification
+
+Not yet run on the authorized SSH stand. The code is covered by unit/integration
+artifacts above; a live two-node exchange will be performed during Stage 4
+integration.
+
 ## Remaining Work
 
-- Stage 2: runtime distribution of announcements over the peer wire (`ANNOUNCE`
-  message type and `MeshRuntime` registry).
 - Stage 3: Ed25519 signing/verification of route announcements.
 - Stage 4: combined integration, full test matrix, and lifecycle attestation.
