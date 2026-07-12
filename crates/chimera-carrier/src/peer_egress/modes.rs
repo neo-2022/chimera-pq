@@ -27,6 +27,9 @@ use crate::peer_egress::transit_dispatch::{
 use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document_and_limits;
 use crate::peer_egress::transit_guard::TransitRelayLimits;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_ack_ok};
+use crate::peer_egress::route_announcement_registry::{
+    SharedRouteAnnouncementRegistry, merge_received_announcements,
+};
 
 pub mod lab;
 #[path = "modes_local_ingress.rs"]
@@ -281,6 +284,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
         next_hop_dispatcher,
         lane_document,
         None,
+        None,
     )
 }
 
@@ -307,6 +311,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
     next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
     lane_document: Option<&TransitLaneDocument>,
     aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
+    route_announcement_registry: Option<SharedRouteAnnouncementRegistry>,
 ) -> Result<(), String> {
     let mut peer = connect_and_establish_outbound_peer(options)?;
     let transit_limits = options.transit_relay_limits();
@@ -318,7 +323,19 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
     peer.stream
         .set_read_timeout(Some(transit_limits.idle_timeout()))
         .map_err(|error| format!("set first peer read timeout failed: {error}"))?;
-    let first_message = read_peer_message(&mut peer, 512)?;
+    let mut first_message = read_peer_message(&mut peer, 512)?;
+    loop {
+        match &first_message {
+            PeerMessage::Announce(announcements) => {
+                if let Some(registry) = &route_announcement_registry {
+                    merge_received_announcements(registry, announcements)?;
+                }
+                first_message = read_peer_message(&mut peer, 512)?;
+                continue;
+            }
+            _ => break,
+        }
+    }
     let destination = match first_message {
         PeerMessage::Connect(destination) => {
             peer.stream
@@ -359,6 +376,9 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
             return Ok(());
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
+        PeerMessage::Announce(_) => {
+            return Err("unexpected peer announce after announce loop".to_string())
+        }
     };
     let target_addr = destination.connect_addr();
     let destination_id = destination.redacted_label();
@@ -408,6 +428,7 @@ pub(crate) fn serve_peer_pool_worker(
     next_hop_dispatcher: Option<SharedTransitNextHopDispatcher>,
     lane_document: Option<&TransitLaneDocument>,
     aggregate_ingress: Option<SharedAggregateTransitIngressRegistry>,
+    route_announcement_registry: Option<SharedRouteAnnouncementRegistry>,
     mut peer: SecurePeerStream,
 ) -> Result<(), String> {
     let transit_limits = options.transit_relay_limits();
@@ -419,7 +440,19 @@ pub(crate) fn serve_peer_pool_worker(
     peer.stream
         .set_read_timeout(Some(transit_limits.idle_timeout()))
         .map_err(|error| format!("set first peer read timeout failed: {error}"))?;
-    let first_message = read_peer_message(&mut peer, 512)?;
+    let mut first_message = read_peer_message(&mut peer, 512)?;
+    loop {
+        match &first_message {
+            PeerMessage::Announce(announcements) => {
+                if let Some(registry) = &route_announcement_registry {
+                    merge_received_announcements(registry, announcements)?;
+                }
+                first_message = read_peer_message(&mut peer, 512)?;
+                continue;
+            }
+            _ => break,
+        }
+    }
     let destination = match first_message {
         PeerMessage::Connect(destination) => {
             peer.stream
@@ -460,6 +493,9 @@ pub(crate) fn serve_peer_pool_worker(
             return Ok(());
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
+        PeerMessage::Announce(_) => {
+            return Err("unexpected peer announce after announce loop".to_string())
+        }
     };
     let target_addr = destination.connect_addr();
     let destination_id = destination.redacted_label();

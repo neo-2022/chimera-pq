@@ -121,6 +121,9 @@ fn pipe_bound_transit_direction(
                         PeerReadOutcome::Message(PeerMessage::AckOk) => {
                             return Err("bound transit stream received ack".to_string());
                         }
+                        PeerReadOutcome::Message(PeerMessage::Announce(_)) => {
+                            return Err("bound transit stream received announce message".to_string());
+                        }
                         PeerReadOutcome::Idle => {
                             if relay_activity.has_finished_direction() {
                                 return Ok(());

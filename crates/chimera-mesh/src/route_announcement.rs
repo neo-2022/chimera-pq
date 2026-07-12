@@ -88,6 +88,15 @@ pub enum RouteDestination {
     Domain(String),
 }
 
+impl RouteDestination {
+    pub fn to_wire_string(&self) -> String {
+        match self {
+            Self::Cidr(cidr) => format!("cidr/{}", cidr.format()),
+            Self::Domain(domain) => format!("domain/{}", domain),
+        }
+    }
+}
+
 impl fmt::Debug for RouteDestination {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -104,6 +113,10 @@ pub struct IpCidr {
 }
 
 impl IpCidr {
+    pub fn format(&self) -> String {
+        format!("{}/{}", self.address, self.prefix)
+    }
+
     pub fn new(address: IpAddr, prefix: u8) -> Result<Self, String> {
         let max = match address {
             IpAddr::V4(_) => 32,
@@ -207,6 +220,41 @@ impl fmt::Debug for CapabilityToken {
             .field("signature", &format!("{} bytes", self.signature.len()))
             .finish()
     }
+}
+
+/// Serialize route announcements to the wire/policy format.
+///
+/// Format is the same as `parse_route_announcements`: pipe-separated entries of
+/// `static,<destination>,<via_peer_id>,<ttl_seconds>,<route_binding_id>[,<base64_signature]`.
+pub fn format_route_announcements(announcements: &[RouteAnnouncement]) -> String {
+    announcements
+        .iter()
+        .map(|announcement| match announcement {
+            RouteAnnouncement::Static {
+                destination,
+                via,
+                route_binding_id,
+                ttl,
+                auth,
+            } => {
+                let mut base = format!(
+                    "static,{},{},{},{}",
+                    destination.to_wire_string(),
+                    via.as_str(),
+                    ttl.as_secs(),
+                    route_binding_id.get()
+                );
+                if !auth.signature.is_empty() {
+                    let signature = base64::engine::general_purpose::STANDARD
+                        .encode(&auth.signature);
+                    base.push(',');
+                    base.push_str(&signature);
+                }
+                base
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("|")
 }
 
 /// Parse a `mesh_announcements` value into route announcements.
@@ -377,5 +425,31 @@ mod tests {
     fn parse_rejects_bad_cidr_prefix() {
         let value = "static,cidr/192.168.31.0/33,vdsina,3600,7";
         assert!(parse_route_announcements(value).is_err());
+    }
+
+    #[test]
+    fn format_and_parse_round_trip_preserves_announcement() -> Result<(), String> {
+        let parsed = parse_route_announcements(
+            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
+        )?;
+        let formatted = format_route_announcements(&parsed);
+        let reparsed = parse_route_announcements(&formatted)?;
+
+        assert_eq!(reparsed.len(), 2);
+        assert_eq!(reparsed[0].via().as_str(), parsed[0].via().as_str());
+        assert_eq!(reparsed[1].via().as_str(), parsed[1].via().as_str());
+        assert_eq!(
+            reparsed[0].destination().to_wire_string(),
+            parsed[0].destination().to_wire_string()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn format_includes_signature_when_present() {
+        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA")
+            .expect("parse");
+        let formatted = format_route_announcements(&parsed);
+        assert!(formatted.contains("AAAA"), "formatted value must include base64 signature");
     }
 }

@@ -7,6 +7,22 @@
   "algorithm_source": "docs/AI_ARCHITECT_LIFECYCLE_GUARD.md",
   "related_worklines": [
     {
+      "workline_id": "phase4-route-announcement-hardening-2026-07-06",
+      "scope": "phase4_route_announcement_stage1_stage2_stage3",
+      "status": "partial",
+      "evidence": [
+        "docs/MESH_SESSION_HANDOFF_2026-07-06_v0_1_208_ROUTE_ANNOUNCEMENT_TRANSIT_PROOF.md"
+      ],
+      "truth_boundary": {
+        "stage1_live_transit_proof": true,
+        "stage2_runtime_distribution": false,
+        "stage3_ed25519_verification": false,
+        "full_mvp_pass": false,
+        "prod_ready": false
+      },
+      "council_status": "pending_stage4_integration_review"
+    },
+    {
       "workline_id": "github-release-runtime-gate-v0.1.138-2026-07-01",
       "scope": "github_latest_release_runtime_slice",
       "status": "pass_for_slice",

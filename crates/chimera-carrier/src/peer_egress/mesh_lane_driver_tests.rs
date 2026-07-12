@@ -124,6 +124,7 @@ fn mesh_lane_driver_plans_carrier_lanes_from_discovery_snapshot() -> Result<(), 
         discovery_keyring: keyring,
         discovery_timeout_ms: 5_000,
         poll_interval_ms: 30_000,
+        route_announcement_registry: None,
     };
 
     run_mesh_lane_driver_once(&options)?;
@@ -176,6 +177,7 @@ fn mesh_lane_driver_filters_self_node() -> Result<(), BoxError> {
         discovery_keyring: keyring,
         discovery_timeout_ms: 5_000,
         poll_interval_ms: 30_000,
+        route_announcement_registry: None,
     };
 
     let result = run_mesh_lane_driver_once(&options);

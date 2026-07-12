@@ -13,6 +13,7 @@ pub(super) enum MeshMultipathRebuildTriggerCause {
     PeerHealthChanged,
     PeerPerformanceChanged,
     UrgentFailover,
+    RuntimeAnnouncementsChanged,
 }
 
 impl MeshMultipathRebuildTriggerCause {
@@ -23,6 +24,7 @@ impl MeshMultipathRebuildTriggerCause {
             Self::PeerHealthChanged => "peer_health_changed",
             Self::PeerPerformanceChanged => "peer_performance_changed",
             Self::UrgentFailover => "urgent_failover",
+            Self::RuntimeAnnouncementsChanged => "runtime_announcements_changed",
         }
     }
 }
@@ -137,6 +139,14 @@ impl MeshRuntime {
             fold_u64(&mut state, count as u64);
         }
 
+        fold_u64(&mut state, self.runtime_announcements.len() as u64);
+        for announcement in &self.runtime_announcements {
+            let key = runtime_announcement_key(announcement);
+            fold_str(&mut state, &key);
+            fold_u64(&mut state, announcement.route_binding_id().get());
+            fold_u64(&mut state, announcement.ttl().as_secs());
+        }
+
         MeshMultipathRebuildFingerprint(state)
     }
 
@@ -156,6 +166,9 @@ impl MeshRuntime {
             MeshMultipathRebuildDirtyScope::Unknown => MeshMultipathRebuildDirtyMetadata::unknown(),
             MeshMultipathRebuildDirtyScope::PeerSet => {
                 MeshMultipathRebuildDirtyMetadata::peer_set(affected_peer_count)?
+            }
+            MeshMultipathRebuildDirtyScope::RuntimeAnnouncements => {
+                MeshMultipathRebuildDirtyMetadata::runtime_announcements(affected_peer_count)?
             }
         };
         let signal = if cause == MeshMultipathRebuildTriggerCause::UrgentFailover {
@@ -214,4 +227,13 @@ fn fold_str(state: &mut u64, value: &str) {
         *state ^= u64::from(byte);
         *state = state.wrapping_mul(FINGERPRINT_PRIME);
     }
+}
+
+fn runtime_announcement_key(announcement: &RouteAnnouncement) -> String {
+    format!(
+        "{}|{}|{}",
+        announcement.destination().to_wire_string(),
+        announcement.via().as_str(),
+        announcement.route_binding_id().get()
+    )
 }

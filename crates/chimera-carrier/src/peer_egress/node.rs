@@ -9,6 +9,11 @@ use crate::peer_egress::aggregate_ingress::{
 };
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
+use crate::peer_egress::route_announcement_registry::{
+    SharedRouteAnnouncementRegistry, local_announcements_from_options,
+    new_shared_route_announcement_registry,
+};
+use crate::peer_egress::wire::write_announce_message;
 use crate::peer_egress::mesh_lane_driver::{
     MeshLaneDriverOptions, run_mesh_lane_driver, run_mesh_lane_driver_once,
 };
@@ -51,8 +56,11 @@ fn classify_local_ingress(first_byte: u8) -> LocalIngressBranch {
 pub fn run_node(mut options: Options) -> Result<(), String> {
     let mut dynamic_lanes_enabled = false;
     let mut lane_driver_cancel: Option<Arc<AtomicBool>> = None;
+    let route_announcement_registry: SharedRouteAnnouncementRegistry =
+        new_shared_route_announcement_registry();
+    let local_announcements_to_share = local_announcements_from_options(&options);
     if options.discovery_configured() {
-        let driver_options = match build_mesh_lane_driver_options(&options) {
+        let driver_options = match build_mesh_lane_driver_options(&options, Some(route_announcement_registry.clone())) {
             Ok(value) => value,
             Err(error) => {
                 eprintln!(
@@ -119,6 +127,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
 
     let token = options.token.clone();
     let aead = options.aead;
+    let local_announcements_for_ingress = local_announcements_to_share.clone();
     let _lane_driver_cancel = lane_driver_cancel;
     let peer_pool = new_shared_pool();
     let transit_dispatcher = new_shared_transit_dispatcher();
@@ -142,8 +151,19 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
             match authenticate_peer(&mut stream, &token)
                 .and_then(|_| establish_secure_peer_server(stream, &token, aead))
             {
-                Ok(peer) => {
+                Ok(mut peer) => {
                     eprintln!("event=weave_peer_ingress_authenticated");
+                    if !local_announcements_for_ingress.is_empty() {
+                        if let Err(error) = write_announce_message(
+                            &mut peer,
+                            &local_announcements_for_ingress,
+                        ) {
+                            eprintln!(
+                                "event=weave_peer_ingress_announce_failed reason_class={}",
+                                redacted_log_reason(&error)
+                            );
+                        }
+                    }
                     if let Err(error) = peer_ingress_pool.push(peer) {
                         eprintln!(
                             "event=weave_peer_pool_push_failed reason_class={}",
@@ -167,6 +187,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
         let pool_worker_dispatcher = transit_dispatcher.clone();
         let pool_worker_aggregate = aggregate_ingress.clone();
         let pool_worker_lane_registry = live_transit_lane_registry.clone();
+        let pool_worker_registry = route_announcement_registry.clone();
         thread::spawn(move || {
             loop {
                 let peer = match pool_worker_pool.pop_wait() {
@@ -196,6 +217,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                     Some(pool_worker_dispatcher.clone()),
                     lane_document.as_deref(),
                     Some(pool_worker_aggregate.clone()),
+                    Some(pool_worker_registry.clone()),
                     peer,
                 ) {
                     eprintln!(
@@ -224,6 +246,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                                 Some(outbound_dispatcher.clone()),
                                 None,
                                 Some(outbound_aggregate_ingress.clone()),
+                                None,
                             )
                         }
                         Ok(document) => {
@@ -233,6 +256,7 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                                 Some(outbound_dispatcher.clone()),
                                 Some(document.as_ref()),
                                 Some(outbound_aggregate_ingress.clone()),
+                                None,
                             )
                         }
                         Err(error) => Err(error),
@@ -377,7 +401,10 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
     Ok(())
 }
 
-fn build_mesh_lane_driver_options(options: &Options) -> Result<MeshLaneDriverOptions, String> {
+fn build_mesh_lane_driver_options(
+    options: &Options,
+    route_announcement_registry: Option<SharedRouteAnnouncementRegistry>,
+) -> Result<MeshLaneDriverOptions, String> {
     let discovery_url = options
         .discovery_url
         .as_deref()
@@ -402,6 +429,7 @@ fn build_mesh_lane_driver_options(options: &Options) -> Result<MeshLaneDriverOpt
         discovery_keyring: options.discovery_keyring_map()?,
         discovery_timeout_ms: options.discovery_timeout_ms,
         poll_interval_ms: options.discovery_poll_interval_ms,
+        route_announcement_registry,
     })
 }
 

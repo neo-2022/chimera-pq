@@ -47,6 +47,16 @@ pub(super) fn validate_dirty_scope(
                 Ok(())
             }
         }
+        MeshMultipathRebuildDirtyScope::RuntimeAnnouncements => {
+            if affected_peer_count == 0 {
+                Err(
+                    "multipath rebuild runtime-announcements scope requires affected count > 0"
+                        .to_string(),
+                )
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 
@@ -65,6 +75,7 @@ fn allowed_rebuild_reason(reason: &str) -> bool {
             | "peer_health_changed"
             | "peer_performance_changed"
             | "peer_table_changed"
+            | "runtime_announcements_changed"
             | "local_reserve_invalid"
             | "route_binding_mismatch"
             | "transit_payload_policy_not_opaque"

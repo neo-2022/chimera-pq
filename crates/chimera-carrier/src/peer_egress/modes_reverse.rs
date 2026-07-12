@@ -146,6 +146,7 @@ pub(super) fn handle_reverse_peer_with_context(
             return Ok(());
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
+        PeerMessage::Announce(_) => return Err("unexpected peer announce message".to_string()),
     };
     let target_addr = destination.connect_addr();
     let destination_id = destination.redacted_label();

@@ -6,6 +6,7 @@ use crate::model::{
     MeshPublishedEndpointUpdate, peer_priority,
 };
 use crate::multipath_model::{MeshMultipathMode, MeshMultipathSchedule};
+use crate::route_announcement::RouteAnnouncement;
 use crate::policy::{MeshPathPolicy, MeshPathProfile, MeshPeerTablePolicy, MultipathMode};
 use crate::preemptive::{
     evaluate_shadow_runtime_decision, format_confirmation_tuning, format_profile_tuning_thresholds,
@@ -228,6 +229,7 @@ pub struct MeshRuntime {
     profile_state: MeshProfileState,
     multipath_rebuild_state: MeshMultipathRebuildState,
     pending_multipath_rebuild: Option<MeshMultipathRebuildSignal>,
+    runtime_announcements: Vec<RouteAnnouncement>,
     next_peer_identity_marker: u64,
     last_table_enforcement_report: MeshPeerTableEnforcementReport,
     tick: u64,
@@ -276,6 +278,7 @@ impl MeshRuntime {
             },
             multipath_rebuild_state: MeshMultipathRebuildState::default(),
             pending_multipath_rebuild: None,
+            runtime_announcements: Vec::new(),
             next_peer_identity_marker: 1,
             last_table_enforcement_report: MeshPeerTableEnforcementReport {
                 tick: 0,
@@ -317,6 +320,49 @@ impl MeshRuntime {
 
     pub fn peer_snapshot(&self) -> Vec<MeshPeerState> {
         self.peers.values().cloned().collect()
+    }
+
+    pub fn runtime_announcements(&self) -> &[RouteAnnouncement] {
+        &self.runtime_announcements
+    }
+
+    pub fn merge_runtime_announcements(
+        &mut self,
+        source: &str,
+        announcements: &[RouteAnnouncement],
+    ) -> Result<bool, String> {
+        if announcements.is_empty() {
+            return Ok(false);
+        }
+        self.remember_source(source);
+        let now = std::time::SystemTime::now();
+        let mut keys: std::collections::BTreeSet<String> = self
+            .runtime_announcements
+            .iter()
+            .map(runtime_announcement_key)
+            .collect();
+        let before = self.rebuild_trigger_fingerprint();
+        let mut added = 0usize;
+        for announcement in announcements {
+            if announcement.is_expired(now) {
+                continue;
+            }
+            let key = runtime_announcement_key(announcement);
+            if keys.insert(key) {
+                self.runtime_announcements.push(announcement.clone());
+                added = added.saturating_add(1);
+            }
+        }
+        if added == 0 {
+            return Ok(false);
+        }
+        self.mark_pending_multipath_rebuild_with_dirty_scope(
+            MeshMultipathRebuildTriggerCause::RuntimeAnnouncementsChanged,
+            before,
+            MeshMultipathRebuildDirtyScope::RuntimeAnnouncements,
+            added,
+        )?;
+        Ok(true)
     }
 
     pub fn health_state_count(&self) -> usize {
@@ -413,5 +459,71 @@ impl MeshRuntime {
         policy: &MeshPathPolicy,
     ) -> Result<MeshPathPlanCore, String> {
         path_planner::build_plan_core_from_runtime_state(self, join_mode, policy)
+    }
+}
+
+fn runtime_announcement_key(announcement: &RouteAnnouncement) -> String {
+    format!(
+        "{}|{}|{}",
+        announcement.destination().to_wire_string(),
+        announcement.via().as_str(),
+        announcement.route_binding_id().get()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_announcements_create_transit_carrier_binding_in_plan() -> Result<(), String> {
+        let mut runtime = MeshRuntime::bootstrap("stand", "test")?;
+        runtime.merge_discovery(
+            "test-discovery",
+            &[crate::model::MeshDiscoveryRecord {
+                node_id: "vdsina".to_string(),
+                endpoint: "198.51.100.1:443".to_string(),
+                region: "ru".to_string(),
+                load_score: 0,
+                reliability_score: 100,
+            }],
+        )?;
+
+        let announcements = crate::route_announcement::parse_route_announcements(
+            "static,cidr/127.0.0.1/32,vdsina,3600,11",
+        )?;
+        let changed = runtime.merge_runtime_announcements("test-peer", &announcements)?;
+        assert!(changed, "registry should change after first merge");
+
+        let request = crate::model::MeshJoinRequest {
+            namespace: "stand".to_string(),
+            node_name: "amai".to_string(),
+            invite_token: None,
+        };
+        let payload = concat!(
+            "allow=mesh;",
+            "mesh_multipath_mode=off;",
+            "mesh_route_binding_id=11;",
+            "mesh_max_peers=1;",
+            "mesh_max_selected_per_region=1"
+        );
+
+        let plan = runtime.plan_path_from_dps_payload_with_announcements(
+            &request,
+            payload,
+            runtime.runtime_announcements(),
+        )?;
+
+        assert_eq!(plan.multipath_schedule.active_lane_count, 1);
+        assert_eq!(plan.multipath_schedule.carrier_lane_bindings.len(), 1);
+        assert_eq!(
+            plan.multipath_schedule.carrier_lane_bindings[0].peer_node_id,
+            "vdsina"
+        );
+        assert_eq!(
+            plan.multipath_schedule.execution_status,
+            "carrier_lane_binding_contract_ready"
+        );
+        Ok(())
     }
 }

@@ -232,6 +232,18 @@ impl MeshDpsPayloadSnapshot {
         &self.route_announcements
     }
 
+    pub(crate) fn merged_route_announcements(
+        &self,
+        runtime_announcements: &[RouteAnnouncement],
+    ) -> Vec<RouteAnnouncement> {
+        let mut merged = self.route_announcements.clone();
+        if !runtime_announcements.is_empty() {
+            merged.reserve(runtime_announcements.len());
+            merged.extend(runtime_announcements.iter().cloned());
+        }
+        merged
+    }
+
     pub(crate) fn has_mesh_policy_key(&self, expected_key: &str) -> bool {
         match expected_key.trim() {
             "mesh_require_min_reliability" => self.mesh_require_min_reliability_present,

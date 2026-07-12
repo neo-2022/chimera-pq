@@ -67,7 +67,7 @@ pub use weave_contract::{
 };
 pub use route_announcement::{
     CapabilityToken, IpCidr, PeerId, RouteAnnouncement, RouteDestination,
-    parse_route_announcements,
+    format_route_announcements, parse_route_announcements,
 };
 
 #[cfg(test)]

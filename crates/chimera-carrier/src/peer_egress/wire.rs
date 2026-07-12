@@ -5,6 +5,7 @@ use crate::peer_egress::aggregate_wire::{
     validate_aggregate_transit_shard_frame,
 };
 use crate::peer_egress::protocol::{Destination, SecurePeerStream, parse_peer_connect_destination};
+use chimera_mesh::{RouteAnnouncement, format_route_announcements, parse_route_announcements};
 use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_frame};
 use crate::peer_egress::transit_binding::{
     BOUND_TRANSIT_MAGIC, BoundTransitRelayFrame, encode_bound_transit_relay_frame,
@@ -17,6 +18,7 @@ pub(crate) enum PeerMessage {
     SealedTransit(TransitRelayFrame),
     BoundSealedTransit(BoundTransitRelayFrame),
     AggregateSealedTransit(AggregateTransitShardFrame),
+    Announce(Vec<RouteAnnouncement>),
 }
 
 impl fmt::Debug for PeerMessage {
@@ -38,6 +40,10 @@ impl fmt::Debug for PeerMessage {
             Self::AggregateSealedTransit(frame) => f
                 .debug_struct("PeerMessage::AggregateSealedTransit")
                 .field("frame", frame)
+                .finish(),
+            Self::Announce(announcements) => f
+                .debug_struct("PeerMessage::Announce")
+                .field("count", &announcements.len())
                 .finish(),
         }
     }
@@ -79,6 +85,17 @@ pub(crate) fn write_bound_sealed_transit_message(
     peer.write_secure_payload(&encode_bound_transit_relay_frame(frame))
 }
 
+pub(crate) fn write_announce_message(
+    peer: &mut SecurePeerStream,
+    announcements: &[RouteAnnouncement],
+) -> Result<(), String> {
+    if announcements.is_empty() {
+        return Ok(());
+    }
+    let payload = format_route_announcements(announcements);
+    peer.write_line(&format!("ANNOUNCE {payload}"))
+}
+
 #[allow(dead_code)]
 pub(crate) fn write_aggregate_sealed_transit_message(
     peer: &mut SecurePeerStream,
@@ -112,6 +129,11 @@ pub(crate) fn parse_peer_payload(
     if line == "OK" {
         return Ok(PeerMessage::AckOk);
     }
+    if let Some(payload) = line.strip_prefix("ANNOUNCE ") {
+        return parse_route_announcements(payload)
+            .map(PeerMessage::Announce)
+            .map_err(|error| format!("peer announce message invalid: {error}"));
+    }
     parse_peer_connect_destination(&line).map(PeerMessage::Connect)
 }
 
@@ -119,8 +141,8 @@ pub(crate) fn parse_peer_payload(
 mod tests {
     use super::{
         PeerMessage, parse_peer_payload, read_peer_message, write_ack_ok,
-        write_aggregate_sealed_transit_message, write_bound_sealed_transit_message,
-        write_connect_message, write_sealed_transit_message,
+        write_aggregate_sealed_transit_message, write_announce_message,
+        write_bound_sealed_transit_message, write_connect_message, write_sealed_transit_message,
     };
     use crate::peer_egress::aggregate_wire::{
         AGGREGATE_TRANSIT_MAGIC, AggregateObjectId, AggregateTransitShardFrame,
@@ -422,6 +444,29 @@ mod tests {
         assert!(!debug.contains("aggregate secure round trip"));
         assert!(!debug.contains("route_id: 9"));
         assert!(!debug.contains("lane_id: 3"));
+        Ok(())
+    }
+
+    #[test]
+    fn peer_wire_messages_round_trip_announce() -> Result<(), String> {
+        let (mut left, mut right) = test_peer_pair()?;
+        let announcements = chimera_mesh::parse_route_announcements(
+            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
+        )?;
+
+        write_announce_message(&mut left, &announcements)?;
+        let message = read_peer_message(&mut right, 4096)?;
+        let debug = format!("{message:?}");
+        match message {
+            PeerMessage::Announce(parsed) => {
+                assert_eq!(parsed.len(), 2);
+                assert_eq!(parsed[0].via().as_str(), "vdsina");
+                assert_eq!(parsed[1].via().as_str(), "amai");
+            }
+            other => return Err(format!("unexpected announce message: {other:?}")),
+        }
+        assert!(!debug.contains("192.168.31"));
+        assert!(!debug.contains("example.internal"));
         Ok(())
     }
 }

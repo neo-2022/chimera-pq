@@ -24,6 +24,7 @@ pub enum MeshMultipathRebuildUrgency {
 pub enum MeshMultipathRebuildDirtyScope {
     Unknown,
     PeerSet,
+    RuntimeAnnouncements,
 }
 
 impl MeshMultipathRebuildDirtyScope {
@@ -31,6 +32,7 @@ impl MeshMultipathRebuildDirtyScope {
         match self {
             Self::Unknown => "unknown",
             Self::PeerSet => "peer_set",
+            Self::RuntimeAnnouncements => "runtime_announcements",
         }
     }
 }
@@ -53,6 +55,15 @@ impl MeshMultipathRebuildDirtyMetadata {
         let metadata = Self {
             scope: MeshMultipathRebuildDirtyScope::PeerSet,
             affected_peer_count,
+        };
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    pub fn runtime_announcements(affected_announcement_count: usize) -> Result<Self, String> {
+        let metadata = Self {
+            scope: MeshMultipathRebuildDirtyScope::RuntimeAnnouncements,
+            affected_peer_count: affected_announcement_count,
         };
         metadata.validate()?;
         Ok(metadata)

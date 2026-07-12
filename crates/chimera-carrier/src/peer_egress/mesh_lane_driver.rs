@@ -13,8 +13,11 @@ use crate::peer_egress::discovery_fetch::{
 };
 use crate::peer_egress::lane_binding::write_transit_lane_document_from_mesh_plan;
 use crate::peer_egress::protocol::redacted_log_reason;
+use crate::peer_egress::route_announcement_registry::{
+    SharedRouteAnnouncementRegistry, registry_announcements,
+};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MeshLaneDriverOptions {
     pub namespace: String,
     pub self_node_id: String,
@@ -24,6 +27,26 @@ pub struct MeshLaneDriverOptions {
     pub discovery_keyring: std::collections::BTreeMap<String, String>,
     pub discovery_timeout_ms: u64,
     pub poll_interval_ms: u64,
+    pub route_announcement_registry: Option<SharedRouteAnnouncementRegistry>,
+}
+
+impl std::fmt::Debug for MeshLaneDriverOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MeshLaneDriverOptions")
+            .field("namespace", &"<redacted>")
+            .field("self_node_id", &"<redacted>")
+            .field("policy_payload", &"<redacted>")
+            .field("lane_document_path", &self.lane_document_path)
+            .field("discovery_urls", &self.discovery_urls.len())
+            .field("discovery_keyring", &self.discovery_keyring.keys().len())
+            .field("discovery_timeout_ms", &self.discovery_timeout_ms)
+            .field("poll_interval_ms", &self.poll_interval_ms)
+            .field(
+                "route_announcement_registry",
+                &self.route_announcement_registry.is_some(),
+            )
+            .finish()
+    }
 }
 
 pub fn run_mesh_lane_driver_once(options: &MeshLaneDriverOptions) -> Result<(), String> {
@@ -90,9 +113,25 @@ pub fn run_mesh_lane_driver_once(options: &MeshLaneDriverOptions) -> Result<(), 
     let _policy_check = MeshPathPolicy::from_dps_payload(&options.policy_payload)
         .map_err(|error| format!("mesh lane driver policy parse failed: {error}"))?;
 
-    let refreshed_plan = runtime
-        .plan_path_from_dps_payload(&request, &options.policy_payload)
-        .map_err(|error| format!("mesh lane driver plan failed: {error}"))?;
+    let runtime_announcements = options
+        .route_announcement_registry
+        .as_ref()
+        .map(registry_announcements)
+        .unwrap_or_default();
+
+    let refreshed_plan = if runtime_announcements.is_empty() {
+        runtime
+            .plan_path_from_dps_payload(&request, &options.policy_payload)
+            .map_err(|error| format!("mesh lane driver plan failed: {error}"))?
+    } else {
+        runtime
+            .plan_path_from_dps_payload_with_announcements(
+                &request,
+                &options.policy_payload,
+                &runtime_announcements,
+            )
+            .map_err(|error| format!("mesh lane driver plan with runtime announcements failed: {error}"))?
+    };
 
     write_transit_lane_document_from_mesh_plan(&refreshed_plan, &options.lane_document_path)
         .map_err(|error| format!("mesh lane driver write lane document failed: {error}"))?;

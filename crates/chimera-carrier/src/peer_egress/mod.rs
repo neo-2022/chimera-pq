@@ -27,6 +27,7 @@ pub mod pool;
 pub mod proof;
 pub mod protocol;
 pub(crate) mod relay_activity;
+pub mod route_announcement_registry;
 pub(crate) mod secure_halves;
 pub mod startup_contract;
 pub mod transit;
@@ -49,6 +50,14 @@ pub use lane_binding::{
     write_transit_lane_registrations_from_mesh_plan,
 };
 pub use live_bindings::{LiveTransitLaneRegistry, load_live_transit_lane_registrations};
+pub use route_announcement_registry::{
+    SharedRouteAnnouncementRegistry,
+    format_registry_for_log,
+    local_announcements_from_options,
+    merge_received_announcements,
+    new_shared_route_announcement_registry,
+    registry_announcements,
+};
 pub use live_lane_selection::{
     CarrierLaneSelection, CarrierLaneSelectionMode, select_carrier_binding_from_multipath_schedule,
     select_carrier_lane_from_mesh_plan, select_carrier_lane_from_multipath_schedule,

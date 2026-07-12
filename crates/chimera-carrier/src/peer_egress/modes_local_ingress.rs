@@ -49,6 +49,7 @@ fn require_peer_ack(peer: &mut SecurePeerStream) -> Result<(), String> {
         PeerMessage::BoundSealedTransit(_) => {
             Err("peer returned unexpected bound transit frame".to_string())
         }
+        PeerMessage::Announce(_) => Err("peer returned unexpected announce message".to_string()),
     }
 }
 

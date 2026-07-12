@@ -18,6 +18,20 @@ impl MeshRuntime {
         dps_eval::plan_path_from_dps_payload(self, request, payload)
     }
 
+    pub fn plan_path_from_dps_payload_with_announcements(
+        &self,
+        request: &MeshJoinRequest,
+        payload: &str,
+        runtime_announcements: &[crate::route_announcement::RouteAnnouncement],
+    ) -> Result<MeshPathPlan, String> {
+        dps_eval::plan_path_from_dps_payload_with_announcements(
+            self,
+            request,
+            payload,
+            runtime_announcements,
+        )
+    }
+
     pub fn plan_path_core_from_dps_payload(
         &self,
         request: &MeshJoinRequest,

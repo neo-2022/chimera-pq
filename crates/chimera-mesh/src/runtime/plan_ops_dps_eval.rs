@@ -1,5 +1,6 @@
 use super::*;
 use crate::dps_payload_snapshot::MeshDpsPayloadSnapshot;
+use crate::route_announcement::RouteAnnouncement;
 use crate::runtime::plan_dps_adaptation::apply_dps_traffic_hints_adaptation;
 use crate::runtime::standby_shadow_explain::adapt_standby_shadow_from_dps;
 
@@ -31,7 +32,17 @@ pub(super) fn plan_path_from_dps_payload(
     request: &MeshJoinRequest,
     payload: &str,
 ) -> Result<MeshPathPlan, String> {
+    plan_path_from_dps_payload_with_announcements(runtime, request, payload, &[])
+}
+
+pub(super) fn plan_path_from_dps_payload_with_announcements(
+    runtime: &MeshRuntime,
+    request: &MeshJoinRequest,
+    payload: &str,
+    runtime_announcements: &[RouteAnnouncement],
+) -> Result<MeshPathPlan, String> {
     let context = policy_and_snapshot_from_dps_payload(payload)?;
+    let merged_announcements = context.snapshot.merged_route_announcements(runtime_announcements);
     let mut plan = runtime.plan_path(request, &context.policy)?;
     annotate_dps_payload_explain(&mut plan.explain, &context.snapshot, "plan");
     adapt_standby_shadow_from_dps(
@@ -43,7 +54,7 @@ pub(super) fn plan_path_from_dps_payload(
             .multipath_mode
             .map(|mode| mode.as_str()),
     );
-    apply_dps_multipath_schedule(&context.snapshot, &mut plan)?;
+    apply_dps_multipath_schedule_with_announcements(&context.snapshot, &merged_announcements, &mut plan)?;
     Ok(plan)
 }
 
@@ -62,6 +73,15 @@ pub(super) fn apply_dps_multipath_schedule(
     snapshot: &MeshDpsPayloadSnapshot,
     plan: &mut MeshPathPlan,
 ) -> Result<(), String> {
+    let announcements = snapshot.route_announcements().to_vec();
+    apply_dps_multipath_schedule_with_announcements(snapshot, &announcements, plan)
+}
+
+pub(super) fn apply_dps_multipath_schedule_with_announcements(
+    snapshot: &MeshDpsPayloadSnapshot,
+    announcements: &[RouteAnnouncement],
+    plan: &mut MeshPathPlan,
+) -> Result<(), String> {
     let hints = snapshot.traffic_hints();
     if let Some(mode) = hints.multipath_mode {
         replace_multipath_schedule(
@@ -69,7 +89,7 @@ pub(super) fn apply_dps_multipath_schedule(
             schedule_mode_from_multipath_hint(mode),
             snapshot.route_binding_id(),
             hints.multipath_demand,
-            snapshot.route_announcements(),
+            announcements,
         )?;
     }
     Ok(())
