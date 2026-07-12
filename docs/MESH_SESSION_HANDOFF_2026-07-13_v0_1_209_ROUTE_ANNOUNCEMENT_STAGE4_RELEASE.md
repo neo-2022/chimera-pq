@@ -2,7 +2,7 @@
 
 **session_id:** handoff-2026-07-13-209-route-announcement-stage4-release
 **version:** 0.1.209
-**status:** partial
+**status:** pass
 
 ## Objective
 
@@ -76,19 +76,75 @@ GitHub Actions release workflow:
 
 - Run ID: `29212092208`
 - Workflow: `.github/workflows/release.yml`
-- Status: in progress while this handoff is written.
+- Status: `completed` — all jobs green; GitHub `latest` release assets published
+  for `v0.1.209`.
 
 The `v0.1.208` tag CI failed on the installer contract gate; `v0.1.209`
 contains the contract-gate fixes described above.
 
-## Remaining Work
+## Stand Update
 
-- Wait for GitHub Actions release workflow `29212092208` to complete and
-  publish `chimera-pq-release.tar.gz`.
-- Trigger `chimera-update` on the authorized stand nodes to install `v0.1.209`.
-- Run the live multi-hop sealed transit probe with `--mesh-announcement-keyring`
-  and `--mesh-announcement-signing-key` configured on both peers.
-- Collect redacted logs as evidence and update this handoff / attestation.
+Both authorized stand nodes auto-updated through the release installer path
+(`chimera-sh -restart`, which runs `auto_update_if_needed` and then installs
+from the GitHub `latest` release before restarting the user units):
+
+```text
+chimera_update=source_current source=github current_version=0.1.209 latest_version=0.1.209 ... action=continue reason=source_not_newer
+bound_transit_start_contract=ok
+start_status=ok mode=systemd_user node_runtime=running ...
+```
+
+No manual service-unit restart was performed.
+
+## Live E2E Ed25519 ANNOUNCE + Sealed Transit Probe
+
+Configuration (applied remotely via SSH, then reverted to baseline after the
+probe):
+
+- Forwarder node (`amai`):
+  - `CHIMERA_MESH_SELF_NODE_ID=amai`
+  - `CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY=<redacted_seed>`
+  - `CHIMERA_MESH_ANNOUNCEMENT_KEYRING=vdsina:<redacted_pubkey>`
+  - `mesh_announcements=static,cidr/127.0.0.1/32,vdsina,3600,11`
+- Via/target node (`vdsina`):
+  - `CHIMERA_MESH_SELF_NODE_ID=vdsina`
+  - `CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY=<redacted_seed>`
+  - `CHIMERA_MESH_ANNOUNCEMENT_KEYRING=amai:<redacted_pubkey>`
+  - `mesh_announcements=static,cidr/10.200.0.0/16,amai,3600,12`
+
+Both nodes were restarted with the keyring configuration, authenticated over
+the existing peer pool, exchanged signed `ANNOUNCE` messages on ingress, and
+merged only announcements whose signatures verified against the configured
+public key.
+
+A local echo responder was started on `vdsina` at `127.0.0.1:7777`.  From
+`amai`, a CHIMERA-LOCAL/1 CONNECT probe was injected into the node's local
+ingress for destination `127.0.0.1:7777`:
+
+```text
+ack b'OK\n'
+resp b'hello route transit\n'
+PROBE_OK
+```
+
+The round-trip payload reached the echo responder on `vdsina` and returned
+unchanged, proving that the signed route announcement produced a working
+multi-hop sealed/native transit binding.
+
+After the probe, the test keyring/signing-key lines and the temporary
+`mesh_announcements` segments were removed from both nodes' `peer-egress.env`
+and the services were restarted back to the baseline `v0.1.209` configuration.
+
+## Conclusion
+
+- Stage 1 live transit proof: already satisfied.
+- Stage 2 runtime `ANNOUNCE` distribution: satisfied.
+- Stage 3 Ed25519 signing/verification: satisfied.
+- Stage 4 GitHub release + auto-update + live Ed25519 ANNOUNCE probe:
+  satisfied.
+
+No stand addresses, credentials, or generated Ed25519 seeds are recorded in this
+handoff.
 
 ## Safety Notes
 
