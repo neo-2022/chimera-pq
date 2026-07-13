@@ -96,6 +96,59 @@ start_status=ok mode=systemd_user node_runtime=running ...
 
 No manual service-unit restart was performed.
 
+## SSH Stand Release Proof (skill `chimera-ssh-stand-release-proof`)
+
+After the initial report the skill was applied retroactively.  The PC stayed a
+control point only; all work was done over SSH.
+
+### Proof host #1 — `amai` (GitHub Latest install proven)
+
+- Stopped the existing runtime.
+- Ran the canonical GitHub one-command install exactly:
+
+```bash
+bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 \
+  https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | \
+  bash -s -- -install'
+```
+
+Result:
+
+```text
+chimera_install=ok version=0.1.209 home=/root/.local/share/chimera
+```
+
+- Installed bundle checksum matches GitHub `latest` checksum:
+
+```text
+2a37c7723335a588f28d462694dc94a71b45ef8c595ebe19f953e690ee034542
+```
+
+- Lifecycle slice passed:
+  `-start` → `-status` → `-restart` → `-status` → `-stop` → delayed `-status`.
+
+### Second host — `vdsina` (local-bundle alignment, not direct GitHub proof)
+
+- GitHub `curl` timed out from this host (`curl: (28) Connection timed out`).
+- The installed bundle checksum still matched the GitHub `latest` checksum:
+  `2a37c77...034542`.
+- This is recorded as "same bundle aligned on second stand host", not as
+  "GitHub delivery proven on second host".
+- During alignment the installer regenerated `peer-egress.env` and truncated
+  the first lines, causing `error: missing CHIMERA_PEER_EGRESS_MODE`.  The file
+  was rewritten with the correct full configuration, after which the lifecycle
+  slice passed.
+
+### Redacted evidence markers
+
+- `ssh_ok` on both hosts.
+- `github_one_command_install_ok` on `amai`.
+- `version_ok=0.1.209` on both hosts.
+- `checksum_ok=2a37c772...034542` on both hosts.
+- `start_status=ok` / `restart_status=ok` / `stop_status=ok` on both hosts.
+- `node_runtime=running` / `transparent_runtime=running` after start and
+  restart on both hosts.
+
 ## Live E2E Ed25519 ANNOUNCE + Sealed Transit Probe
 
 Configuration (applied remotely via SSH, then reverted to baseline after the
