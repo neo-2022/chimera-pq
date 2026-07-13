@@ -259,6 +259,9 @@ bootstrap_uninstall_release_tree() {
   local chimera_cache_dir="${6:?chimera_cache_dir_required}"
   local release_parent=""
   release_parent="$(dirname "$chimera_home")"
+  # Move away from the tree being removed so the release directory itself can be
+  # deleted even though this script lives inside it.
+  cd / 2>/dev/null || cd /tmp 2>/dev/null || true
   remove_link_if_points_to_root "$local_bin/chimera" "$chimera_home"
   remove_link_if_points_to_root "$local_bin/chimera.sh" "$chimera_home"
   remove_link_if_points_to_root "$local_bin/chimera-sh" "$chimera_home"

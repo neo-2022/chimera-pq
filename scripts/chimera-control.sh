@@ -3361,17 +3361,22 @@ remove_previous_release_backups() {
 uninstall_release_tree() {
   local release_parent=""
   release_parent="$(dirname "$ROOT_DIR")"
+  # Move away from the tree being removed so the release directory itself can
+  # be deleted even though this script lives inside it.
+  cd / 2>/dev/null || cd /tmp 2>/dev/null || true
   remove_link_if_points_to_root "$LOCAL_BIN_DIR/chimera"
   remove_link_if_points_to_root "$LOCAL_BIN_DIR/chimera.sh"
   remove_link_if_points_to_root "$LOCAL_BIN_DIR/chimera-sh"
   remove_systemd_user_unit_link "$RUNTIME_SERVICE_UNIT"
   remove_systemd_user_unit_link "$NODE_SERVICE_UNIT"
   remove_systemd_user_unit_link "$DATAPATH_SERVICE_UNIT"
+  remove_systemd_user_unit_link "$SITE_AUTOWATCH_SERVICE_UNIT"
   remove_systemd_user_unit_link "$LEGACY_NODE_COMPAT_SERVICE_UNIT"
   remove_systemd_user_unit_link "$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT"
   remove_path_if_present "$SYSTEMD_USER_DIR/$RUNTIME_SERVICE_UNIT"
   remove_path_if_present "$SYSTEMD_USER_DIR/$NODE_SERVICE_UNIT"
   remove_path_if_present "$SYSTEMD_USER_DIR/$DATAPATH_SERVICE_UNIT"
+  remove_path_if_present "$SYSTEMD_USER_DIR/$SITE_AUTOWATCH_SERVICE_UNIT"
   remove_path_if_present "$SYSTEMD_USER_DIR/$LEGACY_NODE_COMPAT_SERVICE_UNIT"
   remove_path_if_present "$SYSTEMD_USER_DIR/$LEGACY_DATAPATH_COMPAT_SERVICE_UNIT"
   remove_path_if_present "$APPLICATIONS_DIR/chimera-control-gui.desktop"
