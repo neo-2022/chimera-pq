@@ -170,6 +170,11 @@ mkdir -p "$fake_bin" "$home" "$cache" "$config" "$data" "$runtime"
 mkdir -p "$config/chimera"
 cat >"$config/chimera/mesh_bootstrap.env" <<'EOF'
 CHIMERA_PEER_EGRESS_TOKEN=stale-token-from-previous-release
+CHIMERA_MESH_SELF_NODE_ID=contract-smoke-node
+CHIMERA_MESH_NAMESPACE=contract-smoke
+CHIMERA_MESH_ANNOUNCEMENT_KEYRING=peer:AQIDBAUGBwgJCgsMDQ4PEA
+CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY=BAUGBwgJCgsMDQ4PEBESExQVFhcY
+CHIMERA_MESH_LOCAL_NODE_COUNTRY_CODE=RU
 EOF
 chmod 600 "$config/chimera/mesh_bootstrap.env"
 
@@ -381,6 +386,13 @@ if rg -q '^CHIMERA_PEER_EGRESS_TOKEN=' "$config/chimera/mesh_bootstrap.env"; the
 fi
 bootstrap_env_mode="$(stat -c '%a' "$config/chimera/mesh_bootstrap.env")"
 [[ "$bootstrap_env_mode" == "600" ]] || fail "installed_mesh_bootstrap_env_mode:${bootstrap_env_mode}"
+bootstrap_peer_env_file="$config/chimera/peer-egress.env"
+[[ -f "$bootstrap_peer_env_file" ]] || fail "installed_peer_egress_env_missing"
+rg -q "^CHIMERA_MESH_SELF_NODE_ID=contract-smoke-node$" "$bootstrap_peer_env_file" || fail "installed_peer_egress_env_self_node_id_missing"
+rg -q "^CHIMERA_MESH_NAMESPACE=contract-smoke$" "$bootstrap_peer_env_file" || fail "installed_peer_egress_env_namespace_missing"
+rg -q "^CHIMERA_MESH_ANNOUNCEMENT_KEYRING=peer:AQIDBAUGBwgJCgsMDQ4PEA$" "$bootstrap_peer_env_file" || fail "installed_peer_egress_env_announcement_keyring_missing"
+rg -q "^CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY=BAUGBwgJCgsMDQ4PEBESExQVFhcY$" "$bootstrap_peer_env_file" || fail "installed_peer_egress_env_announcement_signing_key_missing"
+rg -q "^CHIMERA_MESH_LOCAL_NODE_COUNTRY_CODE=RU$" "$bootstrap_peer_env_file" || fail "installed_peer_egress_env_country_missing"
 gitvers_bootstrap_sources_mode="$(stat -c '%a' "$gitvers_bootstrap_sources_file")"
 [[ "$gitvers_bootstrap_sources_mode" == "600" ]] || fail "installed_gitvers_bootstrap_sources_mode:${gitvers_bootstrap_sources_mode}"
 
