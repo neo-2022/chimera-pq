@@ -142,16 +142,16 @@ mod tests {
             now,
         ));
 
-        assert!(store
-            .lookup(ip, now + Duration::from_millis(900))
-            .is_some());
-        assert!(store
-            .lookup(ip, now + Duration::from_secs(2))
-            .is_none());
-        assert!(DnsBinding::new("example.org", ip, Duration::from_secs(1), now)
-            .is_expired_with_grace(now + Duration::from_secs(2), Duration::from_secs(1)));
-        assert!(!DnsBinding::new("example.org", ip, Duration::from_secs(1), now)
-            .is_expired_with_grace(now + Duration::from_millis(900), Duration::from_secs(1)));
+        assert!(store.lookup(ip, now + Duration::from_millis(900)).is_some());
+        assert!(store.lookup(ip, now + Duration::from_secs(2)).is_none());
+        assert!(
+            DnsBinding::new("example.org", ip, Duration::from_secs(1), now)
+                .is_expired_with_grace(now + Duration::from_secs(2), Duration::from_secs(1))
+        );
+        assert!(
+            !DnsBinding::new("example.org", ip, Duration::from_secs(1), now)
+                .is_expired_with_grace(now + Duration::from_millis(900), Duration::from_secs(1))
+        );
     }
 
     #[test]
@@ -180,8 +180,18 @@ mod tests {
         let now = Instant::now();
         let ip = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 5));
         let mut store = DnsBindingStore::default();
-        store.insert(DnsBinding::new("old.example", ip, Duration::from_secs(60), now));
-        store.insert(DnsBinding::new("new.example", ip, Duration::from_secs(60), now));
+        store.insert(DnsBinding::new(
+            "old.example",
+            ip,
+            Duration::from_secs(60),
+            now,
+        ));
+        store.insert(DnsBinding::new(
+            "new.example",
+            ip,
+            Duration::from_secs(60),
+            now,
+        ));
 
         assert_eq!(
             store.lookup(ip, now).map(|binding| binding.domain.as_str()),
@@ -197,8 +207,18 @@ mod tests {
         let ip1 = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 10));
         let ip2 = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 11));
         let mut store = DnsBindingStore::default();
-        store.insert(DnsBinding::new("multi.example", ip1, Duration::from_secs(60), now));
-        store.insert(DnsBinding::new("multi.example", ip2, Duration::from_secs(60), now));
+        store.insert(DnsBinding::new(
+            "multi.example",
+            ip1,
+            Duration::from_secs(60),
+            now,
+        ));
+        store.insert(DnsBinding::new(
+            "multi.example",
+            ip2,
+            Duration::from_secs(60),
+            now,
+        ));
 
         assert_eq!(store.lookup_domain("multi.example", now).len(), 2);
         assert!(store.lookup(ip1, now).is_some());
@@ -219,7 +239,11 @@ mod tests {
 
         store.purge_expired(now + Duration::from_secs(2));
         assert_eq!(store.len(), 0);
-        assert!(store.lookup_domain("example.net", now + Duration::from_secs(2)).is_empty());
+        assert!(
+            store
+                .lookup_domain("example.net", now + Duration::from_secs(2))
+                .is_empty()
+        );
     }
 
     #[test]
@@ -228,7 +252,12 @@ mod tests {
         let live_ip = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 7));
         let expired_ip = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 8));
         let mut store = DnsBindingStore::default();
-        store.insert(DnsBinding::new("live.example", live_ip, Duration::from_secs(60), now));
+        store.insert(DnsBinding::new(
+            "live.example",
+            live_ip,
+            Duration::from_secs(60),
+            now,
+        ));
         store.insert(DnsBinding::new(
             "expired.example",
             expired_ip,
@@ -238,8 +267,16 @@ mod tests {
 
         store.purge_expired(now + Duration::from_secs(2));
         assert_eq!(store.len(), 1);
-        assert!(store.lookup(live_ip, now + Duration::from_secs(2)).is_some());
-        assert!(store.lookup(expired_ip, now + Duration::from_secs(2)).is_none());
+        assert!(
+            store
+                .lookup(live_ip, now + Duration::from_secs(2))
+                .is_some()
+        );
+        assert!(
+            store
+                .lookup(expired_ip, now + Duration::from_secs(2))
+                .is_none()
+        );
     }
 
     #[test]
@@ -247,7 +284,12 @@ mod tests {
         let now = Instant::now();
         let ip = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
         let mut store = DnsBindingStore::default();
-        store.insert(DnsBinding::new("ipv6.example", ip, Duration::from_secs(60), now));
+        store.insert(DnsBinding::new(
+            "ipv6.example",
+            ip,
+            Duration::from_secs(60),
+            now,
+        ));
         assert_eq!(
             store.lookup(ip, now).map(|binding| binding.domain.as_str()),
             Some("ipv6.example")
@@ -259,7 +301,12 @@ mod tests {
         let now = Instant::now();
         let ip = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 9));
         let mut store = DnsBindingStore::default();
-        store.insert(DnsBinding::new("gone.example", ip, Duration::from_secs(60), now));
+        store.insert(DnsBinding::new(
+            "gone.example",
+            ip,
+            Duration::from_secs(60),
+            now,
+        ));
         store.remove(ip);
         assert!(store.lookup(ip, now).is_none());
         assert!(store.lookup_domain("gone.example", now).is_empty());

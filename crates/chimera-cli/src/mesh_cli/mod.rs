@@ -17,6 +17,7 @@ mod options;
 mod probe_redaction;
 #[cfg(test)]
 mod probe_redaction_tests;
+mod route_announce_cmd;
 mod route_explain_contract;
 mod route_explain_envelope;
 mod route_explain_error;
@@ -31,7 +32,6 @@ mod route_explain_output;
 mod route_explain_pressure;
 mod route_explain_recovery;
 mod route_explain_recovery_projection;
-mod route_announce_cmd;
 mod route_explain_types;
 #[cfg(test)]
 mod tests_connect_launch_error_parity;

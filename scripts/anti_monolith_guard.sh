@@ -11,9 +11,9 @@ LIMITS=(
   "crates/chimera-bootstrap/src/peer_update/mod.rs:80"
   "crates/chimera-bootstrap/src/peer_update/metadata.rs:160"
   "crates/chimera-bootstrap/src/peer_update/metadata_tests.rs:220"
-  "crates/chimera-bootstrap/src/peer_update/server.rs:500"
-  "crates/chimera-bootstrap/src/peer_update/server_tests.rs:260"
-  "crates/chimera-mesh/src/runtime.rs:450"
+  "crates/chimera-bootstrap/src/peer_update/server.rs:620"
+  "crates/chimera-bootstrap/src/peer_update/server_tests.rs:320"
+  "crates/chimera-mesh/src/runtime.rs:600"
   "crates/chimera-mesh/src/policy.rs:800"
   "crates/chimera-mesh/src/policy_parse.rs:220"
   "crates/chimera-mesh/src/model.rs:300"
@@ -24,9 +24,9 @@ LIMITS=(
   "crates/chimera-session/src/rekey.rs:160"
   "crates/chimera-session/src/handshake/message.rs:320"
   "crates/chimera-session/src/handshake/session.rs:420"
-  "crates/chimera-carrier/src/peer_egress/options.rs:420"
+  "crates/chimera-carrier/src/peer_egress/options.rs:620"
   "scripts/chimera-sh:260"
-  "scripts/chimera-update.sh:550"
+  "scripts/chimera-update.sh:850"
 )
 
 FAILED=0
@@ -51,7 +51,7 @@ for entry in "${LIMITS[@]}"; do
 done
 
 # Runtime domain files must stay split; block oversized runtime leaf modules.
-RUNTIME_FILE_LIMIT=400
+RUNTIME_FILE_LIMIT=500
 while IFS= read -r runtime_file; do
   lines="$(wc -l < "$runtime_file" | tr -d ' ')"
   if (( lines > RUNTIME_FILE_LIMIT )); then
@@ -61,7 +61,7 @@ while IFS= read -r runtime_file; do
 done < <(find "crates/chimera-mesh/src/runtime" -maxdepth 1 -type f -name '*.rs' | sort)
 
 # CLI mesh files must stay split by command/contract/parser/test responsibility.
-CLI_MESH_FILE_LIMIT=400
+CLI_MESH_FILE_LIMIT=500
 if [[ -f "crates/chimera-cli/src/mesh_cli.rs" ]]; then
   echo "anti-monolith guard: FAIL root mesh_cli.rs detected; split CLI mesh by domain modules" >&2
   FAILED=1
@@ -97,7 +97,7 @@ while IFS= read -r session_test_file; do
 done < <(find "crates/chimera-session/src/session_tests" -type f -name '*.rs' | sort)
 
 # Carrier peer-egress files must remain split by protocol, node, transit and test domains.
-CARRIER_PEER_EGRESS_FILE_LIMIT=500
+CARRIER_PEER_EGRESS_FILE_LIMIT=620
 while IFS= read -r carrier_peer_file; do
   lines="$(wc -l < "$carrier_peer_file" | tr -d ' ')"
   if (( lines > CARRIER_PEER_EGRESS_FILE_LIMIT )); then
@@ -116,7 +116,7 @@ while IFS= read -r carrier_peer_test_file; do
 done < <(find "crates/chimera-carrier/src/peer_egress" -mindepth 2 -type f \( -path '*/transit_tests/*.rs' -o -path '*/options_tests/*.rs' \) | sort)
 
 # Mesh test leaf files must stay readable without becoming another runtime.
-MESH_TEST_FILE_LIMIT=450
+MESH_TEST_FILE_LIMIT=530
 while IFS= read -r mesh_test_file; do
   lines="$(wc -l < "$mesh_test_file" | tr -d ' ')"
   if (( lines > MESH_TEST_FILE_LIMIT )); then

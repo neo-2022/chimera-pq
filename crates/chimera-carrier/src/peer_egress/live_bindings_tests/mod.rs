@@ -44,7 +44,12 @@ fn test_peer_stream() -> Result<SecurePeerStream, String> {
         .accept()
         .map_err(|error| format!("accept test peer failed: {error}"))?;
     drop(server);
-    Ok(SecurePeerStream::new(client, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), AeadSuite::Chacha20Poly1305))
+    Ok(SecurePeerStream::new(
+        client,
+        secrets.initiator_to_responder().clone(),
+        secrets.responder_to_initiator().clone(),
+        AeadSuite::Chacha20Poly1305,
+    ))
 }
 
 #[test]

@@ -341,7 +341,9 @@ fn pipe_sealed_transit_direction(
                             );
                         }
                         PeerReadOutcome::Message(PeerMessage::Announce(_)) => {
-                            return Err("sealed transit stream received announce message".to_string());
+                            return Err(
+                                "sealed transit stream received announce message".to_string()
+                            );
                         }
                         PeerReadOutcome::Idle => {
                             if relay_activity.has_finished_direction() {

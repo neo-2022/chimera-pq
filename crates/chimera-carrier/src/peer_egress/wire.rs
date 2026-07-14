@@ -5,12 +5,12 @@ use crate::peer_egress::aggregate_wire::{
     validate_aggregate_transit_shard_frame,
 };
 use crate::peer_egress::protocol::{Destination, SecurePeerStream, parse_peer_connect_destination};
-use chimera_mesh::{RouteAnnouncement, format_route_announcements, parse_route_announcements};
 use crate::peer_egress::transit::{TransitRelayFrame, validate_transit_relay_frame};
 use crate::peer_egress::transit_binding::{
     BOUND_TRANSIT_MAGIC, BoundTransitRelayFrame, encode_bound_transit_relay_frame,
     validate_bound_transit_relay_frame,
 };
+use chimera_mesh::{RouteAnnouncement, format_route_announcements, parse_route_announcements};
 
 pub(crate) enum PeerMessage {
     Connect(Destination),
@@ -195,8 +195,18 @@ mod tests {
         .map_err(|error| format!("derive test secrets failed: {error}"))?;
         let (left, right) = tcp_pair()?;
         Ok((
-            crate::peer_egress::protocol::SecurePeerStream::new(left, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), crate::peer_egress::options::AeadSuite::Chacha20Poly1305),
-            crate::peer_egress::protocol::SecurePeerStream::new(right, secrets.responder_to_initiator().clone(), secrets.initiator_to_responder().clone(), crate::peer_egress::options::AeadSuite::Chacha20Poly1305),
+            crate::peer_egress::protocol::SecurePeerStream::new(
+                left,
+                secrets.initiator_to_responder().clone(),
+                secrets.responder_to_initiator().clone(),
+                crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+            ),
+            crate::peer_egress::protocol::SecurePeerStream::new(
+                right,
+                secrets.responder_to_initiator().clone(),
+                secrets.initiator_to_responder().clone(),
+                crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+            ),
         ))
     }
 

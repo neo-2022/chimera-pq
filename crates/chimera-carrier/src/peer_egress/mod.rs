@@ -50,14 +50,6 @@ pub use lane_binding::{
     write_transit_lane_registrations_from_mesh_plan,
 };
 pub use live_bindings::{LiveTransitLaneRegistry, load_live_transit_lane_registrations};
-pub use route_announcement_registry::{
-    SharedRouteAnnouncementRegistry,
-    format_registry_for_log,
-    local_announcements_from_options,
-    merge_received_announcements,
-    new_shared_route_announcement_registry,
-    registry_announcements,
-};
 pub use live_lane_selection::{
     CarrierLaneSelection, CarrierLaneSelectionMode, select_carrier_binding_from_multipath_schedule,
     select_carrier_lane_from_mesh_plan, select_carrier_lane_from_multipath_schedule,
@@ -74,6 +66,10 @@ pub use options_mode::{Mode, mode_name};
 pub use pool::PeerPool;
 pub use proof::{run_bound_transit_inject, run_sealed_transit_inject};
 pub use protocol::{Destination, SecurePeerStream};
+pub use route_announcement_registry::{
+    SharedRouteAnnouncementRegistry, format_registry_for_log, local_announcements_from_options,
+    merge_received_announcements, new_shared_route_announcement_registry, registry_announcements,
+};
 pub use transit::{
     TransitRelayFrame, forward_bound_peer_sealed_transit_to_next_hop,
     forward_peer_sealed_transit_to_scheduled_next_hop, forward_transit_relay_frame,

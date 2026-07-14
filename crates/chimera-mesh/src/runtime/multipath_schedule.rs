@@ -331,11 +331,8 @@ pub(super) fn schedule_from_lanes(
     let carrier_lane_bindings = match route_binding_id.as_ref() {
         Some(route_binding_id) => {
             let mut bindings = carrier_lane_bindings(selected_peers, &lanes, *route_binding_id)?;
-            let announcement_bindings = announcement_carrier_bindings(
-                selected_peers,
-                &lanes,
-                announcements,
-            )?;
+            let announcement_bindings =
+                announcement_carrier_bindings(selected_peers, &lanes, announcements)?;
             bindings.extend(announcement_bindings);
             bindings
         }

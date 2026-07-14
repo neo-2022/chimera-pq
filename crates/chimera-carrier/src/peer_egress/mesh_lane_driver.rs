@@ -130,7 +130,9 @@ pub fn run_mesh_lane_driver_once(options: &MeshLaneDriverOptions) -> Result<(), 
                 &options.policy_payload,
                 &runtime_announcements,
             )
-            .map_err(|error| format!("mesh lane driver plan with runtime announcements failed: {error}"))?
+            .map_err(|error| {
+                format!("mesh lane driver plan with runtime announcements failed: {error}")
+            })?
     };
 
     write_transit_lane_document_from_mesh_plan(&refreshed_plan, &options.lane_document_path)

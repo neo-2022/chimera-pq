@@ -4,9 +4,7 @@ use crate::model::MeshPeerState;
 use crate::multipath_model::{
     MeshMultipathLane, MeshMultipathLaneRole, MeshMultipathMode, MeshRouteBindingId,
 };
-use crate::route_announcement::{
-    CapabilityToken, PeerId, RouteAnnouncement, RouteDestination,
-};
+use crate::route_announcement::{CapabilityToken, PeerId, RouteAnnouncement, RouteDestination};
 use std::time::Duration;
 
 fn peer(node_id: &str) -> MeshPeerState {
@@ -94,24 +92,30 @@ fn route_announcement_creates_transit_binding_for_selected_via_peer() -> Result<
         .ok_or("missing transit carrier binding for announced via peer")?;
     assert_eq!(transit.role, MeshMultipathLaneRole::Transit);
     assert_eq!(transit.route_binding_id, route_binding_id);
-    assert!(schedule
-        .carrier_lane_bindings
-        .iter()
-        .any(|binding| binding.peer_node_id == "active-node"
-            && binding.role == MeshMultipathLaneRole::Active));
+    assert!(
+        schedule
+            .carrier_lane_bindings
+            .iter()
+            .any(|binding| binding.peer_node_id == "active-node"
+                && binding.role == MeshMultipathLaneRole::Active)
+    );
     Ok(())
 }
 
 #[test]
 fn route_announcement_requires_route_binding_id_to_build_bindings() {
     let selected_peers = vec![peer("active-node"), peer("via-node")];
+    let via = PeerId::new("via-node").unwrap_or_else(|error| unreachable!("{error}"));
+    let route_binding_id =
+        MeshRouteBindingId::new(77).unwrap_or_else(|error| unreachable!("{error}"));
+    let issuer = PeerId::new("issuer").unwrap_or_else(|error| unreachable!("{error}"));
     let announcements = vec![RouteAnnouncement::Static {
         destination: RouteDestination::Domain("example.com".to_string()),
-        via: PeerId::new("via-node").unwrap(),
-        route_binding_id: MeshRouteBindingId::new(77).unwrap(),
+        via,
+        route_binding_id,
         ttl: Duration::from_secs(300),
         auth: CapabilityToken::new(
-            PeerId::new("issuer").unwrap(),
+            issuer,
             RouteDestination::Domain("example.com".to_string()),
             None,
             vec![],
@@ -154,10 +158,12 @@ fn route_announcement_for_unknown_via_is_ignored() -> Result<(), String> {
         &announcements,
     )?;
 
-    assert!(schedule
-        .carrier_lane_bindings
-        .iter()
-        .all(|binding| binding.peer_node_id == "active-node"));
+    assert!(
+        schedule
+            .carrier_lane_bindings
+            .iter()
+            .all(|binding| binding.peer_node_id == "active-node")
+    );
     Ok(())
 }
 

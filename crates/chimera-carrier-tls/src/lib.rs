@@ -101,7 +101,9 @@ impl TlsCarrier {
         if self.config.connect_addr != new_addr {
             self.config.connect_addr = new_addr;
             self.drop_stream("connect_addr_changed");
-            eprintln!("event=tls_carrier_connect_addr_changed transport=tls/tcp reason_class=operator_or_discovery_update");
+            eprintln!(
+                "event=tls_carrier_connect_addr_changed transport=tls/tcp reason_class=operator_or_discovery_update"
+            );
         }
         Ok(())
     }
@@ -172,12 +174,7 @@ impl TlsCarrier {
         let mut len_buf = [0_u8; 4];
         match stream.read_exact(&mut len_buf) {
             Ok(()) => {}
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    ErrorKind::WouldBlock | ErrorKind::TimedOut
-                ) =>
-            {
+            Err(error) if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
                 return Ok(None);
             }
             Err(error)
@@ -219,9 +216,7 @@ impl TlsCarrier {
         let deadline = Instant::now()
             .checked_add(Duration::from_millis(self.reconnect_max_wait_ms))
             .ok_or_else(|| {
-                ChimeraError::InvalidFrame(
-                    "tls carrier reconnect deadline overflow".to_string(),
-                )
+                ChimeraError::InvalidFrame("tls carrier reconnect deadline overflow".to_string())
             })?;
         let max_backoff = Duration::from_millis(DEFAULT_RECONNECT_MAX_BACKOFF_MS);
         let min_backoff = Duration::from_millis(DEFAULT_RECONNECT_MIN_BACKOFF_MS);
@@ -265,9 +260,9 @@ impl Carrier for TlsCarrier {
             ));
         }
         if self.tcp_target().is_none() {
-            let mut guard = tls_bus()
-                .lock()
-                .map_err(|_| ChimeraError::InvalidFrame("tls carrier bus lock poisoned".to_string()))?;
+            let mut guard = tls_bus().lock().map_err(|_| {
+                ChimeraError::InvalidFrame("tls carrier bus lock poisoned".to_string())
+            })?;
             guard
                 .entry(self.config.connect_addr.clone())
                 .or_default()
@@ -280,9 +275,9 @@ impl Carrier for TlsCarrier {
 
     fn recv(&mut self) -> ChimeraResult<Option<Vec<u8>>> {
         if self.tcp_target().is_none() {
-            let mut guard = tls_bus()
-                .lock()
-                .map_err(|_| ChimeraError::InvalidFrame("tls carrier bus lock poisoned".to_string()))?;
+            let mut guard = tls_bus().lock().map_err(|_| {
+                ChimeraError::InvalidFrame("tls carrier bus lock poisoned".to_string())
+            })?;
             return Ok(guard
                 .entry(self.config.connect_addr.clone())
                 .or_default()

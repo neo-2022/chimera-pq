@@ -1,11 +1,11 @@
 use std::env;
 
-use base64::Engine as _;
 use crate::peer_egress::options_mode::parse_mode;
 pub use crate::peer_egress::options_mode::{Mode, mode_name};
 use crate::peer_egress::options_proof::TransitProofOptions;
 use crate::peer_egress::options_transit_guard::TransitRelayGuardOptionValues;
 use crate::peer_egress::transit_guard::TransitRelayLimits;
+use base64::Engine as _;
 
 pub const HANDSHAKE_MAGIC: &[u8] = b"CHIMERA-PEER-EGRESS/1\n";
 pub const LOCAL_MAGIC: &[u8] = b"CHIMERA-LOCAL/1\n";
@@ -253,7 +253,9 @@ impl Options {
                 "--discovery-pubkey" => discovery_pubkey = Some(value.clone()),
                 "--discovery-keyring" => discovery_keyring = Some(value.clone()),
                 "--mesh-announcement-keyring" => mesh_announcement_keyring = Some(value.clone()),
-                "--mesh-announcement-signing-key" => mesh_announcement_signing_key = Some(value.clone()),
+                "--mesh-announcement-signing-key" => {
+                    mesh_announcement_signing_key = Some(value.clone())
+                }
                 "--mesh-namespace" => mesh_namespace = Some(value.clone()),
                 "--mesh-self-node-id" => mesh_self_node_id = Some(value.clone()),
                 "--mesh-policy-payload" => mesh_policy_payload = Some(value.clone()),
@@ -466,9 +468,9 @@ impl Options {
         let mut keyring = std::collections::BTreeMap::new();
         if let Some(raw) = &self.mesh_announcement_keyring {
             for entry in raw.split(',').map(str::trim).filter(|v| !v.is_empty()) {
-                let (peer_id, pubkey) = entry
-                    .split_once(':')
-                    .ok_or_else(|| "announcement keyring entry must be peer_id:base64".to_string())?;
+                let (peer_id, pubkey) = entry.split_once(':').ok_or_else(|| {
+                    "announcement keyring entry must be peer_id:base64".to_string()
+                })?;
                 if peer_id.trim().is_empty() || pubkey.trim().is_empty() {
                     return Err(
                         "announcement keyring entry must have non-empty peer_id and pubkey"
@@ -477,7 +479,9 @@ impl Options {
                 }
                 let pubkey_bytes = base64::engine::general_purpose::STANDARD
                     .decode(pubkey.trim())
-                    .map_err(|error| format!("announcement keyring pubkey decode failed: {error}"))?;
+                    .map_err(|error| {
+                        format!("announcement keyring pubkey decode failed: {error}")
+                    })?;
                 if pubkey_bytes.len() != 32 {
                     return Err(format!(
                         "announcement keyring pubkey for {peer_id} must be 32 bytes, got {}",

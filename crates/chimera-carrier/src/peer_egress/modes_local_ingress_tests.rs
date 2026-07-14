@@ -1,6 +1,6 @@
 use super::{
     active_fallback_bindings, handle_local_client_with_lane_document_and_first_byte,
-    handle_local_client_with_peer_pool_and_first_byte,
+    handle_local_client_with_peer_pool_and_first_byte, require_peer_ack,
 };
 use crate::peer_egress::lane_binding::TransitLaneDocument;
 use crate::peer_egress::live_lane_selection::select_carrier_binding_from_multipath_schedule;
@@ -8,9 +8,11 @@ use crate::peer_egress::options::{AeadSuite, LOCAL_MAGIC};
 use crate::peer_egress::pool::new_shared_pool;
 use crate::peer_egress::protocol::{Destination, SecurePeerStream};
 use crate::peer_egress::transit_dispatch::new_shared_transit_dispatcher;
+use crate::peer_egress::wire::write_announce_message;
 use chimera_mesh::{
-    MeshCarrierLaneBinding, MeshJoinMode, MeshMultipathLane, MeshMultipathLaneRole,
-    MeshMultipathMode, MeshMultipathSchedule, MeshMultipathFlowKey, MeshPathPlan, MeshRouteBindingId,
+    MeshCarrierLaneBinding, MeshJoinMode, MeshMultipathFlowKey, MeshMultipathLane,
+    MeshMultipathLaneRole, MeshMultipathMode, MeshMultipathSchedule, MeshPathPlan,
+    MeshRouteBindingId, parse_route_announcements,
 };
 use std::io::Write;
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -41,8 +43,18 @@ fn test_peer_pair() -> Result<(SecurePeerStream, SecurePeerStream), String> {
     .map_err(|error| format!("derive test secrets failed: {error}"))?;
     let (left, right) = tcp_pair()?;
     Ok((
-        SecurePeerStream::new(left, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), AeadSuite::Chacha20Poly1305),
-        SecurePeerStream::new(right, secrets.responder_to_initiator().clone(), secrets.initiator_to_responder().clone(), AeadSuite::Chacha20Poly1305),
+        SecurePeerStream::new(
+            left,
+            secrets.initiator_to_responder().clone(),
+            secrets.responder_to_initiator().clone(),
+            AeadSuite::Chacha20Poly1305,
+        ),
+        SecurePeerStream::new(
+            right,
+            secrets.responder_to_initiator().clone(),
+            secrets.initiator_to_responder().clone(),
+            AeadSuite::Chacha20Poly1305,
+        ),
     ))
 }
 
@@ -86,10 +98,10 @@ fn make_lane_document(active_lane_count: usize) -> Result<TransitLaneDocument, S
     let route_id = mesh_route_id();
     let lane_weight_pct = (100 / active_lane_count).min(40) as u8;
     let lane_capacity_weight_pct = lane_weight_pct;
-    let active_lane_with_pct = |lane_id: usize| active_lane(lane_id, lane_weight_pct, lane_capacity_weight_pct);
-    let carrier_lane_bindings: Vec<MeshCarrierLaneBinding> = (0..active_lane_count)
-        .map(active_lane_with_pct)
-        .collect();
+    let active_lane_with_pct =
+        |lane_id: usize| active_lane(lane_id, lane_weight_pct, lane_capacity_weight_pct);
+    let carrier_lane_bindings: Vec<MeshCarrierLaneBinding> =
+        (0..active_lane_count).map(active_lane_with_pct).collect();
     let lanes: Vec<MeshMultipathLane> = (0..active_lane_count).map(mesh_multipath_lane).collect();
     let total_capacity_weight_pct = (lane_weight_pct as u16) * (active_lane_count as u16);
     let transit_capacity_budget_pct = total_capacity_weight_pct;
@@ -152,8 +164,9 @@ fn lane_document_retries_same_binding_when_fresh_peer_arrives() -> Result<(), St
     };
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
-    let initial_binding = select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
-        .map_err(|reason| format!("lane selection failed: {reason}"))?;
+    let initial_binding =
+        select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+            .map_err(|reason| format!("lane selection failed: {reason}"))?;
 
     let dispatcher = new_shared_transit_dispatcher();
     dispatcher.register(initial_binding, dead_peer_stream()?)?;
@@ -219,8 +232,9 @@ fn lane_document_fallbacks_to_other_active_lane_when_first_peer_is_dead() -> Res
     };
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
-    let initial_binding = select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
-        .map_err(|reason| format!("lane selection failed: {reason}"))?;
+    let initial_binding =
+        select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+            .map_err(|reason| format!("lane selection failed: {reason}"))?;
     let fallback_bindings =
         active_fallback_bindings(&plan.multipath_schedule, flow_key, initial_binding)?;
     assert!(
@@ -300,11 +314,7 @@ fn peer_pool_discards_dead_peer_and_does_not_retry_same_stream() -> Result<(), S
     });
 
     let worker = thread::spawn(move || {
-        handle_local_client_with_peer_pool_and_first_byte(
-            local_server,
-            pool,
-            LOCAL_MAGIC[0],
-        )
+        handle_local_client_with_peer_pool_and_first_byte(local_server, pool, LOCAL_MAGIC[0])
     });
 
     local_client
@@ -330,6 +340,50 @@ fn peer_pool_discards_dead_peer_and_does_not_retry_same_stream() -> Result<(), S
     Ok(())
 }
 
+#[test]
+fn connect_local_client_accepts_buffered_announce_before_ack() -> Result<(), String> {
+    let (mut local_client, mut local_server) = tcp_pair()?;
+    let (mut peer, mut remote) = test_peer_pair()?;
+    let destination = Destination {
+        host: "announce-then-ack.example.org".to_string(),
+        port: 443,
+    };
+
+    let announcements =
+        parse_route_announcements("static,domain/announce-then-ack.example.org,peer-remote,3600,7")
+            .map_err(|error| format!("parse test announcement failed: {error}"))?;
+    assert!(!announcements.is_empty());
+
+    let remote_worker = thread::spawn(move || -> Result<(), String> {
+        let forwarded = remote.read_secure_payload()?;
+        assert!(forwarded.starts_with(b"CONNECT "));
+        write_announce_message(&mut remote, &announcements)?;
+        remote.write_line("OK")?;
+        Ok(())
+    });
+
+    crate::peer_egress::wire::write_connect_message(&mut peer, &destination)?;
+    require_peer_ack(&mut peer)?;
+
+    local_server
+        .write_all(b"OK\n")
+        .map_err(|error| format!("write native local ack failed: {error}"))?;
+
+    local_client
+        .set_read_timeout(Some(Duration::from_millis(400)))
+        .map_err(|error| format!("set local timeout failed: {error}"))?;
+    let ack = crate::peer_egress::protocol::read_line_limited(&mut local_client, 16)?;
+    assert_eq!(ack, "OK");
+
+    local_client
+        .shutdown(Shutdown::Write)
+        .map_err(|error| format!("shutdown local writer failed: {error}"))?;
+
+    remote_worker
+        .join()
+        .map_err(|_| "remote ack worker panicked".to_string())??;
+    Ok(())
+}
 
 #[test]
 fn lane_document_repaths_through_all_admitted_bindings_until_live_peer() -> Result<(), String> {
@@ -344,8 +398,9 @@ fn lane_document_repaths_through_all_admitted_bindings_until_live_peer() -> Resu
     };
     let flow_key =
         MeshMultipathFlowKey::from_opaque_flow_bytes(destination.connect_addr().as_bytes())?;
-    let initial_binding = select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
-        .map_err(|reason| format!("lane selection failed: {reason}"))?;
+    let initial_binding =
+        select_carrier_binding_from_multipath_schedule(&plan.multipath_schedule, flow_key)
+            .map_err(|reason| format!("lane selection failed: {reason}"))?;
     let fallback_bindings =
         active_fallback_bindings(&plan.multipath_schedule, flow_key, initial_binding)?;
     assert!(
@@ -382,8 +437,12 @@ fn lane_document_repaths_through_all_admitted_bindings_until_live_peer() -> Resu
         .map_err(|error| format!("set local timeout failed: {error}"))?;
     local_client
         .write_all(&LOCAL_MAGIC[1..])
-        .and_then(|_| local_client.write_all(b"CONNECT lane-repath.example.org 443
-"))
+        .and_then(|_| {
+            local_client.write_all(
+                b"CONNECT lane-repath.example.org 443
+",
+            )
+        })
         .map_err(|error| format!("write local connect failed: {error}"))?;
     local_client
         .shutdown(Shutdown::Write)

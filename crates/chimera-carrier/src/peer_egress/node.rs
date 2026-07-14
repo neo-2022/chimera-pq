@@ -9,11 +9,6 @@ use crate::peer_egress::aggregate_ingress::{
 };
 use crate::peer_egress::handshake::{authenticate_peer, establish_secure_peer_server};
 use crate::peer_egress::live_bindings::LiveTransitLaneRegistry;
-use crate::peer_egress::route_announcement_registry::{
-    SharedRouteAnnouncementRegistry, local_announcements_from_options,
-    new_shared_route_announcement_registry, sign_local_announcements,
-};
-use crate::peer_egress::wire::write_announce_message;
 use crate::peer_egress::mesh_lane_driver::{
     MeshLaneDriverOptions, run_mesh_lane_driver, run_mesh_lane_driver_once,
 };
@@ -26,6 +21,10 @@ use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
 use crate::peer_egress::pool::new_shared_pool;
 use crate::peer_egress::protocol::redacted_log_reason;
+use crate::peer_egress::route_announcement_registry::{
+    SharedRouteAnnouncementRegistry, local_announcements_from_options,
+    new_shared_route_announcement_registry, sign_local_announcements,
+};
 use crate::peer_egress::startup_contract::validate_node_startup_contract;
 use crate::peer_egress::transit::{BoundPeerTransitPolicy, PeerTransitPolicy};
 use crate::peer_egress::transit_binding::BOUND_TRANSIT_MAGIC;
@@ -35,6 +34,7 @@ use crate::peer_egress::transit_local::{
     relay_local_sealed_transit_to_next_hop_with_limits,
     relay_local_sealed_transit_with_lane_document_and_first_byte_with_limits,
 };
+use crate::peer_egress::wire::write_announce_message;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalIngressBranch {
@@ -62,7 +62,10 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
     let signing_key = options.mesh_announcement_signing_key_bytes()?;
     sign_local_announcements(&mut local_announcements_to_share, signing_key.as_deref())?;
     if options.discovery_configured() {
-        let driver_options = match build_mesh_lane_driver_options(&options, Some(route_announcement_registry.clone())) {
+        let driver_options = match build_mesh_lane_driver_options(
+            &options,
+            Some(route_announcement_registry.clone()),
+        ) {
             Ok(value) => value,
             Err(error) => {
                 eprintln!(
@@ -155,16 +158,14 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
             {
                 Ok(mut peer) => {
                     eprintln!("event=weave_peer_ingress_authenticated");
-                    if !local_announcements_for_ingress.is_empty() {
-                        if let Err(error) = write_announce_message(
-                            &mut peer,
-                            &local_announcements_for_ingress,
-                        ) {
-                            eprintln!(
-                                "event=weave_peer_ingress_announce_failed reason_class={}",
-                                redacted_log_reason(&error)
-                            );
-                        }
+                    if !local_announcements_for_ingress.is_empty()
+                        && let Err(error) =
+                            write_announce_message(&mut peer, &local_announcements_for_ingress)
+                    {
+                        eprintln!(
+                            "event=weave_peer_ingress_announce_failed reason_class={}",
+                            redacted_log_reason(&error)
+                        );
                     }
                     if let Err(error) = peer_ingress_pool.push(peer) {
                         eprintln!(

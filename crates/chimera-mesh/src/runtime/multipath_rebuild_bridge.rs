@@ -70,7 +70,13 @@ impl MeshRuntime {
             let mut rebuilt = self.plan_path(request, planning_policy)?;
             let mode = rebuilt.multipath_schedule.mode;
             let demand = current_schedule_demand(&rebuilt.multipath_schedule)?;
-            replace_multipath_schedule(&mut rebuilt, mode, route_binding_id, demand, &announcements)?;
+            replace_multipath_schedule(
+                &mut rebuilt,
+                mode,
+                route_binding_id,
+                demand,
+                &announcements,
+            )?;
             *plan = rebuilt;
         }
 
@@ -146,7 +152,13 @@ impl MeshRuntime {
             let mut rebuilt = self.plan_path_core(request, planning_policy)?;
             let mode = rebuilt.multipath_schedule.mode;
             let demand = current_schedule_demand(&rebuilt.multipath_schedule)?;
-            replace_multipath_schedule_core(&mut rebuilt, mode, route_binding_id, demand, &announcements)?;
+            replace_multipath_schedule_core(
+                &mut rebuilt,
+                mode,
+                route_binding_id,
+                demand,
+                &announcements,
+            )?;
             *plan = rebuilt;
         }
 

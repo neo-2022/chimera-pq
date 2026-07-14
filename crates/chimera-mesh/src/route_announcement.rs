@@ -2,7 +2,7 @@
 
 use crate::multipath_model::MeshRouteBindingId;
 use base64::Engine;
-use ring::signature::{Ed25519KeyPair, UnparsedPublicKey, ED25519};
+use ring::signature::{ED25519, Ed25519KeyPair, UnparsedPublicKey};
 use std::fmt;
 use std::net::IpAddr;
 use std::time::{Duration, SystemTime};
@@ -34,7 +34,9 @@ impl RouteAnnouncement {
 
     pub fn route_binding_id(&self) -> MeshRouteBindingId {
         match self {
-            Self::Static { route_binding_id, .. } => *route_binding_id,
+            Self::Static {
+                route_binding_id, ..
+            } => *route_binding_id,
         }
     }
 
@@ -301,8 +303,8 @@ pub fn format_route_announcements(announcements: &[RouteAnnouncement]) -> String
                     route_binding_id.get()
                 );
                 if !auth.signature.is_empty() {
-                    let signature = base64::engine::general_purpose::STANDARD
-                        .encode(&auth.signature);
+                    let signature =
+                        base64::engine::general_purpose::STANDARD.encode(&auth.signature);
                     base.push(',');
                     base.push_str(&signature);
                 }
@@ -348,8 +350,8 @@ fn parse_one_route_announcement(index: usize, part: &str) -> Result<RouteAnnounc
 
     let destination = parse_route_destination(fields[1].trim())
         .map_err(|e| format!("announcement {index} destination: {e}"))?;
-    let via = PeerId::new(fields[2].trim())
-        .map_err(|e| format!("announcement {index} via: {e}"))?;
+    let via =
+        PeerId::new(fields[2].trim()).map_err(|e| format!("announcement {index} via: {e}"))?;
     let ttl_seconds: u64 = fields[3]
         .trim()
         .parse()
@@ -399,7 +401,9 @@ fn parse_route_destination(value: &str) -> Result<RouteDestination, String> {
             return Err("domain destination is empty".to_string());
         }
         if domain.contains(|c: char| c.is_whitespace() || c == ',' || c == '|' || c == ';') {
-            return Err(format!("domain destination contains illegal character: '{domain}'"));
+            return Err(format!(
+                "domain destination contains illegal character: '{domain}'"
+            ));
         }
         return Ok(RouteDestination::Domain(domain.to_string()));
     }
@@ -454,7 +458,8 @@ mod tests {
 
     #[test]
     fn parse_multiple_announcements() -> Result<(), String> {
-        let value = "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11";
+        let value =
+            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11";
         let parsed = parse_route_announcements(value)?;
         assert_eq!(parsed.len(), 2);
         Ok(())
@@ -506,7 +511,10 @@ mod tests {
     fn format_includes_signature_when_present() -> Result<(), String> {
         let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA")?;
         let formatted = format_route_announcements(&parsed);
-        assert!(formatted.contains("AAAA"), "formatted value must include base64 signature");
+        assert!(
+            formatted.contains("AAAA"),
+            "formatted value must include base64 signature"
+        );
         Ok(())
     }
 
@@ -521,9 +529,8 @@ mod tests {
     #[test]
     fn sign_and_verify_round_trip() -> Result<(), String> {
         let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
-        let mut announcements = parse_route_announcements(
-            "static,cidr/192.168.31.0/24,peer-a,3600,7",
-        )?;
+        let mut announcements =
+            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
         let announcement = &mut announcements[0];
         announcement.sign_with_ed25519_seed(&[1u8; 32])?;
         assert!(!announcement.auth().signature.is_empty());
@@ -534,13 +541,14 @@ mod tests {
     #[test]
     fn verify_fails_with_wrong_public_key() -> Result<(), String> {
         let (wrong_public_key, _) = ed25519_keypair_from_seed(&[2u8; 32])?;
-        let mut announcements = parse_route_announcements(
-            "static,cidr/192.168.31.0/24,peer-a,3600,7",
-        )?;
+        let mut announcements =
+            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
         announcements[0].sign_with_ed25519_seed(&[1u8; 32])?;
-        assert!(announcements[0]
-            .verify_with_ed25519_pubkey(&wrong_public_key)
-            .is_err());
+        assert!(
+            announcements[0]
+                .verify_with_ed25519_pubkey(&wrong_public_key)
+                .is_err()
+        );
         Ok(())
     }
 
@@ -548,18 +556,19 @@ mod tests {
     fn verify_fails_when_signature_is_empty() -> Result<(), String> {
         let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
         let announcements = parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
-        assert!(announcements[0]
-            .verify_with_ed25519_pubkey(&public_key)
-            .is_err());
+        assert!(
+            announcements[0]
+                .verify_with_ed25519_pubkey(&public_key)
+                .is_err()
+        );
         Ok(())
     }
 
     #[test]
     fn verify_fails_when_message_is_tampered() -> Result<(), String> {
         let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
-        let mut announcements = parse_route_announcements(
-            "static,cidr/192.168.31.0/24,peer-a,3600,7",
-        )?;
+        let mut announcements =
+            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
         announcements[0].sign_with_ed25519_seed(&[1u8; 32])?;
         // Tamper with a copy that has a different TTL; the signature must not verify.
         let mut tampered = announcements[0].clone();

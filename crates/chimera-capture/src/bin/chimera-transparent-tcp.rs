@@ -61,10 +61,11 @@ impl Options {
             .map(|value| parse_non_negative_usize(&value, "connect-retry-count"))
             .transpose()?
             .unwrap_or(2);
-        let mut connect_retry_delay_ms = env_value("CHIMERA_TRANSPARENT_TCP_CONNECT_RETRY_DELAY_MS")
-            .map(|value| parse_positive_u64(&value, "connect-retry-delay-ms"))
-            .transpose()?
-            .unwrap_or(150);
+        let mut connect_retry_delay_ms =
+            env_value("CHIMERA_TRANSPARENT_TCP_CONNECT_RETRY_DELAY_MS")
+                .map(|value| parse_positive_u64(&value, "connect-retry-delay-ms"))
+                .transpose()?
+                .unwrap_or(150);
 
         let mut index = 0usize;
         while index < args.len() {
@@ -83,15 +84,13 @@ impl Options {
                     direct_timeout_ms = parse_positive_u64(value, "direct-timeout-ms")?;
                 }
                 "--initial-read-timeout-ms" => {
-                    initial_read_timeout_ms =
-                        parse_positive_u64(value, "initial-read-timeout-ms")?;
+                    initial_read_timeout_ms = parse_positive_u64(value, "initial-read-timeout-ms")?;
                 }
                 "--connect-retry-count" => {
                     connect_retry_count = parse_non_negative_usize(value, "connect-retry-count")?;
                 }
                 "--connect-retry-delay-ms" => {
-                    connect_retry_delay_ms =
-                        parse_positive_u64(value, "connect-retry-delay-ms")?;
+                    connect_retry_delay_ms = parse_positive_u64(value, "connect-retry-delay-ms")?;
                 }
                 _ => return Err(format!("unknown flag: {flag}")),
             }
@@ -670,7 +669,9 @@ mod tests {
             unreachable!("dead transit addr should be available: {error}");
         });
         thread::spawn(move || {
-            let Ok((stream, _)) = dead_transit.accept() else { return };
+            let Ok((stream, _)) = dead_transit.accept() else {
+                return;
+            };
             let _ = stream.shutdown(std::net::Shutdown::Both);
         });
 

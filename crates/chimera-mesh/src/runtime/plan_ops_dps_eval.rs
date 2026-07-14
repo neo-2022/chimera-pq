@@ -42,7 +42,9 @@ pub(super) fn plan_path_from_dps_payload_with_announcements(
     runtime_announcements: &[RouteAnnouncement],
 ) -> Result<MeshPathPlan, String> {
     let context = policy_and_snapshot_from_dps_payload(payload)?;
-    let merged_announcements = context.snapshot.merged_route_announcements(runtime_announcements);
+    let merged_announcements = context
+        .snapshot
+        .merged_route_announcements(runtime_announcements);
     let mut plan = runtime.plan_path(request, &context.policy)?;
     annotate_dps_payload_explain(&mut plan.explain, &context.snapshot, "plan");
     adapt_standby_shadow_from_dps(
@@ -54,7 +56,11 @@ pub(super) fn plan_path_from_dps_payload_with_announcements(
             .multipath_mode
             .map(|mode| mode.as_str()),
     );
-    apply_dps_multipath_schedule_with_announcements(&context.snapshot, &merged_announcements, &mut plan)?;
+    apply_dps_multipath_schedule_with_announcements(
+        &context.snapshot,
+        &merged_announcements,
+        &mut plan,
+    )?;
     Ok(plan)
 }
 

@@ -12,13 +12,13 @@ use crate::peer_egress::lane_binding::{
 };
 use crate::peer_egress::net::{connect_tcp, tune_tcp};
 use crate::peer_egress::options::Options;
-use crate::peer_egress::route_announcement_registry::local_announcements_from_options;
-use crate::peer_egress::wire::write_announce_message;
 use crate::peer_egress::protocol::redacted_log_reason;
+use crate::peer_egress::route_announcement_registry::local_announcements_from_options;
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 use crate::peer_egress::transit_dispatch::{
     SharedTransitNextHopDispatcher, TransitNextHopDispatcher,
 };
+use crate::peer_egress::wire::write_announce_message;
 use std::io::Write;
 
 const LIVE_TRANSIT_LANE_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -527,13 +527,13 @@ fn outbound_transit_lane_registration_worker(
     let mut peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
     eprintln!("event=carrier_reconnect_success");
     let local_announcements = local_announcements_from_options(options);
-    if !local_announcements.is_empty() {
-        if let Err(error) = write_announce_message(&mut peer, &local_announcements) {
-            eprintln!(
-                "event=outbound_transit_lane_announce_failed reason_class={}",
-                redacted_log_reason(&error)
-            );
-        }
+    if !local_announcements.is_empty()
+        && let Err(error) = write_announce_message(&mut peer, &local_announcements)
+    {
+        eprintln!(
+            "event=outbound_transit_lane_announce_failed reason_class={}",
+            redacted_log_reason(&error)
+        );
     }
     let ticket = dispatcher.register(registration.binding(), peer)?;
     eprintln!("event=outbound_transit_lane_registered binding=<opaque>");

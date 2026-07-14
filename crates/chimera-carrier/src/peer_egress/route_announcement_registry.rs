@@ -116,7 +116,9 @@ fn redact_error(error: &str) -> String {
     }
 }
 
-pub fn registry_announcements(registry: &SharedRouteAnnouncementRegistry) -> Vec<RouteAnnouncement> {
+pub fn registry_announcements(
+    registry: &SharedRouteAnnouncementRegistry,
+) -> Vec<RouteAnnouncement> {
     registry
         .lock()
         .map(|guard| guard.clone())
@@ -197,11 +199,15 @@ mod tests {
         keypair: &ring::signature::Ed25519KeyPair,
         announcement: &RouteAnnouncement,
     ) -> Vec<u8> {
-        keypair.sign(&announcement.signing_message_for_test()).as_ref().to_vec()
+        keypair
+            .sign(&announcement.signing_message_for_test())
+            .as_ref()
+            .to_vec()
     }
 
     #[test]
-    fn registry_accepts_valid_signed_announcement_and_rejects_bad_signature() -> Result<(), String> {
+    fn registry_accepts_valid_signed_announcement_and_rejects_bad_signature() -> Result<(), String>
+    {
         use ring::signature::Ed25519KeyPair;
 
         let seed_a = [7u8; 32];
@@ -257,9 +263,8 @@ mod tests {
     #[test]
     fn sign_then_verify_local_announcements() -> Result<(), String> {
         let seed = [5u8; 32];
-        let mut announcements = parse_route_announcements(
-            "static,cidr/192.168.31.0/24,peer-a,3600,7",
-        )?;
+        let mut announcements =
+            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
         sign_local_announcements(&mut announcements, Some(&seed))?;
         assert!(!announcements[0].auth().signature.is_empty());
         Ok(())

@@ -142,13 +142,10 @@ impl PeerPool {
         }
     }
 
-    pub fn pop_wait_timeout(
-        &self,
-        timeout: Duration,
-    ) -> Result<Option<SecurePeerStream>, String> {
-        let deadline = Instant::now().checked_add(timeout).ok_or_else(|| {
-            "peer pool wait timeout overflow".to_string()
-        })?;
+    pub fn pop_wait_timeout(&self, timeout: Duration) -> Result<Option<SecurePeerStream>, String> {
+        let deadline = Instant::now()
+            .checked_add(timeout)
+            .ok_or_else(|| "peer pool wait timeout overflow".to_string())?;
         let mut peers = self
             .peers
             .lock()
@@ -180,9 +177,9 @@ impl PeerPool {
         flow_key: MeshMultipathFlowKey,
         timeout: Duration,
     ) -> Result<Option<SecurePeerStream>, String> {
-        let deadline = Instant::now().checked_add(timeout).ok_or_else(|| {
-            "peer pool wait timeout overflow".to_string()
-        })?;
+        let deadline = Instant::now()
+            .checked_add(timeout)
+            .ok_or_else(|| "peer pool wait timeout overflow".to_string())?;
         let mut peers = self
             .peers
             .lock()
@@ -263,7 +260,12 @@ mod tests {
             .accept()
             .unwrap_or_else(|error| unreachable!("server accept failed: {error}"));
         drop(server);
-        SecurePeerStream::new(client, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), crate::peer_egress::options::AeadSuite::Chacha20Poly1305)
+        SecurePeerStream::new(
+            client,
+            secrets.initiator_to_responder().clone(),
+            secrets.responder_to_initiator().clone(),
+            crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+        )
     }
 
     #[test]
@@ -326,7 +328,12 @@ mod tests {
             .local_addr()
             .map_err(|error| format!("client local addr failed: {error}"))?
             .port();
-        pool.push(SecurePeerStream::new(client, secrets.initiator_to_responder().clone(), secrets.responder_to_initiator().clone(), crate::peer_egress::options::AeadSuite::Chacha20Poly1305))?;
+        pool.push(SecurePeerStream::new(
+            client,
+            secrets.initiator_to_responder().clone(),
+            secrets.responder_to_initiator().clone(),
+            crate::peer_egress::options::AeadSuite::Chacha20Poly1305,
+        ))?;
         Ok(port)
     }
 
@@ -453,5 +460,4 @@ mod tests {
         );
         Ok(())
     }
-
 }

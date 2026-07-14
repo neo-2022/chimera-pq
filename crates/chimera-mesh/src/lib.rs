@@ -51,6 +51,10 @@ pub use policy_hints::{
     multipath_mode_from_dps_payload, traffic_class_from_dps_payload,
     traffic_hints_from_dps_payload,
 };
+pub use route_announcement::{
+    CapabilityToken, IpCidr, PeerId, RouteAnnouncement, RouteDestination,
+    format_route_announcements, parse_route_announcements,
+};
 pub use runtime::{
     MeshConnectAttempt, MeshConnectProbeReport, MeshMultipathAggregateAction,
     MeshMultipathAggregatePlan, MeshMultipathAggregateShard, MeshMultipathFlowAction,
@@ -64,10 +68,6 @@ pub use runtime::{
 pub use weave_contract::{
     REQUIRED_WEAVE_NODE_CAPABILITIES, WeaveNodeCapability, WeaveNodeContract,
     WeaveSealedTransitFrame, forward_weave_transit_frame, validate_weave_sealed_transit_frame,
-};
-pub use route_announcement::{
-    CapabilityToken, IpCidr, PeerId, RouteAnnouncement, RouteDestination,
-    format_route_announcements, parse_route_announcements,
 };
 
 #[cfg(test)]

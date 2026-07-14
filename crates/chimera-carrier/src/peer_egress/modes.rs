@@ -20,6 +20,9 @@ use crate::peer_egress::pool::{PeerPool, SharedPeerPool, new_shared_pool};
 use crate::peer_egress::protocol::{
     SecurePeerStream, redacted_destination_label, redacted_log_reason,
 };
+use crate::peer_egress::route_announcement_registry::{
+    SharedRouteAnnouncementRegistry, merge_received_announcements,
+};
 use crate::peer_egress::transit::{BoundPeerTransitPolicy, PeerTransitPolicy};
 use crate::peer_egress::transit_dispatch::{
     SharedTransitNextHopDispatcher, new_shared_transit_dispatcher,
@@ -27,9 +30,6 @@ use crate::peer_egress::transit_dispatch::{
 use crate::peer_egress::transit_document::forward_peer_sealed_transit_with_lane_document_and_limits;
 use crate::peer_egress::transit_guard::TransitRelayLimits;
 use crate::peer_egress::wire::{PeerMessage, read_peer_message, write_ack_ok};
-use crate::peer_egress::route_announcement_registry::{
-    SharedRouteAnnouncementRegistry, merge_received_announcements,
-};
 
 pub mod lab;
 #[path = "modes_local_ingress.rs"]
@@ -288,7 +288,6 @@ pub(crate) fn outbound_peer_worker_with_next_hop_and_lane_document(
     )
 }
 
-
 fn connect_and_establish_outbound_peer(options: &Options) -> Result<SecurePeerStream, String> {
     eprintln!("event=carrier_reconnect_attempt reason_class=carrier_peer_connect");
     let mut peer = connect_tcp(&options.server, options.connect_timeout_ms)
@@ -325,17 +324,11 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
         .set_read_timeout(Some(transit_limits.idle_timeout()))
         .map_err(|error| format!("set first peer read timeout failed: {error}"))?;
     let mut first_message = read_peer_message(&mut peer, 512)?;
-    loop {
-        match &first_message {
-            PeerMessage::Announce(announcements) => {
-                if let Some(registry) = &route_announcement_registry {
-                    merge_received_announcements(registry, announcements, trusted_keys.as_ref())?;
-                }
-                first_message = read_peer_message(&mut peer, 512)?;
-                continue;
-            }
-            _ => break,
+    while let PeerMessage::Announce(announcements) = &first_message {
+        if let Some(registry) = &route_announcement_registry {
+            merge_received_announcements(registry, announcements, trusted_keys.as_ref())?;
         }
+        first_message = read_peer_message(&mut peer, 512)?;
     }
     let destination = match first_message {
         PeerMessage::Connect(destination) => {
@@ -378,7 +371,7 @@ pub(crate) fn outbound_peer_worker_with_next_hop_lane_document_and_aggregate_ing
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
         PeerMessage::Announce(_) => {
-            return Err("unexpected peer announce after announce loop".to_string())
+            return Err("unexpected peer announce after announce loop".to_string());
         }
     };
     let target_addr = destination.connect_addr();
@@ -443,17 +436,11 @@ pub(crate) fn serve_peer_pool_worker(
         .set_read_timeout(Some(transit_limits.idle_timeout()))
         .map_err(|error| format!("set first peer read timeout failed: {error}"))?;
     let mut first_message = read_peer_message(&mut peer, 512)?;
-    loop {
-        match &first_message {
-            PeerMessage::Announce(announcements) => {
-                if let Some(registry) = &route_announcement_registry {
-                    merge_received_announcements(registry, announcements, trusted_keys.as_ref())?;
-                }
-                first_message = read_peer_message(&mut peer, 512)?;
-                continue;
-            }
-            _ => break,
+    while let PeerMessage::Announce(announcements) = &first_message {
+        if let Some(registry) = &route_announcement_registry {
+            merge_received_announcements(registry, announcements, trusted_keys.as_ref())?;
         }
+        first_message = read_peer_message(&mut peer, 512)?;
     }
     let destination = match first_message {
         PeerMessage::Connect(destination) => {
@@ -496,7 +483,7 @@ pub(crate) fn serve_peer_pool_worker(
         }
         PeerMessage::AckOk => return Err("unexpected peer ack before request".to_string()),
         PeerMessage::Announce(_) => {
-            return Err("unexpected peer announce after announce loop".to_string())
+            return Err("unexpected peer announce after announce loop".to_string());
         }
     };
     let target_addr = destination.connect_addr();

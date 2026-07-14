@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 
 use crate::multipath_model::MeshRouteBindingId;
-use crate::route_announcement::{parse_route_announcements, RouteAnnouncement};
 use crate::policy::{
     ContinuityPolicy, MeshPathPolicy, MeshPathProfile, MeshTrafficHints, MultipathDemand,
     MultipathMode, ShadowSwitchMode, TrafficClass,
@@ -10,6 +9,7 @@ use crate::policy_parse::{
     parse_bool_field, parse_csv_unique, parse_csv_unique_normalized, parse_u8_field,
     parse_u16_csv_field, parse_u64_field, parse_usize_field,
 };
+use crate::route_announcement::{RouteAnnouncement, parse_route_announcements};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MeshDpsPayloadSnapshot {

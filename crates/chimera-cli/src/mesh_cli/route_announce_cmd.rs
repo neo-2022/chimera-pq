@@ -86,7 +86,10 @@ pub(crate) fn mesh_route_announce_command(_usage: &str, args: &[String]) -> i32 
 
     let output = if options.json_output {
         let mut object = serde_json::Map::new();
-        object.insert("status".to_string(), serde_json::Value::String("ok".to_string()));
+        object.insert(
+            "status".to_string(),
+            serde_json::Value::String("ok".to_string()),
+        );
         object.insert(
             "policy_payload".to_string(),
             serde_json::Value::String(policy_payload),
@@ -126,11 +129,11 @@ pub(crate) fn mesh_route_announce_command(_usage: &str, args: &[String]) -> i32 
 
     println!("{output}");
 
-    if let Some(path) = options.out_path.as_deref() {
-        if let Err(error) = std::fs::write(path, &output) {
-            eprintln!("mesh route-announce write failed: {error}");
-            return 1;
-        }
+    if let Some(path) = options.out_path.as_deref()
+        && let Err(error) = std::fs::write(path, &output)
+    {
+        eprintln!("mesh route-announce write failed: {error}");
+        return 1;
     }
 
     0
@@ -168,9 +171,7 @@ fn parse_options(args: &[String]) -> Result<MeshRouteAnnounceOptions, String> {
         match flag {
             "--namespace" => set_once("--namespace", &mut namespace, value.to_string())?,
             "--node" => set_once("--node", &mut node_name, value.to_string())?,
-            "--destination" => {
-                set_once("--destination", &mut destination, value.to_string())?
-            }
+            "--destination" => set_once("--destination", &mut destination, value.to_string())?,
             "--via" => set_once("--via", &mut via, value.to_string())?,
             "--route-binding-id" => {
                 set_once(
@@ -216,9 +217,7 @@ fn parse_options(args: &[String]) -> Result<MeshRouteAnnounceOptions, String> {
 
     let destination = destination.ok_or_else(|| "missing --destination".to_string())?;
     if !destination.starts_with("cidr/") && !destination.starts_with("domain/") {
-        return Err(
-            "--destination must start with 'cidr/' or 'domain/'".to_string(),
-        );
+        return Err("--destination must start with 'cidr/' or 'domain/'".to_string());
     }
     if destination.contains(',') || destination.contains('|') || destination.contains(';') {
         return Err("--destination contains illegal separator character".to_string());
@@ -361,7 +360,7 @@ mod tests {
         let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(&seed)
             .map_err(|error| format!("test key pair: {error}"))?;
         let public_key = key_pair.public_key().as_ref().to_vec();
-        let signing_key = base64::engine::general_purpose::STANDARD.encode(&seed);
+        let signing_key = base64::engine::general_purpose::STANDARD.encode(seed);
 
         let mut args = sample_args();
         args.push("--mesh-announcement-signing-key".to_string());
@@ -373,8 +372,9 @@ mod tests {
             .split(';')
             .find(|segment| segment.starts_with("mesh_announcements="))
             .ok_or_else(|| "mesh_announcements missing from payload".to_string())?;
-        let announcements =
-            chimera_mesh::parse_route_announcements(&announcement_value["mesh_announcements=".len()..])?;
+        let announcements = chimera_mesh::parse_route_announcements(
+            &announcement_value["mesh_announcements=".len()..],
+        )?;
         assert_eq!(announcements.len(), 1);
         assert!(!announcements[0].auth().signature.is_empty());
         announcements[0]
