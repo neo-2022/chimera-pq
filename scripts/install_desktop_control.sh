@@ -1140,33 +1140,84 @@ if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   esac
 fi
 
-echo
-echo "CHIMERA desktop control installed."
-echo "Desktop entry: $APPLICATIONS_DIR/chimera-control-gui.desktop"
-echo "User units: $SYSTEMD_USER_DIR/$RUNTIME_SERVICE_UNIT, $SYSTEMD_USER_DIR/$NODE_SERVICE_UNIT, $SYSTEMD_USER_DIR/$DATAPATH_SERVICE_UNIT"
-echo "boot_recovery_status=$BOOT_RECOVERY_STATUS"
-if [[ "$BOOT_RECOVERY_STATUS" == "armed" ]]; then
-  echo "Boot recovery: armed via $RUNTIME_SERVICE_UNIT"
-elif [[ "$BOOT_RECOVERY_STATUS" == "session_only" ]]; then
-  echo "Boot recovery: live systemd --user is ready, but reboot persistence is unverified"
-else
-  echo "Boot recovery: units are installed on disk only; live systemd --user session is unavailable in this shell"
-fi
-echo "Shortcut command: $LOCAL_BIN_DIR/chimera"
-echo "Shortcut command: $LOCAL_BIN_DIR/chimera-sh"
-echo "Shortcut command: $LOCAL_BIN_DIR/chimera.sh"
-echo
+{
+  # Bilingual human-readable install summary with optional terminal colors.
+  if [[ -t 1 ]]; then
+    c_bold='\e[1m'
+    c_green='\e[32m'
+    c_cyan='\e[36m'
+    c_yellow='\e[33m'
+    c_reset='\e[0m'
+  else
+    c_bold=''
+    c_green=''
+    c_cyan=''
+    c_yellow=''
+    c_reset=''
+  fi
 
-echo "UI compatibility:"
-echo "  - Wayland: launcher window mode (zenity/kdialog/yad fallback)"
-echo "  - X11: tray mode when yad is available, otherwise launcher window mode"
-echo "  - Headless/SSH: CLI fallback (status output)"
-if ! command -v zenity >/dev/null 2>&1 && ! command -v kdialog >/dev/null 2>&1 && ! command -v yad >/dev/null 2>&1; then
-  echo "No GUI dialog backend found; install one of: zenity, kdialog, yad"
-fi
-echo
-echo "Quick start:"
-echo "  chimera -start"
-echo "  chimera -status"
-echo "  chimera -stop"
-echo "  chimera -uninstall"
+  version="${CHIMERA_RELEASE_VERSION:-unknown}"
+  sep="================================================================"
+
+  echo
+  echo -e "${c_green}${sep}${c_reset}"
+  echo -e "  ${c_bold}CHIMERA-PQ ${version}${c_reset}"
+  echo -e "  ${c_bold}CHIMERA-PQ ${version} установлена${c_reset}"
+  echo -e "${c_green}${sep}${c_reset}"
+  echo
+
+  echo -e "${c_cyan}Desktop entry / Ярлык приложения:${c_reset}"
+  echo "  $APPLICATIONS_DIR/chimera-control-gui.desktop"
+  echo
+
+  echo -e "${c_cyan}User units / Пользовательские юниты systemd:${c_reset}"
+  echo "  $SYSTEMD_USER_DIR/$RUNTIME_SERVICE_UNIT"
+  echo "  $SYSTEMD_USER_DIR/$NODE_SERVICE_UNIT"
+  echo "  $SYSTEMD_USER_DIR/$DATAPATH_SERVICE_UNIT"
+  if [[ -f "$SYSTEMD_USER_DIR/$SITE_AUTOWATCH_SERVICE_UNIT" ]]; then
+    echo "  $SYSTEMD_USER_DIR/$SITE_AUTOWATCH_SERVICE_UNIT"
+  fi
+  echo
+
+  echo -e "${c_cyan}Boot recovery / Автозагрузка:${c_reset}"
+  case "$BOOT_RECOVERY_STATUS" in
+    armed)
+      echo "  armed / активна (via $RUNTIME_SERVICE_UNIT)"
+      ;;
+    session_only)
+      echo "  session_only / только текущая сессия"
+      echo "  Reboot persistence is unverified / переживёт ли перезагрузку — не проверено"
+      ;;
+    *)
+      echo "  disk_only / только на диске"
+      echo "  Live systemd --user session is unavailable here / live-сессия systemd --user недоступна"
+      ;;
+  esac
+  echo
+
+  echo -e "${c_cyan}Shortcuts / Команды быстрого доступа:${c_reset}"
+  echo "  chimera        — control CHIMERA / управление CHIMERA"
+  echo "  chimera-sh     — quick launcher / быстрый запуск"
+  echo "  chimera.sh     — installer & updater / установщик и обновлятор"
+  echo
+
+  echo -e "${c_cyan}UI compatibility / Совместимость интерфейса:${c_reset}"
+  echo "  Wayland: launcher window mode (zenity/kdialog/yad fallback)"
+  echo "  X11:     tray mode when yad is available, otherwise launcher window mode"
+  echo "  Headless/SSH: CLI fallback (status output)"
+  if ! command -v zenity >/dev/null 2>&1 && ! command -v kdialog >/dev/null 2>&1 && ! command -v yad >/dev/null 2>&1; then
+    echo -e "  ${c_yellow}Note / Примечание:${c_reset} no GUI dialog backend found; install one of: zenity, kdialog, yad"
+  fi
+  echo
+
+  echo -e "${c_cyan}Quick start / Быстрый старт:${c_reset}"
+  printf '  %-18s %s\n' \
+    "chimera -start"   "start CHIMERA / запустить" \
+    "chimera -status"  "show status / посмотреть статус" \
+    "chimera -stop"    "stop CHIMERA / остановить" \
+    "chimera -uninstall" "remove CHIMERA / удалить"
+  echo
+
+  # Keep the machine-readable line required by contract tests.
+  echo "boot_recovery_status=$BOOT_RECOVERY_STATUS"
+} >&2
