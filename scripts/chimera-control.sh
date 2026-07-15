@@ -1540,6 +1540,16 @@ node_service_prestart_self_heal() {
   fi
   refresh_node_peer_target_from_bootstrap >/dev/null 2>&1 || true
   configure_peer_egress_dynamic_lanes_from_bootstrap
+  # If bound transit is enabled but the runtime-generated bindings file is empty
+  # or missing (e.g. after rollback cleanup), regenerate it from the control
+  # plane before the node starts. Without this the node exits immediately and
+  # enters a crash-loop.
+  if peer_egress_bound_transit_requested && ! peer_egress_transit_lane_bindings_ready; then
+    if ! mesh_bind_control_plane --strict >/dev/null 2>&1; then
+      echo "error: peer-egress bound transit enabled but transit lane bindings could not be regenerated" >&2
+      return 1
+    fi
+  fi
   heal_node_peer_egress_env_bindings
   heal_node_carrier_addr_from_peer_egress_env >/dev/null 2>&1 || true
   ensure_peer_egress_local_listen_aligned
