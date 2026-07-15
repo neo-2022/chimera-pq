@@ -488,6 +488,10 @@ publish_mesh_discovery_snapshot() {
   if [[ -z "$self_node_id" && -f "$PEER_EGRESS_ENV_FILE" ]]; then
     self_node_id="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_MESH_SELF_NODE_ID)")"
   fi
+  if [[ -z "$self_node_id" && -s "$state_path" ]]; then
+    self_node_id="$(awk -F= '/^node_id=/{print $2; exit}' "$state_path" 2>/dev/null || true)"
+    self_node_id="$(trim_ascii_line "$self_node_id")"
+  fi
   self_node_id="${self_node_id:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo chimera-node)}"
   advertise_invite_token="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_TOKEN)")"
   if ! wait_for_file "$state_path" 5; then
@@ -501,6 +505,9 @@ publish_mesh_discovery_snapshot() {
     --out "$discovery_out"
     --pubkey-out "$pubkey_out"
   )
+  if [[ -n "$self_node_id" ]]; then
+    advertise_args+=(--node-id "$self_node_id")
+  fi
   if [[ -n "${CHIMERA_MESH_LOCAL_NODE_REGION:-}" ]]; then
     advertise_args+=(--region "${CHIMERA_MESH_LOCAL_NODE_REGION}")
   fi
@@ -2534,9 +2541,21 @@ clear_runtime_generated_state() {
 
 peer_egress_runtime_live() {
   if systemd_user_ready; then
-    [[ "$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)" == "active" ]] && return 0
+    local active_state
+    active_state="$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)"
+    [[ "$active_state" == "active" || "$active_state" == "activating" ]] && return 0
   fi
-  pidfile_running "$(peer_egress_pid_path)"
+  local pid_path
+  pid_path="$(peer_egress_pid_path)"
+  [[ -f "$pid_path" ]] && pidfile_running "$pid_path" && return 0
+  # v0.1.216: systemd user mode runs the node service without a control-script
+  # pidfile, and SSH/operator sessions may not have DBUS_SESSION_BUS_ADDRESS set.
+  # Fall back to a process-needle check so site-watch never treats a live
+  # peer-egress as stale and deletes its state file.
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -u "$(id -u)" -f "$(runner_cmdline_needle_for_target peer-egress)" >/dev/null 2>&1 && return 0
+  fi
+  return 1
 }
 
 peer_update_runtime_live() {

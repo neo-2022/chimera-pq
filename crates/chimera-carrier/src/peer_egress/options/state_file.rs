@@ -10,12 +10,14 @@ use crate::peer_egress::options_mode::{Mode, mode_name};
 pub fn write_resolved_state_file(
     state_file: &str,
     mode: &Mode,
+    mesh_node: &str,
     resolved_local_listen: &str,
     resolved_peer_listen: &str,
 ) -> Result<(), String> {
     let contents = format!(
-        "mode={}\nresolved_local_listen={}\nresolved_peer_listen={}\n",
+        "mode={}\nnode_id={}\nresolved_local_listen={}\nresolved_peer_listen={}\n",
         mode_name(mode),
+        mesh_node,
         resolved_local_listen,
         resolved_peer_listen
     );

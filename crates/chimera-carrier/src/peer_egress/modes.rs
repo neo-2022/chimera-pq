@@ -69,6 +69,7 @@ pub fn run_side_a(options: Options) -> Result<(), String> {
         && let Err(error) = write_resolved_state_file(
             state_file,
             &options.mode,
+            &options.mesh_self_node_id,
             &resolved_local_listen,
             &resolved_peer_listen,
         )

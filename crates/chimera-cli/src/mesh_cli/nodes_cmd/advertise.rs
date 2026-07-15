@@ -11,7 +11,7 @@ use ring::{
 
 use super::advertise_state::{
     PeerUpdateAdvertiseState, read_peer_update_advertise_state,
-    read_resolved_peer_listen_from_state,
+    read_resolved_node_id_from_state, read_resolved_peer_listen_from_state,
 };
 use crate::mesh_cli::nodes_inventory::{self, MeshNodesInventory, extract_flag_value};
 
@@ -200,6 +200,13 @@ fn resolve_advertise_node_id(
     }
     if let Some(id) = inventory.self_node_id.as_ref() {
         return Ok(id.0.clone());
+    }
+    if let Some(state_path) = extract_flag_value(args, "--state-file")
+        .map(str::to_string)
+        .or_else(|| std::env::var("CHIMERA_MESH_PEER_EGRESS_STATE_PATH").ok())
+        && let Some(node_id) = read_resolved_node_id_from_state(&state_path)?
+    {
+        return Ok(node_id);
     }
     if let Ok(host) = std::env::var("HOSTNAME") {
         let host = host.trim();

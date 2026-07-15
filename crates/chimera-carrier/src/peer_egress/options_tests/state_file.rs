@@ -11,11 +11,13 @@ fn write_resolved_state_file_creates_private_file() -> Result<(), String> {
     write_resolved_state_file(
         path.to_str().ok_or_else(|| "state path utf8".to_string())?,
         &Mode::Node,
+        "amai",
         "127.0.0.1:11111",
         "198.51.100.44:45678",
     )?;
     let body = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
     assert!(body.contains("resolved_peer_listen=198.51.100.44:45678"));
+    assert!(body.contains("node_id=amai"));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

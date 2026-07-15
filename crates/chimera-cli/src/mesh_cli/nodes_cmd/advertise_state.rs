@@ -51,6 +51,34 @@ pub(super) fn read_resolved_peer_listen_from_state(path: &str) -> Result<Option<
     Ok(resolved_peer_listen)
 }
 
+pub(super) fn read_resolved_node_id_from_state(path: &str) -> Result<Option<String>, String> {
+    let path = Path::new(path);
+    match fs::metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("read peer egress state metadata failed: {error}")),
+    }
+    validate_state_file_permissions(path)?;
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("read peer egress state failed: {error}")),
+    };
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("node_id=") {
+            let node_id = rest.trim();
+            if node_id.is_empty() {
+                return Err("peer egress state node_id is empty".to_string());
+            }
+            return Ok(Some(node_id.to_string()));
+        }
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 pub(super) fn read_update_bootstrap_url_from_state(path: &str) -> Result<Option<String>, String> {
     Ok(read_peer_update_advertise_state(path)?.map(|state| state.update_bootstrap_url))
@@ -331,7 +359,10 @@ fn validate_optional_endpoint_generation(value: &Value) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_resolved_peer_listen_from_state, read_update_bootstrap_url_from_state};
+    use super::{
+        read_resolved_node_id_from_state, read_resolved_peer_listen_from_state,
+        read_update_bootstrap_url_from_state,
+    };
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
@@ -511,6 +542,35 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("endpoint_generation"));
+        let _ = fs::remove_dir_all(dir);
+        Ok(())
+    }
+
+    #[test]
+    fn read_peer_egress_state_extracts_node_id() -> Result<(), String> {
+        let dir = temp_dir("chimera-peer-egress-state-node-id")?;
+        let state_path = dir.join("peer-egress.state");
+        fs::write(
+            &state_path,
+            "mode=peer\nnode_id=remote-node\nresolved_local_listen=127.0.0.1:11111\nresolved_peer_listen=198.51.100.44:45678\n",
+        )
+        .map_err(|error| format!("write state failed: {error}"))?;
+        #[cfg(unix)]
+        {
+            fs::set_permissions(&state_path, fs::Permissions::from_mode(0o600))
+                .map_err(|error| format!("chmod state failed: {error}"))?;
+        }
+        let state_path = state_path
+            .to_str()
+            .ok_or_else(|| "state path utf8".to_string())?;
+        assert_eq!(
+            read_resolved_node_id_from_state(state_path)?,
+            Some("remote-node".to_string())
+        );
+        assert_eq!(
+            read_resolved_peer_listen_from_state(state_path)?,
+            Some("198.51.100.44:45678".to_string())
+        );
         let _ = fs::remove_dir_all(dir);
         Ok(())
     }
