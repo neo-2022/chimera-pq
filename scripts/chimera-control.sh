@@ -1629,16 +1629,16 @@ node_service_poststart_reconcile() {
     echo "node_poststart_reconcile=poststart_fast reconcile_status=ok"
     return 0
   fi
-  local reconcile_status="ok"
-  # v0.1.215: always attempt an immediate discovery/endpoint publication cycle
-  # after peer-egress comes up; do not defer it just because datapath proof is
-  # not yet available.
-  site_auto_watch_run_once >/dev/null 2>&1 || reconcile_status="partial"
+  # Do not run discovery/endpoint publication until the datapath proof is
+  # available. Publishing bindings/endpoints while the datapath is unproven
+  # would publish stale or unreachable state.
   if ! datapath_apply_proof_ok; then
     clear_stale_publication_runtime_state
-    echo "node_poststart_reconcile=deferred reconcile_status=$reconcile_status"
+    echo "node_poststart_reconcile=deferred reconcile_status=deferred"
     return 0
   fi
+  local reconcile_status="ok"
+  site_auto_watch_run_once >/dev/null 2>&1 || reconcile_status="partial"
   echo "node_poststart_reconcile=ok reconcile_status=$reconcile_status"
 }
 
