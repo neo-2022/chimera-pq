@@ -1592,24 +1592,32 @@ node_service_poststart_reconcile() {
   # also running. Without this, a peer-egress crash/recovery can leave the
   # datapath and discovery publication stopped because the runtime oneshot unit
   # does not supervise long-running services.
+  #
+  # Use --no-block when starting these units: they have After=/BindsTo= or
+  # Requires= dependencies on chimera-node.service, so a synchronous
+  # "systemctl start" from inside the node ExecStartPost would deadlock with
+  # the node start job itself and hit TimeoutStartPost.
   if systemd_user_ready; then
     if [[ "$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)" != "active" ]]; then
       systemctl --user reset-failed "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || true
-      systemctl --user start "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || true
+      systemctl --user start --no-block "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || true
     fi
     if [[ "$(systemctl --user is-active "$SITE_AUTOWATCH_SERVICE_UNIT" 2>/dev/null || true)" != "active" ]]; then
       systemctl --user reset-failed "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
-      systemctl --user start "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
+      systemctl --user start --no-block "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
     fi
   fi
+  local reconcile_status="ok"
+  # v0.1.215: always attempt an immediate discovery/endpoint publication cycle
+  # after peer-egress comes up; do not defer it just because datapath proof is
+  # not yet available.
+  site_auto_watch_run_once >/dev/null 2>&1 || reconcile_status="partial"
   if ! datapath_apply_proof_ok; then
     clear_stale_publication_runtime_state
-    echo "node_poststart_reconcile=deferred"
+    echo "node_poststart_reconcile=deferred reconcile_status=$reconcile_status"
     return 0
   fi
-  site_auto_watch_run_once >/dev/null 2>&1 || true
-  site_auto_watch_start >/dev/null 2>&1 || true
-  echo "node_poststart_reconcile=ok"
+  echo "node_poststart_reconcile=ok reconcile_status=$reconcile_status"
 }
 
 materialize_node_runtime_config() {

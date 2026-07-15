@@ -52,6 +52,14 @@ impl RouteAnnouncement {
         }
     }
 
+    pub fn set_issuer(&mut self, issuer: PeerId) {
+        match self {
+            Self::Static { auth, .. } => {
+                auth.issuer = issuer;
+            }
+        }
+    }
+
     pub fn sign_with_ed25519_seed(&mut self, seed: &[u8]) -> Result<(), String> {
         if seed.len() != 32 {
             return Err(format!(

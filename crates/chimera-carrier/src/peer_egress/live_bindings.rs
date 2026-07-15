@@ -13,7 +13,9 @@ use crate::peer_egress::lane_binding::{
 use crate::peer_egress::net::{connect_tcp, tune_tcp};
 use crate::peer_egress::options::Options;
 use crate::peer_egress::protocol::redacted_log_reason;
-use crate::peer_egress::route_announcement_registry::local_announcements_from_options;
+use crate::peer_egress::route_announcement_registry::{
+    local_announcements_from_options, sign_local_announcements,
+};
 use crate::peer_egress::transit_binding::{TransitLaneId, TransitPathBinding, TransitRouteId};
 use crate::peer_egress::transit_dispatch::{
     SharedTransitNextHopDispatcher, TransitNextHopDispatcher,
@@ -526,7 +528,22 @@ fn outbound_transit_lane_registration_worker(
         .map_err(|error| format!("write token failed: {error}"))?;
     let mut peer = establish_secure_peer_client(peer, &options.token, options.aead)?;
     eprintln!("event=carrier_reconnect_success");
-    let local_announcements = local_announcements_from_options(options);
+    let mut local_announcements = local_announcements_from_options(options);
+    if let Err(error) = options
+        .mesh_announcement_signing_key_bytes()
+        .and_then(|signing_key| {
+            sign_local_announcements(
+                &mut local_announcements,
+                signing_key.as_deref(),
+                &options.mesh_self_node_id,
+            )
+        })
+    {
+        eprintln!(
+            "event=outbound_transit_lane_announce_sign_failed reason_class={}",
+            redacted_log_reason(&error)
+        );
+    }
     if !local_announcements.is_empty()
         && let Err(error) = write_announce_message(&mut peer, &local_announcements)
     {

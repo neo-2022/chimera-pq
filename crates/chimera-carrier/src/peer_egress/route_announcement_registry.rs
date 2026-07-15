@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use chimera_mesh::{RouteAnnouncement, format_route_announcements, parse_route_announcements};
+use chimera_mesh::{PeerId, RouteAnnouncement, format_route_announcements, parse_route_announcements};
 
 use super::options::Options;
 
@@ -19,11 +19,15 @@ pub fn local_announcements_from_options(options: &Options) -> Vec<RouteAnnouncem
 pub fn sign_local_announcements(
     announcements: &mut [RouteAnnouncement],
     signing_key: Option<&[u8]>,
+    local_issuer: &str,
 ) -> Result<(), String> {
     let Some(seed) = signing_key else {
         return Ok(());
     };
+    let issuer = PeerId::new(local_issuer)
+        .map_err(|error| format!("invalid local announcement issuer: {error}"))?;
     for announcement in announcements {
+        announcement.set_issuer(issuer.clone());
         announcement.sign_with_ed25519_seed(seed)?;
     }
     Ok(())
@@ -294,7 +298,7 @@ mod tests {
         let seed = [5u8; 32];
         let mut announcements =
             parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
-        sign_local_announcements(&mut announcements, Some(&seed))?;
+        sign_local_announcements(&mut announcements, Some(&seed), "peer-a")?;
         assert!(!announcements[0].auth().signature.is_empty());
         Ok(())
     }

@@ -60,7 +60,11 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
         new_shared_route_announcement_registry();
     let mut local_announcements_to_share = local_announcements_from_options(&options);
     let signing_key = options.mesh_announcement_signing_key_bytes()?;
-    sign_local_announcements(&mut local_announcements_to_share, signing_key.as_deref())?;
+    sign_local_announcements(
+        &mut local_announcements_to_share,
+        signing_key.as_deref(),
+        &options.mesh_self_node_id,
+    )?;
     if options.discovery_configured() {
         let driver_options = match build_mesh_lane_driver_options(
             &options,
