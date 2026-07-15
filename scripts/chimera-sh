@@ -37,24 +37,69 @@ load_update_module() {
 load_update_module
 
 usage() {
-  cat <<'EOF'
-Usage:
-  chimera -install
-  chimera -start
-  chimera -stop
-  chimera -restart
-  chimera -status
-  chimera -mesh <args...>
-  chimera -connect <index|node_id> [mesh node filters...]
-  chimera -mesh-bind-control-plane [--strict|--best-effort]
-  chimera -version
-  chimera -doctor
-  chimera -logs
-  chimera -uninstall
-  chimera -help
+  local c_reset c_bold c_cyan c_yellow c_green c_dim
+  if [[ -t 1 ]]; then
+    c_reset='\e[0m'
+    c_bold='\e[1m'
+    c_cyan='\e[36m'
+    c_yellow='\e[33m'
+    c_green='\e[32m'
+    c_dim='\e[2m'
+  else
+    c_reset=''
+    c_bold=''
+    c_cyan=''
+    c_yellow=''
+    c_green=''
+    c_dim=''
+  fi
 
-The same commands also work via the legacy names chimera-sh and chimera.sh.
-EOF
+  printf '%b\n' "${c_bold}${c_cyan}╔════════════════════════════════════════════════════════════════════╗${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}║         CHIMERA-PQ / WEAVE — справка по управляющим командам       ║${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}╚════════════════════════════════════════════════════════════════════╝${c_reset}"
+  echo
+  printf '%b\n' "${c_bold}Основные команды${c_reset} ${c_dim}(большинство задач решается ими)${c_reset}"
+  printf '%b\n' "${c_dim}────────────────────────────────────────────────────────────────────${c_reset}"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -install"      "Установить или переустановить CHIMERA"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -start"        "Запустить CHIMERA (сначала проверяет обновление)"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -stop"         "Остановить CHIMERA"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -restart"      "Перезапустить CHIMERA (сначала проверяет обновление)"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -status"       "Показать состояние сервисов, туннеля и маршрутов"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -version"      "Показать установленную версию"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -doctor"       "Запустить диагностику"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -logs"         "Показать последние записи журнала"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -uninstall"    "Полностью удалить CHIMERA с хоста"
+  echo
+  printf '%b\n' "${c_bold}Mesh / WEAVE${c_reset} ${c_dim}(для работы с узлами и транзитом)${c_reset}"
+  printf '%b\n' "${c_dim}────────────────────────────────────────────────────────────────────${c_reset}"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -mesh <args>"  "Управление mesh-узлами: list, best, select, connect"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" ""                      "advertise, route-explain и другие подкоманды"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -connect <id>" "Быстро подключиться к узлу mesh по id или индексу"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" "chimera -mesh-bind-cp" "Собрать и применить привязки транзитных lane-ов"
+  printf "  ${c_bold}%-24s${c_reset} %s\n" ""                      "control-plane (флаги --strict или --best-effort)"
+  echo
+  printf '%b\n' "${c_bold}${c_yellow}Примеры использования mesh-команд:${c_reset}"
+  printf '  %-43s %s\n' "  chimera -mesh nodes list"               "# список известных узлов"
+  printf '  %-43s %s\n' "  chimera -mesh nodes best"               "# выбрать лучший по задержке"
+  printf '  %-43s %s\n' "  chimera -mesh nodes select --id узел-1"  "# выбрать конкретный узел"
+  printf '  %-43s %s\n' "  chimera -connect узел-1"                 "# быстро подключиться"
+  printf '  %-43s %s\n' "  chimera -mesh route-explain --help"      "# справка по маршрутам"
+  printf '  %-43s %s\n' "  chimera -mesh-bind-control-plane --best-effort" "# мягкий режим привязки lane-ов"
+  echo
+  printf '%b\n' "${c_bold}${c_yellow}Важно:${c_reset}"
+  printf '%b\n' "Команды ${c_bold}-start, -restart, -mesh, -connect, -mesh-bind-control-plane${c_reset}"
+  printf '%b\n' "перед выполнением проверяют, что локальная версия совпадает с последним релизом."
+  printf '%b\n' "Если версия устарела, команда заблокируется и скажет выполнить:"
+  printf '%b\n' "  ${c_bold}${c_green}chimera -install${c_reset}"
+  echo
+  printf '%b\n' "${c_bold}${c_yellow}Предупреждения:${c_reset}"
+printf '%b\n' "• Mesh-команды list / best / select / connect требуют настроенного keyring" >&2
+printf '%b\n' "  или pubkey для discovery. Без них CHIMERA скажет:" >&2
+printf '%b\n' "  ${c_dim}mesh discovery keyring is required${c_reset}" >&2
+printf '%b\n' "  Переменные: CHIMERA_MESH_NODES_DISCOVERY_KEYRING / _PUBKEY (или config)" >&2
+printf '%b\n' "• ${c_bold}chimera -connect <id>${c_reset} работает только с аргументом: id узла или индекс" >&2
+echo
+printf '%b\n' "${c_dim}Те же команды работают через legacy-имена: chimera-sh и chimera.sh${c_reset}"
 }
 
 require_file() {
@@ -94,6 +139,20 @@ ensure_runtime_files() {
   return 0
 }
 
+fail_missing_runtime() {
+  echo "error / ошибка: CHIMERA runtime files are missing / файлы runtime отсутствуют" >&2
+  echo "  Run / выполните: chimera -install" >&2
+  exit 1
+}
+
+fail_update_required() {
+  local context_en="${1:-command}"
+  local context_ru="${2:-командой}"
+  echo "error / ошибка: CHIMERA runtime is not aligned with latest release / runtime не соответствует релизу" >&2
+  echo "  Update required before ${context_en} / обновите перед ${context_ru}: chimera -install" >&2
+  exit 1
+}
+
 main() {
   local cmd="${1:-}"
   case "$cmd" in
@@ -102,94 +161,52 @@ main() {
       exec "$INSTALLER" "${@:2}"
       ;;
     -start)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
-      auto_update_if_needed -start || {
-        echo "error: CHIMERA runtime is not aligned with latest release. Update required before start." >&2
-        exit 1
-      }
+      auto_update_if_needed -start || fail_update_required "start" "запуском"
       CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" start
       ;;
     -stop)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
       exec "$CONTROL" stop
       ;;
     -restart)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
-      auto_update_if_needed -restart || {
-        echo "error: CHIMERA runtime is not aligned with latest release. Update required before restart." >&2
-        exit 1
-      }
+      auto_update_if_needed -restart || fail_update_required "restart" "перезапуском"
       CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" restart
       ;;
     -mesh|mesh)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
-      auto_update_if_needed "$cmd" "${@:2}" || {
-        echo "error: CHIMERA runtime is not aligned with latest release. Update required before mesh command." >&2
-        exit 1
-      }
+      auto_update_if_needed "$cmd" "${@:2}" || fail_update_required "mesh command" "mesh-командой"
       CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh "${@:2}"
       ;;
     -connect|connect)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
-      auto_update_if_needed "$cmd" "${@:2}" || {
-        echo "error: CHIMERA runtime is not aligned with latest release. Update required before connect." >&2
-        exit 1
-      }
+      auto_update_if_needed "$cmd" "${@:2}" || fail_update_required "connect" "подключением"
       CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh nodes connect "${@:2}"
       ;;
     -mesh-bind-control-plane|mesh-bind-control-plane)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
-      auto_update_if_needed "$cmd" "${@:2}" || {
-        echo "error: CHIMERA runtime is not aligned with latest release. Update required before mesh bind control-plane." >&2
-        exit 1
-      }
+      auto_update_if_needed "$cmd" "${@:2}" || fail_update_required "mesh bind control-plane" "привязкой control-plane"
       CHIMERA_UPDATE_FIRST_CHECKED=1 exec "$CONTROL" mesh-bind-control-plane "${@:2}"
       ;;
     -status)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
       exec "$CONTROL" status
       ;;
     -doctor)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
       exec "$CONTROL" doctor
       ;;
     -logs)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
       exec "$CONTROL" logs
       ;;
@@ -201,10 +218,7 @@ main() {
       echo "chimera-runtime ${current}"
       ;;
     -uninstall)
-      ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
-        exit 1
-      }
+      ensure_runtime_files || fail_missing_runtime
       require_file "$CONTROL"
       exec "$CONTROL" uninstall
       ;;
@@ -212,7 +226,8 @@ main() {
       usage
       ;;
     *)
-      echo "error: unknown option: $cmd" >&2
+      echo "error / ошибка: unknown option / неизвестная опция: $cmd" >&2
+      echo "  Run / выполните: chimera -help" >&2
       usage
       exit 1
       ;;

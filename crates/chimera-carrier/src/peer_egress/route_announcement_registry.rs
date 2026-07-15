@@ -2,7 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use chimera_mesh::{PeerId, RouteAnnouncement, format_route_announcements, parse_route_announcements};
+use chimera_mesh::{
+    PeerId, RouteAnnouncement, format_route_announcements, parse_route_announcements,
+};
 
 use super::options::Options;
 

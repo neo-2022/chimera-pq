@@ -10,8 +10,8 @@ use ring::{
 };
 
 use super::advertise_state::{
-    PeerUpdateAdvertiseState, read_peer_update_advertise_state,
-    read_resolved_node_id_from_state, read_resolved_peer_listen_from_state,
+    PeerUpdateAdvertiseState, read_peer_update_advertise_state, read_resolved_node_id_from_state,
+    read_resolved_peer_listen_from_state,
 };
 use crate::mesh_cli::nodes_inventory::{self, MeshNodesInventory, extract_flag_value};
 

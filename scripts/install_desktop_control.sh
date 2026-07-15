@@ -1198,7 +1198,7 @@ fi
   echo -e "${c_cyan}Shortcuts / Команды быстрого доступа:${c_reset}"
   echo "  chimera        — control CHIMERA / управление CHIMERA"
   echo "  chimera-sh     — quick launcher / быстрый запуск"
-  echo "  chimera.sh     — installer & updater / установщик и обновлятор"
+  echo "  chimera.sh     — installer & updater / установка и обновление"
   echo
 
   echo -e "${c_cyan}UI compatibility / Совместимость интерфейса:${c_reset}"
