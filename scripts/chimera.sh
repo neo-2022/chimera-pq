@@ -234,9 +234,32 @@ chimera_installation_exists() {
   return 1
 }
 
+chimera_latest_install_command() {
+  printf '%s' "bash <(curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh) -install"
+}
+
 print_chimera_install_hint() {
+  local install_cmd=""
+  install_cmd="$(chimera_latest_install_command)"
   printf '%s\n' "To install the latest release, run:"
-  printf '%s\n' "  bash <(curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh) -install"
+  printf '  %s\n' "$install_cmd"
+}
+
+print_chimera_not_installed_notice() {
+  local install_cmd=""
+  install_cmd="$(chimera_latest_install_command)"
+  printf '\n'
+  printf '%s\n' 'Nothing to uninstall. CHIMERA is not installed on this system.'
+  printf '\n'
+  printf '%s\n' '--- English ---'
+  printf '%s\n' 'CHIMERA is not installed on this system.'
+  printf '%s\n' 'To install the latest release, run:'
+  printf '  %s\n' "$install_cmd"
+  printf '\n'
+  printf '%s\n' '--- Русский ---'
+  printf '%s\n' 'CHIMERA не установлена в этой системе.'
+  printf '%s\n' 'Чтобы установить последний выпуск, выполните:'
+  printf '  %s\n' "$install_cmd"
 }
 
 remove_link_if_points_to_root() {
@@ -360,8 +383,7 @@ bootstrap_uninstall_current_installation() {
   if ! chimera_installation_exists "$chimera_home" "$local_bin" "$chimera_config_dir" "$chimera_cache_dir" "$chimera_state_dir"; then
     bootstrap_remove_install_artifacts
     echo "uninstall_status=ok reason=not_installed"
-    echo "notice: CHIMERA is not installed on this system."
-    print_chimera_install_hint
+    print_chimera_not_installed_notice
     return 0
   fi
 
