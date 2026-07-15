@@ -1604,6 +1604,10 @@ node_service_poststart_reconcile() {
   # Requires= dependencies on chimera-node.service, so a synchronous
   # "systemctl start" from inside the node ExecStartPost would deadlock with
   # the node start job itself and hit TimeoutStartPost.
+  local poststart_fast=0
+  if [[ "${1:-}" == "--poststart" ]]; then
+    poststart_fast=1
+  fi
   if systemd_user_ready; then
     if [[ "$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)" != "active" ]]; then
       systemctl --user reset-failed "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || true
@@ -1613,6 +1617,16 @@ node_service_poststart_reconcile() {
       systemctl --user reset-failed "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
       systemctl --user start --no-block "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
     fi
+  fi
+  # v0.1.217: inside systemd ExecStartPost the heavy discovery/publication cycle
+  # must not run synchronously: on restart it can exceed TimeoutStartPost when
+  # discovery probes/transit publication point at slow/unreachable peers.
+  # The shell start path (chimera-control.sh start/restart) runs the same work
+  # after the node service is already active, and the site-watch service keeps
+  # reconciling in the background.
+  if [[ "$poststart_fast" -eq 1 ]]; then
+    echo "node_poststart_reconcile=poststart_fast reconcile_status=ok"
+    return 0
   fi
   local reconcile_status="ok"
   # v0.1.215: always attempt an immediate discovery/endpoint publication cycle
@@ -5309,7 +5323,7 @@ main() {
       datapath_service_prestart_validate
       ;;
     __service-poststart-node)
-      node_service_poststart_reconcile
+      node_service_poststart_reconcile --poststart
       ;;
     __execstoppost-cleanup)
       chimera_execstoppost_cleanup
