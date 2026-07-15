@@ -5,6 +5,22 @@ that weaves equal peer nodes together.
 
 Linux-first MVP workspace for CHIMERA-PQ WEAVE.
 
+## Quick install
+
+First-time install:
+
+```bash
+bash <(curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh) -install
+```
+
+After install the `chimera` command is available:
+
+```bash
+chimera -install   # reinstall / update
+chimera -uninstall # remove
+chimera -status    # status
+```
+
 Start every agent session with the parent workspace documents and process
 guards:
 
