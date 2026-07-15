@@ -10,6 +10,7 @@ SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR="${SYSTEMD_USER_DEFAULT_TARGET_WANTS_DIR:-
 APPLICATIONS_DIR="${APPLICATIONS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/applications}"
 CHIMERA_CONFIG_DIR="${CHIMERA_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera}"
 CHIMERA_CACHE_DIR="${CHIMERA_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera}"
+CHIMERA_STATE_DIR="${CHIMERA_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/chimera}"
 DEFAULT_LOCAL_BIN_DIR="${HOME}/.local/bin"
 if [[ -f "$INSTALL_LOCAL_BIN_FILE" ]]; then
   stored_local_bin_dir="$(tr -d '\r\n' <"$INSTALL_LOCAL_BIN_FILE" 2>/dev/null || true)"
@@ -3505,6 +3506,7 @@ uninstall_release_tree() {
   remove_path_if_present "$APPLICATIONS_DIR/chimera-control.desktop"
   remove_path_if_present "$CHIMERA_CONFIG_DIR"
   remove_path_if_present "$CHIMERA_CACHE_DIR"
+  remove_path_if_present "$CHIMERA_STATE_DIR"
   remove_path_if_present "$ROOT_DIR"
   remove_previous_release_backups "$release_parent"
 }

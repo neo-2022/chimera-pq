@@ -257,6 +257,7 @@ bootstrap_uninstall_release_tree() {
   local applications_dir="${4:?applications_dir_required}"
   local chimera_config_dir="${5:?chimera_config_dir_required}"
   local chimera_cache_dir="${6:?chimera_cache_dir_required}"
+  local chimera_state_dir="${7:-${XDG_STATE_HOME:-$HOME/.local/state}/chimera}"
   local release_parent=""
   release_parent="$(dirname "$chimera_home")"
   # Move away from the tree being removed so the release directory itself can be
@@ -281,13 +282,14 @@ bootstrap_uninstall_release_tree() {
   remove_path_if_present "$applications_dir/chimera-control.desktop"
   remove_path_if_present "$chimera_config_dir"
   remove_path_if_present "$chimera_cache_dir"
+  remove_path_if_present "$chimera_state_dir"
   remove_path_if_present "$chimera_home"
   remove_previous_release_backups "$release_parent"
 }
 
 bootstrap_uninstall_current_installation() {
   local chimera_home=""
-  local local_bin systemd_user_dir applications_dir chimera_config_dir chimera_cache_dir
+  local local_bin systemd_user_dir applications_dir chimera_config_dir chimera_cache_dir chimera_state_dir
   local control_script=""
   local traces_remaining=0
   local trace_path=""
@@ -298,6 +300,7 @@ bootstrap_uninstall_current_installation() {
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   chimera_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/chimera"
   chimera_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
+  chimera_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/chimera"
   control_script="$chimera_home/scripts/chimera-control.sh"
 
   if [[ -x "$control_script" ]]; then
@@ -318,7 +321,8 @@ bootstrap_uninstall_current_installation() {
     "$systemd_user_dir" \
     "$applications_dir" \
     "$chimera_config_dir" \
-    "$chimera_cache_dir" || {
+    "$chimera_cache_dir" \
+    "$chimera_state_dir" || {
       echo "uninstall_status=fail reason=cleanup_failed"
       return 1
     }
@@ -346,7 +350,8 @@ bootstrap_uninstall_current_installation() {
     "$applications_dir/chimera-control-gui.desktop" \
     "$applications_dir/chimera-control.desktop" \
     "$chimera_config_dir" \
-    "$chimera_cache_dir"
+    "$chimera_cache_dir" \
+    "$chimera_state_dir"
   do
     if path_exists_or_link "$trace_path"; then
       traces_remaining=1
