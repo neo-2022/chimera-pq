@@ -218,12 +218,14 @@ jobs:
       - name: Mirror release tag to GitVerse
         env:
           GITVERSE_MIRROR_TOKEN: ${{ secrets.GITVERSE_MIRROR_TOKEN }}
+          GITVERSE_FALLBACK_TOKEN: ${{ secrets.CHIMERA_GITVERS_TOKEN }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          if [[ -z "${GITVERSE_MIRROR_TOKEN:-}" ]]; then
-            echo "error: GITVERSE_MIRROR_TOKEN secret is required for GitVerse mirror" >&2
+          mirror_token="${GITVERSE_MIRROR_TOKEN:-${GITVERSE_FALLBACK_TOKEN:-}}"
+          if [[ -z "${mirror_token:-}" ]]; then
+            echo "error: GITVERSE_MIRROR_TOKEN (or CHIMERA_GITVERS_TOKEN) secret is required for GitVerse mirror" >&2
             exit 1
           fi
-          git remote add gitverse "https://oauth2:${GITVERSE_MIRROR_TOKEN}@gitverse.ru/ArtReg/chimera.git"
+          git remote add gitverse "https://oauth2:${mirror_token}@gitverse.ru/ArtReg/chimera.git"
           git push gitverse main:main "${RELEASE_TAG}" --tags
