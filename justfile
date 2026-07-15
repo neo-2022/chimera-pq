@@ -19,6 +19,10 @@ check:
 test:
     cargo test --workspace
 
+update-script-test:
+    bash -n scripts/chimera-update.sh
+    bash scripts/tests/chimera-update-peer-preferred-test.sh
+
 lab-smoke:
     cargo run -p chimera-lab --bin chimera-lab -- smoke
 

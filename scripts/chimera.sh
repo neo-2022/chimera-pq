@@ -30,24 +30,80 @@ resolve_self() {
   pwd
 }
 
+curl_exit_reason() {
+  local rc="${1:-0}"
+  case "$rc" in
+    1) printf '%s' "curl_unsupported_protocol" ;;
+    2) printf '%s' "curl_init_failed" ;;
+    3) printf '%s' "curl_malformed_url" ;;
+    4) printf '%s' "curl_feature_not_available" ;;
+    5) printf '%s' "curl_could_not_resolve_proxy" ;;
+    6) printf '%s' "curl_could_not_resolve_host" ;;
+    7) printf '%s' "curl_connection_failed" ;;
+    9) printf '%s' "curl_access_denied" ;;
+    22) printf '%s' "curl_http_error_4xx_5xx" ;;
+    23) printf '%s' "curl_write_error" ;;
+    25) printf '%s' "curl_upload_failed" ;;
+    28) printf '%s' "curl_timeout" ;;
+    35) printf '%s' "curl_ssl_handshake_failed" ;;
+    51) printf '%s' "curl_ssl_cert_verify_failed" ;;
+    60) printf '%s' "curl_peer_certificate_failed" ;;
+    *) printf '%s' "curl_exit_%s" "$rc" ;;
+  esac
+}
+
+wget_exit_reason() {
+  local rc="${1:-0}"
+  case "$rc" in
+    1) printf '%s' "wget_generic_error" ;;
+    2) printf '%s' "wget_parse_error" ;;
+    3) printf '%s' "wget_io_error" ;;
+    4) printf '%s' "wget_network_failure" ;;
+    5) printf '%s' "wget_ssl_verification_failed" ;;
+    6) printf '%s' "wget_username_password_error" ;;
+    7) printf '%s' "wget_protocol_error" ;;
+    8) printf '%s' "wget_server_error_4xx" ;;
+    *) printf '%s' "wget_exit_%s" "$rc" ;;
+  esac
+}
+
 download_url_to_file() {
   local url="${1:?url_required}"
   local dest="${2:?dest_required}"
-  if command -v curl >/dev/null 2>&1; then
+  local curl_rc=0 wget_rc=0
+  local curl_present="no" wget_present="no"
+  command -v curl >/dev/null 2>&1 && curl_present="yes"
+  command -v wget >/dev/null 2>&1 && wget_present="yes"
+
+  if [[ "$curl_present" == "yes" ]]; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
       curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 "$url" -o "$dest"
     then
       return 0
     fi
+    curl_rc=$?
+    echo "download_status=fail tool=curl url=$url rc=$curl_rc reason=$(curl_exit_reason "$curl_rc")" >&2
+    [[ -f "$dest" ]] && rm -f "$dest"
   fi
-  if command -v wget >/dev/null 2>&1; then
+
+  if [[ "$wget_present" == "yes" ]]; then
     if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
       wget --no-config --tries=3 --timeout=10 --dns-timeout=10 --connect-timeout=10 --read-timeout=60 --waitretry=1 -qO "$dest" "$url"
     then
       return 0
     fi
+    wget_rc=$?
+    echo "download_status=fail tool=wget url=$url rc=$wget_rc reason=$(wget_exit_reason "$wget_rc")" >&2
+    [[ -f "$dest" ]] && rm -f "$dest"
   fi
-  echo "error: missing downloader: curl or wget" >&2
+
+  if [[ "$curl_present" == "no" && "$wget_present" == "no" ]]; then
+    echo "download_status=fail url=$url reason=no_downloader_installed curl_present=no wget_present=no" >&2
+    echo "error: no HTTP downloader found; install curl or wget" >&2
+  else
+    echo "download_status=fail url=$url reason=no_downloader_succeeded curl_present=$curl_present wget_present=$wget_present curl_rc=$curl_rc wget_rc=$wget_rc" >&2
+    echo "error: could not download $url (see download_status logs above)" >&2
+  fi
   return 1
 }
 

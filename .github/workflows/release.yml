@@ -214,3 +214,16 @@ jobs:
             printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual" >&2
             exit 1
           fi
+
+      - name: Mirror release tag to GitVerse
+        env:
+          GITVERSE_MIRROR_TOKEN: ${{ secrets.GITVERSE_MIRROR_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GITVERSE_MIRROR_TOKEN:-}" ]]; then
+            echo "error: GITVERSE_MIRROR_TOKEN secret is required for GitVerse mirror" >&2
+            exit 1
+          fi
+          git remote add gitverse "https://oauth2:${GITVERSE_MIRROR_TOKEN}@gitverse.ru/ArtReg/chimera.git"
+          git push gitverse main:main "${RELEASE_TAG}" --tags
