@@ -1588,6 +1588,20 @@ datapath_service_prestart_validate() {
 }
 
 node_service_poststart_reconcile() {
+  # After a node (re)start make sure dependent datapath and site-watch units are
+  # also running. Without this, a peer-egress crash/recovery can leave the
+  # datapath and discovery publication stopped because the runtime oneshot unit
+  # does not supervise long-running services.
+  if systemd_user_ready; then
+    if [[ "$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)" != "active" ]]; then
+      systemctl --user reset-failed "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || true
+      systemctl --user start "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || true
+    fi
+    if [[ "$(systemctl --user is-active "$SITE_AUTOWATCH_SERVICE_UNIT" 2>/dev/null || true)" != "active" ]]; then
+      systemctl --user reset-failed "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
+      systemctl --user start "$SITE_AUTOWATCH_SERVICE_UNIT" >/dev/null 2>&1 || true
+    fi
+  fi
   if ! datapath_apply_proof_ok; then
     clear_stale_publication_runtime_state
     echo "node_poststart_reconcile=deferred"
