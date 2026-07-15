@@ -228,4 +228,7 @@ jobs:
             exit 1
           fi
           git remote add gitverse "https://oauth2:${mirror_token}@gitverse.ru/ArtReg/chimera.git"
-          git push gitverse main:main "${RELEASE_TAG}" --tags
+          # actions/checkout on a tag push leaves the runner in detached HEAD
+          # without a local 'main' branch, so fetch origin/main explicitly.
+          git fetch origin main
+          git push gitverse FETCH_HEAD:refs/heads/main "${RELEASE_TAG}"
