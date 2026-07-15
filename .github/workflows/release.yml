@@ -217,18 +217,19 @@ jobs:
 
       - name: Mirror release tag to GitVerse
         env:
-          GITVERSE_MIRROR_TOKEN: ${{ secrets.GITVERSE_MIRROR_TOKEN }}
-          GITVERSE_FALLBACK_TOKEN: ${{ secrets.CHIMERA_GITVERS_TOKEN }}
+          CHIMERA_GITVERS_TOKEN: ${{ secrets.GITVERSE_MIRROR_TOKEN || secrets.CHIMERA_GITVERS_TOKEN }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          mirror_token="${GITVERSE_MIRROR_TOKEN:-${GITVERSE_FALLBACK_TOKEN:-}}"
-          if [[ -z "${mirror_token:-}" ]]; then
+          if [[ -z "${CHIMERA_GITVERS_TOKEN:-}" ]]; then
             echo "error: GITVERSE_MIRROR_TOKEN (or CHIMERA_GITVERS_TOKEN) secret is required for GitVerse mirror" >&2
             exit 1
           fi
-          git remote add gitverse "https://oauth2:${mirror_token}@gitverse.ru/ArtReg/chimera.git"
-          # actions/checkout on a tag push leaves the runner in detached HEAD
-          # without a local 'main' branch, so fetch origin/main explicitly.
-          git fetch origin main
-          git push gitverse FETCH_HEAD:refs/heads/main "${RELEASE_TAG}"
+          # Sync the GitVerse main branch with the self-hosted bootstrap URLs
+          # and the release archive/checksum, then push the release tag.
+          bash scripts/sync_gitvers_release.sh \
+            target/chimera.sh \
+            target/chimera-pq-release.tar.gz \
+            target/chimera-pq-release.tar.gz.sha256
+          git remote add gitverse "https://oauth2:${CHIMERA_GITVERS_TOKEN}@gitverse.ru/ArtReg/chimera.git"
+          git push gitverse "${RELEASE_TAG}"
