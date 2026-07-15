@@ -11,7 +11,8 @@ use crate::peer_egress::live_lane_selection::{
 use crate::peer_egress::options::LOCAL_MAGIC;
 use crate::peer_egress::pool::SharedPeerPool;
 use crate::peer_egress::protocol::{
-    Destination, SecurePeerStream, read_native_connect_destination, redacted_log_reason,
+    Destination, SecurePeerStream, read_native_connect_destination, redacted_error_fields,
+    redacted_log_reason,
 };
 use crate::peer_egress::transit_binding::TransitPathBinding;
 use crate::peer_egress::transit_dispatch::SharedTransitNextHopDispatcher;
@@ -150,8 +151,8 @@ pub fn handle_local_client_with_peer_pool_and_first_byte(
                 // out of scope; the pool never sees this stream again, so the
                 // same dead peer cannot be retried within this flow.
                 eprintln!(
-                    "event=local_ingress_peer_dead_discarded attempt={attempt} reason_class={} destination_id={destination_id}",
-                    redacted_log_reason(&error)
+                    "event=local_ingress_peer_dead_discarded attempt={attempt} {} destination_id={destination_id}",
+                    redacted_error_fields(&error)
                 );
                 // After a dead peer, stop pinning this request to the same
                 // flow-key slot so the next iteration can pick any live peer.

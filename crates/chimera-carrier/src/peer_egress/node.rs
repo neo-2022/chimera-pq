@@ -20,7 +20,7 @@ use crate::peer_egress::modes::{
 use crate::peer_egress::net::{bind_reuse_listener, tune_tcp};
 use crate::peer_egress::options::{LOCAL_MAGIC, Options, write_resolved_state_file};
 use crate::peer_egress::pool::new_shared_pool;
-use crate::peer_egress::protocol::redacted_log_reason;
+use crate::peer_egress::protocol::{redacted_error_fields, redacted_log_reason};
 use crate::peer_egress::route_announcement_registry::{
     SharedRouteAnnouncementRegistry, local_announcements_from_options,
     new_shared_route_announcement_registry, sign_local_announcements,
@@ -224,8 +224,8 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                     peer,
                 ) {
                     eprintln!(
-                        "event=peer_pool_worker_error reason_class={}",
-                        redacted_log_reason(&error)
+                        "event=peer_pool_worker_error {}",
+                        redacted_error_fields(&error)
                     );
                 }
             }
@@ -386,8 +386,8 @@ pub fn run_node(mut options: Options) -> Result<(), String> {
                     };
                     if let Err(error) = result {
                         eprintln!(
-                            "event=weave_local_ingress_error reason_class={}",
-                            redacted_log_reason(&error)
+                            "event=weave_local_ingress_error {}",
+                            redacted_error_fields(&error)
                         );
                     }
                 });

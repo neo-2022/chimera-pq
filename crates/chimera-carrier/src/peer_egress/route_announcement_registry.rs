@@ -93,7 +93,7 @@ fn verify_announcement_signature(
         eprintln!(
             "event=route_announcement_untrusted_issuer issuer=<redacted> reason=no_keyring_entry"
         );
-        return true;
+        return false;
     };
     match announcement.verify_with_ed25519_pubkey(pubkey) {
         Ok(()) => true,
@@ -246,6 +246,35 @@ mod tests {
             "bad signature should be rejected"
         );
         assert_eq!(registry_announcements(&registry).len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn signed_announcement_from_unknown_issuer_with_keyring_is_rejected() -> Result<(), String> {
+        use ring::signature::Ed25519KeyPair;
+
+        let seed_a = [7u8; 32];
+        let keypair_a = Ed25519KeyPair::from_seed_unchecked(&seed_a)
+            .map_err(|error| format!("test keypair a: {error}"))?;
+        let pubkey_a = <Ed25519KeyPair as ring::signature::KeyPair>::public_key(&keypair_a)
+            .as_ref()
+            .to_vec();
+
+        // peer-b is NOT present in the keyring, so its signed announcement must be rejected.
+        let mut rogue = parse_route_announcements("static,cidr/10.0.0.0/8,peer-b,3600,9")?
+            .pop()
+            .ok_or_else(|| "parsed announcement missing".to_string())?;
+        rogue.sign_with_ed25519_seed(&seed_a)?;
+
+        let keyring: BTreeMap<String, Vec<u8>> =
+            std::iter::once(("peer-a".to_string(), pubkey_a)).collect();
+        let registry = new_shared_route_announcement_registry();
+
+        assert!(
+            !merge_received_announcements(&registry, &[rogue], Some(&keyring))?,
+            "unknown issuer must be rejected when a keyring is configured"
+        );
+        assert!(registry_announcements(&registry).is_empty());
         Ok(())
     }
 

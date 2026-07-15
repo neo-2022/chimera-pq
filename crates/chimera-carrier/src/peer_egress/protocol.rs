@@ -37,15 +37,48 @@ pub fn redacted_destination_label(host: &str, port: u16) -> String {
 }
 
 pub fn redacted_log_reason(error: &str) -> &'static str {
-    if error.contains("request") {
+    let lower = error.to_ascii_lowercase();
+    if lower.contains("request") {
         "request_invalid_or_unsupported"
-    } else if error.contains("target") {
+    } else if lower.contains("target") {
         "target_connect_failed"
-    } else if error.contains("connect") {
+    } else if lower.contains("encrypt") || lower.contains("decrypt") {
+        "peer_crypto_failed"
+    } else if lower.contains("excessive buffered announce") {
+        "peer_announce_buffer_exceeded"
+    } else if lower.contains("announce") {
+        "peer_announce_failed"
+    } else if lower.contains("ack") || lower.contains("handshake") {
+        "peer_handshake_failed"
+    } else if lower.contains("peer returned unexpected") {
+        "peer_protocol_mismatch"
+    } else if lower.contains("fill whole buffer") || lower.contains("secure frame") {
+        "peer_secure_stream_failed"
+    } else if lower.contains("connect") {
         "connect_failed"
     } else {
         "runtime_error"
     }
+}
+
+pub fn redacted_error_fields(error: &str) -> String {
+    let class = redacted_log_reason(error);
+    let raw_enabled = raw_logging_enabled();
+    if raw_enabled {
+        let raw = error
+            .replace(|c: char| c.is_whitespace(), "_")
+            .replace('=', "_");
+        format!("reason_class={class} raw_reason={raw}")
+    } else {
+        format!("reason_class={class}")
+    }
+}
+
+fn raw_logging_enabled() -> bool {
+    std::env::var("CHIMERA_LOG_REDACTION")
+        .as_ref()
+        .map(String::as_str)
+        == Ok("none")
 }
 
 fn redaction_salt() -> &'static [u8; 16] {

@@ -19,30 +19,55 @@ pub fn connect_tcp(target: &str, timeout_ms: u64) -> Result<TcpStream, String> {
     if addrs.is_empty() {
         return Err("target resolved to no socket addresses".to_string());
     }
+    let mark = service_fwmark_value();
     let mut last_error = String::new();
     for addr in addrs {
-        match TcpStream::connect_timeout(&addr, timeout) {
-            Ok(stream) => {
-                apply_service_fwmark(&stream);
-                return Ok(stream);
-            }
+        match connect_tcp_socket(addr, timeout, mark) {
+            Ok(stream) => return Ok(stream),
             Err(error) => last_error = format!("{addr}: {error}"),
         }
     }
     Err(last_error)
 }
 
-fn apply_service_fwmark(stream: &TcpStream) {
-    let Ok(value) = std::env::var("CHIMERA_SERVICE_FWMARK") else {
-        return;
+fn connect_tcp_socket(
+    addr: SocketAddr,
+    timeout: Duration,
+    mark: Option<u32>,
+) -> Result<TcpStream, String> {
+    let domain = if addr.is_ipv4() {
+        Domain::IPV4
+    } else {
+        Domain::IPV6
     };
-    let Some(mark) = parse_optional_fwmark(&value) else {
-        eprintln!("event=peer_egress_warn reason=invalid CHIMERA_SERVICE_FWMARK value={value}");
-        return;
-    };
-    if let Err(error) = setsockopt(stream, Mark, &mark) {
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))
+        .map_err(|error| format!("create socket failed: {error}"))?;
+
+    // Apply the service fwmark BEFORE connect() so the initial SYN bypasses the
+    // transparent redirect rule. Setting it after connect() is too late because
+    // the output hook has already redirected the handshake packet.
+    if let Some(mark) = mark
+        && let Err(error) = setsockopt(&socket, Mark, &mark)
+    {
         eprintln!("event=peer_egress_warn reason=set SO_MARK failed mark={mark}: {error}");
     }
+
+    let sockaddr = addr.into();
+    socket
+        .connect_timeout(&sockaddr, timeout)
+        .map_err(|error| format!("connect failed: {error}"))?;
+
+    // socket2::Socket implements From<Socket> for std::net::TcpStream.
+    Ok(TcpStream::from(socket))
+}
+
+fn service_fwmark_value() -> Option<u32> {
+    let value = std::env::var("CHIMERA_SERVICE_FWMARK").ok()?;
+    let mark = parse_optional_fwmark(&value).or_else(|| {
+        eprintln!("event=peer_egress_warn reason=invalid CHIMERA_SERVICE_FWMARK value={value}");
+        None
+    })?;
+    Some(mark)
 }
 
 fn parse_optional_fwmark(value: &str) -> Option<u32> {
