@@ -82,6 +82,7 @@ MESH_DISCOVERY_OUT_FILE="${MESH_DISCOVERY_OUT_FILE:-${XDG_CACHE_HOME:-$HOME/.cac
 MESH_DISCOVERY_PUBKEY_OUT_FILE="${MESH_DISCOVERY_PUBKEY_OUT_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/mesh_nodes.discovery.pubkey}"
 MESH_DISCOVERY_URLS_FILE="${MESH_DISCOVERY_URLS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/mesh_nodes_discovery_urls.list}"
 RUNTIME_LISTENER_OVERRIDE_FILE="${RUNTIME_LISTENER_OVERRIDE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/runtime_listener_overrides.env}"
+PEER_EGRESS_STICKY_LISTEN_FILE="${PEER_EGRESS_STICKY_LISTEN_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/chimera/peer-egress.sticky.env}"
 TRANSPARENT_RUNTIME_ENV_FILE="${TRANSPARENT_RUNTIME_ENV_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/chimera/transparent-runtime.env}"
 SPLIT_TRANSPARENT_ENABLED="${SPLIT_TRANSPARENT_ENABLED:-1}"
 SPLIT_TRANSPARENT_TUN_NAME="${SPLIT_TRANSPARENT_TUN_NAME:-chimera-tun}"
@@ -1388,7 +1389,7 @@ configure_peer_egress_dynamic_lanes_from_bootstrap() {
 }
 
 heal_node_peer_egress_env_bindings() {
-  local mode expected_peer_listen current_peer_listen
+  local mode expected_peer_listen current_peer_listen sticky_peer_listen
   [[ -f "$PEER_EGRESS_ENV_FILE" ]] || return 0
   mode="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_MODE)")"
   [[ "$mode" == "node" ]] || return 0
@@ -1399,6 +1400,16 @@ heal_node_peer_egress_env_bindings() {
   # ephemeral port and advertise it through discovery.
   if mesh_discovery_source_present && [[ "$expected_peer_listen" == "0.0.0.0:0" ]]; then
     expected_peer_listen="0.0.0.0:0"
+  fi
+  # If no stable peer listen address is configured, reuse the previously resolved
+  # port from an earlier run so static neighbor specs and transit lane bindings
+  # remain valid across restarts. Only fall back to a fresh ephemeral port when
+  # the sticky port is unavailable.
+  if listen_addr_is_auto_like "$expected_peer_listen"; then
+    sticky_peer_listen="$(read_peer_egress_sticky_peer_listen 2>/dev/null || true)"
+    if [[ -n "$sticky_peer_listen" ]] && ! fixed_listen_addr_port_is_blocked "$sticky_peer_listen"; then
+      expected_peer_listen="$sticky_peer_listen"
+    fi
   fi
   current_peer_listen="$(trim_ascii_line "$(read_peer_egress_env_kv CHIMERA_PEER_EGRESS_PEER_LISTEN)")"
   if [[ "$current_peer_listen" != "$expected_peer_listen" ]]; then
@@ -2114,6 +2125,52 @@ clear_runtime_listener_override_kv() {
 clear_node_listener_runtime_overrides() {
   clear_runtime_listener_override_kv "CHIMERA_PEER_EGRESS_LOCAL_LISTEN" || true
   clear_runtime_listener_override_kv "CHIMERA_PEER_EGRESS_PEER_LISTEN" || true
+}
+
+peer_egress_sticky_listen_path() {
+  printf '%s\n' "$PEER_EGRESS_STICKY_LISTEN_FILE"
+}
+
+read_peer_egress_sticky_peer_listen() {
+  local listen_addr=""
+  if [[ ! -f "$PEER_EGRESS_STICKY_LISTEN_FILE" ]]; then
+    return 1
+  fi
+  listen_addr="$(read_existing_env_kv_from_file "$PEER_EGRESS_STICKY_LISTEN_FILE" "CHIMERA_PEER_EGRESS_PEER_LISTEN")"
+  listen_addr="$(trim_ascii "$listen_addr")"
+  [[ -n "$listen_addr" ]] || return 1
+  if listen_addr_is_auto_like "$listen_addr"; then
+    return 1
+  fi
+  printf '%s\n' "$listen_addr"
+}
+
+update_peer_egress_sticky_peer_listen_from_state() {
+  local resolved_addr="" port="" sticky_addr=""
+  if [[ ! -f "$PEER_EGRESS_STATE_FILE" ]]; then
+    return 0
+  fi
+  resolved_addr="$(awk -F= '
+    /^resolved_peer_listen=/ {
+      sub(/^resolved_peer_listen=/, "")
+      print
+      exit
+    }
+  ' "$PEER_EGRESS_STATE_FILE" 2>/dev/null || true)"
+  resolved_addr="$(trim_ascii "$resolved_addr")"
+  [[ -n "$resolved_addr" ]] || return 0
+  if listen_addr_is_auto_like "$resolved_addr"; then
+    return 0
+  fi
+  port="${resolved_addr##*:}"
+  if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  sticky_addr="0.0.0.0:${port}"
+  ensure_parent_dir "$PEER_EGRESS_STICKY_LISTEN_FILE" >/dev/null 2>&1 || true
+  touch "$PEER_EGRESS_STICKY_LISTEN_FILE"
+  chmod 600 "$PEER_EGRESS_STICKY_LISTEN_FILE" 2>/dev/null || true
+  upsert_env_kv "$PEER_EGRESS_STICKY_LISTEN_FILE" "CHIMERA_PEER_EGRESS_PEER_LISTEN" "$sticky_addr"
 }
 
 clear_peer_update_listener_runtime_override() {
@@ -3841,6 +3898,9 @@ site_auto_watch_run_once() {
     discovery_status="failed"
     watch_rc=1
   }
+  # Persist the resolved peer listen port so future restarts can reuse the same
+  # port even when the operator relies on the default dynamic listener.
+  update_peer_egress_sticky_peer_listen_from_state || true
   if [[ "$watch_rc" -eq 0 ]]; then
     echo "site_auto_watch_run_once=ok peer_update_publish=$peer_update_status"
     return 0
