@@ -39,19 +39,21 @@ load_update_module
 usage() {
   cat <<'EOF'
 Usage:
-  chimera-sh -install
-  chimera-sh -start
-  chimera-sh -stop
-  chimera-sh -restart
-  chimera-sh -status
-  chimera-sh -mesh <args...>
-  chimera-sh -connect <index|node_id> [mesh node filters...]
-  chimera-sh -mesh-bind-control-plane [--strict|--best-effort]
-  chimera-sh -version
-  chimera-sh -doctor
-  chimera-sh -logs
-  chimera-sh -uninstall
-  chimera-sh -help
+  chimera -install
+  chimera -start
+  chimera -stop
+  chimera -restart
+  chimera -status
+  chimera -mesh <args...>
+  chimera -connect <index|node_id> [mesh node filters...]
+  chimera -mesh-bind-control-plane [--strict|--best-effort]
+  chimera -version
+  chimera -doctor
+  chimera -logs
+  chimera -uninstall
+  chimera -help
+
+The same commands also work via the legacy names chimera-sh and chimera.sh.
 EOF
 }
 
@@ -101,7 +103,7 @@ main() {
       ;;
     -start)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -113,7 +115,7 @@ main() {
       ;;
     -stop)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -121,7 +123,7 @@ main() {
       ;;
     -restart)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -133,7 +135,7 @@ main() {
       ;;
     -mesh|mesh)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -145,7 +147,7 @@ main() {
       ;;
     -connect|connect)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -157,7 +159,7 @@ main() {
       ;;
     -mesh-bind-control-plane|mesh-bind-control-plane)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -169,7 +171,7 @@ main() {
       ;;
     -status)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -177,7 +179,7 @@ main() {
       ;;
     -doctor)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -185,7 +187,7 @@ main() {
       ;;
     -logs)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"
@@ -200,7 +202,7 @@ main() {
       ;;
     -uninstall)
       ensure_runtime_files || {
-        echo "error: CHIMERA runtime files are missing. Run: chimera-sh -install" >&2
+        echo "error: CHIMERA runtime files are missing. Run: chimera -install" >&2
         exit 1
       }
       require_file "$CONTROL"

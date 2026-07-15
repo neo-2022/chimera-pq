@@ -1107,6 +1107,7 @@ fi
 printf '%s\n' "$INSTALL_NODE_ROLE" > "$INSTALL_NODE_ROLE_FILE"
 
 mkdir -p "$LOCAL_BIN_DIR"
+ln -sfn "$ROOT_DIR/scripts/chimera-sh" "$LOCAL_BIN_DIR/chimera"
 ln -sfn "$ROOT_DIR/scripts/chimera-sh" "$LOCAL_BIN_DIR/chimera-sh"
 ln -sfn "$ROOT_DIR/scripts/chimera.sh" "$LOCAL_BIN_DIR/chimera.sh"
 
@@ -1151,6 +1152,7 @@ elif [[ "$BOOT_RECOVERY_STATUS" == "session_only" ]]; then
 else
   echo "Boot recovery: units are installed on disk only; live systemd --user session is unavailable in this shell"
 fi
+echo "Shortcut command: $LOCAL_BIN_DIR/chimera"
 echo "Shortcut command: $LOCAL_BIN_DIR/chimera-sh"
 echo "Shortcut command: $LOCAL_BIN_DIR/chimera.sh"
 echo
@@ -1164,7 +1166,7 @@ if ! command -v zenity >/dev/null 2>&1 && ! command -v kdialog >/dev/null 2>&1 &
 fi
 echo
 echo "Quick start:"
-echo "  chimera.sh -start"
-echo "  chimera.sh -status"
-echo "  chimera.sh -stop"
-echo "  chimera.sh -uninstall"
+echo "  chimera -start"
+echo "  chimera -status"
+echo "  chimera -stop"
+echo "  chimera -uninstall"

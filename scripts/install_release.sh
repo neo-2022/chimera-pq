@@ -195,7 +195,7 @@ cleanup_external_state_snapshot() {
 
 link_launchers() {
   mkdir -p "${LOCAL_BIN}" || return 1
-  ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera" || return 1
+  ln -sfn "${CHIMERA_HOME}/scripts/chimera-sh" "${LOCAL_BIN}/chimera" || return 1
   ln -sfn "${CHIMERA_HOME}/scripts/chimera.sh" "${LOCAL_BIN}/chimera.sh" || return 1
   ln -sfn "${CHIMERA_HOME}/scripts/chimera-sh" "${LOCAL_BIN}/chimera-sh" || return 1
 }
