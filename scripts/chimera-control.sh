@@ -4314,15 +4314,55 @@ logs_tail() {
   if ! [[ "$lines" =~ ^[0-9]+$ ]]; then
     lines=200
   fi
-  echo "=== node log: <redacted> ==="
-  echo "node_log_path_state=present"
-  tail -n "$lines" "$NODE_LOG" 2>/dev/null | redact_diagnostic_stream || true
-  echo "=== transparent-runtime log: <redacted> ==="
-  echo "transparent_runtime_log_path_state=present"
-  tail -n "$lines" "$DATAPATH_LOG" 2>/dev/null | redact_diagnostic_stream || true
-  echo "=== autofix log: <redacted> ==="
-  echo "autofix_log_path_state=present"
-  tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null | redact_diagnostic_stream || true
+
+  local c_reset c_bold c_cyan c_dim
+  if [[ -t 1 ]]; then
+    c_reset='\e[0m'
+    c_bold='\e[1m'
+    c_cyan='\e[36m'
+    c_dim='\e[2m'
+  else
+    c_reset=''
+    c_bold=''
+    c_cyan=''
+    c_dim=''
+  fi
+
+  printf '%b\n' "${c_bold}${c_cyan}╔════════════════════════════════════════════════════════════════════╗${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}║  CHIMERA-PQ / WEAVE — журнал / logs (последние $lines строк)     ║${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}╚════════════════════════════════════════════════════════════════════╝${c_reset}"
+  echo
+
+  local node_present transparent_present autofix_present
+  node_present="$([[ -s "$NODE_LOG" ]] && echo true || echo false)"
+  transparent_present="$([[ -s "$DATAPATH_LOG" ]] && echo true || echo false)"
+  autofix_present="$([[ -s "$AUTOFIX_LOG_FILE" ]] && echo true || echo false)"
+
+  printf '%b\n' "${c_bold}--- node log / журнал узла: <redacted> ---${c_reset}"
+  echo "node_log_path_state=$([[ "$node_present" == "true" ]] && echo present || echo missing)"
+  if [[ "$node_present" == "true" ]]; then
+    tail -n "$lines" "$NODE_LOG" 2>/dev/null | redact_diagnostic_stream || true
+  else
+    printf '%b\n' "${c_dim}  (журнал пуст или отсутствует / log is empty or missing)${c_reset}"
+  fi
+  echo
+
+  printf '%b\n' "${c_bold}--- transparent-runtime log / журнал datapath: <redacted> ---${c_reset}"
+  echo "transparent_runtime_log_path_state=$([[ "$transparent_present" == "true" ]] && echo present || echo missing)"
+  if [[ "$transparent_present" == "true" ]]; then
+    tail -n "$lines" "$DATAPATH_LOG" 2>/dev/null | redact_diagnostic_stream || true
+  else
+    printf '%b\n' "${c_dim}  (журнал пуст или отсутствует / log is empty or missing)${c_reset}"
+  fi
+  echo
+
+  printf '%b\n' "${c_bold}--- autofix log / журнал автоисправлений: <redacted> ---${c_reset}"
+  echo "autofix_log_path_state=$([[ "$autofix_present" == "true" ]] && echo present || echo missing)"
+  if [[ "$autofix_present" == "true" ]]; then
+    tail -n "$lines" "$AUTOFIX_LOG_FILE" 2>/dev/null | redact_diagnostic_stream || true
+  else
+    printf '%b\n' "${c_dim}  (журнал пуст или отсутствует / log is empty or missing)${c_reset}"
+  fi
 }
 
 write_doctor_fail_json() {
@@ -4335,28 +4375,174 @@ write_doctor_fail_json() {
 EOF
 }
 
+# Render a friendly bilingual summary for `chimera -doctor`.
+# The machine-readable `doctor_status=...` line is still emitted by doctor_run.
+render_doctor_human() {
+  local config_ready="${1:-false}"
+  local bound_transit_requested="${2:-false}"
+  local bound_transit_ready="${3:-true}"
+  local status="${4:-fail}"
+  local reason="${5:-}"
+
+  local c_reset c_bold c_cyan c_green c_yellow c_red c_dim
+  if [[ -t 1 ]]; then
+    c_reset='\e[0m'
+    c_bold='\e[1m'
+    c_cyan='\e[36m'
+    c_green='\e[32m'
+    c_yellow='\e[33m'
+    c_red='\e[31m'
+    c_dim='\e[2m'
+  else
+    c_reset=''
+    c_bold=''
+    c_cyan=''
+    c_green=''
+    c_yellow=''
+    c_red=''
+    c_dim=''
+  fi
+
+  local config_word config_color
+  if [[ "$config_ready" == "true" ]]; then
+    config_word="ready / готова"
+    config_color="$c_green"
+  else
+    config_word="not ready / не готова"
+    config_color="$c_red"
+  fi
+
+  local transit_word transit_color
+  if [[ "$bound_transit_requested" == "true" ]]; then
+    if [[ "$bound_transit_ready" == "true" ]]; then
+      transit_word="active / активен"
+      transit_color="$c_green"
+    else
+      transit_word="requested but not ready / запрошен, но не готов"
+      transit_color="$c_yellow"
+    fi
+  else
+    transit_word="not used / не используется"
+    transit_color="$c_dim"
+  fi
+
+  local status_word status_color
+  if [[ "$status" == "ok" ]]; then
+    status_word="OK / норма"
+    status_color="$c_green"
+  else
+    status_word="FAIL / сбой"
+    status_color="$c_red"
+  fi
+
+  printf '%b\n' "${c_bold}${c_cyan}╔════════════════════════════════════════════════════════════════════╗${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}║  CHIMERA-PQ / WEAVE — диагностика / doctor diagnostic            ║${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}╚════════════════════════════════════════════════════════════════════╝${c_reset}"
+  echo
+  printf "  %-34s [ %b%s%b ]\n" "Node configuration / Конфигурация" "$config_color" "$config_word" "$c_reset"
+  printf "  %-34s [ %b%s%b ]\n" "Bound transit / Связанный транзит" "$transit_color" "$transit_word" "$c_reset"
+  printf "  %-34s [ %b%s%b ]\n" "Doctor result / Результат" "$status_color" "$status_word" "$c_reset"
+  echo
+
+  if [[ "$status" != "ok" ]]; then
+    printf '%b\n' "${c_bold}═══ Найденная проблема / Issue ═══${c_reset}"
+    case "$reason" in
+      node_endpoint_unconfigured)
+        echo "  Конфигурация узла не завершена."
+        echo "  Node configuration is incomplete."
+        echo
+        echo "  Проверьте, что в mesh-node.conf заданы реальные значения:"
+        echo "  Make sure mesh-node.conf contains real values for:"
+        echo "    carrier.addr        — адрес peer / peer address"
+        echo "    carrier.server_name — имя узла / node server name"
+        echo
+        ;;
+      bound_transit_unready)
+        echo "  Bound transit запрошен, но authority-узел не готов."
+        echo "  Bound transit is requested but the authority node is not ready."
+        echo
+        echo "  Проверьте peer-egress.env и убедитесь, что authority-узел доступен:"
+        echo "  Check peer-egress.env and ensure the authority node is reachable:"
+        echo "    CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true"
+        echo "    CHIMERA_PEER_EGRESS_TOKEN=<shared-secret>"
+        echo
+        ;;
+      *)
+        echo "  Проверка doctor завершилась ошибкой: ${reason}"
+        echo "  Doctor check failed: ${reason}"
+        echo
+        ;;
+    esac
+
+    printf '%b\n' "${c_bold}═══ Что делать / Next steps ═══${c_reset}"
+    if [[ "$config_ready" != "true" ]]; then
+      echo "  1. Установить или восстановить конфигурацию:  chimera -install"
+      echo "     Install or repair configuration:             chimera -install"
+    else
+      echo "  1. Запустить CHIMERA:                          chimera -start"
+      echo "     Start CHIMERA:                               chimera -start"
+      echo "  2. Если не помогло — собрать диагностику:       chimera -diag-export"
+      echo "     If that does not help, collect diagnostics:  chimera -diag-export"
+    fi
+    echo "  • Диагностика:                                 chimera -doctor"
+    echo "    Diagnostics:                                  chimera -doctor"
+    echo "  • Журнал:                                      chimera -logs 20"
+    echo "    Logs:                                         chimera -logs 20"
+    echo "  • Справка:                                     chimera -help"
+    echo "    Help:                                         chimera -help"
+    echo
+  else
+    printf '%b\n' "${c_bold}${c_green}  CHIMERA готова к работе / CHIMERA is healthy${c_reset}"
+    echo
+  fi
+}
+
 doctor_run() {
   local out_file="$ROOT_DIR/docs/doctor_latest.json"
-  local config_path rc=0
+  local config_path=""
+  local rc=0
+  local config_ready=false
+  local bound_transit_requested=false
+  local bound_transit_ready=true
+  local raw_line=""
+
   mkdir -p "$(dirname "$out_file")" >/dev/null 2>&1 || true
-  if ! node_config_ready; then
+  if node_config_ready; then
+    config_ready=true
+  fi
+  if peer_egress_bound_transit_requested; then
+    bound_transit_requested=true
+    if ! ensure_bound_transit_start_contract >/dev/null 2>&1; then
+      bound_transit_ready=false
+    fi
+  fi
+
+  if [[ "$config_ready" != "true" ]]; then
     write_doctor_fail_json "$out_file" "node_endpoint_unconfigured" "false"
-    echo "doctor_status=fail reason=node_endpoint_unconfigured" >&2
+    raw_line="doctor_status=fail reason=node_endpoint_unconfigured"
+    render_doctor_human "$config_ready" "$bound_transit_requested" "$bound_transit_ready" "fail" "node_endpoint_unconfigured"
+    echo "$raw_line" >&2
     return 2
   fi
-  if peer_egress_bound_transit_requested \
-    && ! ensure_bound_transit_start_contract >/dev/null 2>&1; then
+  if [[ "$bound_transit_requested" == "true" ]] && [[ "$bound_transit_ready" != "true" ]]; then
     write_doctor_fail_json "$out_file" "bound_transit_unready" "true"
-    echo "doctor_status=fail reason=bound_transit_unready" >&2
+    raw_line="doctor_status=fail reason=bound_transit_unready"
+    render_doctor_human "$config_ready" "$bound_transit_requested" "$bound_transit_ready" "fail" "bound_transit_unready"
+    echo "$raw_line" >&2
     return 2
   fi
+
   config_path="$(node_config_path)"
   run_chimera_cli doctor --config "$config_path" --json --out "$out_file" || rc=$?
   if [[ "$rc" -eq 0 ]]; then
-    echo "doctor_status=ok"
+    raw_line="doctor_status=ok"
+    render_doctor_human "$config_ready" "$bound_transit_requested" "$bound_transit_ready" "ok" ""
+    echo "$raw_line"
     return 0
   fi
-  echo "doctor_status=fail exit=$rc" >&2
+  raw_line="doctor_status=fail exit=$rc"
+  render_doctor_human "$config_ready" "$bound_transit_requested" "$bound_transit_ready" "fail" "cli_exit_${rc}"
+  echo "$raw_line" >&2
   return "$rc"
 }
 
@@ -4929,14 +5115,163 @@ restart_runtime() {
 }
 
 runtime_status() {
-  local runtime_state runtime_enabled_state node_state datapath_state route_mode split_mode watch_status
+  local runtime_state runtime_enabled_state node_state datapath_state route_mode split_mode watch_line
+  local node_config_ready_flag bound_transit publication version
+  local c_reset c_bold c_cyan c_yellow c_green c_red c_dim
+
+  if [[ -t 1 ]]; then
+    c_reset='\e[0m'
+    c_bold='\e[1m'
+    c_cyan='\e[36m'
+    c_yellow='\e[33m'
+    c_green='\e[32m'
+    c_red='\e[31m'
+    c_dim='\e[2m'
+  else
+    c_reset=''
+    c_bold=''
+    c_cyan=''
+    c_yellow=''
+    c_green=''
+    c_red=''
+    c_dim=''
+  fi
+
   runtime_state="$(read_runtime_service_state "$RUNTIME_SERVICE_UNIT")"
   runtime_enabled_state="$(read_runtime_service_enable_state "$RUNTIME_SERVICE_UNIT")"
   node_state="$(read_runtime_service_state "$NODE_SERVICE_UNIT")"
   datapath_state="$(read_runtime_service_state "$DATAPATH_SERVICE_UNIT")"
   route_mode="$(read_route_mode)"
   split_mode="$(read_split_list_mode)"
-  watch_status="$(site_auto_watch_status)"
+  watch_line="$(site_auto_watch_status)"
+  node_config_ready_flag="$(node_config_ready && echo true || echo false)"
+  bound_transit="$(bound_transit_authority_state)"
+  publication="$(runtime_publication_state)"
+  version="unknown"
+  if [[ -f "$ROOT_DIR/.chimera_release_version" ]]; then
+    version="$(tr -d '[:space:]' < "$ROOT_DIR/.chimera_release_version")"
+  fi
+
+  local runtime_color runtime_hint node_color node_hint datapath_color datapath_hint
+  case "$runtime_state" in
+    active) runtime_color="$c_green"; runtime_hint="стартовый юнит активен" ;;
+    failed) runtime_color="$c_red"; runtime_hint="сбой — см. journalctl --user -u $RUNTIME_SERVICE_UNIT" ;;
+    *) runtime_color="$c_dim"; runtime_hint="не активен" ;;
+  esac
+  case "$node_state" in
+    active) node_color="$c_green"; node_hint="узел работает" ;;
+    failed) node_color="$c_red"; node_hint="сбой сервиса" ;;
+    *) node_color="$c_dim"; node_hint="остановлен" ;;
+  esac
+  case "$datapath_state" in
+    active) datapath_color="$c_green"; datapath_hint="перехват трафика включён" ;;
+    failed) datapath_color="$c_red"; datapath_hint="сбой сервиса" ;;
+    *) datapath_color="$c_dim"; datapath_hint="перехват трафика выключен" ;;
+  esac
+
+  local enabled_word enabled_hint
+  enabled_word="${c_dim}${runtime_enabled_state}${c_reset}"
+  case "$runtime_enabled_state" in
+    enabled) enabled_word="${c_green}enabled${c_reset}"; enabled_hint="автозагрузка включена" ;;
+    not-found) enabled_hint="юнит не найден — возможно, установка не завершена" ;;
+    disabled) enabled_hint="автозагрузка отключена" ;;
+    *) enabled_hint="состояние автозагрузки: ${runtime_enabled_state}" ;;
+  esac
+
+  local watch_status watch_mode
+  watch_status="${watch_line#site_auto_watch_status=}"
+  watch_mode="${watch_status#*mode=}"
+  watch_mode="${watch_mode%% *}"
+
+  printf '%b\n' "${c_bold}${c_cyan}╔════════════════════════════════════════════════════════════════════╗${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}║  CHIMERA-PQ / WEAVE — состояние узла / node status               ║${c_reset}"
+  printf '%b\n' "${c_bold}${c_cyan}╚════════════════════════════════════════════════════════════════════╝${c_reset}"
+  echo
+  printf "  Версия / version: %s\n" "$version"
+  echo
+
+  printf '%b\n' "${c_bold}═══ Сервисы systemd / Services ═══${c_reset}"
+  printf "  %-28s %b\n" "Автозагрузка (runtime)" "[ ${runtime_color}${runtime_state}${c_reset} | ${enabled_word} ] ${c_dim}${runtime_hint}${c_reset}"
+  printf "  %-28s %b\n" "Узел CHIMERA (node)" "[ ${node_color}${node_state}${c_reset} ] ${c_dim}${node_hint}${c_reset}"
+  printf "  %-28s %b\n" "Прозрачный datapath" "[ ${datapath_color}${datapath_state}${c_reset} ] ${c_dim}${datapath_hint}${c_reset}"
+  printf "  %-28s %b\n" "Автообновление сайтов" "[ ${c_dim}${watch_status}${c_reset} ]"
+  echo
+
+  printf '%b\n' "${c_bold}═══ Рабочее состояние / Runtime ═══${c_reset}"
+  local runtime_up_flag transparent_state runtime_status_color runtime_status_hint
+  if runtime_state_is_up; then
+    runtime_up_flag="up"
+  else
+    runtime_up_flag="unknown"
+  fi
+
+  transparent_state="stopped"
+  if node_config_ready; then
+    if runtime_state_is_up || systemd_user_ready; then
+      if [[ "$datapath_state" == "active" ]]; then
+        transparent_state="running"
+      fi
+    else
+      if pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)"; then
+        transparent_state="running"
+      fi
+    fi
+  fi
+
+  if [[ "$runtime_up_flag" == "up" ]]; then
+    runtime_status_color="$c_green"
+    runtime_status_hint="CHIMERA работает"
+  else
+    runtime_status_color="$c_yellow"
+    runtime_status_hint="CHIMERA не запущена — выполните: chimera -start"
+  fi
+
+  printf "  %-26s %b\n" "node_runtime" "[ ${node_color}$([[ "$node_state" == "active" ]] && echo running || echo stopped)${c_reset} ]"
+  printf "  %-26s %b\n" "transparent_runtime" "[ ${datapath_color}${transparent_state}${c_reset} ]"
+  printf "  %-26s %b\n" "runtime_state_status" "[ ${runtime_status_color}${runtime_up_flag}${c_reset} ] ${c_dim}${runtime_status_hint}${c_reset}"
+  echo
+
+  printf '%b\n' "${c_bold}═══ Сеть и маршруты / Network & routes ═══${c_reset}"
+  printf "  %-26s %s\n" "route_mode" "$route_mode"
+  printf "  %-26s %s\n" "split_list_mode" "$split_mode"
+  printf "  %-26s %s\n" "bound_transit_authority" "$bound_transit"
+  printf "  %-26s %s\n" "runtime_publication" "$publication"
+  echo
+
+  printf '%b\n' "${c_bold}═══ Конфигурация и файлы состояния / State files ═══${c_reset}"
+  printf "  %-26s %s\n" "node_config_ready" "$node_config_ready_flag"
+  local state_file_present peer_update_present discovery_present peer_egress_present
+  state_file_present="$([[ -f "$STATE_FILE" ]] && echo present || echo missing)"
+  peer_update_present="$([[ -f "$PEER_UPDATE_STATE_FILE" ]] && echo present || echo missing)"
+  discovery_present="$([[ -f "$(mesh_discovery_out_path)" ]] && echo present || echo missing)"
+  peer_egress_present="$([[ -f "$(peer_egress_state_path)" ]] && echo present || echo missing)"
+  local file_label file_color file_value
+  for pair in "state_file=$state_file_present" "peer_update_state_file=$peer_update_present" "discovery_snapshot=$discovery_present" "peer_egress_state_file=$peer_egress_present"; do
+    file_label="${pair%%=*}"
+    file_value="${pair#*=}"
+    if [[ "$file_value" == "missing" ]]; then
+      file_color="$c_yellow"
+    else
+      file_color="$c_green"
+    fi
+    printf "  %-26s [ %b%s%b ]\n" "$file_label" "$file_color" "$file_value" "$c_reset"
+  done
+  echo
+
+  printf '%b\n' "${c_bold}${c_yellow}Что делать / Next steps:${c_reset}"
+  if [[ "$node_state" != "active" ]]; then
+    echo "  1. Установить или восстановить конфигурацию:  chimera -install"
+    echo "  2. Запустить CHIMERA:                          chimera -start"
+  fi
+  if [[ "$node_config_ready_flag" != "true" ]]; then
+    echo "  • Конфиг узла не готов — проверьте mesh-node.conf и peer-egress.env"
+  fi
+  echo "  • Диагностика:                                 chimera -doctor"
+  echo "  • Журнал:                                      chimera -logs 20"
+  echo "  • Справка:                                     chimera -help"
+  echo
+
+  # --- machine-readable status (used by scripts and diagnostics) ---
   echo "runtime_root=<redacted>"
   echo "runtime_root_state=present"
   echo "runtime_boot_service_state=$runtime_state"
@@ -4944,7 +5279,7 @@ runtime_status() {
   echo "node_service_state=$node_state"
   echo "transparent_runtime_service_state=$datapath_state"
   echo "peer_egress_state_file=<redacted>"
-  echo "$watch_status"
+  echo "$watch_line"
   if [[ "$node_state" == "active" ]]; then
     echo "node_runtime=running"
   else
@@ -4975,17 +5310,13 @@ runtime_status() {
         echo "transparent_runtime=stopped"
       fi
     fi
-  echo "runtime_state_status=unknown"
+    echo "runtime_state_status=unknown"
   fi
   echo "route_mode=$route_mode"
   echo "split_list_mode=$split_mode"
-  echo "bound_transit_authority_state=$(bound_transit_authority_state)"
-  echo "runtime_publication_state=$(runtime_publication_state)"
-  if node_config_ready; then
-    echo "node_config_ready=true"
-  else
-    echo "node_config_ready=false"
-  fi
+  echo "bound_transit_authority_state=$bound_transit"
+  echo "runtime_publication_state=$publication"
+  echo "node_config_ready=$node_config_ready_flag"
   if [[ -f "$STATE_FILE" ]]; then
     echo "state_file=<redacted>"
     echo "state_file_state=present"

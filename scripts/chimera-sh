@@ -36,6 +36,20 @@ load_update_module() {
 
 load_update_module
 
+# Friendly bilingual wrapper around the machine-readable version line.
+print_version_human() {
+  local current="${1:-unknown}" c_reset='\e[0m' c_bold='\e[1m' c_cyan='\e[36m' c_dim='\e[2m'
+  [[ -t 1 ]] || return 0
+  printf '%b\n' \
+    "${c_bold}${c_cyan}╔════════════════════════════════════════════════════════════════════╗${c_reset}" \
+    "${c_bold}${c_cyan}║   CHIMERA-PQ / WEAVE — версия / version                          ║${c_reset}" \
+    "${c_bold}${c_cyan}╚════════════════════════════════════════════════════════════════════╝${c_reset}" ""
+  printf "  Установленная версия / installed version: %s\n\n" "$current"
+  printf "  %s\n" \
+    "Справка / help:              chimera -help" \
+    "Диагностика / diagnostics:   chimera -doctor" ""
+}
+
 usage() {
   local c_reset c_bold c_cyan c_yellow c_green c_dim
   if [[ -t 1 ]]; then
@@ -216,6 +230,7 @@ main() {
         current="$(tr -d '[:space:]' < "$RUNTIME_VERSION_FILE")"
       fi
       echo "chimera-runtime ${current}"
+      print_version_human "$current"
       ;;
     -uninstall)
       ensure_runtime_files || fail_missing_runtime
