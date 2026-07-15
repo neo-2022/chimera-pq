@@ -3462,6 +3462,37 @@ remove_path_if_present() {
   rm -rf "$path"
 }
 
+is_chimera_bootstrap_script() {
+  local file="${1:?file_required}"
+  [[ -f "$file" ]] || return 1
+  if grep -q '^# CHIMERA-PQ-BOOTSTRAP' "$file" 2>/dev/null; then
+    return 0
+  fi
+  grep -q 'ARCHIVE_URL_DEFAULT="https://github.com/neo-2022/chimera-pq' "$file" 2>/dev/null
+}
+
+self_executable_path_matches() {
+  local file="${1:?file_required}"
+  local self=""
+  self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+  [[ -n "$self" && "$self" == "$(readlink -f "$file" 2>/dev/null || true)" ]]
+}
+
+uninstall_install_artifacts() {
+  local tmp_dir="${TMPDIR:-/tmp}"
+  local artifact=""
+  for artifact in \
+    "$tmp_dir/chimera-pq-release.tar.gz" \
+    "$tmp_dir/chimera-pq-release.tar.gz.sha256"
+  do
+    remove_path_if_present "$artifact"
+  done
+  local bootstrap_script="$tmp_dir/chimera.sh"
+  if is_chimera_bootstrap_script "$bootstrap_script" && ! self_executable_path_matches "$bootstrap_script"; then
+    rm -f "$bootstrap_script"
+  fi
+}
+
 remove_link_if_points_to_root() {
   local path="${1:?path_required}"
   local resolved=""
@@ -5093,6 +5124,7 @@ uninstall_runtime() {
     echo "uninstall_status=fail reason=cleanup_failed"
     return 1
   }
+  uninstall_install_artifacts
   if systemd_user_ready; then
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
