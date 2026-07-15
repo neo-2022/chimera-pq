@@ -218,6 +218,27 @@ bootstrap_remove_install_artifacts() {
   fi
 }
 
+chimera_installation_exists() {
+  local chimera_home="${1:?chimera_home_required}"
+  local local_bin="${2:?local_bin_required}"
+  local chimera_config_dir="${3:?chimera_config_dir_required}"
+  local chimera_cache_dir="${4:?chimera_cache_dir_required}"
+  local chimera_state_dir="${5:?chimera_state_dir_required}"
+  [[ -d "$chimera_home" ]] && return 0
+  path_exists_or_link "$local_bin/chimera" && return 0
+  path_exists_or_link "$local_bin/chimera.sh" && return 0
+  path_exists_or_link "$local_bin/chimera-sh" && return 0
+  path_exists_or_link "$chimera_config_dir" && return 0
+  path_exists_or_link "$chimera_cache_dir" && return 0
+  path_exists_or_link "$chimera_state_dir" && return 0
+  return 1
+}
+
+print_chimera_install_hint() {
+  printf '%s\n' "To install the latest release, run:"
+  printf '%s\n' "  bash <(curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh) -install"
+}
+
 remove_link_if_points_to_root() {
   local path="${1:?path_required}"
   local root_dir="${2:?root_dir_required}"
@@ -335,6 +356,14 @@ bootstrap_uninstall_current_installation() {
   chimera_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/chimera"
   chimera_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/chimera"
   control_script="$chimera_home/scripts/chimera-control.sh"
+
+  if ! chimera_installation_exists "$chimera_home" "$local_bin" "$chimera_config_dir" "$chimera_cache_dir" "$chimera_state_dir"; then
+    bootstrap_remove_install_artifacts
+    echo "uninstall_status=ok reason=not_installed"
+    echo "notice: CHIMERA is not installed on this system."
+    print_chimera_install_hint
+    return 0
+  fi
 
   if [[ -x "$control_script" ]]; then
     "$control_script" stop >/dev/null 2>&1 || true
