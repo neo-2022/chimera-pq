@@ -3606,7 +3606,7 @@ normalize_domain_token() {
   token="${token%%\#*}"
   token="${token%%:*}"
   token="${token,,}"
-  printf '%s' "$token"
+  printf '%s\n' "$token"
 }
 
 extract_domains_from_text() {
@@ -3643,7 +3643,7 @@ merge_unique_domain_sources() {
       extract_domains_from_text "$command_part" >>"$tmp"
     done <"$APP_ROUTES_FILE"
   fi
-  awk 'NF { print tolower($0) }' "$tmp" | sort -u >"$out_file"
+  awk '{ for (i = 1; i <= NF; i++) print tolower($i) }' "$tmp" | sort -u >"$out_file"
   rm -f "$tmp"
 }
 
@@ -3830,7 +3830,7 @@ site_auto_discover_run() {
           printf '%s\n' "$token"
         done >>"$tmp" || true
   fi
-  awk 'NF { print tolower($0) }' "$tmp" | sort -u >"$SITE_DISCOVERY_DOMAINS_FILE"
+  awk '{ for (i = 1; i <= NF; i++) print tolower($i) }' "$tmp" | sort -u >"$SITE_DISCOVERY_DOMAINS_FILE"
   local count
   count="$(wc -l <"$SITE_DISCOVERY_DOMAINS_FILE" 2>/dev/null || echo 0)"
   echo "site_auto_discover_status=ok"
@@ -3861,7 +3861,7 @@ site_auto_bootstrap_run() {
       extract_domains_from_text "${line#*=}" >>"$tmp"
     done <"$APP_ROUTES_FILE"
   fi
-  awk 'NF { print tolower($0) }' "$tmp" | sort -u >"$ADAPTIVE_DOMAINS_FILE"
+  awk '{ for (i = 1; i <= NF; i++) print tolower($i) }' "$tmp" | sort -u >"$ADAPTIVE_DOMAINS_FILE"
   rm -f "$tmp"
   if [[ -x "$AUTOFIX_SCRIPT" ]]; then
     bash "$AUTOFIX_SCRIPT" >/dev/null 2>&1 || true

@@ -1084,6 +1084,13 @@ configure_transparent_runtime_env() {
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_TRANSPARENT_RUNTIME_GID' "${CHIMERA_TRANSPARENT_RUNTIME_GID:-$transparent_gid}"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_NFT_PRIVILEGE_MODE' "$nft_privilege_mode"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_RUNNER_USE_SUDO' "$runner_use_sudo"
+  local capture_domains_file="${CHIMERA_CAPTURE_DOMAINS_FILE:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_DOMAINS_FILE "")}"
+  if [[ -z "$capture_domains_file" && -s "$ROOT_DIR/configs/adaptive_domains.txt" ]]; then
+    capture_domains_file="$ROOT_DIR/configs/adaptive_domains.txt"
+  fi
+  upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_CAPTURE_DOMAINS_FILE' "$capture_domains_file"
+  local capture_tcp_ports="${CHIMERA_CAPTURE_TCP_PORTS:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_TCP_PORTS 443)}"
+  upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_CAPTURE_TCP_PORTS' "$capture_tcp_ports"
   chmod 600 "$TRANSPARENT_RUNTIME_ENV_FILE"
   echo "transparent_runtime_listen=$listen"
   echo "transparent_runtime_transit_local=$transit_local"

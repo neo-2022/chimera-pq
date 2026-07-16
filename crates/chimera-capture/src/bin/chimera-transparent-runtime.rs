@@ -71,6 +71,9 @@ impl Options {
             .map(|value| parse_u32(&value, "transparent-gid"))
             .transpose()?;
         let mut bypass_cidrs_v4 = default_bypass_cidrs_v4();
+        if let Some(extra_bypass) = parse_string_list_env("CHIMERA_BYPASS_CIDR_V4") {
+            bypass_cidrs_v4.extend(extra_bypass);
+        }
         let mut capture_cidrs_v4 =
             parse_string_list_env("CHIMERA_CAPTURE_CIDR_V4").unwrap_or_default();
         let mut capture_tcp_ports =
@@ -78,6 +81,7 @@ impl Options {
         let mut capture_skuids = parse_uid_list_env("CHIMERA_CAPTURE_SKUID").unwrap_or_default();
         let mut capture_domains =
             parse_string_list_env("CHIMERA_CAPTURE_DOMAIN").unwrap_or_default();
+        let mut capture_domains_file = env_value("CHIMERA_CAPTURE_DOMAINS_FILE");
         let mut run_ms = env_value("CHIMERA_TRANSPARENT_RUNTIME_RUN_MS")
             .map(|value| parse_positive_u64(&value, "run-ms"))
             .transpose()?;
@@ -170,6 +174,10 @@ impl Options {
                     capture_domains.push(arg_value(args, index, flag)?);
                     index += 2;
                 }
+                "--capture-domains-file" => {
+                    capture_domains_file = Some(arg_value(args, index, flag)?);
+                    index += 2;
+                }
                 "--no-default-bypass" => {
                     bypass_cidrs_v4.clear();
                     index += 1;
@@ -197,6 +205,9 @@ impl Options {
         }
         if direct_mode != "disabled" {
             return Err("direct-mode must be disabled".to_string());
+        }
+        if let Some(path) = capture_domains_file {
+            capture_domains.extend(read_capture_domains_file(&path)?);
         }
         if !capture_domains.is_empty() {
             capture_cidrs_v4.extend(resolve_domains_to_cidrs(&capture_domains)?);
@@ -269,6 +280,24 @@ fn resolve_domains_to_cidrs(domains: &[String]) -> Result<Vec<String>, String> {
         }
     }
     Ok(cidrs)
+}
+
+fn read_capture_domains_file(path: &str) -> Result<Vec<String>, String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read capture domains file '{path}': {error}"))?;
+    let mut domains = Vec::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let token = line.split_once('#').map(|(prefix, _)| prefix.trim()).unwrap_or(line);
+        let token = token.split_whitespace().next().unwrap_or("");
+        if !token.is_empty() {
+            domains.push(token.to_string());
+        }
+    }
+    Ok(domains)
 }
 
 fn main() {
