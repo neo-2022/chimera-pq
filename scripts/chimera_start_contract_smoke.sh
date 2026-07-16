@@ -243,7 +243,7 @@ CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
 CHIMERA_PEER_EGRESS_STATE_FILE=$tmp_dir/peer-egress.state
 CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$tmp_dir/peer-egress.state
 CHIMERA_PEER_EGRESS_TOKEN=test-token
-CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true
+CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false
 EOF
 
   cat >"$fake_systemctl" <<EOF
@@ -286,16 +286,15 @@ EOF
   rc=$?
   set -e
 
-  [[ "$rc" -eq 2 ]] || fail "systemd_bound_transit_missing_authority_start_progress: expected rc=2 output=$output"
+  [[ "$rc" -eq 0 ]] || fail "systemd_bound_transit_missing_authority_start_progress: expected rc=0 output=$output"
   [[ "$output" == *"start_status=partial"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing partial status output=$output"
   [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing listener_only mode output=$output"
   [[ "$output" == *"reason=node_endpoint_unconfigured_listener_only"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing listener_only reason output=$output"
-  [[ "$output" == *"fail_closed=true"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing fail_closed=true output=$output"
-  [[ "$output" == *"node_runtime=stopped"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing node_runtime=stopped output=$output"
-  [[ "$output" != *"reason=bound_transit_unready"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: bound transit preflight still blocked clean start output=$output"
+  [[ "$output" == *"fail_closed=false"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing fail_closed=false output=$output"
+  [[ "$output" == *"node_runtime=running"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing node_runtime=running output=$output"
+  [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_bound_transit_missing_authority_start_progress: missing datapath_apply=skipped output=$output"
   grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_bound_transit_missing_authority_start_progress: node service was not started"
-  grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_bound_transit_missing_authority_start_progress: fail-closed stop was not invoked"
-  ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_bound_transit_missing_authority_start_progress: datapath service should stay skipped in listener_only"
+  ! grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_bound_transit_missing_authority_start_progress: listener-only bootstrap must stay running"
 
   rm -rf "$tmp_dir"
 }
@@ -381,17 +380,17 @@ EOF
   rc=$?
   set -e
 
-  [[ "$rc" -eq 2 ]] || fail "systemd_listener_only_unconfigured_endpoint: expected rc=2 got $rc output=$output"
+  [[ "$rc" -eq 0 ]] || fail "systemd_listener_only_unconfigured_endpoint: expected rc=0 got $rc output=$output"
   [[ "$output" == *"start_status=partial"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing partial status output=$output"
   [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing listener_only mode output=$output"
   [[ "$output" == *"mesh_ready=false"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing mesh_ready=false output=$output"
   [[ "$output" == *"reason=node_endpoint_unconfigured_listener_only"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing reason output=$output"
-  [[ "$output" == *"fail_closed=true"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing fail_closed=true output=$output"
-  [[ "$output" == *"transparent_runtime=stopped"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing transparent_runtime=stopped output=$output"
-  [[ "$output" == *"node_runtime=stopped"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing node_runtime=stopped output=$output"
+  [[ "$output" == *"fail_closed=false"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing fail_closed=false output=$output"
+  [[ "$output" == *"transparent_runtime=skipped"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing transparent_runtime=skipped output=$output"
+  [[ "$output" == *"node_runtime=running"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing node_runtime=running output=$output"
   [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_listener_only_unconfigured_endpoint: missing datapath_apply=skipped output=$output"
   grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_listener_only_unconfigured_endpoint: node service was not started"
-  grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_listener_only_unconfigured_endpoint: fail-closed stop was not invoked"
+  ! grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_listener_only_unconfigured_endpoint: listener-only bootstrap must stay running"
   ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_listener_only_unconfigured_endpoint: datapath service should not start in listener_only mode"
 
   rm -rf "$tmp_dir"
@@ -997,17 +996,17 @@ EOF
   rc=$?
   set -e
 
-  [[ "$rc" -eq 2 ]] || fail "systemd_listener_only_self_loop: expected rc=2 got $rc output=$output"
+  [[ "$rc" -eq 0 ]] || fail "systemd_listener_only_self_loop: expected rc=0 got $rc output=$output"
   [[ "$output" == *"start_status=partial"* ]] || fail "systemd_listener_only_self_loop: missing partial status output=$output"
   [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_listener_only_self_loop: missing listener_only mode output=$output"
   [[ "$output" == *"mesh_ready=false"* ]] || fail "systemd_listener_only_self_loop: missing mesh_ready=false output=$output"
   [[ "$output" == *"reason=self_loop_listener_only"* ]] || fail "systemd_listener_only_self_loop: missing self_loop_listener_only reason output=$output"
-  [[ "$output" == *"fail_closed=true"* ]] || fail "systemd_listener_only_self_loop: missing fail_closed=true output=$output"
-  [[ "$output" == *"transparent_runtime=stopped"* ]] || fail "systemd_listener_only_self_loop: missing transparent_runtime=stopped output=$output"
-  [[ "$output" == *"node_runtime=stopped"* ]] || fail "systemd_listener_only_self_loop: missing node_runtime=stopped output=$output"
+  [[ "$output" == *"fail_closed=false"* ]] || fail "systemd_listener_only_self_loop: missing fail_closed=false output=$output"
+  [[ "$output" == *"transparent_runtime=skipped"* ]] || fail "systemd_listener_only_self_loop: missing transparent_runtime=skipped output=$output"
+  [[ "$output" == *"node_runtime=running"* ]] || fail "systemd_listener_only_self_loop: missing node_runtime=running output=$output"
   [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_listener_only_self_loop: missing datapath_apply=skipped output=$output"
   grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_listener_only_self_loop: node service was not started"
-  grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_listener_only_self_loop: fail-closed stop was not invoked"
+  ! grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_listener_only_self_loop: self-loop listener-only node must stay running"
   ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_listener_only_self_loop: datapath service should not start in listener_only mode"
 
   rm -rf "$tmp_dir"

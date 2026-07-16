@@ -2595,6 +2595,13 @@ partial_start_fail_closed() {
   [[ "${CHIMERA_FAIL_CLOSED_ON_PARTIAL_START:-1}" != "0" ]]
 }
 
+# Listener-only bootstrap has no outbound carrier and never applies a datapath,
+# so there is no traffic-leak risk. Keep the node running so the install can
+# auto-start and wait for a peer endpoint to be supplied later.
+listener_only_bootstrap_fail_closed() {
+  return 1
+}
+
 stop_partial_runtime_components() {
   local mode="${1:?mode_required}"
   stop_runner_background "peer_update" "$(peer_update_pid_path)" >/dev/null 2>&1 || true
@@ -4646,7 +4653,7 @@ start_runtime() {
       local listener_only_node_status="$node_status"
       local listener_only_transparent_runtime="skipped"
       site_auto_watch_stop >/dev/null 2>&1 || true
-      if partial_start_fail_closed; then
+      if listener_only_bootstrap_fail_closed; then
         stop_partial_runtime_components "systemd_user"
         listener_only_fail_closed="true"
         listener_only_exit_rc=2
@@ -4669,7 +4676,7 @@ start_runtime() {
       local self_loop_node_status="$node_status"
       local self_loop_transparent_runtime="skipped"
       site_auto_watch_stop >/dev/null 2>&1 || true
-      if partial_start_fail_closed; then
+      if listener_only_bootstrap_fail_closed; then
         stop_partial_runtime_components "systemd_user"
         self_loop_fail_closed="true"
         self_loop_exit_rc=2
@@ -4860,7 +4867,7 @@ start_runtime() {
     local direct_listener_node_status="$direct_node_status"
     local direct_listener_transparent_runtime="skipped"
     site_auto_watch_stop >/dev/null 2>&1 || true
-    if partial_start_fail_closed; then
+    if listener_only_bootstrap_fail_closed; then
       stop_partial_runtime_components "direct"
       direct_listener_fail_closed="true"
       direct_listener_exit_rc=2
@@ -4883,7 +4890,7 @@ start_runtime() {
     local direct_self_loop_node_status="$direct_node_status"
     local direct_self_loop_transparent_runtime="skipped"
     site_auto_watch_stop >/dev/null 2>&1 || true
-    if partial_start_fail_closed; then
+    if listener_only_bootstrap_fail_closed; then
       stop_partial_runtime_components "direct"
       direct_self_loop_fail_closed="true"
       direct_self_loop_exit_rc=2

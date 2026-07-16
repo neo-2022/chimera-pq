@@ -1115,6 +1115,24 @@ if [[ "$bootstrap_authority_present" -eq 1 && -z "${CONFIGURED_PEER_ENDPOINT:-}"
   echo "error: authoritative mesh seed did not resolve a peer endpoint during install" >&2
   exit 2
 fi
+
+# Detect a fresh listener-only/bootstrap install. Without a peer endpoint or
+# discovery source, bound transit has no authoritative lane definitions and
+# would prevent the node from auto-starting.
+listener_only_bootstrap=0
+if [[ -z "${CONFIGURED_PEER_ENDPOINT:-}" && "$installer_dynamic_discovery_configured" -eq 0 && "$bootstrap_authority_present" -eq 0 ]]; then
+  listener_only_bootstrap=1
+fi
+if [[ "$listener_only_bootstrap" -eq 1 ]]; then
+  CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="false"
+  export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
+else
+  if [[ "${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT:-}" != "false" ]]; then
+    CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="true"
+    export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
+  fi
+fi
+
 if [[ -n "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
   selected_invite_token="$(run_chimera_cli mesh nodes selected-invite-token 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
   configure_peer_egress_env "node" "$CONFIGURED_PEER_ENDPOINT" "$selected_invite_token" "$node_peer_listen" "127.0.0.1:18135"
