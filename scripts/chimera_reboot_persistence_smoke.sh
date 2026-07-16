@@ -67,6 +67,11 @@ case "${1:-}" in
 esac
 cmd="${1:-}"
 unit="${2:-}"
+# Strip common options so $unit holds the actual unit name.
+while [[ "$unit" == --* ]]; do
+  shift
+  unit="${2:-}"
+done
 ensure_dirs() { mkdir -p "$wants_dir" "$cache_root/chimera"; }
 record_active() {
   ensure_dirs
@@ -84,7 +89,11 @@ record_started() {
 }
 is_active() {
   local u="$1"
-  if [[ -f "$active_file" ]] && grep -qx "$u" "$active_file"; then
+  # Accept 'is-active --quiet <unit>'
+  if [[ "$u" == --* ]]; then
+    shift; u="${2:-}"
+  fi
+  if [[ -n "$u" && -f "$active_file" ]] && grep -qx "$u" "$active_file"; then
     echo "active"
     return 0
   fi
@@ -160,7 +169,10 @@ if ! env \
   PATH="$bin_dir:$PATH" \
   CHIMERA_INSTALL_ENABLE_BOOT_RECOVERY=true \
   CHIMERA_PEER_EGRESS_TOKEN=test-token \
+  CHIMERA_FAKE_SYSTEMCTL_ACTIVE_FILE="$active_units_file" \
+  CHIMERA_FAKE_SYSTEMCTL_STARTED_FILE="$started_units_file" \
   CHIMERA_RUNTIME_SERVICE_UNIT=chimera-runtime.service \
+  CHIMERA_UPDATE_FIRST_CHECKED=1 \
   bash "$install_root/scripts/install_desktop_control.sh" >"$install_log" 2>&1; then
   cat "$install_log" >&2
   fail "installer failed"

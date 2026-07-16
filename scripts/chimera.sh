@@ -67,9 +67,27 @@ wget_exit_reason() {
   esac
 }
 
-download_url_to_file() {
+download_url_cache_bust() {
   local url="${1:?url_required}"
+  local cache_buster
+  case "$url" in
+    *gitverse.ru/api/repos/*/raw/branch/*)
+      cache_buster="$(date +%s%N 2>/dev/null || date +%s)"
+      if [[ "$url" == *\?* ]]; then
+        printf '%s&cb=%s\n' "$url" "$cache_buster"
+      else
+        printf '%s?cb=%s\n' "$url" "$cache_buster"
+      fi
+      return 0
+      ;;
+  esac
+  printf '%s\n' "$url"
+}
+
+download_url_to_file() {
+  local original_url="${1:?url_required}"
   local dest="${2:?dest_required}"
+  local url="$(download_url_cache_bust "$original_url")"
   local curl_rc=0 wget_rc=0
   local curl_present="no" wget_present="no"
   command -v curl >/dev/null 2>&1 && curl_present="yes"
@@ -82,7 +100,7 @@ download_url_to_file() {
       return 0
     fi
     curl_rc=$?
-    echo "download_status=fail tool=curl url=$url rc=$curl_rc reason=$(curl_exit_reason "$curl_rc")" >&2
+    echo "download_status=fail tool=curl url=$original_url rc=$curl_rc reason=$(curl_exit_reason "$curl_rc")" >&2
     [[ -f "$dest" ]] && rm -f "$dest"
   fi
 
@@ -93,16 +111,16 @@ download_url_to_file() {
       return 0
     fi
     wget_rc=$?
-    echo "download_status=fail tool=wget url=$url rc=$wget_rc reason=$(wget_exit_reason "$wget_rc")" >&2
+    echo "download_status=fail tool=wget url=$original_url rc=$wget_rc reason=$(wget_exit_reason "$wget_rc")" >&2
     [[ -f "$dest" ]] && rm -f "$dest"
   fi
 
   if [[ "$curl_present" == "no" && "$wget_present" == "no" ]]; then
-    echo "download_status=fail url=$url reason=no_downloader_installed curl_present=no wget_present=no" >&2
+    echo "download_status=fail url=$original_url reason=no_downloader_installed curl_present=no wget_present=no" >&2
     echo "error: no HTTP downloader found; install curl or wget" >&2
   else
-    echo "download_status=fail url=$url reason=no_downloader_succeeded curl_present=$curl_present wget_present=$wget_present curl_rc=$curl_rc wget_rc=$wget_rc" >&2
-    echo "error: could not download $url (see download_status logs above)" >&2
+    echo "download_status=fail url=$original_url reason=no_downloader_succeeded curl_present=$curl_present wget_present=$wget_present curl_rc=$curl_rc wget_rc=$wget_rc" >&2
+    echo "error: could not download $original_url (see download_status logs above)" >&2
   fi
   return 1
 }
