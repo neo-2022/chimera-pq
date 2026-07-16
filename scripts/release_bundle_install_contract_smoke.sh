@@ -268,6 +268,7 @@ XDG_RUNTIME_DIR="$runtime" \
 CHIMERA_HOME="$tmp_dir/chimera-home" \
 CHIMERA_LOCAL_BIN="$tmp_dir/local-bin" \
 CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+CHIMERA_AUTO_START_AFTER_INSTALL=0 \
 CHIMERA_MESH_REMOTE_ENDPOINT="mesh.example.invalid:443" \
   timeout 60s bash "$ROOT_DIR/scripts/install_release.sh" "$ARCHIVE" "$CHECKSUM" >"$install_log" 2>&1
 install_rc=$?
@@ -330,6 +331,7 @@ bootstrap_install_version_tracks_bundle_not_script_version() {
   XDG_RUNTIME_DIR="$bootstrap_runtime" \
   CHIMERA_HOME="$bootstrap_home" \
   CHIMERA_LOCAL_BIN="$bootstrap_local_bin" \
+  CHIMERA_AUTO_START_AFTER_INSTALL=0 \
   CHIMERA_RELEASE_ARCHIVE_URL="file://$ARCHIVE" \
   CHIMERA_RELEASE_CHECKSUM_URL="file://$CHECKSUM" \
     timeout 60s bash "$bootstrap_script" -install >"$bootstrap_log" 2>&1

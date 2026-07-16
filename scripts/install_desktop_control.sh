@@ -31,6 +31,23 @@ normalize_install_node_role() {
 
 INSTALL_NODE_ROLE="$(normalize_install_node_role "${CHIMERA_INSTALL_NODE_ROLE:-node}")"
 
+AUTO_START_AFTER_INSTALL=1
+case "${CHIMERA_AUTO_START_AFTER_INSTALL:-1}" in
+  1|true|yes|YES|Yes)
+    AUTO_START_AFTER_INSTALL=1
+    ;;
+  0|false|no|NO|No)
+    AUTO_START_AFTER_INSTALL=0
+    ;;
+  "")
+    AUTO_START_AFTER_INSTALL=1
+    ;;
+  *)
+    echo "warning: invalid CHIMERA_AUTO_START_AFTER_INSTALL value, defaulting to enabled: ${CHIMERA_AUTO_START_AFTER_INSTALL}" >&2
+    AUTO_START_AFTER_INSTALL=1
+    ;;
+esac
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "error: missing required command: $1" >&2
@@ -370,6 +387,74 @@ install_systemd_user_unit() {
   }
   sed "s|__CHIMERA_ROOT__|$ROOT_DIR|g" "$source_file" >"$SYSTEMD_USER_DIR/$unit"
   chmod 0644 "$SYSTEMD_USER_DIR/$unit"
+}
+
+# systemd manages the user-level node through a D-Bus session; on bare SSH or
+# non-graphical logins the bus socket may not be present in the installer's
+# environment. Force D-Bus discovery to the real login session socket so that
+# `systemctl --user start` can talk to the daemon.
+ensure_systemd_user_dbus_env() {
+  if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    return 0
+  fi
+  local uid runtime_dir bus_socket
+  uid="$(id -u)"
+  runtime_dir="/run/user/$uid"
+  bus_socket="$runtime_dir/bus"
+  if [[ -S "$bus_socket" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_socket"
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$runtime_dir}"
+    return 0
+  fi
+  # As a last resort, try the systemd host bus probe.
+  local session_addr=""
+  session_addr="$(systemctl --host "" --no-pager show-environment 2>/dev/null | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -n1 || true)"
+  if [[ -n "$session_addr" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="$session_addr"
+    return 0
+  fi
+  return 1
+}
+
+# Start CHIMERA immediately after installation when automatic start is enabled
+# and a systemd user session is available.  A missing/empty node configuration
+# becomes the listener-only bootstrap mode and must not block the install.
+start_installed_runtime() {
+  if [[ "$AUTO_START_AFTER_INSTALL" -ne 1 ]]; then
+    echo "auto_start_after_install=skipped reason=disabled"
+    return 0
+  fi
+  if [[ "$SYSTEMD_USER_READY" != "1" ]]; then
+    echo "auto_start_after_install=skipped reason=systemd_user_not_ready"
+    return 0
+  fi
+  if ! ensure_systemd_user_dbus_env; then
+    echo "auto_start_after_install=skipped reason=dbus_session_unavailable"
+    return 0
+  fi
+  # Reload any new units before starting.
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+
+  local start_output="" start_rc=0 node_active=0
+  set +e
+  start_output="$("$ROOT_DIR/scripts/chimera-control.sh" start 2>&1)" || start_rc=$?
+  set -e
+  if [[ -n "$start_output" ]]; then
+    printf '%s\n' "$start_output" >&2
+  fi
+  if systemctl --user is-active --quiet "$NODE_SERVICE_UNIT" 2>/dev/null; then
+    node_active=1
+  fi
+
+  # rc=2 from control start means listener-only bootstrap, which is still an
+  # acceptable automatic start when no carrier endpoint has been configured.
+  if { [[ "$start_rc" -eq 0 ]] || [[ "$start_rc" -eq 2 && "$node_active" -eq 1 ]]; } && [[ "$node_active" -eq 1 ]]; then
+    echo "auto_start_after_install=ok listener_only=$([[ "$start_rc" -eq 2 ]] && echo yes || echo no)"
+    return 0
+  fi
+
+  echo "auto_start_after_install=fail start_rc=$start_rc node_active=$node_active"
+  return 1
 }
 
 best_effort_enable_user_linger() {
@@ -1123,6 +1208,12 @@ if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
 fi
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
+  AUTO_START_REPORT="$(start_installed_runtime)"
+else
+  AUTO_START_REPORT="auto_start_after_install=skipped reason=installer_environment_without_systemd"
+fi
+
+if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
   case "$USER_LINGER_STATUS" in
     user_linger=enabled|user_linger=present)
       case "$RUNTIME_SERVICE_ENABLE_STATE" in
@@ -1210,14 +1301,31 @@ fi
   fi
   echo
 
+  echo -e "${c_cyan}Auto start / Автозапуск после установки:${c_reset}"
+  if [[ "$AUTO_START_REPORT" == *"auto_start_after_install=ok"* ]]; then
+    echo "  started / запущена"
+    printf '  %s\n' "$AUTO_START_REPORT"
+  elif [[ "$AUTO_START_REPORT" == *"auto_start_after_install=skipped"* ]]; then
+    echo "  skipped / пропущена"
+    printf '  %s\n' "$AUTO_START_REPORT"
+  else
+    echo "  failed / ошибка"
+    printf '  %s\n' "$AUTO_START_REPORT"
+  fi
+  echo
+
   echo -e "${c_cyan}Quick start / Быстрый старт:${c_reset}"
+  if [[ "$AUTO_START_REPORT" != *"auto_start_after_install=ok"* ]]; then
+    printf '  %-18s %s\n' \
+      "chimera -start"   "start CHIMERA / запустить"
+  fi
   printf '  %-18s %s\n' \
-    "chimera -start"   "start CHIMERA / запустить" \
     "chimera -status"  "show status / посмотреть статус" \
     "chimera -stop"    "stop CHIMERA / остановить" \
     "chimera -uninstall" "remove CHIMERA / удалить"
   echo
 
-  # Keep the machine-readable line required by contract tests.
+  # Machine-readable lines required by contract and monitoring tests.
+  echo "auto_start_after_install_report=$AUTO_START_REPORT"
   echo "boot_recovery_status=$BOOT_RECOVERY_STATUS"
 } >&2

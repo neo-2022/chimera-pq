@@ -2326,7 +2326,7 @@ rg -n 'bash scripts/product_language_guard\.sh' "$ROOT_DIR/.github/workflows/rel
 rg -n 'git verify-tag --raw -v "\$\{release_tag\}"' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_gpg_tag_verification"
 rg -n 'CHIMERA_RELEASE_GPG_PUBLIC_KEY' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_gpg_public_key_import"
 rg -n 'CHIMERA_RELEASE_GPG_FINGERPRINT' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_gpg_fingerprint_check"
-rg -n 'immutable release policy forbids asset replacement' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_immutable_asset_guard"
+rg -n 'existing release assets do not match required immutable set' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_immutable_asset_guard"
 if rg -n 'delete-asset|--clobber' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null; then
   fail "github_release_mutable_asset_path_present"
 fi

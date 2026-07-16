@@ -175,24 +175,33 @@ jobs:
           - chimera-pq-release.tar.gz.sha256
           EOF
 
-          required_assets=(
-            "chimera.sh"
-            "chimera-pq-release.tar.gz"
-            "chimera-pq-release.tar.gz.sha256"
-          )
+          expected_sorted=$(printf '%s\n' \
+            "chimera-pq-release.tar.gz" \
+            "chimera-pq-release.tar.gz.sha256" \
+            "chimera.sh" | sort)
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "error: release already exists and immutable release policy forbids asset replacement: ${RELEASE_TAG}" >&2
-            exit 1
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              target/chimera.sh \
+              target/chimera-pq-release.tar.gz \
+              target/chimera-pq-release.tar.gz.sha256 \
+              --verify-tag \
+              --latest \
+              --title "$RELEASE_TAG" \
+              --notes-file target/release-notes.md
+            echo "github_release=created tag=${RELEASE_TAG}"
+          else
+            echo "github_release=exists tag=${RELEASE_TAG} — verifying immutable assets"
+            actual_sorted=$(gh release view "$RELEASE_TAG" \
+              --json assets --jq '.assets[].name' | sort)
+            if [[ "$actual_sorted" != "$expected_sorted" ]]; then
+              echo "error: existing release assets do not match required immutable set; manual cleanup required" >&2
+              printf 'expected:\n%s\nactual:\n%s\n' "$expected_sorted" "$actual_sorted" >&2
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" --latest >/dev/null 2>&1 || true
+            echo "github_release=verified tag=${RELEASE_TAG} assets=immutable"
           fi
-          gh release create "$RELEASE_TAG" \
-            target/chimera.sh \
-            target/chimera-pq-release.tar.gz \
-            target/chimera-pq-release.tar.gz.sha256 \
-            --verify-tag \
-            --latest \
-            --title "$RELEASE_TAG" \
-            --notes-file target/release-notes.md
 
       - name: Verify GitHub Latest Contract
         shell: bash
