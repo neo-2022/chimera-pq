@@ -446,10 +446,17 @@ start_installed_runtime() {
     node_active=1
   fi
 
-  # rc=2 from control start means listener-only bootstrap, which is still an
-  # acceptable automatic start when no carrier endpoint has been configured.
+  # Listener-only bootstrap now exits 0 when it stays running; detect it from
+  # the start output so the install report is accurate.
+  local listener_only="no"
+  if [[ "$start_rc" -eq 2 ]] || [[ "$start_output" == *"mode=listener_only"* ]]; then
+    listener_only="yes"
+  fi
+  # rc=2 from control start is the legacy listener-only signal; rc=0 is the
+  # modern stay-running listener-only bootstrap. Both are acceptable automatic
+  # starts when no carrier endpoint has been configured.
   if { [[ "$start_rc" -eq 0 ]] || [[ "$start_rc" -eq 2 && "$node_active" -eq 1 ]]; } && [[ "$node_active" -eq 1 ]]; then
-    echo "auto_start_after_install=ok listener_only=$([[ "$start_rc" -eq 2 ]] && echo yes || echo no)"
+    echo "auto_start_after_install=ok listener_only=$listener_only"
     return 0
   fi
 
