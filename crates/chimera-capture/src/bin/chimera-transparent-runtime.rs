@@ -1,620 +1,588 @@
-#![forbid(unsafe_code)]
+// chimera-transparent-runtime.rs
+//
+// CHIMERA transparent local-capture datapath launcher.
+// This binary is intentionally small: it owns the OS-level redirect rules,
+// resolves capture targets, and hands accepted TCP flows to
+// `chimera-transparent-tcp` over a local acceptor.
 
-use std::env;
-use std::net::ToSocketAddrs;
-use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, Stdio};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::collections::BTreeSet;
+use std::fs;
+use std::io::{BufRead, Write};
+use std::net::{Ipv4Addr, SocketAddr};
+use std::path::Path;
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
-use chimera_capture::nft_exec::run_nft_script;
-use chimera_capture::redirect::{TransparentRedirectPlan, default_bypass_cidrs_v4};
+use dns_lookup::{AddrFamily, AddrInfoHints, getaddrinfo};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+const DEFAULT_LISTEN: &str = "127.0.0.1:18134";
+const DEFAULT_TRANSIT_LOCAL: &str = "127.0.0.1:18135";
+const DEFAULT_REDIRECT_TABLE: &str = "chimera_redirect";
+const DEFAULT_REDIRECT_CHAIN: &str = "output";
+const DEFAULT_SERVICE_FWMARK: u32 = 0x5244;
+const DEFAULT_EXEMPT_UID: u32 = 65534;
+const DEFAULT_RUNTIME_UID: u32 = 1000;
+const DEFAULT_RUNTIME_GID: u32 = 1000;
+const DEFAULT_DIRECT_MODE: &str = "disabled";
+const DEFAULT_DIRECT_TIMEOUT_MS: u64 = 1200;
+const DEFAULT_INITIAL_READ_TIMEOUT_MS: u64 = 500;
+const DEFAULT_CAPTURE_TCP_PORTS: &str = "443";
+
+const DEFAULT_BYPASS_CIDR_V4: &[&str] = &[
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "224.0.0.0/4",
+    "240.0.0.0/4",
+];
+
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("transparent-runtime fatal: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), String> {
+    let options = Options::parse();
+    setup_signal_handler();
+
+    let (listen_addr, transit_local) = parse_local_endpoints(&options)?;
+
+    let ports = parse_ports(&options.capture_tcp_ports)?;
+    let capture_cidrs = build_capture_cidrs(&options)?;
+
+    let redirect_table = options.redirect_table.clone();
+    let redirect_chain = options.redirect_chain.clone();
+    let service_fwmark = options.service_fwmark;
+    let exempt_uid = options.exempt_uid;
+    let runtime_uid = options.runtime_uid;
+    let runtime_gid = options.runtime_gid;
+    let transparent_bin = options.transparent_bin.clone();
+    let use_sudo = options.use_sudo;
+    let privilege_mode = options.privilege_mode.clone();
+
+    install_redirect_rules(
+        &redirect_table,
+        &redirect_chain,
+        service_fwmark,
+        exempt_uid,
+        &capture_cidrs,
+        &ports,
+        use_sudo,
+        &privilege_mode,
+    )?;
+
+    let cleanup_on_drop = CleanupState {
+        redirect_table,
+        redirect_chain,
+        use_sudo,
+        privilege_mode,
+    };
+
+    let child = spawn_transparent_tcp(
+        &transparent_bin,
+        listen_addr,
+        transit_local,
+        &options,
+        runtime_uid,
+        runtime_gid,
+    )?;
+
+    let mut child = child;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let _ = cleanup_redirect_rules(&cleanup_on_drop);
+                return Err(format!(
+                    "transparent-tcp exited early with status: {status}"
+                ));
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(500)),
+            Err(error) => {
+                let _ = cleanup_redirect_rules(&cleanup_on_drop);
+                return Err(format!("failed to wait on transparent-tcp: {error}"));
+            }
+        }
+    }
+}
+
 struct Options {
     transparent_bin: String,
     listen: String,
     transit_local: String,
+    redirect_table: String,
+    redirect_chain: String,
+    service_fwmark: u32,
+    exempt_uid: u32,
+    runtime_uid: u32,
+    runtime_gid: u32,
+    use_sudo: bool,
+    privilege_mode: String,
+    capture_domain: Vec<String>,
+    capture_cidr_v4: Vec<String>,
+    capture_tcp_ports: String,
+    capture_domains_file: Option<String>,
+    bypass_cidr_v4: Vec<String>,
+    no_default_bypass: bool,
     direct_mode: String,
     direct_timeout_ms: u64,
     initial_read_timeout_ms: u64,
-    table_name: String,
-    chain_name: String,
-    exempt_uid: u32,
-    service_fwmark: Option<u32>,
-    transparent_uid: Option<u32>,
-    transparent_gid: Option<u32>,
-    bypass_cidrs_v4: Vec<String>,
-    capture_cidrs_v4: Vec<String>,
-    capture_tcp_ports: Vec<u16>,
-    capture_skuids: Vec<u32>,
-    run_ms: Option<u64>,
-    print_only: bool,
 }
 
 impl Options {
-    fn parse(args: &[String]) -> Result<Self, String> {
-        let mut transparent_bin = env_value("CHIMERA_TRANSPARENT_BIN")
-            .unwrap_or_else(|| "chimera-transparent-tcp".to_string());
-        let mut listen = env_value("CHIMERA_TRANSPARENT_TCP_LISTEN");
-        let mut transit_local = env_value("CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL")
-            .or_else(|| env_value("CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL"));
-        let mut direct_mode = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE")
-            .unwrap_or_else(|| "disabled".to_string());
-        let mut direct_timeout_ms = env_value("CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS")
-            .map(|value| parse_positive_u64(&value, "direct-timeout-ms"))
-            .transpose()?
-            .unwrap_or(1200);
-        let mut initial_read_timeout_ms =
-            env_value("CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS")
-                .map(|value| parse_positive_u64(&value, "initial-read-timeout-ms"))
-                .transpose()?
-                .unwrap_or(500);
-        let mut table_name =
-            env_value("CHIMERA_REDIRECT_TABLE").unwrap_or_else(|| "chimera_redirect".to_string());
-        let mut chain_name =
-            env_value("CHIMERA_REDIRECT_CHAIN").unwrap_or_else(|| "output".to_string());
-        let mut exempt_uid = env_value("CHIMERA_REDIRECT_EXEMPT_UID")
-            .map(|value| parse_u32(&value, "exempt-uid"))
-            .transpose()?;
-        let mut service_fwmark = env_value("CHIMERA_REDIRECT_SERVICE_FWMARK")
-            .map(|value| parse_u32(&value, "service-fwmark"))
-            .transpose()?;
-        let mut transparent_uid = env_value("CHIMERA_TRANSPARENT_RUNTIME_UID")
-            .map(|value| parse_u32(&value, "transparent-uid"))
-            .transpose()?;
-        let mut transparent_gid = env_value("CHIMERA_TRANSPARENT_RUNTIME_GID")
-            .map(|value| parse_u32(&value, "transparent-gid"))
-            .transpose()?;
-        let mut bypass_cidrs_v4 = default_bypass_cidrs_v4();
-        if let Some(extra_bypass) = parse_string_list_env("CHIMERA_BYPASS_CIDR_V4") {
-            bypass_cidrs_v4.extend(extra_bypass);
-        }
-        let mut capture_cidrs_v4 =
-            parse_string_list_env("CHIMERA_CAPTURE_CIDR_V4").unwrap_or_default();
-        let mut capture_tcp_ports =
-            parse_u16_list_env("CHIMERA_CAPTURE_TCP_PORTS").unwrap_or_default();
-        let mut capture_skuids = parse_uid_list_env("CHIMERA_CAPTURE_SKUID").unwrap_or_default();
-        let mut capture_domains =
-            parse_string_list_env("CHIMERA_CAPTURE_DOMAIN").unwrap_or_default();
-        let mut capture_domains_file = env_value("CHIMERA_CAPTURE_DOMAINS_FILE");
-        let mut run_ms = env_value("CHIMERA_TRANSPARENT_RUNTIME_RUN_MS")
-            .map(|value| parse_positive_u64(&value, "run-ms"))
-            .transpose()?;
-        let mut print_only = false;
+    fn parse() -> Self {
+        let env_or = |key: &str, default: &str| -> String {
+            std::env::var(key).unwrap_or_else(|_| default.to_owned())
+        };
+        let env_flag = |key: &str, default: bool| -> bool {
+            std::env::var(key)
+                .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+                .unwrap_or(default)
+        };
+        let env_u32 = |key: &str, default: u32| -> u32 {
+            std::env::var(key)
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(default)
+        };
+        let env_u64 = |key: &str, default: u64| -> u64 {
+            std::env::var(key)
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(default)
+        };
 
-        let mut index = 0usize;
-        while index < args.len() {
-            let flag = args[index].as_str();
-            match flag {
-                "--transparent-bin" => {
-                    transparent_bin = arg_value(args, index, flag)?;
-                    index += 2;
+        let mut capture_domain = Vec::new();
+        if let Ok(value) = std::env::var("CHIMERA_CAPTURE_DOMAIN") {
+            for token in value.split(',') {
+                let token = token.trim();
+                if !token.is_empty() {
+                    capture_domain.push(token.to_lowercase());
                 }
-                "--listen" => {
-                    listen = Some(arg_value(args, index, flag)?);
-                    index += 2;
-                }
-                "--transit-local" | "--gateway-local" => {
-                    transit_local = Some(arg_value(args, index, flag)?);
-                    index += 2;
-                }
-                "--direct-mode" => {
-                    direct_mode = arg_value(args, index, flag)?;
-                    index += 2;
-                }
-                "--direct-timeout-ms" => {
-                    direct_timeout_ms =
-                        parse_positive_u64(&arg_value(args, index, flag)?, "direct-timeout-ms")?;
-                    index += 2;
-                }
-                "--initial-read-timeout-ms" => {
-                    initial_read_timeout_ms = parse_positive_u64(
-                        &arg_value(args, index, flag)?,
-                        "initial-read-timeout-ms",
-                    )?;
-                    index += 2;
-                }
-                "--table" => {
-                    table_name = arg_value(args, index, flag)?;
-                    index += 2;
-                }
-                "--chain" => {
-                    chain_name = arg_value(args, index, flag)?;
-                    index += 2;
-                }
-                "--exempt-uid" => {
-                    exempt_uid = Some(parse_u32(&arg_value(args, index, flag)?, "exempt-uid")?);
-                    index += 2;
-                }
-                "--service-fwmark" => {
-                    service_fwmark =
-                        Some(parse_u32(&arg_value(args, index, flag)?, "service-fwmark")?);
-                    index += 2;
-                }
-                "--transparent-uid" => {
-                    transparent_uid = Some(parse_u32(
-                        &arg_value(args, index, flag)?,
-                        "transparent-uid",
-                    )?);
-                    index += 2;
-                }
-                "--transparent-gid" => {
-                    transparent_gid = Some(parse_u32(
-                        &arg_value(args, index, flag)?,
-                        "transparent-gid",
-                    )?);
-                    index += 2;
-                }
-                "--bypass-cidr-v4" => {
-                    bypass_cidrs_v4.push(arg_value(args, index, flag)?);
-                    index += 2;
-                }
-                "--capture-cidr-v4" => {
-                    capture_cidrs_v4.push(arg_value(args, index, flag)?);
-                    index += 2;
-                }
-                "--capture-tcp-port" => {
-                    capture_tcp_ports.push(parse_u16(
-                        &arg_value(args, index, flag)?,
-                        "capture-tcp-port",
-                    )?);
-                    index += 2;
-                }
-                "--capture-skuid" => {
-                    capture_skuids
-                        .push(parse_u32(&arg_value(args, index, flag)?, "capture-skuid")?);
-                    index += 2;
-                }
-                "--capture-domain" => {
-                    capture_domains.push(arg_value(args, index, flag)?);
-                    index += 2;
-                }
-                "--capture-domains-file" => {
-                    capture_domains_file = Some(arg_value(args, index, flag)?);
-                    index += 2;
-                }
-                "--no-default-bypass" => {
-                    bypass_cidrs_v4.clear();
-                    index += 1;
-                }
-                "--run-ms" => {
-                    run_ms = Some(parse_positive_u64(
-                        &arg_value(args, index, flag)?,
-                        "run-ms",
-                    )?);
-                    index += 2;
-                }
-                "--print-only" => {
-                    print_only = true;
-                    index += 1;
-                }
-                _ => return Err(format!("unknown argument: {flag}")),
             }
         }
 
-        if direct_mode == "auto" {
-            return Err(
-                "direct-mode auto is forbidden; direct routes require policy-bound WEAVE routing"
-                    .to_string(),
-            );
-        }
-        if direct_mode != "disabled" {
-            return Err("direct-mode must be disabled".to_string());
-        }
-        if let Some(path) = capture_domains_file {
-            capture_domains.extend(read_capture_domains_file(&path)?);
-        }
-        if !capture_domains.is_empty() {
-            capture_cidrs_v4.extend(resolve_domains_to_cidrs(&capture_domains)?);
-        }
-        let exempt_uid = exempt_uid.or(transparent_uid).ok_or_else(|| {
-            "missing --exempt-uid/--transparent-uid or CHIMERA_REDIRECT_EXEMPT_UID".to_string()
-        })?;
-        if let Some(transparent_uid) = transparent_uid
-            && transparent_uid != exempt_uid
-        {
-            return Err("transparent-uid must match exempt-uid to avoid redirect loop".to_string());
-        }
-        Ok(Self {
-            transparent_bin,
-            listen: required_value(listen, "missing --listen or CHIMERA_TRANSPARENT_TCP_LISTEN")?,
-            transit_local: required_value(
-                transit_local,
-                "missing --transit-local/--gateway-local or CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL",
-            )?,
-            direct_mode,
-            direct_timeout_ms,
-            initial_read_timeout_ms,
-            table_name,
-            chain_name,
-            exempt_uid,
-            service_fwmark,
-            transparent_uid,
-            transparent_gid,
-            bypass_cidrs_v4,
-            capture_cidrs_v4,
-            capture_tcp_ports,
-            capture_skuids,
-            run_ms,
-            print_only,
-        })
-    }
+        let capture_cidr_v4 = std::env::var("CHIMERA_CAPTURE_CIDR_V4")
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|token| token.trim().to_owned())
+                    .filter(|token| !token.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
 
-    fn plan(&self) -> TransparentRedirectPlan {
-        TransparentRedirectPlan {
-            table_name: self.table_name.clone(),
-            chain_name: self.chain_name.clone(),
-            listen_port: parse_listen_port(&self.listen).unwrap_or(0),
-            exempt_uid: self.exempt_uid,
-            service_fwmark: self.service_fwmark,
-            bypass_cidrs_v4: self.bypass_cidrs_v4.clone(),
-            capture_cidrs_v4: self.capture_cidrs_v4.clone(),
-            capture_tcp_ports: self.capture_tcp_ports.clone(),
-            capture_skuids: self.capture_skuids.clone(),
+        let bypass_cidr_v4 = std::env::var("CHIMERA_BYPASS_CIDR_V4")
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|token| token.trim().to_owned())
+                    .filter(|token| !token.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Self {
+            transparent_bin: env_or(
+                "CHIMERA_TRANSPARENT_BIN",
+                "/usr/local/bin/chimera-transparent-tcp",
+            ),
+            listen: env_or("CHIMERA_TRANSPARENT_TCP_LISTEN", DEFAULT_LISTEN),
+            transit_local: env_or(
+                "CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL",
+                DEFAULT_TRANSIT_LOCAL,
+            ),
+            redirect_table: env_or("CHIMERA_REDIRECT_TABLE", DEFAULT_REDIRECT_TABLE),
+            redirect_chain: env_or("CHIMERA_REDIRECT_CHAIN", DEFAULT_REDIRECT_CHAIN),
+            service_fwmark: env_u32("CHIMERA_REDIRECT_SERVICE_FWMARK", DEFAULT_SERVICE_FWMARK),
+            exempt_uid: env_u32("CHIMERA_REDIRECT_EXEMPT_UID", DEFAULT_EXEMPT_UID),
+            runtime_uid: env_u32("CHIMERA_TRANSPARENT_RUNTIME_UID", DEFAULT_RUNTIME_UID),
+            runtime_gid: env_u32("CHIMERA_TRANSPARENT_RUNTIME_GID", DEFAULT_RUNTIME_GID),
+            use_sudo: env_flag("CHIMERA_RUNNER_USE_SUDO", false),
+            privilege_mode: env_or("CHIMERA_NFT_PRIVILEGE_MODE", "none"),
+            capture_domain,
+            capture_cidr_v4,
+            capture_tcp_ports: env_or("CHIMERA_CAPTURE_TCP_PORTS", DEFAULT_CAPTURE_TCP_PORTS),
+            capture_domains_file: std::env::var("CHIMERA_CAPTURE_DOMAINS_FILE")
+                .ok()
+                .filter(|path| !path.is_empty()),
+            bypass_cidr_v4,
+            no_default_bypass: env_flag("CHIMERA_NO_DEFAULT_BYPASS", false),
+            direct_mode: env_or("CHIMERA_TRANSPARENT_TCP_DIRECT_MODE", DEFAULT_DIRECT_MODE),
+            direct_timeout_ms: env_u64(
+                "CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS",
+                DEFAULT_DIRECT_TIMEOUT_MS,
+            ),
+            initial_read_timeout_ms: env_u64(
+                "CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS",
+                DEFAULT_INITIAL_READ_TIMEOUT_MS,
+            ),
         }
     }
 }
 
-fn resolve_domains_to_cidrs(domains: &[String]) -> Result<Vec<String>, String> {
-    let mut cidrs = Vec::new();
-    for domain in domains {
-        let mut seen_ipv4 = false;
-        let socket_addrs = format!("{domain}:443")
-            .to_socket_addrs()
-            .map_err(|error| format!("failed to resolve domain '{domain}': {error}"))?;
-        for addr in socket_addrs {
-            if let std::net::SocketAddr::V4(v4) = addr {
-                cidrs.push(format!("{}/32", v4.ip()));
-                seen_ipv4 = true;
-            }
-        }
-        if !seen_ipv4 {
-            return Err(format!(
-                "domain '{domain}' did not resolve to any IPv4 address"
-            ));
-        }
+fn parse_local_endpoints(options: &Options) -> Result<(SocketAddr, SocketAddr), String> {
+    let listen_addr: SocketAddr = options
+        .listen
+        .parse()
+        .map_err(|error| format!("invalid listen address '{}': {error}", options.listen))?;
+    if !listen_addr.ip().is_loopback() {
+        return Err(format!(
+            "listen address '{listen_addr}' must be loopback for safety"
+        ));
     }
-    Ok(cidrs)
+    let transit_local: SocketAddr = options.transit_local.parse().map_err(|error| {
+        format!(
+            "invalid transit-local address '{}': {error}",
+            options.transit_local
+        )
+    })?;
+    Ok((listen_addr, transit_local))
 }
 
-fn read_capture_domains_file(path: &str) -> Result<Vec<String>, String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|error| format!("cannot read capture domains file '{path}': {error}"))?;
+fn parse_ports(raw: &str) -> Result<Vec<u16>, String> {
+    let mut ports = Vec::new();
+    for token in raw.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let port: u16 = token
+            .parse()
+            .map_err(|error| format!("invalid TCP port '{token}': {error}"))?;
+        ports.push(port);
+    }
+    if ports.is_empty() {
+        return Err("at least one capture TCP port is required".to_owned());
+    }
+    Ok(ports)
+}
+
+fn build_capture_cidrs(options: &Options) -> Result<Vec<String>, String> {
+    let mut cidrs: BTreeSet<String> = BTreeSet::new();
+
+    if !options.no_default_bypass {
+        for cidr in DEFAULT_BYPASS_CIDR_V4 {
+            cidrs.insert((*cidr).to_owned());
+        }
+    }
+
+    for cidr in &options.bypass_cidr_v4 {
+        if !cidr.is_empty() {
+            cidrs.insert(cidr.clone());
+        }
+    }
+
+    for cidr in &options.capture_cidr_v4 {
+        cidrs.insert(cidr.clone());
+    }
+
+    let mut domains: Vec<String> = options.capture_domain.clone();
+
+    if let Some(path) = &options.capture_domains_file {
+        let file_domains = read_capture_domains_file(Path::new(path))
+            .map_err(|error| format!("failed to read capture domains file '{}': {error}", path))?;
+        domains.extend(file_domains);
+    }
+
+    if domains.is_empty() && options.capture_cidr_v4.is_empty() {
+        return Err(
+            "no capture domains or CIDRs specified; set CHIMERA_CAPTURE_DOMAIN, CHIMERA_CAPTURE_CIDR_V4, or CHIMERA_CAPTURE_DOMAINS_FILE"
+                .to_owned(),
+        );
+    }
+
+    let resolved = resolve_domains_to_cidrs(&domains)?;
+    for cidr in resolved {
+        cidrs.insert(cidr);
+    }
+
+    Ok(cidrs.into_iter().collect())
+}
+
+fn read_capture_domains_file(path: &Path) -> Result<Vec<String>, std::io::Error> {
+    let file = fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
     let mut domains = Vec::new();
-    for line in content.lines() {
+    for line in reader.lines() {
+        let line = line?;
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let token = line.split_once('#').map(|(prefix, _)| prefix.trim()).unwrap_or(line);
-        let token = token.split_whitespace().next().unwrap_or("");
-        if !token.is_empty() {
-            domains.push(token.to_string());
+        for token in line.split(|c: char| c.is_whitespace() || c == ',') {
+            let token = token.trim();
+            if !token.is_empty() {
+                domains.push(token.to_lowercase());
+            }
         }
     }
     Ok(domains)
 }
 
-fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
-    let options = match Options::parse(&args) {
-        Ok(options) => options,
-        Err(error) => {
-            eprintln!("error: {error}");
-            std::process::exit(2);
+fn resolve_domains_to_cidrs(domains: &[String]) -> Result<Vec<String>, String> {
+    let mut cidrs = Vec::new();
+    for domain in domains {
+        let resolved = resolve_domain_ipv4(domain)
+            .map_err(|error| format!("failed to resolve domain '{domain}': {error}"))?;
+        if resolved.is_empty() {
+            return Err(format!(
+                "domain '{domain}' did not resolve to any IPv4 address"
+            ));
         }
+        for ip in resolved {
+            cidrs.push(format!("{}/32", ip));
+        }
+    }
+    Ok(cidrs)
+}
+
+fn resolve_domain_ipv4(domain: &str) -> Result<Vec<Ipv4Addr>, String> {
+    let hints = AddrInfoHints {
+        address: AddrFamily::Inet.into(),
+        socktype: dns_lookup::SockType::Stream.into(),
+        ..AddrInfoHints::default()
     };
-    if let Err(error) = run(options) {
-        eprintln!("error: {error}");
-        std::process::exit(1);
+
+    let iterator = getaddrinfo(Some(domain), None, Some(hints))
+        .map_err(|error| format!("dns lookup failed: {error:?}"))?;
+
+    let mut ipv4s = Vec::new();
+    for item in iterator {
+        let addr_info = item.map_err(|error| format!("dns lookup result failed: {error:?}"))?;
+        if let SocketAddr::V4(socket_addr_v4) = addr_info.sockaddr {
+            ipv4s.push(*socket_addr_v4.ip());
+        }
+    }
+
+    Ok(ipv4s)
+}
+
+fn install_redirect_rules(
+    table: &str,
+    chain: &str,
+    service_fwmark: u32,
+    exempt_uid: u32,
+    capture_cidrs: &[String],
+    ports: &[u16],
+    use_sudo: bool,
+    privilege_mode: &str,
+) -> Result<(), String> {
+    cleanup_redirect_rules(&CleanupState {
+        redirect_table: table.to_owned(),
+        redirect_chain: chain.to_owned(),
+        use_sudo,
+        privilege_mode: privilege_mode.to_owned(),
+    })?;
+
+    let mut commands = String::new();
+    commands.push_str(&format!(
+        "add table ip {table}\nadd chain ip {table} {chain} {{ type nat hook output priority 0; policy accept; }}\n"
+    ));
+
+    for cidr in capture_cidrs {
+        if is_default_bypass_cidr(cidr) {
+            commands.push_str(&format!(
+                "add rule ip {table} {chain} ip daddr {cidr} return comment \"RFC1918/loopback bypass\"\n"
+            ));
+        }
+    }
+
+    commands.push_str(&format!(
+        "add rule ip {table} {chain} meta fwmark 0x{service_fwmark:x} return comment \"service self-exempt\"\n"
+    ));
+    commands.push_str(&format!(
+        "add rule ip {table} {chain} meta skuid {exempt_uid} return comment \"runtime UID exempt\"\n"
+    ));
+
+    let capture_cidrs_iter = capture_cidrs
+        .iter()
+        .filter(|cidr| !is_default_bypass_cidr(cidr));
+    let capture_cidrs_list: Vec<_> = capture_cidrs_iter.clone().collect();
+
+    if capture_cidrs_list.is_empty() && ports.is_empty() {
+        return Err("no capture CIDRs or ports to redirect; aborting rule installation".to_owned());
+    }
+
+    let ports_expr = ports
+        .iter()
+        .map(|port| port.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if capture_cidrs_list.is_empty() {
+        commands.push_str(&format!(
+            "add rule ip {table} {chain} tcp dport {{ {ports_expr} }} redirect to :18134 comment \"CHIMERA capture all ports\"\n"
+        ));
+    } else {
+        let cidrs_expr = capture_cidrs_list
+            .iter()
+            .map(|cidr| (*cidr).clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        commands.push_str(&format!(
+            "add rule ip {table} {chain} ip daddr {{ {cidrs_expr} }} tcp dport {{ {ports_expr} }} redirect to :18134 comment \"CHIMERA domain capture\"\n"
+        ));
+    }
+
+    let mut child = create_privileged_child("nft", &["-f", "-"], use_sudo, privilege_mode, true)?;
+    {
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "failed to open nft stdin".to_owned())?;
+        let mut stdin = std::io::BufWriter::new(stdin);
+        stdin
+            .write_all(commands.as_bytes())
+            .map_err(|error| format!("failed to write nft commands: {error}"))?;
+        stdin
+            .flush()
+            .map_err(|error| format!("failed to flush nft stdin: {error}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("nft command failed: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("nft failed:\n{stderr}"));
+    }
+
+    eprintln!(
+        "transparent-runtime: installed nft rules in {}:{}",
+        table, chain
+    );
+    Ok(())
+}
+
+fn is_default_bypass_cidr(cidr: &str) -> bool {
+    DEFAULT_BYPASS_CIDR_V4
+        .iter()
+        .any(|default| *default == cidr)
+}
+
+#[derive(Clone)]
+struct CleanupState {
+    redirect_table: String,
+    redirect_chain: String,
+    use_sudo: bool,
+    privilege_mode: String,
+}
+
+fn cleanup_redirect_rules(state: &CleanupState) -> Result<(), String> {
+    let table = &state.redirect_table;
+    let chain = &state.redirect_chain;
+    let commands = format!("delete chain ip {table} {chain}\ndelete table ip {table}\n");
+
+    let mut child = create_privileged_child(
+        "nft",
+        &["-f", "-"],
+        state.use_sudo,
+        &state.privilege_mode,
+        true,
+    )?;
+    {
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "failed to open nft stdin".to_owned())?;
+        let mut stdin = std::io::BufWriter::new(stdin);
+        let _ = stdin.write_all(commands.as_bytes());
+        let _ = stdin.flush();
+    }
+
+    let _ = child.wait_with_output();
+    Ok(())
+}
+
+fn create_privileged_child(
+    program: &str,
+    args: &[&str],
+    use_sudo: bool,
+    privilege_mode: &str,
+    preserve_env: bool,
+) -> Result<std::process::Child, String> {
+    let effective_use_sudo = use_sudo || privilege_mode.eq_ignore_ascii_case("sudo");
+
+    if effective_use_sudo {
+        let mut cmd = Command::new("sudo");
+        if preserve_env {
+            cmd.arg("-E");
+        }
+        cmd.arg(program);
+        cmd.args(args);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.spawn()
+            .map_err(|error| format!("failed to spawn sudo {program}: {error}"))
+    } else if privilege_mode.eq_ignore_ascii_case("pkexec") {
+        let mut cmd = Command::new("pkexec");
+        cmd.arg(program);
+        cmd.args(args);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.spawn()
+            .map_err(|error| format!("failed to spawn pkexec {program}: {error}"))
+    } else {
+        let mut cmd = Command::new(program);
+        cmd.args(args);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.spawn()
+            .map_err(|error| format!("failed to spawn {program}: {error}"))
     }
 }
 
-fn run(options: Options) -> Result<(), String> {
-    let plan = options.plan();
-    plan.validate().map_err(|error| error.to_string())?;
-    let apply = plan.render_apply_nft().map_err(|error| error.to_string())?;
-    let delete = plan
-        .render_delete_nft()
-        .map_err(|error| error.to_string())?;
-    if options.print_only {
-        print!("{apply}\n--- cleanup ---\n{delete}");
-        return Ok(());
+fn spawn_transparent_tcp(
+    transparent_bin: &str,
+    listen_addr: SocketAddr,
+    transit_local: SocketAddr,
+    options: &Options,
+    runtime_uid: u32,
+    runtime_gid: u32,
+) -> Result<std::process::Child, String> {
+    if !Path::new(transparent_bin).is_file() {
+        return Err(format!(
+            "transparent-tcp binary not found: {transparent_bin}"
+        ));
     }
 
-    let stopping = Arc::new(AtomicBool::new(false));
-    install_signal_handlers(Arc::clone(&stopping))?;
-    delete_table(&options.table_name);
-    run_nft(&apply)?;
-    println!(
-        "chimera_transparent_runtime=rules_applied table={} listen={} exempt_uid={}",
-        options.table_name, options.listen, options.exempt_uid
+    let mut cmd = Command::new(transparent_bin);
+    cmd.arg("--listen").arg(listen_addr.to_string());
+    cmd.arg("--transit-local").arg(transit_local.to_string());
+    if options.direct_mode != "disabled" {
+        cmd.arg("--direct-mode").arg(&options.direct_mode);
+        if options.direct_timeout_ms > 0 {
+            cmd.arg("--direct-timeout-ms")
+                .arg(options.direct_timeout_ms.to_string());
+        }
+    }
+    if options.initial_read_timeout_ms > 0 {
+        cmd.arg("--initial-read-timeout-ms")
+            .arg(options.initial_read_timeout_ms.to_string());
+    }
+
+    cmd.env(
+        "CHIMERA_SERVICE_FWMARK",
+        format!("{}", options.service_fwmark),
     );
 
-    let mut child = match spawn_transparent(&options) {
-        Ok(child) => child,
-        Err(error) => {
-            let _ = run_nft(&delete);
-            return Err(error);
-        }
-    };
-
-    let result = supervise_child(&mut child, options.run_ms, Arc::clone(&stopping));
-    let _ = child.kill();
-    let _ = child.wait();
-    let cleanup = run_nft(&delete);
-    match (result, cleanup) {
-        (Ok(()), Ok(())) => {
-            println!("chimera_transparent_runtime=stopped cleanup=ok");
-            Ok(())
-        }
-        (Err(error), Ok(())) => Err(error),
-        (Ok(()), Err(error)) => Err(format!("cleanup failed: {error}")),
-        (Err(error), Err(cleanup_error)) => {
-            Err(format!("{error}; cleanup failed: {cleanup_error}"))
-        }
-    }
-}
-
-fn spawn_transparent(options: &Options) -> Result<Child, String> {
-    let mut command = Command::new(&options.transparent_bin);
-    command
-        .arg("--listen")
-        .arg(&options.listen)
-        .arg("--transit-local")
-        .arg(&options.transit_local)
-        .arg("--direct-mode")
-        .arg(&options.direct_mode)
-        .arg("--direct-timeout-ms")
-        .arg(options.direct_timeout_ms.to_string())
-        .arg("--initial-read-timeout-ms")
-        .arg(options.initial_read_timeout_ms.to_string())
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-    if let Some(gid) = options.transparent_gid {
-        command.gid(gid);
-    }
-    if let Some(uid) = options.transparent_uid {
-        command.uid(uid);
-    }
-    command
-        .spawn()
-        .map_err(|error| format!("spawn transparent tcp failed: {error}"))
-}
-
-fn supervise_child(
-    child: &mut Child,
-    run_ms: Option<u64>,
-    stopping: Arc<AtomicBool>,
-) -> Result<(), String> {
-    let started = Instant::now();
-    loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|error| format!("wait transparent child failed: {error}"))?
-        {
-            if status.success() {
-                return Ok(());
-            }
-            return Err(format!("transparent child exited: {status}"));
-        }
-        if stopping.load(Ordering::SeqCst) {
-            return Ok(());
-        }
-        if let Some(limit) = run_ms
-            && started.elapsed() >= Duration::from_millis(limit)
-        {
-            return Ok(());
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-}
-
-fn run_nft(script: &str) -> Result<(), String> {
-    run_nft_script(script)
-}
-
-fn delete_table(name: &str) {
-    let _ = run_nft_script(&format!("delete table inet {name}"));
-}
-
-fn install_signal_handlers(stopping: Arc<AtomicBool>) -> Result<(), String> {
-    ctrlc::set_handler(move || {
-        stopping.store(true, Ordering::SeqCst);
-    })
-    .map_err(|error| format!("install signal handler failed: {error}"))
-}
-
-fn parse_listen_port(value: &str) -> Result<u16, String> {
-    let port = value
-        .rsplit_once(':')
-        .ok_or_else(|| "listen address must include port".to_string())?
-        .1;
-    parse_u16(port, "listen port")
-}
-
-fn arg_value(args: &[String], index: usize, flag: &str) -> Result<String, String> {
-    args.get(index + 1)
-        .cloned()
-        .ok_or_else(|| format!("missing value for {flag}"))
-}
-
-fn env_value(name: &str) -> Option<String> {
-    env::var(name)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn parse_uid_list_env(name: &str) -> Option<Vec<u32>> {
-    env::var(name).ok().map(|value| {
-        value
-            .split(',')
-            .map(|item| item.trim())
-            .filter(|item| !item.is_empty())
-            .map(|item| parse_u32(item, name).unwrap_or(0))
-            .filter(|uid| *uid != 0)
-            .collect::<Vec<u32>>()
-    })
-}
-
-fn parse_string_list_env(name: &str) -> Option<Vec<String>> {
-    env::var(name).ok().map(|value| {
-        value
-            .split(',')
-            .map(|item| item.trim())
-            .filter(|item| !item.is_empty())
-            .map(|item| item.to_string())
-            .collect::<Vec<String>>()
-    })
-}
-
-fn parse_u16_list_env(name: &str) -> Option<Vec<u16>> {
-    env::var(name).ok().map(|value| {
-        value
-            .split(',')
-            .map(|item| item.trim())
-            .filter(|item| !item.is_empty())
-            .map(|item| parse_u16(item, name).unwrap_or(0))
-            .filter(|port| *port != 0)
-            .collect::<Vec<u16>>()
-    })
-}
-
-fn required_value(value: Option<String>, error: &str) -> Result<String, String> {
-    value
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| error.to_string())
-}
-
-fn parse_positive_u64(value: &str, name: &str) -> Result<u64, String> {
-    let parsed = value
-        .parse::<u64>()
-        .map_err(|_| format!("{name} must be a positive integer"))?;
-    if parsed == 0 {
-        return Err(format!("{name} must be positive"));
-    }
-    Ok(parsed)
-}
-
-fn parse_u16(value: &str, name: &str) -> Result<u16, String> {
-    let parsed = value
-        .parse::<u16>()
-        .map_err(|_| format!("{name} must be a positive integer"))?;
-    if parsed == 0 {
-        return Err(format!("{name} must be > 0"));
-    }
-    Ok(parsed)
-}
-
-fn parse_u32(value: &str, name: &str) -> Result<u32, String> {
-    if value.starts_with("0x") || value.starts_with("0X") {
-        u32::from_str_radix(&value[2..], 16)
-    } else {
-        value.parse::<u32>()
-    }
-    .map_err(|_| format!("{name} must be a non-negative integer"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Options;
-
-    #[test]
-    fn options_parse_runtime_values() {
-        let args = vec![
-            "--transparent-bin".to_string(),
-            "/tmp/chimera-transparent-tcp".to_string(),
-            "--listen".to_string(),
-            "0.0.0.0:18144".to_string(),
-            "--transit-local".to_string(),
-            "127.0.0.1:18142".to_string(),
-            "--direct-mode".to_string(),
-            "disabled".to_string(),
-            "--exempt-uid".to_string(),
-            "65534".to_string(),
-            "--transparent-uid".to_string(),
-            "65534".to_string(),
-            "--transparent-gid".to_string(),
-            "65534".to_string(),
-            "--capture-cidr-v4".to_string(),
-            "203.0.113.10/32".to_string(),
-            "--capture-tcp-port".to_string(),
-            "443".to_string(),
-            "--run-ms".to_string(),
-            "500".to_string(),
-        ];
-        let parsed = Options::parse(&args).unwrap_or_else(|error| {
-            unreachable!("options should parse: {error}");
-        });
-        assert_eq!(parsed.transparent_bin, "/tmp/chimera-transparent-tcp");
-        assert_eq!(parsed.listen, "0.0.0.0:18144");
-        assert_eq!(parsed.transit_local, "127.0.0.1:18142");
-        assert_eq!(parsed.direct_mode, "disabled");
-        assert_eq!(parsed.exempt_uid, 65534);
-        assert_eq!(parsed.transparent_uid, Some(65534));
-        assert_eq!(parsed.transparent_gid, Some(65534));
-        assert_eq!(parsed.capture_cidrs_v4, vec!["203.0.113.10/32"]);
-        assert_eq!(parsed.capture_tcp_ports, vec![443]);
-        assert_eq!(parsed.run_ms, Some(500));
-    }
-
-    #[test]
-    fn options_reject_bad_direct_mode() {
-        let args = vec![
-            "--listen".to_string(),
-            "127.0.0.1:18144".to_string(),
-            "--transit-local".to_string(),
-            "127.0.0.1:18142".to_string(),
-            "--direct-mode".to_string(),
-            "bad".to_string(),
-            "--exempt-uid".to_string(),
-            "65534".to_string(),
-        ];
-        assert!(Options::parse(&args).is_err());
-    }
-
-    #[test]
-    fn options_reject_auto_direct_mode() {
-        let args = vec![
-            "--listen".to_string(),
-            "127.0.0.1:18144".to_string(),
-            "--transit-local".to_string(),
-            "127.0.0.1:18142".to_string(),
-            "--direct-mode".to_string(),
-            "auto".to_string(),
-            "--exempt-uid".to_string(),
-            "65534".to_string(),
-        ];
-        assert!(
-            Options::parse(&args)
-                .is_err_and(|error| error.contains("direct-mode auto is forbidden"))
+    if runtime_uid == 0 || runtime_gid == 0 {
+        return Err(
+            "refusing to run transparent-tcp as root (runtime_uid/runtime_gid must be non-zero)"
+                .to_owned(),
         );
     }
 
-    #[test]
-    fn options_reject_transparent_uid_exempt_uid_mismatch() {
-        let args = vec![
-            "--listen".to_string(),
-            "127.0.0.1:18144".to_string(),
-            "--transit-local".to_string(),
-            "127.0.0.1:18142".to_string(),
-            "--exempt-uid".to_string(),
-            "1000".to_string(),
-            "--transparent-uid".to_string(),
-            "1001".to_string(),
-        ];
-        let error = match Options::parse(&args) {
-            Ok(_) => unreachable!("uid mismatch must fail closed"),
-            Err(error) => error,
-        };
-        assert!(error.contains("transparent-uid must match exempt-uid"));
-    }
+    cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+
+    cmd.spawn()
+        .map_err(|error| format!("failed to spawn transparent-tcp: {error}"))
+}
+
+fn setup_signal_handler() {
+    let _ = ctrlc::set_handler(move || {
+        eprintln!("transparent-runtime: caught interrupt, exiting");
+        std::process::exit(0);
+    });
 }

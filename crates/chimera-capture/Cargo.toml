@@ -13,3 +13,4 @@ chimera-core = { path = "../chimera-core" }
 nix = { version = "0.31.3", features = ["socket", "net"] }
 ctrlc = "3"
 socket2 = "0.6"
+dns-lookup = "2"
