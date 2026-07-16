@@ -1123,14 +1123,21 @@ listener_only_bootstrap=0
 if [[ -z "${CONFIGURED_PEER_ENDPOINT:-}" && "$installer_dynamic_discovery_configured" -eq 0 && "$bootstrap_authority_present" -eq 0 ]]; then
   listener_only_bootstrap=1
 fi
-if [[ "$listener_only_bootstrap" -eq 1 ]]; then
+
+# Preserve any existing peer-egress.env setting or an explicitly exported
+# variable. Only default a missing value based on bootstrap vs configured.
+existing_allow_bound_transit="$(read_existing_peer_env_kv CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT)"
+if [[ -n "${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT+x}" ]]; then
+  : # explicit environment value wins
+elif [[ -n "$existing_allow_bound_transit" ]]; then
+  CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="$existing_allow_bound_transit"
+  export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
+elif [[ "$listener_only_bootstrap" -eq 1 ]]; then
   CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="false"
   export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
 else
-  if [[ "${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT:-}" != "false" ]]; then
-    CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="true"
-    export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
-  fi
+  CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="true"
+  export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
 fi
 
 if [[ -n "${CONFIGURED_PEER_ENDPOINT:-}" ]]; then
