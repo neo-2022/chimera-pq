@@ -33,6 +33,7 @@ struct Options {
     initial_read_timeout_ms: u64,
     connect_retry_count: usize,
     connect_retry_delay_ms: u64,
+    state_file: Option<String>,
     #[cfg(test)]
     static_destination: Option<String>,
 }
@@ -66,6 +67,7 @@ impl Options {
                 .map(|value| parse_positive_u64(&value, "connect-retry-delay-ms"))
                 .transpose()?
                 .unwrap_or(150);
+        let mut state_file = env_value("CHIMERA_STATE_FILE");
 
         let mut index = 0usize;
         while index < args.len() {
@@ -92,6 +94,7 @@ impl Options {
                 "--connect-retry-delay-ms" => {
                     connect_retry_delay_ms = parse_positive_u64(value, "connect-retry-delay-ms")?;
                 }
+                "--state-file" => state_file = Some(value.clone()),
                 _ => return Err(format!("unknown flag: {flag}")),
             }
             index += 2;
@@ -109,6 +112,7 @@ impl Options {
             initial_read_timeout_ms,
             connect_retry_count,
             connect_retry_delay_ms,
+            state_file,
             #[cfg(test)]
             static_destination: None,
         })
@@ -167,7 +171,21 @@ fn handle_client(mut client: TcpStream, options: &Options) -> Result<(), String>
             eprintln!(
                 "event=transparent_route_selected route=transit reason=direct_mode_disabled destination_state=resolved"
             );
-            relay_plain(client, transit)
+            let (bytes_up, bytes_down) = relay_plain(client, transit)?;
+            if let Some(state_file) = &options.state_file {
+                let proof = chimera_capture::flow_proof::FlowProof::new(
+                    "local_egress_via_secure_peer",
+                    bytes_up,
+                    bytes_down,
+                );
+                if let Err(error) = chimera_capture::flow_proof::write_flow_proof(
+                    std::path::Path::new(state_file),
+                    &proof,
+                ) {
+                    eprintln!("event=flow_proof_write_failed reason=\"{error}\"");
+                }
+            }
+            Ok(())
         }
     }
 }
@@ -258,7 +276,7 @@ fn connect_transit(
     Ok(transit)
 }
 
-fn relay_plain(left: TcpStream, right: TcpStream) -> Result<(), String> {
+fn relay_plain(left: TcpStream, right: TcpStream) -> Result<(u64, u64), String> {
     let mut left_read = left
         .try_clone()
         .map_err(|error| format!("clone left stream failed: {error}"))?;
@@ -270,22 +288,32 @@ fn relay_plain(left: TcpStream, right: TcpStream) -> Result<(), String> {
 
     let a = thread::spawn(move || copy_until_eof(&mut left_read, &mut right_write));
     let b = thread::spawn(move || copy_until_eof(&mut right_read, &mut left_write));
-    let _ = a.join().map_err(|_| "left relay panicked".to_string())?;
-    let _ = b.join().map_err(|_| "right relay panicked".to_string())?;
-    Ok(())
+    let bytes_up = a
+        .join()
+        .map_err(|_| "left relay panicked".to_string())?
+        .map_err(|error| format!("left relay failed: {error}"))?;
+    let bytes_down = b
+        .join()
+        .map_err(|_| "right relay panicked".to_string())?
+        .map_err(|error| format!("right relay failed: {error}"))?;
+    Ok((bytes_up, bytes_down))
 }
 
-fn copy_until_eof(reader: &mut TcpStream, writer: &mut TcpStream) -> Result<(), String> {
+fn copy_until_eof(reader: &mut TcpStream, writer: &mut TcpStream) -> Result<u64, String> {
     let mut buf = vec![0_u8; COPY_BUFFER_BYTES];
+    let mut total = 0_u64;
     loop {
         match reader.read(&mut buf) {
             Ok(0) => {
                 let _ = writer.shutdown(Shutdown::Write);
-                return Ok(());
+                return Ok(total);
             }
-            Ok(n) => writer
-                .write_all(&buf[..n])
-                .map_err(|error| format!("relay write failed: {error}"))?,
+            Ok(n) => {
+                writer
+                    .write_all(&buf[..n])
+                    .map_err(|error| format!("relay write failed: {error}"))?;
+                total = total.saturating_add(n as u64);
+            }
             Err(error) => return Err(format!("relay read failed: {error}")),
         }
     }
@@ -460,6 +488,7 @@ mod tests {
             initial_read_timeout_ms: 500,
             connect_retry_count: 0,
             connect_retry_delay_ms: 50,
+            state_file: None,
             static_destination: None,
         }
     }
@@ -607,6 +636,78 @@ mod tests {
             unreachable!("client read should work: {error}");
         });
         assert_eq!(&reply, b"forced-transit:hello");
+        drop(direct_target);
+    }
+
+    #[test]
+    fn transparent_tcp_writes_flow_proof_after_relay() {
+        let direct_target = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("direct target listener should bind: {error}");
+        });
+        let direct_target_addr = direct_target.local_addr().unwrap_or_else(|error| {
+            unreachable!("direct target addr should be available: {error}");
+        });
+
+        let transit = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transit listener should bind: {error}");
+        });
+        let transit_addr = transit.local_addr().unwrap_or_else(|error| {
+            unreachable!("transit addr should be available: {error}");
+        });
+        start_echo_transit(transit, b"proof:");
+
+        let transparent = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|error| {
+            unreachable!("transparent listener should bind: {error}");
+        });
+        let transparent_addr = transparent.local_addr().unwrap_or_else(|error| {
+            unreachable!("transparent addr should be available: {error}");
+        });
+
+        let state_path = std::env::temp_dir().join(format!(
+            "chimera_flow_proof_test_{}.json",
+            std::process::id()
+        ));
+        let flow_path = chimera_capture::flow_proof::default_flow_proof_path(&state_path);
+        let _ = std::fs::remove_file(&state_path);
+        let _ = std::fs::remove_file(&flow_path);
+
+        let mut options = base_options(&transit_addr.to_string());
+        options.listen = transparent_addr.to_string();
+        options.static_destination = Some(direct_target_addr.to_string());
+        options.state_file = Some(state_path.to_string_lossy().to_string());
+        thread::spawn(move || {
+            let Ok((client, _)) = transparent.accept() else {
+                return;
+            };
+            let _ = handle_client(client, &options);
+        });
+
+        let mut client = TcpStream::connect(transparent_addr).unwrap_or_else(|error| {
+            unreachable!("client should connect to transparent listener: {error}");
+        });
+        client.write_all(b"proof").unwrap_or_else(|error| {
+            unreachable!("client write should work: {error}");
+        });
+        let mut reply = [0_u8; 11];
+        client.read_exact(&mut reply).unwrap_or_else(|error| {
+            unreachable!("client read should work: {error}");
+        });
+        assert_eq!(&reply, b"proof:proof");
+        drop(client);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let flow_text = std::fs::read_to_string(&flow_path).unwrap_or_else(|error| {
+            unreachable!("flow proof should exist: {error}");
+        });
+        assert!(flow_text.contains("\"kind\":\"chimera_datapath_flow_proof\""));
+        assert!(flow_text.contains("\"transparent_flow_observed\":true"));
+        assert!(flow_text.contains("\"counter_delta_ok\":true"));
+        assert!(flow_text.contains("\"secure_peer_egress_observed\":true"));
+        assert!(flow_text.contains("\"secure_peer_bytes_delta_ok\":true"));
+        assert!(flow_text.contains("\"network_state\":\"modified\""));
+        assert!(flow_text.contains("\"bytes_up\":"));
+        assert!(flow_text.contains("\"bytes_down\":"));
+        let _ = std::fs::remove_file(&flow_path);
         drop(direct_target);
     }
 

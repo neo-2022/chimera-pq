@@ -2511,10 +2511,10 @@ run_chimera_cli() {
 
 remove_state_file_for_datapath_apply() {
   if should_run_chimera_cli_with_sudo up; then
-    sudo -n rm -f "$STATE_FILE"
+    sudo -n rm -f "$STATE_FILE" "${STATE_FILE}.flow.json"
     return $?
   fi
-  rm -f "$STATE_FILE"
+  rm -f "$STATE_FILE" "${STATE_FILE}.flow.json"
 }
 
 default_tun_device_name() {
@@ -2543,6 +2543,7 @@ clear_runtime_generated_state() {
   clear_peer_egress_transit_lane_bindings_runtime_state
   rm -f \
     "$STATE_FILE" \
+    "${STATE_FILE}.flow.json" \
     "$PEER_EGRESS_STATE_FILE" \
     "$PEER_UPDATE_STATE_FILE" \
     "$MESH_DISCOVERY_OUT_FILE" \
@@ -4691,6 +4692,9 @@ start_runtime() {
       fi
       echo "start_status=partial mode=listener_only node_runtime=$self_loop_node_runtime node=$self_loop_node_status transparent_runtime=$self_loop_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$self_loop_fail_closed reason=self_loop_listener_only"
       return "$self_loop_exit_rc"
+    fi
+    if [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
+      upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_STATE_FILE' "$STATE_FILE"
     fi
     local transparent_start_rc=0
     systemctl --user start "$DATAPATH_SERVICE_UNIT" >/dev/null 2>&1 || transparent_start_rc=$?

@@ -960,7 +960,7 @@ configure_peer_egress_env() {
     allow_bound_transit="${CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT}"
   elif [[ -n "$previous_allow_bound_transit" ]]; then
     allow_bound_transit="$previous_allow_bound_transit"
-  elif [[ "$mode" == "node" ]]; then
+  elif [[ "$mode" == "node" && -n "${CHIMERA_MESH_NAMESPACE:-}" && -n "${CHIMERA_MESH_LOCAL_NODE:-}" ]]; then
     allow_bound_transit="true"
   else
     allow_bound_transit="false"

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod flow_proof;
 pub mod nft_exec;
 pub mod redirect;
 
