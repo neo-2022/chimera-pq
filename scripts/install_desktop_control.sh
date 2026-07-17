@@ -1091,6 +1091,8 @@ configure_transparent_runtime_env() {
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_CAPTURE_DOMAINS_FILE' "$capture_domains_file"
   local capture_tcp_ports="${CHIMERA_CAPTURE_TCP_PORTS:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_TCP_PORTS 443)}"
   upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_CAPTURE_TCP_PORTS' "$capture_tcp_ports"
+  local capture_cidr_v4="${CHIMERA_CAPTURE_CIDR_V4:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_CIDR_V4 "")}"
+  upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_CAPTURE_CIDR_V4' "$capture_cidr_v4"
   chmod 600 "$TRANSPARENT_RUNTIME_ENV_FILE"
   echo "transparent_runtime_listen=$listen"
   echo "transparent_runtime_transit_local=$transit_local"

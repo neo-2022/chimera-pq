@@ -514,20 +514,26 @@ fn create_privileged_child(
         }
         cmd.arg(program);
         cmd.args(args);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         cmd.spawn()
             .map_err(|error| format!("failed to spawn sudo {program}: {error}"))
     } else if privilege_mode.eq_ignore_ascii_case("pkexec") {
         let mut cmd = Command::new("pkexec");
         cmd.arg(program);
         cmd.args(args);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         cmd.spawn()
             .map_err(|error| format!("failed to spawn pkexec {program}: {error}"))
     } else {
         let mut cmd = Command::new(program);
         cmd.args(args);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         cmd.spawn()
             .map_err(|error| format!("failed to spawn {program}: {error}"))
     }
