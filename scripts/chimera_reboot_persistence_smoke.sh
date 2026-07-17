@@ -21,6 +21,10 @@ home_dir="$tmp_dir/home"
 unit_state_dir="$config_dir/systemd/user/default.target.wants"
 active_units_file="$cache_dir/active-units.txt"
 started_units_file="$cache_dir/started-units.txt"
+# Hermetic synthetic release fixtures; keep session-process-guard independent of
+# a prior build_release.sh run. The values are not asserted against real releases.
+smoke_release_version="0.1.86"
+smoke_release_bundle_sha="$(printf '%064d' 1)"
 
 mkdir -p "$bin_dir" "$config_dir/chimera" "$cache_dir/chimera" \
   "$runtime_dir" "$install_root" "$unit_state_dir" "$home_dir/.local/bin" \
@@ -36,8 +40,8 @@ if [[ -d "$ROOT_DIR/bin" ]]; then
 fi
 
 # Version/sha files expected by chimera-sh.
-printf '%s\n' "0.1.170" >"$install_root/.chimera_release_version"
-printf '%s\n' "b35795d0b0852c61204488f297953dfcdc816172a551facaa658fea22f9d2426" >"$install_root/.chimera_release_bundle.sha256"
+printf '%s\n' "$smoke_release_version" >"$install_root/.chimera_release_version"
+printf '%s\n' "$smoke_release_bundle_sha" >"$install_root/.chimera_release_bundle.sha256"
 
 # Fake chimera-cli: returns invite token for selected-invite-token, no-ops otherwise.
 cat >"$install_root/bin/chimera-cli" <<'EOF'

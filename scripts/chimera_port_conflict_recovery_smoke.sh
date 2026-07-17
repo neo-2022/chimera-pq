@@ -24,7 +24,11 @@ mkdir -p "$bin_dir" "$cache_dir/chimera" "$config_dir/chimera" "$runtime_dir" \
   "$install_root/scripts"
 
 cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
-printf '%s\n' "0.1.170" >"$install_root/.chimera_release_version"
+cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
+# Hermetic synthetic release fixture; keep session-process-guard independent of
+# a prior build_release.sh run. The value is not asserted against real releases.
+smoke_release_version="0.1.86"
+printf '%s\n' "$smoke_release_version" >"$install_root/.chimera_release_version"
 
 # Node config with a fixed peer listen port to trigger the conflict path.
 cat >"$node_conf" <<EOF

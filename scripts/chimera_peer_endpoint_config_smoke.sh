@@ -23,6 +23,10 @@ install_a="$tmp_dir/install-a"
 install_b="$tmp_dir/install-b"
 peer_port="19142"
 peer_endpoint="127.0.0.1:$peer_port"
+# Hermetic synthetic release fixtures; keep session-process-guard independent of
+# a prior build_release.sh run. The values are not asserted against real releases.
+smoke_release_version="0.1.86"
+smoke_release_bundle_sha="$(printf '%064d' 1)"
 
 mkdir -p "$bin_dir" \
   "$config_a/chimera" "$cache_a/chimera" "$home_a/.local/bin" "$home_a/.local/share/applications" \
@@ -34,8 +38,8 @@ for root in "$install_a" "$install_b"; do
   cp -r "$ROOT_DIR/scripts" "$root/"
   cp -r "$ROOT_DIR/deploy" "$root/"
   cp -r "$ROOT_DIR/configs" "$root/"
-  printf '%s\n' "0.1.170" >"$root/.chimera_release_version"
-  printf '%s\n' "b35795d0b0852c61204488f297953dfcdc816172a551facaa658fea22f9d2426" >"$root/.chimera_release_bundle.sha256"
+  printf '%s\n' "$smoke_release_version" >"$root/.chimera_release_version"
+  printf '%s\n' "$smoke_release_bundle_sha" >"$root/.chimera_release_bundle.sha256"
 done
 
 # Fake systemctl/loginctl (boot recovery is not the focus here).
@@ -88,6 +92,7 @@ if ! env \
   XDG_CONFIG_HOME="$config_a" \
   XDG_CACHE_HOME="$cache_a" \
   PATH="$bin_dir:$PATH" \
+  CHIMERA_AUTO_START_AFTER_INSTALL=0 \
   CHIMERA_NODE_PEER_LISTEN_ADDR="0.0.0.0:$peer_port" \
   CHIMERA_PEER_EGRESS_TOKEN="test-token-a" \
   bash "$install_a/scripts/install_desktop_control.sh" >"$tmp_dir/install-a.log" 2>&1; then
@@ -106,6 +111,7 @@ if ! env \
   XDG_CONFIG_HOME="$config_b" \
   XDG_CACHE_HOME="$cache_b" \
   PATH="$bin_dir:$PATH" \
+  CHIMERA_AUTO_START_AFTER_INSTALL=0 \
   CHIMERA_NODE_ENDPOINT="$peer_endpoint" \
   CHIMERA_PEER_EGRESS_TOKEN="test-token-b" \
   bash "$install_b/scripts/install_desktop_control.sh" >"$tmp_dir/install-b.log" 2>&1; then
