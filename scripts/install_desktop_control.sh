@@ -982,8 +982,16 @@ configure_peer_egress_env() {
     peer_listen="${CHIMERA_PEER_EGRESS_PEER_LISTEN:-$desired_peer_listen}"
     local_listen="${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-$desired_local_listen}"
   else
+    # Environment variables must override preserved previous values so that
+    # operators can reconfigure listen addresses without manual file edits.
     peer_listen="${CHIMERA_PEER_EGRESS_PEER_LISTEN:-${previous_peer_listen:-$desired_peer_listen}}"
     local_listen="${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-${previous_local_listen:-$desired_local_listen}}"
+    if [[ -n "${CHIMERA_PEER_EGRESS_PEER_LISTEN:-}" ]]; then
+      peer_listen="$CHIMERA_PEER_EGRESS_PEER_LISTEN"
+    fi
+    if [[ -n "${CHIMERA_PEER_EGRESS_LOCAL_LISTEN:-}" ]]; then
+      local_listen="$CHIMERA_PEER_EGRESS_LOCAL_LISTEN"
+    fi
   fi
   if [[ ! "$local_listen" == *:* ]]; then
     local_listen="127.0.0.1:${local_listen}"
