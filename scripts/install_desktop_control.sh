@@ -1052,6 +1052,15 @@ configure_transparent_runtime_env() {
   local default_uid default_gid exempt_uid transparent_uid transparent_gid
   default_uid="$(id -u)"
   default_gid="$(id -g)"
+  # Root-only systems (e.g. VPS without regular users) must not run
+  # transparent-tcp as root; fall back to nobody (65534) so the runtime can
+  # start safely without manual operator action.
+  if [[ "$default_uid" -eq 0 ]]; then
+    default_uid="65534"
+  fi
+  if [[ "$default_gid" -eq 0 ]]; then
+    default_gid="65534"
+  fi
   exempt_uid="${CHIMERA_REDIRECT_EXEMPT_UID:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_REDIRECT_EXEMPT_UID "$default_uid")}"
   transparent_uid="${CHIMERA_TRANSPARENT_RUNTIME_UID:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_RUNTIME_UID "$default_uid")}"
   transparent_gid="${CHIMERA_TRANSPARENT_RUNTIME_GID:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_RUNTIME_GID "$default_gid")}"
