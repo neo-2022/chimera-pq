@@ -1164,6 +1164,12 @@ elif [[ -n "$existing_allow_bound_transit" ]]; then
 elif [[ "$listener_only_bootstrap" -eq 1 ]]; then
   CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="false"
   export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
+elif [[ -z "${CHIMERA_MESH_NAMESPACE:-}" || -z "${CHIMERA_MESH_LOCAL_NODE:-}" ]]; then
+  # Bound transit requires an authoritative mesh context to generate transit
+  # lane bindings. Without it, enabling bound transit would hard-fail the
+  # Rust runtime on missing transit-lane-bindings file.
+  CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="false"
+  export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
 else
   CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT="true"
   export CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT
