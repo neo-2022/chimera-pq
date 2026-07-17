@@ -392,7 +392,7 @@ fn install_redirect_rules(
     }
 
     commands.push_str(&format!(
-        "add rule ip {table} {chain} meta fwmark 0x{service_fwmark:x} return comment \"service self-exempt\"\n"
+        "add rule ip {table} {chain} meta mark 0x{service_fwmark:x} return comment \"service self-exempt\"\n"
     ));
     commands.push_str(&format!(
         "add rule ip {table} {chain} meta skuid {exempt_uid} return comment \"runtime UID exempt\"\n"
