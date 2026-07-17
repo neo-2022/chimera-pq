@@ -428,7 +428,7 @@ fn install_redirect_rules(
         ));
     }
 
-    let mut child = create_privileged_child("nft", &["-f", "-"], use_sudo, privilege_mode, true)?;
+    let mut child = create_privileged_child("nft", &["-f", "-"], use_sudo, privilege_mode, false)?;
     {
         let stdin = child
             .stdin
@@ -482,7 +482,7 @@ fn cleanup_redirect_rules(state: &CleanupState) -> Result<(), String> {
         &["-f", "-"],
         state.use_sudo,
         &state.privilege_mode,
-        true,
+        false,
     )?;
     {
         let stdin = child
