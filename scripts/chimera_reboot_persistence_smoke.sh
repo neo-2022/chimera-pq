@@ -27,7 +27,7 @@ smoke_release_version="0.1.86"
 smoke_release_bundle_sha="$(printf '%064d' 1)"
 
 mkdir -p "$bin_dir" "$config_dir/chimera" "$cache_dir/chimera" \
-  "$runtime_dir" "$install_root" "$unit_state_dir" "$home_dir/.local/bin" \
+  "$runtime_dir" "$install_root/bin" "$unit_state_dir" "$home_dir/.local/bin" \
   "$home_dir/.local/share/applications"
 
 # Copy the runtime tree.
