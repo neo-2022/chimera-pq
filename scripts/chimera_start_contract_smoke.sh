@@ -491,6 +491,7 @@ EOF
   [[ "$output" == *"transparent_runtime=skipped"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: transparent runtime should be skipped output=$output"
   [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: datapath apply should be skipped output=$output"
   grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: node service was not started"
+  grep -q '^--user reset-failed chimera-datapath.service chimera-runtime.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: skipped datapath failure state was not reset"
   ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: datapath service should not start"
   ! grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: node should stay running"
 

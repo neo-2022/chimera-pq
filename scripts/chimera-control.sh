@@ -4739,6 +4739,7 @@ start_runtime() {
       return "$self_loop_exit_rc"
     fi
     if transparent_capture_targets_empty; then
+      systemctl --user reset-failed "$DATAPATH_SERVICE_UNIT" "$RUNTIME_SERVICE_UNIT" >/dev/null 2>&1 || true
       site_auto_watch_start >/dev/null 2>&1 || true
       refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
       echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=true fail_closed=true reason=transparent_capture_targets_empty"
