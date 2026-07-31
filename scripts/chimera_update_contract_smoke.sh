@@ -1461,6 +1461,7 @@ ExecStart=__CHIMERA_ROOT__/scripts/chimera-sh -start
 EOF
   printf '%s\n' 'CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000' \
     >"$release_dir/configs/mesh_bootstrap.env.example"
+  cp "$ROOT_DIR/configs/adaptive_domains.txt" "$release_dir/configs/adaptive_domains.txt"
   printf '%s\n' 'https://gitverse.ru/api/repos/ArtReg/chimera/raw/branch/main/chimera.sh' \
     >"$release_dir/configs/update_gitvers_bootstrap_urls.example.list"
   chmod +x "$release_dir/scripts/"*.sh "$release_dir/bin/chimera-bootstrap"
@@ -1702,6 +1703,91 @@ EOF
   [[ "${CHIMERA_PEER_EGRESS_TRANSIT_LANE_BINDINGS_FILE:-}" == "$injected_path" ]] \
     || fail "quoted preserved lane bindings path did not round-trip"
   [[ ! -f "$marker" ]] || fail "quoted preserved lane bindings path executed during explicit source"
+  rm -rf "$tmp_dir"
+)
+
+case_auto_update_preserves_legacy_capture_domains_env() (
+  local tmp_dir old_home xdg_config xdg_cache xdg_data local_bin fake_bin archive checksum env_file legacy_path output rc
+  tmp_dir="$(mktemp -d)"
+  old_home="$tmp_dir/home/chimera"
+  xdg_config="$tmp_dir/xdg-config"
+  xdg_cache="$tmp_dir/xdg-cache"
+  xdg_data="$tmp_dir/xdg-data"
+  local_bin="$tmp_dir/bin"
+  fake_bin="$tmp_dir/fake-bin"
+  env_file="$xdg_config/chimera/transparent-runtime.env"
+  legacy_path="/safe/test/adaptive domains.txt"
+  mkdir -p "$old_home/scripts" "$xdg_config/chimera" "$xdg_cache" "$xdg_data" "$local_bin" "$fake_bin"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$old_home/scripts/chimera-sh"
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl" "$fake_bin/nft"
+
+  make_fake_release_archive_with_current_installer "$tmp_dir" "0.1.99"
+  archive="$tmp_dir/chimera-pq-release.tar.gz"
+  checksum="$tmp_dir/chimera-pq-release.tar.gz.sha256"
+
+  printf 'CHIMERA_CAPTURE_DOMAINS_FILE="%s"\n' "$legacy_path" >"$env_file"
+  printf '%s\n' 'CHIMERA_CAPTURE_TCP_PORTS=443' >>"$env_file"
+
+  set +e
+  output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_HOME="$old_home" \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_PEER_EGRESS_TOKEN=test-token \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "legacy quoted capture domains env install failed: $output"
+  unset CHIMERA_CAPTURE_DOMAINS_FILE
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_file"
+  set +a
+  [[ "${CHIMERA_CAPTURE_DOMAINS_FILE:-}" == "$legacy_path" ]] \
+    || fail "legacy quoted capture domains path did not round-trip"
+
+  printf "%s\n" "CHIMERA_CAPTURE_DOMAINS_FILE=\\'\\'" >"$env_file"
+  printf '%s\n' 'CHIMERA_CAPTURE_TCP_PORTS=443' >>"$env_file"
+  unset CHIMERA_CAPTURE_DOMAINS_FILE
+
+  set +e
+  output="$(CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_HOME="$old_home" \
+    CHIMERA_LOCAL_BIN="$local_bin" \
+    HOME="$tmp_dir/home/user" \
+    XDG_CONFIG_HOME="$xdg_config" \
+    XDG_CACHE_HOME="$xdg_cache" \
+    XDG_DATA_HOME="$xdg_data" \
+    PATH="$fake_bin:$PATH" \
+    CHIMERA_PEER_EGRESS_TOKEN=test-token \
+    bash "$ROOT_DIR/scripts/install_release.sh" "$archive" "$checksum" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "legacy empty capture domains env install failed: $output"
+  unset CHIMERA_CAPTURE_DOMAINS_FILE
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_file"
+  set +a
+  [[ "${CHIMERA_CAPTURE_DOMAINS_FILE:-}" == "$old_home/configs/adaptive_domains.txt" ]] \
+    || fail "legacy empty capture domains env did not normalize to default adaptive domains file"
   rm -rf "$tmp_dir"
 )
 
@@ -3149,6 +3235,7 @@ case_auto_update_preserves_bound_transit_env
 case_auto_update_preserves_explicit_bound_transit_disable
 case_peer_egress_env_shell_quotes_lane_bindings_path
 case_auto_update_preserves_quoted_lane_bindings_env
+case_auto_update_preserves_legacy_capture_domains_env
 case_auto_update_materialize_preserves_explicit_runtime_settings
 case_peer_token_stays_in_private_peer_env
 case_failed_install_restores_previous_release

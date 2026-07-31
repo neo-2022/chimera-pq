@@ -81,7 +81,7 @@ diag-export:
     cargo run -p chimera-cli -- diag export --config configs/mesh-node.example.conf --age 120 --packets 1 --out docs/diag_export_latest.json
 
 route-explain-json:
-    cargo run -p chimera-cli -- route explain example.org --json --out docs/route_explain_latest.json
+    cargo run -p chimera-cli -- route explain example.org --policy configs/policy.route_explain.example.conf --json --out docs/route_explain_latest.json
 
 probe-access-smoke:
     probe_mode="${CHIMERA_PROBE_ACCESS_MODE:-${CHIMERA_REAL_WORLD_PROBE_MODE:-live}}"; \

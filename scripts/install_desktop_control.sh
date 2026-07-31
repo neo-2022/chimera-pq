@@ -158,6 +158,17 @@ decode_existing_env_rhs() {
     echo "error: invalid control character in existing peer env value: $key" >&2
     exit 2
   fi
+  case "$raw" in
+    "''"|'""')
+      return 0
+      ;;
+    \"*\"|\'*\')
+      if [[ "${raw:0:1}" == "${raw: -1}" && "${#raw}" -ge 2 ]]; then
+        printf '%s' "${raw:1:${#raw}-2}"
+        return 0
+      fi
+      ;;
+  esac
   local out="" char rest
   while [[ -n "$raw" ]]; do
     char="${raw:0:1}"
@@ -180,6 +191,11 @@ decode_existing_env_rhs() {
       out+="$char"
     fi
   done
+  case "$out" in
+    "''"|'""')
+      return 0
+      ;;
+  esac
   printf '%s' "$out"
 }
 

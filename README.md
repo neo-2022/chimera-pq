@@ -85,7 +85,7 @@ cargo run -p chimera-cli -- doctor --config configs/mesh-node.example.conf
 cargo run -p chimera-cli -- --lang ru status
 cargo run -p chimera-cli -- --lang ru health --config configs/mesh-node.example.conf
 cargo run -p chimera-cli -- --lang ru doctor --config configs/mesh-node.example.conf --json --out docs/doctor_latest.json
-cargo run -p chimera-cli -- route explain example.org --json --out docs/route_explain_latest.json
+cargo run -p chimera-cli -- route explain example.org --policy configs/policy.route_explain.example.conf --json --out docs/route_explain_latest.json
 cargo run -p chimera-lab -- datapath-report --json --out docs/datapath_latest.json
 cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json
 cargo run -p chimera-cli -- up --state-file docs/runtime_state_latest.json --apply-dns true --dns-server 9.9.9.9 --resolv-conf /tmp/chimera_resolv_test.conf

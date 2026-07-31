@@ -67,6 +67,7 @@ find "${ROOT_DIR}/configs" -maxdepth 1 -type f \( -name '*.example.*' -o -name '
   ! -name 'mesh_launch_preflight.side_a.env.example' \
   ! -name 'mesh_launch_preflight.side_b.env.example' \
   -exec cp -p {} "${RELEASE_DIR}/configs/" \;
+cp -p "${ROOT_DIR}/configs/adaptive_domains.txt" "${RELEASE_DIR}/configs/"
 
 echo "build_release: copying deploy units"
 cp -p "${ROOT_DIR}/deploy/systemd-user/chimera-runtime.service" "${RELEASE_DIR}/deploy/systemd-user/"
@@ -120,6 +121,7 @@ grep -q '^chimera-release/scripts/chimera-update-rerun\.sh$' "${ROOT_DIR}/target
 grep -q '^chimera-release/scripts/chimera-sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/chimera\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh$' "${ROOT_DIR}/target/chimera-release-contents.txt"
+grep -q '^chimera-release/configs/adaptive_domains\.txt$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/configs/mesh_bootstrap\.env\.example$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/configs/mesh-node\.example\.conf$' "${ROOT_DIR}/target/chimera-release-contents.txt"
 grep -q '^chimera-release/configs/update_gitvers_bootstrap_urls\.example\.list$' "${ROOT_DIR}/target/chimera-release-contents.txt"

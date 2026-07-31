@@ -142,6 +142,7 @@ jobs:
           grep -q '^chimera-release/scripts/chimera-update-runtime-state\.sh$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/chimera-update-rerun\.sh$' target/chimera-release-contents.txt
           grep -q '^chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh$' target/chimera-release-contents.txt
+          grep -q '^chimera-release/configs/adaptive_domains\.txt$' target/chimera-release-contents.txt
           grep -q '^chimera-release/configs/mesh_bootstrap\.env\.example$' target/chimera-release-contents.txt
           grep -q '^chimera-release/configs/mesh-node\.example\.conf$' target/chimera-release-contents.txt
           grep -q '^chimera-release/configs/update_gitvers_bootstrap_urls\.example\.list$' target/chimera-release-contents.txt
@@ -195,7 +196,7 @@ jobs:
             actual_sorted=$(gh release view "$RELEASE_TAG" \
               --json assets --jq '.assets[].name' | sort)
             if [[ "$actual_sorted" != "$expected_sorted" ]]; then
-              echo "error: existing release assets do not match required immutable set; manual cleanup required" >&2
+              echo "error: immutable release policy forbids asset replacement; existing release assets do not match required immutable set" >&2
               printf 'expected:\n%s\nactual:\n%s\n' "$expected_sorted" "$actual_sorted" >&2
               exit 1
             fi

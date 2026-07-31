@@ -152,7 +152,7 @@ EOF
     echo "$output" >&2
     fail "installer_peer_listen_env_value_not_written"
   }
-  rg -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" || {
+  rg -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false$' "$env_file" || {
     echo "$output" >&2
     fail "installer_bound_transit_default_not_written"
   }
@@ -179,6 +179,139 @@ EOF
   rg -q '^CHIMERA_TRANSPARENT_RUNTIME_UID=5555$' "$tmp_dir/config/chimera/transparent-runtime.env" || fail "installer_transparent_env_existing_runtime_uid_not_preserved"
   rg -q '^CHIMERA_TRANSPARENT_RUNTIME_GID=6666$' "$tmp_dir/config/chimera/transparent-runtime.env" || fail "installer_transparent_env_existing_runtime_gid_not_preserved"
   [[ "$output" == *"boot_recovery_status=disk_only"* ]] || fail "installer_boot_recovery_status_not_disk_only_without_live_systemd_user"
+  rm -rf "$tmp_dir"
+}
+
+run_installer_bound_transit_authoritative_mesh_context_smoke() {
+  local tmp_dir install_root fake_bin env_file output rc
+  tmp_dir="$(mktemp -d)"
+  install_root="$tmp_dir/chimera-release"
+  fake_bin="$tmp_dir/bin"
+  mkdir -p \
+    "$fake_bin" \
+    "$install_root/bin" \
+    "$install_root/configs" \
+    "$install_root/deploy/desktop" \
+    "$install_root/deploy/systemd-user" \
+    "$install_root/scripts" \
+    "$tmp_dir/cache" \
+    "$tmp_dir/config" \
+    "$tmp_dir/data" \
+    "$tmp_dir/home" \
+    "$tmp_dir/runtime"
+
+  cp "$ROOT_DIR/scripts/install_desktop_control.sh" "$install_root/scripts/install_desktop_control.sh"
+  chmod +x "$install_root/scripts/install_desktop_control.sh"
+
+  cat >"$install_root/scripts/chimera-control.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  preflight-perms)
+    echo "preflight_status=ok"
+    ;;
+  grant-perms)
+    ;;
+  *)
+    ;;
+esac
+EOF
+  chmod +x "$install_root/scripts/chimera-control.sh"
+
+  for script in \
+    chimera-control-launcher.sh \
+    chimera-control-tray.sh \
+    chimera-sh \
+    chimera-update.sh \
+    chimera.sh
+  do
+    cat >"$install_root/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$install_root/scripts/$script"
+  done
+
+  cat >"$install_root/bin/chimera-cli" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$install_root/bin/chimera-cli"
+
+  cat >"$fake_bin/nft" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/nft"
+
+  cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--user" && "${2:-}" == "show-environment" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "$fake_bin/systemctl"
+
+  cat >"$install_root/configs/mesh-node.example.conf" <<'EOF'
+carrier.profile = in-memory
+carrier.addr = 127.0.0.1:1
+carrier.server_name = node.local
+EOF
+  cat >"$install_root/configs/mesh_bootstrap.env.example" <<'EOF'
+CHIMERA_MESH_NODES_PROBE_TIMEOUT_MS=4000
+EOF
+  write_gitvers_bootstrap_template "$install_root/configs/update_gitvers_bootstrap_urls.example.list"
+  mkdir -p "$tmp_dir/config/chimera"
+  cat >"$tmp_dir/config/chimera/peer-egress.env" <<'EOF'
+CHIMERA_PEER_EGRESS_AEAD=chacha20poly1305
+EOF
+  cat >"$install_root/deploy/desktop/chimera-control-gui.desktop" <<'EOF'
+[Desktop Entry]
+Name=CHIMERA
+Exec=__CHIMERA_ROOT__/scripts/chimera-control-launcher.sh
+Type=Application
+EOF
+  touch \
+    "$install_root/deploy/systemd-user/chimera-runtime.service" \
+    "$install_root/deploy/systemd-user/chimera-node.service" \
+    "$install_root/deploy/systemd-user/chimera-datapath.service" \
+    "$install_root/deploy/systemd-user/chimera-site-watch.service"
+
+  set +e
+  output="$(
+    PATH="$fake_bin:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$tmp_dir/cache" \
+    XDG_CONFIG_HOME="$tmp_dir/config" \
+    XDG_DATA_HOME="$tmp_dir/data" \
+    XDG_RUNTIME_DIR="$tmp_dir/runtime" \
+    CHIMERA_INSTALL_NODE_ROLE=node \
+    CHIMERA_MESH_NAMESPACE=cef-public \
+    CHIMERA_MESH_LOCAL_NODE=node-a \
+    CHIMERA_MESH_REMOTE_ENDPOINT=198.51.100.10:18142 \
+    CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135 \
+    CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:18142 \
+      timeout 15s bash "$install_root/scripts/install_desktop_control.sh" 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || {
+    echo "$output" >&2
+    fail "installer_bound_transit_authoritative_mesh_context_smoke_failed"
+  }
+
+  env_file="$tmp_dir/config/chimera/peer-egress.env"
+  rg -q '^CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true$' "$env_file" || {
+    echo "$output" >&2
+    fail "installer_bound_transit_authoritative_mesh_context_not_written"
+  }
+  rg -q '^CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT=false$' "$env_file" || {
+    echo "$output" >&2
+    fail "installer_bound_transit_authoritative_mesh_context_pool_default_changed"
+  }
+
   rm -rf "$tmp_dir"
 }
 
@@ -2264,6 +2397,7 @@ rg -n 'chimera-release/bin/chimera-node' "$ROOT_DIR/scripts/build_release.sh" >/
 rg -n 'chimera-release/scripts/install_release\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_installer_content_guard"
 rg -n 'chimera-release/scripts/chimera-update\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_update_module_content_guard"
 rg -n 'mesh_control_plane_env_from_preflight\\.sh' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_control_plane_env_writer"
+rg -n 'configs/adaptive_domains\.txt' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_adaptive_domains_bundle_guard"
 rg -n 'mesh_bootstrap\\.env\\.example' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_bootstrap_example_guard"
 rg -n -F 'mesh-node\.example\.conf' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_mesh_node_example_guard"
 rg -n -F 'chimera-node.service' "$ROOT_DIR/scripts/build_release.sh" >/dev/null || fail "release_build_missing_node_unit_guard"
@@ -2313,6 +2447,7 @@ rg -n 'chimera-release/scripts/chimera-runner\\.sh' "$ROOT_DIR/.github/workflows
 rg -n -F 'chimera-release/scripts/install_release\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_update_installer_bundle_guard"
 rg -n 'chimera-release/scripts/chimera-update\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_update_module_bundle_guard"
 rg -n -F 'chimera-release/scripts/mesh_control_plane_env_from_preflight\.sh' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_mesh_control_plane_env_writer_bundle_guard"
+rg -n -F 'chimera-release/configs/adaptive_domains\.txt' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_adaptive_domains_bundle_guard"
 rg -n -F 'chimera-release/configs/mesh-node\.example\.conf' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_mesh_node_example_bundle_guard"
 rg -n -F 'chimera-release/deploy/systemd-user/chimera-node\.service' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_node_unit_bundle_guard"
 rg -n -F 'chimera-release/deploy/systemd-user/chimera-datapath\.service' "$ROOT_DIR/.github/workflows/release.yml" >/dev/null || fail "github_release_missing_datapath_unit_bundle_guard"
@@ -2515,6 +2650,7 @@ run_installer_preserves_disabled_boot_recovery_smoke
 run_installer_node_auto_peer_listen_smoke
 run_installer_unconfigured_node_template_smoke
 run_installer_env_contract_smoke
+run_installer_bound_transit_authoritative_mesh_context_smoke
 run_installer_rejects_invalid_preserved_runtime_ids
 
 if ! rg -q 'Environment=CHIMERA_FAIL_CLOSED_ON_PARTIAL_START=0' "$ROOT_DIR/deploy/systemd-user/chimera-runtime.service"; then

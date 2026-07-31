@@ -392,13 +392,15 @@ the node up in listener-only mode so it can bind and publish its own ingress
 endpoint, but transparent datapath and doctor stay fail-closed until a real
 peer endpoint is selected or materialized from trusted bootstrap data.
 
-Node-role installs now default `CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true`
-for symmetric WEAVE behavior, while `CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT`
-remains `false`. This does not make the node mesh-ready by itself: live bound
-transit still requires authoritative mesh context, policy, peers and active
-lane bindings. Operators that need to disable bound transit must set
-`CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false` explicitly before install/update
-or change `peer-egress.env` after install.
+Node-role installs keep `CHIMERA_PEER_EGRESS_ALLOW_POOL_TRANSIT=false`.
+`CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT` defaults to `false` when the install
+does not yet have authoritative mesh context (`CHIMERA_MESH_NAMESPACE` plus
+`CHIMERA_MESH_LOCAL_NODE`), because bound transit without that context cannot
+materialize valid lane bindings and would hard-fail the runtime. When the
+operator provides authoritative mesh context, install writes
+`CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true` for symmetric WEAVE behavior.
+Operators can still override the value explicitly before install/update or by
+editing `peer-egress.env` afterwards.
 
 Operator flow:
 

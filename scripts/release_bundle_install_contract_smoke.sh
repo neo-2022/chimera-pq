@@ -208,6 +208,7 @@ for required in \
   chimera-release/scripts/chimera-runner.sh \
   chimera-release/scripts/chimera-update.sh \
   chimera-release/scripts/chimera-update-runtime-state.sh \
+  chimera-release/configs/adaptive_domains.txt \
   chimera-release/configs/mesh-node.example.conf \
   chimera-release/configs/mesh_bootstrap.env.example \
   chimera-release/configs/update_gitvers_bootstrap_urls.example.list \

@@ -64,23 +64,20 @@ fn run() -> Result<(), String> {
     let use_sudo = options.use_sudo;
     let privilege_mode = options.privilege_mode.clone();
 
-    install_redirect_rules(
-        &redirect_table,
-        &redirect_chain,
-        service_fwmark,
-        exempt_uid,
-        &capture_cidrs,
-        &ports,
-        use_sudo,
-        &privilege_mode,
-    )?;
-
     let cleanup_on_drop = CleanupState {
         redirect_table,
         redirect_chain,
         use_sudo,
         privilege_mode,
     };
+
+    install_redirect_rules(
+        &cleanup_on_drop,
+        service_fwmark,
+        exempt_uid,
+        &capture_cidrs,
+        &ports,
+    )?;
 
     let child = spawn_transparent_tcp(
         &transparent_bin,
@@ -362,21 +359,16 @@ fn resolve_domain_ipv4(domain: &str) -> Result<Vec<Ipv4Addr>, String> {
 }
 
 fn install_redirect_rules(
-    table: &str,
-    chain: &str,
+    state: &CleanupState,
     service_fwmark: u32,
     exempt_uid: u32,
     capture_cidrs: &[String],
     ports: &[u16],
-    use_sudo: bool,
-    privilege_mode: &str,
 ) -> Result<(), String> {
-    cleanup_redirect_rules(&CleanupState {
-        redirect_table: table.to_owned(),
-        redirect_chain: chain.to_owned(),
-        use_sudo,
-        privilege_mode: privilege_mode.to_owned(),
-    })?;
+    cleanup_redirect_rules(state)?;
+
+    let table = &state.redirect_table;
+    let chain = &state.redirect_chain;
 
     let mut commands = String::new();
     commands.push_str(&format!(
@@ -428,7 +420,13 @@ fn install_redirect_rules(
         ));
     }
 
-    let mut child = create_privileged_child("nft", &["-f", "-"], use_sudo, privilege_mode, false)?;
+    let mut child = create_privileged_child(
+        "nft",
+        &["-f", "-"],
+        state.use_sudo,
+        &state.privilege_mode,
+        false,
+    )?;
     {
         let stdin = child
             .stdin
@@ -459,9 +457,7 @@ fn install_redirect_rules(
 }
 
 fn is_default_bypass_cidr(cidr: &str) -> bool {
-    DEFAULT_BYPASS_CIDR_V4
-        .iter()
-        .any(|default| *default == cidr)
+    DEFAULT_BYPASS_CIDR_V4.contains(&cidr)
 }
 
 #[derive(Clone)]
