@@ -398,6 +398,107 @@ EOF
 
 run_systemd_listener_only_unconfigured_endpoint_case
 
+run_systemd_empty_capture_targets_stays_listener_only_case() {
+  local tmp_dir bin_dir cache_dir config_dir runtime_dir install_root node_conf output rc fake_systemctl systemctl_log domains_file
+
+  tmp_dir="$(mktemp -d)"
+  bin_dir="$tmp_dir/bin"
+  cache_dir="$tmp_dir/cache"
+  config_dir="$tmp_dir/config"
+  runtime_dir="$tmp_dir/runtime"
+  install_root="$tmp_dir/chimera-release"
+  node_conf="$tmp_dir/mesh-node.conf"
+  fake_systemctl="$bin_dir/systemctl"
+  systemctl_log="$tmp_dir/systemctl.log"
+  domains_file="$install_root/configs/adaptive_domains.txt"
+  : >"$systemctl_log"
+
+  mkdir -p "$bin_dir" "$cache_dir" "$config_dir/chimera" "$runtime_dir" "$install_root/scripts" "$install_root/configs"
+  cp "$ROOT_DIR/scripts/chimera-control.sh" "$install_root/scripts/chimera-control.sh"
+  cp "$ROOT_DIR/scripts/chimera-control-cleanup.inc" "$install_root/scripts/chimera-control-cleanup.inc"
+  cp "$ROOT_DIR/configs/mesh-node.example.conf" "$install_root/configs/mesh-node.example.conf"
+  cat >"$node_conf" <<'EOF'
+carrier.profile = tls
+carrier.addr = tcp://peer.example:443
+carrier.server_name = node.local
+capture.mode = tun
+capture.tun_supported = true
+peer.listen_addr = 0.0.0.0:0
+rekey.max_age_seconds = 300
+rekey.max_packets_per_key = 10000
+EOF
+  cat >"$config_dir/chimera/peer-egress.env" <<EOF
+CHIMERA_PEER_EGRESS_MODE=node
+CHIMERA_PEER_EGRESS_LOCAL_LISTEN=127.0.0.1:18135
+CHIMERA_PEER_EGRESS_PEER_LISTEN=0.0.0.0:0
+CHIMERA_PEER_EGRESS_STATE_FILE=$tmp_dir/peer-egress.state
+CHIMERA_MESH_PEER_EGRESS_STATE_PATH=$tmp_dir/peer-egress.state
+CHIMERA_PEER_EGRESS_TOKEN=test-token
+CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=false
+EOF
+  cat >"$config_dir/chimera/transparent-runtime.env" <<EOF
+CHIMERA_CAPTURE_DOMAINS_FILE=$domains_file
+CHIMERA_CAPTURE_TCP_PORTS=443
+EOF
+  printf '%s\n' '# intentionally empty product default' >"$domains_file"
+
+  cat >"$fake_systemctl" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" >>"$systemctl_log"
+case "\${1:-}" in
+  --user) shift ;;
+esac
+case "\${1:-}" in
+  show-environment|daemon-reload|start)
+    exit 0
+    ;;
+  is-active)
+    echo "active"
+    exit 0
+    ;;
+  stop|list-units|list-unit-files)
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "$fake_systemctl"
+
+  set +e
+  output="$(
+    PATH="$bin_dir:$PATH" \
+    HOME="$tmp_dir/home" \
+    XDG_CACHE_HOME="$cache_dir" \
+    XDG_CONFIG_HOME="$config_dir" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    NODE_CONFIG_FILE="$node_conf" \
+    CHIMERA_UPDATE_FIRST_CHECKED=1 \
+    SITE_AUTOWATCH_ENABLED=0 \
+    timeout 20s bash "$install_root/scripts/chimera-control.sh" start 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ "$rc" -eq 0 ]] || fail "systemd_empty_capture_targets_stays_listener_only: expected rc=0 got $rc output=$output"
+  [[ "$output" == *"start_status=partial"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: missing partial status output=$output"
+  [[ "$output" == *"mode=listener_only"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: missing listener_only mode output=$output"
+  [[ "$output" == *"mesh_ready=true"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: missing mesh_ready=true output=$output"
+  [[ "$output" == *"fail_closed=true"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: missing fail_closed=true output=$output"
+  [[ "$output" == *"reason=transparent_capture_targets_empty"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: missing empty target reason output=$output"
+  [[ "$output" == *"transparent_runtime=skipped"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: transparent runtime should be skipped output=$output"
+  [[ "$output" == *"datapath_apply=skipped"* ]] || fail "systemd_empty_capture_targets_stays_listener_only: datapath apply should be skipped output=$output"
+  grep -q '^--user start chimera-node.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: node service was not started"
+  ! grep -q '^--user start chimera-datapath.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: datapath service should not start"
+  ! grep -q '^--user stop chimera-datapath.service chimera-node.service$' "$systemctl_log" || fail "systemd_empty_capture_targets_stays_listener_only: node should stay running"
+
+  rm -rf "$tmp_dir"
+}
+
+run_systemd_empty_capture_targets_stays_listener_only_case
+
 run_systemd_apply_failure_case() {
   local tmp_dir bin_dir cache_dir config_dir runtime_dir install_root node_conf output rc fake_runner fake_systemctl fake_ip runner_log rollback_marker systemctl_log state_file ip_log tun_marker
 
@@ -684,6 +785,7 @@ EOF
   cat >"$env_file" <<'EOF'
 CHIMERA_RUNNER_USE_SUDO=1
 CHIMERA_NFT_PRIVILEGE_MODE=sudo
+CHIMERA_CAPTURE_CIDR_V4=198.51.100.0/24
 EOF
   printf '%s\n' '{"status":"old"}' >"$state_file"
 
@@ -856,6 +958,7 @@ EOF
   cat >"$env_file" <<'EOF'
 CHIMERA_RUNNER_USE_SUDO=1
 CHIMERA_NFT_PRIVILEGE_MODE=sudo
+CHIMERA_CAPTURE_CIDR_V4=198.51.100.0/24
 EOF
   printf '%s\n' present >"$tun_marker"
 

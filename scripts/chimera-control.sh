@@ -2404,6 +2404,19 @@ node_config_self_loop_target() {
   return 1
 }
 
+transparent_capture_targets_empty() {
+  local domains_file domains_count cidr_v4 capture_domain
+  [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]] || return 1
+  grep -Eq '^(CHIMERA_CAPTURE_DOMAINS_FILE|CHIMERA_CAPTURE_CIDR_V4|CHIMERA_CAPTURE_DOMAIN)=' "$TRANSPARENT_RUNTIME_ENV_FILE" 2>/dev/null || return 1
+  domains_file="$(trim_ascii_line "$(read_existing_env_kv_from_file "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_DOMAINS_FILE)")"
+  cidr_v4="$(trim_ascii_line "$(read_existing_env_kv_from_file "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_CIDR_V4)")"
+  capture_domain="$(trim_ascii_line "$(read_existing_env_kv_from_file "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_CAPTURE_DOMAIN)")"
+  [[ -n "$cidr_v4" || -n "$capture_domain" ]] && return 1
+  [[ -n "$domains_file" ]] || return 0
+  domains_count="$(count_noncomment_lines "$domains_file")"
+  [[ "${domains_count:-0}" == "0" ]]
+}
+
 load_cli_privilege_env() {
   if [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
     # shellcheck disable=SC1090
@@ -3678,6 +3691,10 @@ runtime_state_is_up() {
     node_state="$(systemctl --user is-active "$NODE_SERVICE_UNIT" 2>/dev/null || true)"
     datapath_state="$(systemctl --user is-active "$DATAPATH_SERVICE_UNIT" 2>/dev/null || true)"
     if node_config_ready; then
+      if transparent_capture_targets_empty; then
+        [[ "$node_state" == "active" ]]
+        return $?
+      fi
       [[ "$node_state" == "active" && "$datapath_state" == "active" ]] || return 1
       if peer_egress_bound_transit_requested; then
         ensure_bound_transit_start_contract >/dev/null 2>&1 || return 1
@@ -3689,6 +3706,10 @@ runtime_state_is_up() {
     return $?
   fi
   if node_config_ready; then
+    if transparent_capture_targets_empty; then
+      pidfile_running "$(peer_egress_pid_path)"
+      return $?
+    fi
     pidfile_running "$(peer_egress_pid_path)" && pidfile_running "$(transparent_runtime_pid_path)" || return 1
     if peer_egress_bound_transit_requested; then
       ensure_bound_transit_start_contract >/dev/null 2>&1 || return 1
@@ -4717,6 +4738,12 @@ start_runtime() {
       echo "start_status=partial mode=listener_only node_runtime=$self_loop_node_runtime node=$self_loop_node_status transparent_runtime=$self_loop_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$self_loop_fail_closed reason=self_loop_listener_only"
       return "$self_loop_exit_rc"
     fi
+    if transparent_capture_targets_empty; then
+      site_auto_watch_start >/dev/null 2>&1 || true
+      refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
+      echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$node_status transparent_runtime=skipped datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=true fail_closed=true reason=transparent_capture_targets_empty"
+      return 0
+    fi
     if [[ -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
       upsert_env_kv "$TRANSPARENT_RUNTIME_ENV_FILE" 'CHIMERA_STATE_FILE' "$STATE_FILE"
     fi
@@ -4933,6 +4960,12 @@ start_runtime() {
     fi
     echo "start_status=partial mode=listener_only node_runtime=$direct_self_loop_node_runtime node=$direct_self_loop_node_status transparent_runtime=$direct_self_loop_transparent_runtime datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=false fail_closed=$direct_self_loop_fail_closed reason=self_loop_listener_only"
     return "$direct_self_loop_exit_rc"
+  fi
+  if [[ "$direct_node_status" == "started" ]] && transparent_capture_targets_empty; then
+    site_auto_watch_start >/dev/null 2>&1 || true
+    refresh_runtime_publication_after_node_start >/dev/null 2>&1 || true
+    echo "start_status=partial mode=listener_only node_runtime=$node_runtime node=$direct_node_status transparent_runtime=skipped datapath_apply=skipped recovery_state=$PRESTART_SAVED_STATE_RECOVERY peer_update_publish=$START_RUNTIME_PEER_UPDATE_STATUS transit_lane_bindings_publish=$START_RUNTIME_TRANSIT_LANE_BINDINGS_STATUS discovery_publish=$START_RUNTIME_DISCOVERY_PUBLISH_STATUS mesh_ready=true fail_closed=true reason=transparent_capture_targets_empty"
+    return 0
   fi
   if [[ "$direct_node_status" == "started" && -f "$TRANSPARENT_RUNTIME_ENV_FILE" ]]; then
     start_runner_background "transparent_runtime" "$(transparent_runtime_pid_path)" "$DATAPATH_LOG" "$TRANSPARENT_RUNTIME_ENV_FILE" "transparent-runtime" >/dev/null 2>&1 || true
