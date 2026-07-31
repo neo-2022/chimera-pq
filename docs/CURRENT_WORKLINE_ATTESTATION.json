@@ -6,7 +6,7 @@
   "workline_attestation": "docs/WORKFLOW_ATTESTATION_FAILURE_HARDENING_2026_07_05.md",
   "workline_attestation_sha256": "9bd00f176e2343875833482c7edc2cc5087feb003248b8e97a55f67244c13e05",
   "latest_handoff": "docs/MESH_SESSION_HANDOFF_2026-07-13_v0_1_209_ROUTE_ANNOUNCEMENT_STAGE4_RELEASE.md",
-  "latest_handoff_sha256": "45ce2436e4c9aa8794fec7699df423c6f6421e5c7145aeb71d04eb0aff7aabc4",
+  "latest_handoff_sha256": "6db267f601d34f8f1cb424f3ff425df07694076254e8af9d6a9b5923df8f5b94",
   "subagent_execution_trace": "docs/SUBAGENT_EXECUTION_TRACE_FAILURE_HARDENING_2026_07_05.json",
   "subagent_execution_trace_sha256": "476c69d010f529d9042598c0164de9ce59a6ed6266572fe824893096d9313f79",
   "status": "blocked",
