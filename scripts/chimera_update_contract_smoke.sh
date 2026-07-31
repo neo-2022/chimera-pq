@@ -2994,6 +2994,63 @@ case_connect_peer_update_url_precedes_general_peer_list() (
   [[ "$output" == "http://selected-peer.invalid/chimera.sh" ]] || fail "connect did not use selected peer update URL only"
 )
 
+case_connect_selected_peer_is_fallback_after_github() (
+  local tmp_dir calls output rc current_sha
+  tmp_dir="$(mktemp -d)"
+  calls="$tmp_dir/calls"
+  current_sha="9292929292929292929292929292929292929292929292929292929292929292"
+  read_local_runtime_version() { printf '%s\n' 0.1.222; }
+  read_local_runtime_bundle_sha() { printf '%s\n' "$current_sha"; }
+  read_release_metadata_from_source() {
+    printf '%s:%s\n' "${1:-}" "${2:-}" >>"$calls"
+    case "${1:-}:${2:-}" in
+      github:https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh)
+        printf '%s\n%s\n%s\n' \
+          0.1.222 \
+          http://github.invalid/chimera-pq-release.tar.gz \
+          http://github.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      peer:http://selected-peer.invalid/chimera.sh)
+        printf '%s\n%s\n%s\n' \
+          0.1.223 \
+          http://selected-peer.invalid/chimera-pq-release.tar.gz \
+          http://selected-peer.invalid/chimera-pq-release.tar.gz.sha256
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+  load_update_gitvers_bootstrap_urls() { return 0; }
+  selected_connect_peer_update_bootstrap_url() {
+    printf '%s\n' http://selected-peer.invalid/chimera.sh
+  }
+  remote_archive_sha256() {
+    case "${1:-}" in
+      http://github.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "$current_sha"
+        ;;
+      http://selected-peer.invalid/chimera-pq-release.tar.gz)
+        printf '%s\n' "9393939393939393939393939393939393939393939393939393939393939393"
+        ;;
+      *)
+        return 2
+        ;;
+    esac
+  }
+
+  set +e
+  output="$(auto_update_if_needed -connect node-a 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 0 ]] || fail "connect should accept verified github current result before peer fallback"
+  [[ "$output" == *"chimera_update=no_newer_release current_version=0.1.222 action=continue reason=highest_available_not_newer"* ]] \
+    || fail "connect github current result did not stop at no_newer_release"
+  [[ "$(cat "$calls")" == $'github:https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh' ]] \
+    || fail "connect consulted peer before higher-trust sources"
+  rm -rf "$tmp_dir"
+)
+
 case_update_bootstrap_url_rejects_userinfo() (
   if validate_update_bootstrap_url "http://user@peer.invalid/chimera.sh"; then
     fail "userinfo update bootstrap URL accepted"
@@ -3115,6 +3172,7 @@ case_gitvers_same_tier_divergence_blocks_after_first_current_result
 case_peer_same_tier_divergence_blocks_after_first_current_result
 case_connect_peer_update_url_does_not_use_general_peer_list
 case_connect_peer_update_url_precedes_general_peer_list
+case_connect_selected_peer_is_fallback_after_github
 case_update_bootstrap_url_rejects_userinfo
 case_control_requires_update_first_marker
 case_real_control_delegates_direct_start_and_mesh

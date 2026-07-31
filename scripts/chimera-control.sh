@@ -599,6 +599,7 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
   local namespace local_node policy_payload traffic_profile out_file
   local -a peer_args route_args
   local peer_spec rc
+  local control_plane_env_loaded=0
 
   control_plane_env_file="${CHIMERA_MESH_CONTROL_PLANE_ENV_FILE:-${CHIMERA_MESH_PRELAUNCH_ENV_FILE:-${CHIMERA_MESH_LAUNCH_ENV_FILE:-$MESH_CONTROL_PLANE_ENV_FILE}}}"
   if [[ -n "$control_plane_env_file" && -f "$control_plane_env_file" ]]; then
@@ -608,12 +609,19 @@ publish_peer_egress_transit_lane_bindings_from_control_plane() {
     fi
     # shellcheck disable=SC1090
     source "$control_plane_env_file"
+    control_plane_env_loaded=1
   fi
-  if ! mesh_control_plane_has_preflight_env && [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
+  if ! mesh_control_plane_context_ready_from_current_env && [[ -f "$BOOTSTRAP_ENV_FILE" ]]; then
     load_bootstrap_env_if_present || {
       peer_egress_transit_lane_bindings_publish_skip "$strict_publish" "invalid_bootstrap_env" 2
       return $?
     }
+    if [[ "$control_plane_env_loaded" -eq 1 ]]; then
+      # Re-apply the explicit control-plane handoff after filling missing fields
+      # from bootstrap, so partial preflight state does not lose its overrides.
+      # shellcheck disable=SC1090
+      source "$control_plane_env_file"
+    fi
   fi
 
   existing_bindings_file=""

@@ -656,43 +656,9 @@ auto_update_if_needed() {
   fi
 
   local update_rc gitvers_bootstrap_url normalized_gitvers_url peer_bootstrap_url normalized_peer_url
-  local peer_update_url=""
-  local peer_preferred=0
   local gitvers_verified_not_newer=0 peer_verified_not_newer=0
   local update_failed=0 update_source_unavailable=0
   reset_update_source_authority
-
-  # For -connect, try the selected peer first so a stale node can self-heal from
-  # the peer it is about to join. A peer can only upgrade, never downgrade.
-  case "${original_args[0]:-}" in
-    -connect|connect)
-      peer_update_url="$(load_update_peer_bootstrap_urls_for_args "${original_args[@]}" | head -n1 || true)"
-      [[ -n "$peer_update_url" ]] && peer_preferred=1
-      ;;
-  esac
-
-  if [[ "$peer_preferred" -eq 1 ]]; then
-    set +e
-    try_update_from_bootstrap_source "peer" "$peer_update_url" "$local_version" "$local_sha" "${original_args[@]}"
-    update_rc=$?
-    set -e
-    case "$update_rc" in
-      0)
-        return 0
-        ;;
-      2)
-        echo "chimera_update=peer_unavailable current_version=$local_version action=continue reason=preferred_peer_unreachable" >&2
-        update_source_unavailable=1
-        ;;
-      3)
-        echo "chimera_update=peer_invalid current_version=$local_version action=block reason=preferred_peer_metadata_invalid" >&2
-        return 1
-        ;;
-      4)
-        peer_verified_not_newer=1
-        ;;
-    esac
-  fi
 
   set +e
   try_update_from_bootstrap_source "github" "$UPDATE_BOOTSTRAP_URL" "$local_version" "$local_sha" "${original_args[@]}"

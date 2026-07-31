@@ -10,7 +10,7 @@ Linux-first MVP workspace for CHIMERA-PQ WEAVE.
 First-time install:
 
 ```bash
-bash <(curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh) -install
+bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-time 60 https://github.com/neo-2022/chimera-pq/releases/latest/download/chimera.sh | bash -s -- -install'
 ```
 
 After install the `chimera` command is available:

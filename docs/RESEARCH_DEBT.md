@@ -9,7 +9,9 @@ must remain a blocker in the workflow attestation.
 
 ## Current Items
 
-- None for the workflow-attestation guard slice. The remaining limitation is not
-  research debt: no machine guard can prove subjective "perfect understanding";
-  it can only require structured evidence, stage order, council review, gate
-  decisions, rollback declarations, and truthful status boundaries.
+- `2026-07-31`: GitHub, Gitvers, and peer mirrors still lack a signed shared
+  release manifest that binds the same release tuple to source identity across
+  the trust ladder. Current protection is checksum + source-order + same-origin
+  metadata validation, which is strong enough for bounded fallback but not full
+  cross-source provenance equivalence. Evidence: `docs/UPDATE_SOURCE_DECISION_MATRIX.md`,
+  `docs/OPERATIONS.md`, `scripts/chimera-update.sh`.

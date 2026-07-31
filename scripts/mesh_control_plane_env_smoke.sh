@@ -100,6 +100,45 @@ lane_file="$XDG_CACHE_HOME/chimera/peer-egress-transit-lane-bindings.csv"
 grep -q '^7401,0,198.51.100.22:443$' "$lane_file" \
   || fail "lane bindings file content mismatch"
 
+bootstrap_env="$XDG_CONFIG_HOME/chimera/mesh_bootstrap.env"
+cat >"$bootstrap_env" <<'EOF'
+CHIMERA_MESH_NAMESPACE=cef-public
+CHIMERA_MESH_TRAFFIC_PROFILE=high_speed_anonymous
+CHIMERA_MESH_REMOTE_PEER_SPEC=node-b@198.51.100.22:443@eu@20@90
+EOF
+chmod 600 "$bootstrap_env"
+
+partial_control_plane_env="$tmp_dir/partial-control-plane.env"
+cat >"$partial_control_plane_env" <<'EOF'
+CHIMERA_MESH_LOCAL_NODE=node-from-control-plane
+EOF
+
+printf '%s\n' 'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true' >"$peer_env"
+rm -f "$lane_file"
+partial_output="$(
+  unset CHIMERA_MESH_NAMESPACE \
+    CHIMERA_MESH_LOCAL_NODE \
+    CHIMERA_MESH_REMOTE_NODE \
+    CHIMERA_MESH_REMOTE_ENDPOINT \
+    CHIMERA_MESH_REMOTE_REGION \
+    CHIMERA_MESH_REMOTE_LOAD_SCORE \
+    CHIMERA_MESH_REMOTE_RELIABILITY_SCORE \
+    CHIMERA_MESH_REMOTE_PEER_SPEC \
+    CHIMERA_MESH_EXTRA_PEERS \
+    CHIMERA_MESH_POLICY_PAYLOAD \
+    CHIMERA_MESH_TRAFFIC_PROFILE
+  CHIMERA_RUNNER="$fake_runner" \
+  PEER_EGRESS_ENV_FILE="$peer_env" \
+  CHIMERA_MESH_CONTROL_PLANE_ENV_FILE="$partial_control_plane_env" \
+  bash -c 'source "$1"; publish_peer_egress_transit_lane_bindings_from_control_plane strict' \
+    _ "$ROOT_DIR/scripts/chimera-control.sh" 2>&1
+)"
+
+[[ "$partial_output" == *"peer_egress_transit_lane_bindings_publish=ok"* ]] \
+  || fail "partial control-plane env did not fall back to bootstrap: $partial_output"
+[[ -s "$lane_file" ]] || fail "partial control-plane env bootstrap fallback did not create lane file"
+rm -f "$bootstrap_env"
+
 printf '%s\n' 'CHIMERA_PEER_EGRESS_ALLOW_BOUND_TRANSIT=true' >"$peer_env"
 rm -f "$lane_file"
 command_output="$(
