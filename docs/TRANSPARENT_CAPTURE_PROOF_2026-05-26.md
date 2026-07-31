@@ -119,8 +119,8 @@ side_b_exact_cleanup_done
 Local echo gateway proof on SIDE_A:
 
 ```text
-chimera_local_gateway_echo=ready listen=127.0.0.1:18135
-chimera_transparent_tcp=ready listen=0.0.0.0:18134
+chimera_local_gateway_echo=ready listen=<redacted-ip>
+chimera_transparent_tcp=ready listen=<redacted-ip>
 nft_redirect_transparent=pass reply=gateway:hello
 ssh_after_redirect_ok
 nft_cleanup_ok

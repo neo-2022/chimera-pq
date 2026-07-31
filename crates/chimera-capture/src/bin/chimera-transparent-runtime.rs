@@ -50,6 +50,7 @@ fn run() -> Result<(), String> {
     setup_signal_handler();
 
     let (listen_addr, transit_local) = parse_local_endpoints(&options)?;
+    validate_direct_mode(&options.direct_mode)?;
 
     let ports = parse_ports(&options.capture_tcp_ports)?;
     let capture_cidrs = build_capture_cidrs(&options)?;
@@ -238,6 +239,17 @@ fn parse_local_endpoints(options: &Options) -> Result<(SocketAddr, SocketAddr), 
         )
     })?;
     Ok((listen_addr, transit_local))
+}
+
+fn validate_direct_mode(value: &str) -> Result<(), String> {
+    match value {
+        "disabled" => Ok(()),
+        "auto" => Err(
+            "direct-mode auto is forbidden; direct routes require policy-bound WEAVE routing"
+                .to_string(),
+        ),
+        _ => Err("direct-mode must be disabled".to_string()),
+    }
 }
 
 fn parse_ports(raw: &str) -> Result<Vec<u16>, String> {
@@ -587,4 +599,19 @@ fn setup_signal_handler() {
         eprintln!("transparent-runtime: caught interrupt, exiting");
         std::process::exit(0);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direct_mode_defaults_to_disabled_only() {
+        assert!(validate_direct_mode("disabled").is_ok());
+        assert!(
+            validate_direct_mode("auto")
+                .is_err_and(|error| error.contains("direct-mode auto is forbidden"))
+        );
+        assert!(validate_direct_mode("fallback").is_err());
+    }
 }

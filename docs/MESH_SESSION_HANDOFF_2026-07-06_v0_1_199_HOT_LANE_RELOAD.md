@@ -58,13 +58,13 @@ site_auto_watch_status=running mode=systemd_user service_state=active interval_s
 NL → RU (baseline):
 ```text
 $ setpriv --reuid 65534 --regid 65534 --clear-groups curl -sS --max-time 15 https://ipinfo.io
-{ "ip": "138.16.175.96", ... }
+{ "ip": "<redacted-ip>", ... }
 ```
 
 RU → NL (baseline):
 ```text
 $ setpriv --reuid 65534 --regid 65534 --clear-groups curl -sS --max-time 15 https://ipinfo.io
-{ "ip": "91.124.19.180", ... }
+{ "ip": "<redacted-ip>", ... }
 ```
 
 Convergence after restart (stopwatch polling from the peer node every 2s):
@@ -74,7 +74,7 @@ NL restart_issued
 t=0s ip=
 t=2s ip=
 t=4s ip=
-t=6s ip=91.124.19.180
+t=6s ip=<redacted-ip>
 converged
 
 # systemctl --user restart chimera-node.service on RU; poll from NL
@@ -84,7 +84,7 @@ t=3s ip=
 t=5s ip=
 t=7s ip=
 t=9s ip=
-t=11s ip=138.16.175.96
+t=11s ip=<redacted-ip>
 converged
 ```
 

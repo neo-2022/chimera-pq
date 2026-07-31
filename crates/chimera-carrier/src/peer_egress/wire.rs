@@ -461,7 +461,7 @@ mod tests {
     fn peer_wire_messages_round_trip_announce() -> Result<(), String> {
         let (mut left, mut right) = test_peer_pair()?;
         let announcements = chimera_mesh::parse_route_announcements(
-            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
+            "static,cidr/10.42.0.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
         )?;
 
         write_announce_message(&mut left, &announcements)?;
@@ -475,7 +475,7 @@ mod tests {
             }
             other => return Err(format!("unexpected announce message: {other:?}")),
         }
-        assert!(!debug.contains("192.168.31"));
+        assert!(!debug.contains("10.42.0"));
         assert!(!debug.contains("example.internal"));
         Ok(())
     }

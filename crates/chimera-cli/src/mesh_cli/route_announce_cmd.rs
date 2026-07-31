@@ -312,7 +312,7 @@ mod tests {
             "--node",
             "test-node",
             "--destination",
-            "cidr/192.168.31.0/24",
+            "cidr/10.42.0.0/24",
             "--via",
             "via-peer",
             "--route-binding-id",
@@ -332,7 +332,7 @@ mod tests {
         let options = parse_options(&sample_args())?;
         assert_eq!(options.namespace, "test-namespace");
         assert_eq!(options.node_name, "test-node");
-        assert_eq!(options.destination, "cidr/192.168.31.0/24");
+        assert_eq!(options.destination, "cidr/10.42.0.0/24");
         assert_eq!(options.via, "via-peer");
         assert_eq!(options.route_binding_id, 7);
         assert_eq!(options.ttl_seconds, 3600);
@@ -345,7 +345,7 @@ mod tests {
         let options = parse_options(&sample_args())?;
         let payload = build_policy_payload(&options)?;
         assert!(payload.contains("mesh_announcements="));
-        assert!(payload.contains("static,cidr/192.168.31.0/24,via-peer,3600,7"));
+        assert!(payload.contains("static,cidr/10.42.0.0/24,via-peer,3600,7"));
         assert!(payload.contains("mesh_route_binding_id=7"));
         assert!(payload.contains("mesh_max_peers=2"));
         Ok(())
@@ -443,7 +443,7 @@ mod tests {
             .iter()
             .position(|a| a == "--destination")
             .ok_or_else(|| "--destination not found in sample args".to_string())?;
-        args[idx + 1] = "192.168.31.0/24".to_string();
+        args[idx + 1] = "10.42.0.0/24".to_string();
         let rc = mesh_route_announce_command("usage", &args);
         assert_eq!(rc, 2);
         Ok(())

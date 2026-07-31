@@ -115,7 +115,7 @@ bash -o pipefail -c 'curl --disable -fsSL --retry 3 --connect-timeout 10 --max-t
 Result:
 
 ```text
-chimera_install=ok version=0.1.209 home=/root/.local/share/chimera
+chimera_install=ok version=0.1.209 home=<redacted-path>
 ```
 
 - Installed bundle checksum matches GitHub `latest` checksum:
@@ -158,21 +158,21 @@ probe):
   - `CHIMERA_MESH_SELF_NODE_ID=amai`
   - `CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY=<redacted_seed>`
   - `CHIMERA_MESH_ANNOUNCEMENT_KEYRING=vdsina:<redacted_pubkey>`
-  - `mesh_announcements=static,cidr/127.0.0.1/32,vdsina,3600,11`
+  - `mesh_announcements=static,cidr/<redacted-ip>/32,vdsina,3600,11`
 - Via/target node (`vdsina`):
   - `CHIMERA_MESH_SELF_NODE_ID=vdsina`
   - `CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY=<redacted_seed>`
   - `CHIMERA_MESH_ANNOUNCEMENT_KEYRING=amai:<redacted_pubkey>`
-  - `mesh_announcements=static,cidr/10.200.0.0/16,amai,3600,12`
+  - `mesh_announcements=static,cidr/<redacted-ip>/16,amai,3600,12`
 
 Both nodes were restarted with the keyring configuration, authenticated over
 the existing peer pool, exchanged signed `ANNOUNCE` messages on ingress, and
 merged only announcements whose signatures verified against the configured
 public key.
 
-A local echo responder was started on `vdsina` at `127.0.0.1:7777`.  From
+A local echo responder was started on `vdsina` at `<redacted-ip>`.  From
 `amai`, a CHIMERA-LOCAL/1 CONNECT probe was injected into the node's local
-ingress for destination `127.0.0.1:7777`:
+ingress for destination `<redacted-ip>`:
 
 ```text
 ack b'OK\n'

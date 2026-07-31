@@ -46,7 +46,15 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 EVIDENCE_FILE="${OUT_DIR}/STABILIZATION_EVIDENCE_${TIMESTAMP}.json"
 mkdir -p "$OUT_DIR"
 
-timestamp_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
+timestamp_ms() {
+  local now
+  now="$(date +%s%3N 2>/dev/null || true)"
+  if [[ "$now" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$now"
+  else
+    printf '%s000\n' "$(date +%s)"
+  fi
+}
 
 ssh_cmd() {
   local user="$1" host="$2"

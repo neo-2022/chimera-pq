@@ -45,9 +45,9 @@ Topology:
 Passing download-direction command on SIDE_A:
 
 ```bash
-timeout 60 /tmp/chimera-peer-egress-test5 --mode download-probe \
-  --server 127.0.0.1:18112 \
-  --target 127.0.0.1:18113 \
+timeout 60 <redacted-path> --mode download-probe \
+  --server <redacted-ip> \
+  --target <redacted-ip> \
   --token '<redacted>' \
   --bench-bytes 67108864 \
   --connections 8 \

@@ -17,22 +17,22 @@ configuration restored on both nodes.
 
 ## Stand / Runtime Context
 
-- Product repository: `/home/art/Archives/VPN/chimera-pq`, branch `main`.
+- Product repository: `<redacted-path>`, branch `main`.
 - Registered Amai project code: `chimera`.
 - Stand nodes (addresses/logins/seeds stored in operator-local files, not in
   product):
-  - NL `amai`: public address on file; runtime `/root/.local/share/chimera`;
-    CLI `/root/.local/bin`; peer-egress listener `0.0.0.0:8448`;
-    local ingress `127.0.0.1:18135`.
-  - RU `vdsina`: public address on file; runtime `/root/.local/share/chimera`;
-    peer-egress listener `0.0.0.0:8448`; outbound bootstrap
+  - NL `amai`: public address on file; runtime `<redacted-path>`;
+    CLI `<redacted-path>`; peer-egress listener `<redacted-ip>`;
+    local ingress `<redacted-ip>`.
+  - RU `vdsina`: public address on file; runtime `<redacted-path>`;
+    peer-egress listener `<redacted-ip>`; outbound bootstrap
     `amai@<redacted>:8448`.
 - Common token, Ed25519 seeds, `peer-egress.env`, `mesh_bootstrap.env`,
   `mesh-node.conf` are already configured on both nodes.
 - `chimera-control.sh start` is the current restart path (it bypasses the
   GitHub update gate that can time out on the stand).
 - `CHIMERA_SERVICE_FWMARK=0x5244`, `CHIMERA_PEER_EGRESS_CONNECTIONS=8`.
-- Echo responder on `vdsina:127.0.0.1:7777` was left running.
+- Echo responder on `vdsina:<redacted-ip>` was left running.
 
 ## What Already Works
 
@@ -103,7 +103,7 @@ Also modified:
 
 2. **Local checks (on PC, no network changes)**
    ```bash
-   cd /home/art/Archives/VPN/chimera-pq
+   cd <redacted-path>
    just fmt
    just lint
    just check
@@ -118,7 +118,7 @@ Also modified:
 
 4. **Deploy to stand**
    - Copy the patched `chimera-peer-egress` / `chimera-node` / bundle to both
-     stand nodes into `/root/.local/share/chimera/bin/` and `/root/.local/bin/`
+     stand nodes into `<redacted-path>` and `<redacted-path>`
      as required.
    - On `vdsina`, restore normal route-announcement configuration
      (`CHIMERA_MESH_ANNOUNCEMENT_SIGNING_KEY` and
@@ -126,7 +126,7 @@ Also modified:
    - Restart both nodes with `chimera-control.sh start`.
 
 5. **Run bidirectional probes**
-   - `amai → vdsina` to `127.0.0.1:7777`.
+   - `amai → vdsina` to `<redacted-ip>`.
    - `vdsina → amai` to a temporary echo responder or known service on `amai`.
    - Confirm both `PROBE_OK` and payload round-trip.
 

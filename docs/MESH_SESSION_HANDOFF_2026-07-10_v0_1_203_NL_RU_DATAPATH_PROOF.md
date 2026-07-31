@@ -21,7 +21,7 @@
 
 ## Bidirectional Datapath Proof
 
-Mesh capture policy on both nodes redirects TCP from UID `65534` (`nobody`) through the local transparent TCP proxy (`127.0.0.1:18134`) into the WEAVE peer-egress tunnel. Root traffic is exempt and exits directly from the local node.
+Mesh capture policy on both nodes redirects TCP from UID `65534` (`nobody`) through the local transparent TCP proxy (`<redacted-ip>`) into the WEAVE peer-egress tunnel. Root traffic is exempt and exits directly from the local node.
 
 Test method (run as `root` and as `nobody` via `runuser -u nobody -- curl -sS <target>`):
 

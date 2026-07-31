@@ -328,7 +328,7 @@ pub fn format_route_announcements(announcements: &[RouteAnnouncement]) -> String
 /// Format (announcements separated by `|`):
 /// `static,<destination>,<via_peer_id>,<ttl_seconds>,<route_binding_id>,[base64_signature]`
 ///
-/// Destination may be `cidr/192.168.31.0/24` or `domain/example.internal`.
+/// Destination may be `cidr/10.42.0.0/24` or `domain/example.internal`.
 /// Empty signature means the announcement is not signed.
 pub fn parse_route_announcements(value: &str) -> Result<Vec<RouteAnnouncement>, String> {
     if value.trim().is_empty() {
@@ -430,7 +430,7 @@ mod tests {
     use ring::signature::KeyPair;
 
     fn sample_announcement() -> String {
-        "static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA".to_string()
+        "static,cidr/10.42.0.0/24,vdsina,3600,7,AAAA".to_string()
     }
 
     #[test]
@@ -467,7 +467,7 @@ mod tests {
     #[test]
     fn parse_multiple_announcements() -> Result<(), String> {
         let value =
-            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11";
+            "static,cidr/10.42.0.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11";
         let parsed = parse_route_announcements(value)?;
         assert_eq!(parsed.len(), 2);
         Ok(())
@@ -475,32 +475,32 @@ mod tests {
 
     #[test]
     fn parse_rejects_zero_ttl() {
-        let value = "static,cidr/192.168.31.0/24,vdsina,0,7";
+        let value = "static,cidr/10.42.0.0/24,vdsina,0,7";
         assert!(parse_route_announcements(value).is_err());
     }
 
     #[test]
     fn parse_rejects_zero_route_binding_id() {
-        let value = "static,cidr/192.168.31.0/24,vdsina,3600,0";
+        let value = "static,cidr/10.42.0.0/24,vdsina,3600,0";
         assert!(parse_route_announcements(value).is_err());
     }
 
     #[test]
     fn parse_rejects_missing_kind() {
-        let value = "cidr/192.168.31.0/24,vdsina,3600,7";
+        let value = "cidr/10.42.0.0/24,vdsina,3600,7";
         assert!(parse_route_announcements(value).is_err());
     }
 
     #[test]
     fn parse_rejects_bad_cidr_prefix() {
-        let value = "static,cidr/192.168.31.0/33,vdsina,3600,7";
+        let value = "static,cidr/10.42.0.0/33,vdsina,3600,7";
         assert!(parse_route_announcements(value).is_err());
     }
 
     #[test]
     fn format_and_parse_round_trip_preserves_announcement() -> Result<(), String> {
         let parsed = parse_route_announcements(
-            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
+            "static,cidr/10.42.0.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
         )?;
         let formatted = format_route_announcements(&parsed);
         let reparsed = parse_route_announcements(&formatted)?;
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn format_includes_signature_when_present() -> Result<(), String> {
-        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,3600,7,AAAA")?;
+        let parsed = parse_route_announcements("static,cidr/10.42.0.0/24,vdsina,3600,7,AAAA")?;
         let formatted = format_route_announcements(&parsed);
         assert!(
             formatted.contains("AAAA"),
@@ -538,7 +538,7 @@ mod tests {
     fn sign_and_verify_round_trip() -> Result<(), String> {
         let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
         let mut announcements =
-            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+            parse_route_announcements("static,cidr/10.42.0.0/24,peer-a,3600,7")?;
         let announcement = &mut announcements[0];
         announcement.sign_with_ed25519_seed(&[1u8; 32])?;
         assert!(!announcement.auth().signature.is_empty());
@@ -550,7 +550,7 @@ mod tests {
     fn verify_fails_with_wrong_public_key() -> Result<(), String> {
         let (wrong_public_key, _) = ed25519_keypair_from_seed(&[2u8; 32])?;
         let mut announcements =
-            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+            parse_route_announcements("static,cidr/10.42.0.0/24,peer-a,3600,7")?;
         announcements[0].sign_with_ed25519_seed(&[1u8; 32])?;
         assert!(
             announcements[0]
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn verify_fails_when_signature_is_empty() -> Result<(), String> {
         let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
-        let announcements = parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+        let announcements = parse_route_announcements("static,cidr/10.42.0.0/24,peer-a,3600,7")?;
         assert!(
             announcements[0]
                 .verify_with_ed25519_pubkey(&public_key)
@@ -576,7 +576,7 @@ mod tests {
     fn verify_fails_when_message_is_tampered() -> Result<(), String> {
         let (public_key, _) = ed25519_keypair_from_seed(&[1u8; 32])?;
         let mut announcements =
-            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+            parse_route_announcements("static,cidr/10.42.0.0/24,peer-a,3600,7")?;
         announcements[0].sign_with_ed25519_seed(&[1u8; 32])?;
         // Tamper with a copy that has a different TTL; the signature must not verify.
         let mut tampered = announcements[0].clone();

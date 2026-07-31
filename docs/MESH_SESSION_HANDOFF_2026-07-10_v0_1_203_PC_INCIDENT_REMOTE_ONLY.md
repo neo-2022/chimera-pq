@@ -13,10 +13,10 @@
 
 ## Recovery Actions
 
-- Verified PC internet/DNS after reboot: ping to `8.8.8.8` and `curl https://example.com` succeed.
+- Verified PC internet/DNS after reboot: ping to `<redacted-ip>` and `curl https://example.com` succeed.
 - Removed all residual CHIMERA artifacts from PC:
   - disabled and stopped `chimera-{runtime,node,datapath,site-watch}.service` user units;
-  - moved systemd unit files, `~/.local/bin/chimera*` symlinks, `~/.config/chimera`, `~/.local/share/chimera`, and `~/.cache/chimera` to `/home/art/.chimera-removed-20260710-150039`.
+  - moved systemd unit files, `~/.local/bin/chimera*` symlinks, `~/.config/chimera`, `~/.local/share/chimera`, and `~/.cache/chimera` to `<redacted-path>`.
 - `systemctl --user daemon-reload` performed.
 
 ## Working Model Going Forward

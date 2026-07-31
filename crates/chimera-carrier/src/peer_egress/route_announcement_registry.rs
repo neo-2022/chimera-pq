@@ -160,7 +160,7 @@ mod tests {
 
     fn sample_announcements() -> Result<Vec<RouteAnnouncement>, String> {
         parse_route_announcements(
-            "static,cidr/192.168.31.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
+            "static,cidr/10.42.0.0/24,vdsina,3600,7|static,domain/example.internal,amai,1800,11",
         )
     }
 
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn registry_drops_expired_announcements() -> Result<(), String> {
         let registry = new_shared_route_announcement_registry();
-        let parsed = parse_route_announcements("static,cidr/192.168.31.0/24,vdsina,1,7")?;
+        let parsed = parse_route_announcements("static,cidr/10.42.0.0/24,vdsina,1,7")?;
         std::thread::sleep(std::time::Duration::from_millis(1200));
         assert!(
             !merge_received_announcements(&registry, &parsed, None)?,
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn unsigned_announcements_still_accepted_without_keyring() -> Result<(), String> {
         let registry = new_shared_route_announcement_registry();
-        let unsigned = parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+        let unsigned = parse_route_announcements("static,cidr/10.42.0.0/24,peer-a,3600,7")?;
         assert!(
             merge_received_announcements(&registry, &unsigned, None)?,
             "unsigned announcements accepted when no keyring is configured"
@@ -299,7 +299,7 @@ mod tests {
     fn sign_then_verify_local_announcements() -> Result<(), String> {
         let seed = [5u8; 32];
         let mut announcements =
-            parse_route_announcements("static,cidr/192.168.31.0/24,peer-a,3600,7")?;
+            parse_route_announcements("static,cidr/10.42.0.0/24,peer-a,3600,7")?;
         sign_local_announcements(&mut announcements, Some(&seed), "peer-a")?;
         assert!(!announcements[0].auth().signature.is_empty());
         Ok(())

@@ -20,11 +20,11 @@
 peer-egress-конфигах. Исправлено оператором только в runtime-файлах на
 стенде (без ручного копирования бинарей):
 
-- `CHIMERA_PEER_EGRESS_PEER_LISTEN` выставлен в `0.0.0.0:18142`.
+- `CHIMERA_PEER_EGRESS_PEER_LISTEN` выставлен в `<redacted-ip>`.
 - `CHIMERA_PEER_EGRESS_SERVER` выровнен на удалённый узел `:18142`.
-- `CHIMERA_MESH_REMOTE_PEER_SPEC` в `/root/.config/chimera/mesh_bootstrap.env`
+- `CHIMERA_MESH_REMOTE_PEER_SPEC` в `<redacted-path>`
   приведён к тому же порту.
-- `/root/.local/share/chimera/configs/mesh-node.conf`: `carrier.addr` и
+- `<redacted-path>`: `carrier.addr` и
   `peer.listen_addr` зафиксированы на `:18142`.
 - После этого оба направления mesh (primary→secondary и secondary→primary)
   установились.
@@ -109,7 +109,7 @@ secondary: chimera-runtime=active  chimera-node=active  chimera-datapath=active
 ## Доказательства
 
 - service status: `systemctl --user is-active chimera-runtime.service`
-- node log: `/root/.cache/chimera/chimera_node.service.log`
-- datapath log: `/root/.cache/chimera/chimera_datapath.service.log`
+- node log: `<redacted-path>`
+- datapath log: `<redacted-path>`
 - правила nft: `nft list table inet chimera_redirect`
-- capture env: `/root/.config/chimera/transparent-runtime.env`
+- capture env: `<redacted-path>`

@@ -110,7 +110,7 @@
   `node_runtime=running`, `transparent_runtime=running`,
   `runtime_state_status=up`, `datapath_apply=ok`, `datapath_proof=ok`.
 - Runtime state shows `tun_applied=true`, `route_applied=true`,
-  `dns_applied=true`, TUN device `chimera0`, route `0.0.0.0/1` via policy table.
+  `dns_applied=true`, TUN device `chimera0`, route `<redacted-ip>/1` via policy table.
 - `chimera-cli state proof --require-flow false` returned `datapath_proof=ok`.
 - Stop/rollback completed cleanly and restored the original resolv.conf symlink.
 - Captured additional artifacts in `docs/mesh_evidence_2026-07-06/`:

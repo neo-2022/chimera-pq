@@ -56,7 +56,8 @@ pub enum CapabilityScope {
 
 1. **Explicit, not implicit**
    - The `via` field names a single concrete peer. There is no algorithmic
-     inference that "because RU can see laptop, NL should use RU" unless the
+     inference that "because one peer can see a NATed node, another peer should
+     use it" unless the
      operator or the peer explicitly publishes that fact.
 
 2. **Bounded TTL**
@@ -90,7 +91,7 @@ via peer (e.g. RU)                     control plane on (e.g. NL)
        |                                      | rebuild TransitLaneDocument
        |                                      |   -> binding route -> via
        |                                      v
-                           local ingress sees flow to 192.168.31.31
+                           local ingress sees flow to 10.42.0.31
                            planner selects routed lane via RU
 ```
 

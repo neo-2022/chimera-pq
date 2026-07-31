@@ -35,9 +35,9 @@ chimera-cli mesh route-explain
   --namespace stand --node <forwarder_node>
   --policy-payload "allow=mesh;mesh_multipath_mode=off;mesh_route_binding_id=11;
                     mesh_max_peers=1;mesh_max_selected_per_region=1;
-                    mesh_announcements=static,cidr/127.0.0.1/32,<via_node>,3600,11"
+                    mesh_announcements=static,cidr/<redacted-ip>/32,<via_node>,3600,11"
   --peer <via_node>@<RU_PEER_LISTEN>@ru@0@100
-  --transit-lane-bindings-out /tmp/chimera-lanes-stand.csv
+  --transit-lane-bindings-out <redacted-path>
 ```
 
 Planner lane document excerpt:
@@ -59,11 +59,11 @@ Forwarding node (`amai`):
 
 ```text
 chimera-peer-egress --mode node
-  --local-listen 127.0.0.1:18190
-  --peer-listen 0.0.0.0:0
+  --local-listen <redacted-ip>
+  --peer-listen <redacted-ip>
   --token mesh-shared-token
   --allow-bound-transit true
-  --transit-lane-bindings-file /tmp/chimera-lanes-stand.csv
+  --transit-lane-bindings-file <redacted-path>
   --aead chacha20poly1305
 ```
 
@@ -81,15 +81,15 @@ Target node (`vdsina`):
 
 - Existing `chimera-peer-egress --mode node` peer listener on `<RU_PEER_LISTEN>`
   authenticated with `mesh-shared-token`.
-- Local echo responder bound to `127.0.0.1:7777`.
+- Local echo responder bound to `<redacted-ip>`.
 
 ## Probe and Result
 
 Local probe via bash/python on the forwarding node:
 
 ```python
-s.connect(("127.0.0.1", 18190))
-s.sendall(b"CHIMERA-LOCAL/1\nCONNECT 127.0.0.1 7777\n")
+s.connect(("<redacted-ip>", 18190))
+s.sendall(b"CHIMERA-LOCAL/1\nCONNECT <redacted-ip> 7777\n")
 ack = s.recv(16)      # b'OK\n'
 s.sendall(b"hello route transit\n")
 resp = s.recv(1024)   # b'hello route transit\n'

@@ -559,7 +559,11 @@ public-artifact-redaction-guard-selfcheck:
     bash -n scripts/public_artifact_redaction_guard.sh
     rg -q 'CHIMERA_PUBLIC_ARTIFACT_REDACTION_FILES' scripts/public_artifact_redaction_guard.sh
     rg -q 'REQUIRED_FILES' scripts/public_artifact_redaction_guard.sh
+    rg -q 'HISTORY_PATTERNS' scripts/public_artifact_redaction_guard.sh
+    rg -q 'HISTORY_REDACTION_RE' scripts/public_artifact_redaction_guard.sh
+    rg -q 'git ls-files' scripts/public_artifact_redaction_guard.sh
     rg -q 'EXTRA_CANDIDATES' scripts/public_artifact_redaction_guard.sh
+    rg -Fq 'docs/MESH_SESSION_HANDOFF_*.md' scripts/public_artifact_redaction_guard.sh
     rg -q 'docs/probe_access_latest.json' scripts/public_artifact_redaction_guard.sh
     rg -q 'docs/SECOND_MACHINE_REPORT.md' scripts/public_artifact_redaction_guard.sh
     rg -q 'Workspace under test:' scripts/public_artifact_redaction_guard.sh
@@ -599,6 +603,7 @@ rust-no-hardcode-guard-selfcheck:
     rg -q 'machine/resource-specific literal found' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'product docs stand-specific device marker found' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'has_banned_product_doc_device_marker' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'is_product_doc_device_marker_target' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python execution found in justfile' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'python command found in docs/README' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -Fq 'resolve_non_empty_setting("CHIMERA_REAL_WORLD_DIRECT_URL"' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
@@ -609,6 +614,9 @@ rust-no-hardcode-guard-selfcheck:
     rg -q 'baked URL/proxy endpoint found in runtime Rust bins' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'transparent TCP product direct/proxy-style bypass is forbidden' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'transparent failover must fail closed when CHIMERA transit is not verified' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -q 'DEFAULT_DIRECT_MODE' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
+    rg -Fq 'const DEFAULT_DIRECT_MODE: &str = "disabled";' crates/chimera-capture/src/bin/chimera-transparent-runtime.rs
+    rg -q 'direct_mode_defaults_to_disabled_only' crates/chimera-capture/src/bin/chimera-transparent-runtime.rs
     rg -q 'release default route/adaptive domain list must be empty' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'CHIMERA transit path is not verified; fail closed' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs
     rg -q 'ws://' crates/chimera-lab/src/bin/rust_no_hardcode_guard.rs

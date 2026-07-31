@@ -49,14 +49,14 @@ restart_issued
 t=0s ip=
 t=2s ip=
 t=4s ip=
-t=6s ip=91.124.19.180
+t=6s ip=<redacted-ip>
 converged
 ```
 
 Datapath after v0.1.200 start (both directions):
 ```text
-RU uid65534 -> ipinfo.io -> 91.124.19.180 (NL)
-NL uid65534 -> ipinfo.io -> 138.16.175.96 (RU)
+RU uid65534 -> ipinfo.io -> <redacted-ip> (NL)
+NL uid65534 -> ipinfo.io -> <redacted-ip> (RU)
 ```
 
 GitHub latest:

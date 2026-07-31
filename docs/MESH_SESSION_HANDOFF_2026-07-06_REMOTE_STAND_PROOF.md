@@ -56,7 +56,7 @@
   `peer-update.state.json`, `mesh_nodes.discovery.json` removed after service
   start on both VPS hosts.
 - Port-conflict recovery: observed auto-listen fallback when configured fixed
-  peer listen port was occupied; peer listen binding reset to `0.0.0.0:0` and
+  peer listen port was occupied; peer listen binding reset to `<redacted-ip>` and
   node service retried. Controlled negative-path logs lost due to SSH session
   resets, so evidence is observational on both VPS hosts.
 

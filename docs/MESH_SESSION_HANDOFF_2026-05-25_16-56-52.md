@@ -8,7 +8,7 @@
 
 ## What Was Done
 - Enforced SSH-only persistent rule in workspace policy (`AGENTS.md` section 5.2).
-- Synced mesh contract-hardening changes to SIDE_A codebase (`/root/chimera-pq`):
+- Synced mesh contract-hardening changes to SIDE_A codebase (`<redacted-path>`):
   - `crates/chimera-cli/src/mesh_cli/nodes_cmd.rs`
   - `crates/chimera-cli/src/mesh_cli/tests_nodes_runtime_state.rs`
   - `docs/MESH_NODES_JSON_CONTRACT.md`

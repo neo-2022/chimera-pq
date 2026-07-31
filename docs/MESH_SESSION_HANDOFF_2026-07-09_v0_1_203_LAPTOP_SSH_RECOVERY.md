@@ -11,10 +11,10 @@ Restore SSH access to the laptop (third stand node) and use it together with NL 
 ## Investigation
 
 1. **Local SSH config**: only two hosts defined — `github.com` and `vps`. No dedicated laptop alias found.
-2. **Last known documented address**: `192.168.31.21` (from previous handoff `MESH_SESSION_HANDOFF_2026-07-06_SPLIT_TUNNEL_UID_CAPTURE.md`).
-3. **ARP entry on current PC**: stale entry for `192.168.31.21` with MAC `84:7b:eb:37:f1:22` exists, but ICMP/SSH probes time out.
-4. **Local subnet scan**: ping sweep of `192.168.31.0/24` found active hosts, but none with MAC `84:7b:eb:37:f1:22`; `192.168.31.21` did not respond.
-5. **Wake-on-LAN attempt**: sent broadcast magic packets to `192.168.31.255` and `255.255.255.255` on ports 7 and 9 for MAC `84:7b:eb:37:f1:22`; no ICMP response after 15 seconds.
+2. **Last known documented address**: `<redacted-ip>` (from previous handoff `MESH_SESSION_HANDOFF_2026-07-06_SPLIT_TUNNEL_UID_CAPTURE.md`).
+3. **ARP entry on current PC**: stale entry for `<redacted-ip>` with MAC `<redacted-ipv6>` exists, but ICMP/SSH probes time out.
+4. **Local subnet scan**: ping sweep of `<redacted-ip>/24` found active hosts, but none with MAC `<redacted-ipv6>`; `<redacted-ip>` did not respond.
+5. **Wake-on-LAN attempt**: sent broadcast magic packets to `<redacted-ip>` and `<redacted-ip>` on ports 7 and 9 for MAC `<redacted-ipv6>`; no ICMP response after 15 seconds.
 6. **VPS WireGuard peers**: `wg show wg0 endpoints/latest-handshakes` on NL VPS reports `(none)` and epoch `0` for all peers; laptop is not connected via the VPN tunnel either.
 
 ## Conclusion

@@ -1093,7 +1093,10 @@ configure_transparent_runtime_env() {
   require_numeric_preserved_id "CHIMERA_TRANSPARENT_RUNTIME_GID" "$transparent_gid"
   local listen="${CHIMERA_TRANSPARENT_TCP_LISTEN:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_LISTEN 127.0.0.1:18134)}"
   local transit_local="${CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL:-${CHIMERA_TRANSPARENT_TCP_GATEWAY_LOCAL:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_TRANSIT_LOCAL 127.0.0.1:18135)}}"
-  local direct_mode="${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_DIRECT_MODE disabled)}"
+  local direct_mode="${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE:-disabled}"
+  if [[ -z "${CHIMERA_TRANSPARENT_TCP_DIRECT_MODE+x}" ]]; then
+    direct_mode="$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_DIRECT_MODE "$direct_mode")"
+  fi
   local direct_timeout_ms="${CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_DIRECT_TIMEOUT_MS 1200)}"
   local initial_read_timeout_ms="${CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_TRANSPARENT_TCP_INITIAL_READ_TIMEOUT_MS 500)}"
   local redirect_table="${CHIMERA_REDIRECT_TABLE:-$(prefer_existing_env_value "$TRANSPARENT_RUNTIME_ENV_FILE" CHIMERA_REDIRECT_TABLE chimera_redirect)}"

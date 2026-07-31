@@ -15,7 +15,7 @@ to NL and RU stand nodes, services restarted and active.
 - **Done**: negative-path verified (stopping datapath breaks UID capture,
 restart restores it).
 - **Done**: post-work verification skill updated to v3.0
-  (`/home/art/.codex/skills/chimera-post-work-verification-guard/SKILL.md`).
+  (`<redacted-path>`).
 
 ## Key Artifacts
 
@@ -48,7 +48,7 @@ NL capture UID curl (returns RU IP):
 ```text
 $ setpriv --reuid=65534 --regid=65534 --init-groups curl --max-time 15 -4 -sS http://ipinfo.io
 {
-  "ip": "138.16.175.96",
+  "ip": "<redacted-ip>",
   ...
 }
 ```
@@ -57,7 +57,7 @@ RU capture UID curl (returns NL IP):
 ```text
 $ setpriv --reuid=65534 --regid=65534 --init-groups curl --max-time 15 -4 -sS http://ipinfo.io
 {
-  "ip": "91.124.19.180",
+  "ip": "<redacted-ip>",
   ...
 }
 ```
@@ -78,7 +78,7 @@ $ systemctl --user start chimera-datapath
   and lane documents were aligned to the current discovery endpoint, not the
   operator label `vdsina`. This is a stand-only label mismatch; auth is
   token-based and unaffected.
-- `CHIMERA_PEER_EGRESS_PEER_LISTEN` is dynamic (`0.0.0.0:0`) when discovery is
+- `CHIMERA_PEER_EGRESS_PEER_LISTEN` is dynamic (`<redacted-ip>`) when discovery is
   configured, so the actual peer port changed after each `chimera-node` restart.
   After each restart, `publish_peer_egress_transit_lane_bindings_from_control_plane`
   had to be re-run on the *other* node so that its lane document pointed at the
@@ -87,7 +87,7 @@ $ systemctl --user start chimera-datapath
 ## Risks / Known Limitations
 
 1. **Dynamic peer port staleness**: because `heal_node_peer_egress_env_bindings`
-   forces `0.0.0.0:0` whenever a discovery source is configured, the peer listen
+   forces `<redacted-ip>` whenever a discovery source is configured, the peer listen
    port is random. After a node restart, the partner node’s lane document may
    still reference the old port until the control-plane publish function is run
    again. The current code fix refreshes the remote peer spec from discovery,

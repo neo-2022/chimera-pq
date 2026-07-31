@@ -72,10 +72,10 @@ Command (node `laptop`, destination NL network via RU peer `vdsina`):
 ```text
 chimera-cli mesh route-announce
   --namespace stand --node laptop
-  --destination cidr/91.124.19.0/24
+  --destination cidr/<redacted-ip>/24
   --via vdsina --route-binding-id 11
-  --peer amai@91.124.19.180:443@nl@10@95
-  --peer vdsina@138.16.175.96:443@ru@12@93
+  --peer <redacted-login>:443@nl@10@95
+  --peer <redacted-login>:443@ru@12@93
   --json
 ```
 
@@ -86,7 +86,7 @@ Result:
   "carrier_binding_count": 2,
   "execution_status": "carrier_lane_binding_contract_ready",
   "multipath_mode": "off",
-  "policy_payload": "allow=mesh;mesh_multipath_mode=off;mesh_route_binding_id=11;mesh_max_peers=2;mesh_max_selected_per_region=2;mesh_announcements=static,cidr/91.124.19.0/24,vdsina,3600,11",
+  "policy_payload": "allow=mesh;mesh_multipath_mode=off;mesh_route_binding_id=11;mesh_max_peers=2;mesh_max_selected_per_region=2;mesh_announcements=static,cidr/<redacted-ip>/24,vdsina,3600,11",
   "route_announcement_count": 1,
   "status": "ok",
   "transit_binding_count": 1
@@ -102,10 +102,10 @@ announcement designated `vdsina` as the `via` peer for the NL destination.
 ```text
 chimera-cli mesh route-announce
   --namespace stand --node amai
-  --destination cidr/192.168.31.0/24
+  --destination cidr/<redacted-ip>/24
   --via vdsina --route-binding-id 7
-  --peer amai@91.124.19.180:443@nl@10@95
-  --peer vdsina@138.16.175.96:443@ru@12@93
+  --peer <redacted-login>:443@nl@10@95
+  --peer <redacted-login>:443@ru@12@93
 ```
 
 Result: `carrier_binding_count=2`, `transit_binding_count=1`,
@@ -116,10 +116,10 @@ Result: `carrier_binding_count=2`, `transit_binding_count=1`,
 ```text
 chimera-cli mesh route-announce
   --namespace stand --node vdsina
-  --destination cidr/10.200.0.0/16
+  --destination cidr/<redacted-ip>/16
   --via amai --route-binding-id 9
-  --peer amai@91.124.19.180:443@nl@10@95
-  --peer vdsina@138.16.175.96:443@ru@12@93
+  --peer <redacted-login>:443@nl@10@95
+  --peer <redacted-login>:443@ru@12@93
   --json
 ```
 

@@ -172,6 +172,24 @@ fn has_banned_active_product_doc_stand_marker(text: &str) -> bool {
         || text.contains("Side B/SIDE_A")
 }
 
+fn is_product_doc_device_marker_target(path: &Path) -> bool {
+    if path == Path::new("README.md") {
+        return true;
+    }
+    if !path_has_component(path, "docs") || path.extension().and_then(|v| v.to_str()) != Some("md")
+    {
+        return false;
+    }
+    let Some(name) = path.file_name().and_then(|v| v.to_str()) else {
+        return false;
+    };
+    !name.starts_with("MESH_SESSION_HANDOFF_")
+        && !name.starts_with("WORKFLOW_ATTESTATION_")
+        && !name.starts_with("BENCHMARK_REPORT_")
+        && !name.starts_with("STABILIZATION_GATE_")
+        && !name.starts_with("CHIMERA_")
+}
+
 fn has_ambiguous_chimera_lab_cargo_run(line: &str) -> bool {
     let cleaned = line.split('#').next().unwrap_or_default().trim();
     if cleaned.is_empty() {
@@ -344,6 +362,9 @@ fn main() {
             let mut doc_files = Vec::new();
             collect_files(doc, &mut doc_files);
             for file in doc_files {
+                if !is_product_doc_device_marker_target(&file) {
+                    continue;
+                }
                 let Some(text) = try_read_text(&file) else {
                     continue;
                 };
@@ -376,6 +397,9 @@ fn main() {
             let mut doc_files = Vec::new();
             collect_files(doc, &mut doc_files);
             for file in doc_files {
+                if !is_product_doc_device_marker_target(&file) {
+                    continue;
+                }
                 let Some(text) = try_read_text(&file) else {
                     continue;
                 };
@@ -386,6 +410,9 @@ fn main() {
                 }
             }
         } else if doc.is_file() {
+            if !is_product_doc_device_marker_target(doc) {
+                continue;
+            }
             let text = read_to_string(doc);
             for (i, line) in text.lines().enumerate() {
                 if has_banned_product_doc_device_marker(line) {
@@ -526,7 +553,11 @@ fn main() {
         (transparent_tcp_rs, "unwrap_or(DirectMode::Disabled)"),
         (
             Path::new("crates/chimera-capture/src/bin/chimera-transparent-runtime.rs"),
-            "unwrap_or_else(|| \"disabled\".to_string())",
+            "const DEFAULT_DIRECT_MODE: &str = \"disabled\";",
+        ),
+        (
+            Path::new("crates/chimera-capture/src/bin/chimera-transparent-runtime.rs"),
+            "direct_mode: env_or(\"CHIMERA_TRANSPARENT_TCP_DIRECT_MODE\", DEFAULT_DIRECT_MODE)",
         ),
         (
             Path::new("scripts/install_desktop_control.sh"),

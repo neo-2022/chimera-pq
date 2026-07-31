@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Temporary stand helper: ensure the laptop accepts SSH from the current-PC key.
+# Temporary stand helper: ensure the laptop accepts an operator-provided SSH key.
 # Run on the laptop (not on PC).
 set -euo pipefail
 
-PC_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF5bUhKk6mpiAUqYEen9js+q1bd4PXYRWV7OvAj/YC3Q art@artPC'
+PC_PUBKEY="${CHIMERA_RESTORE_LAPTOP_SSH_PUBKEY:-${1:-}}"
+if [[ -z "$PC_PUBKEY" ]]; then
+  echo "ERROR: pass public key as CHIMERA_RESTORE_LAPTOP_SSH_PUBKEY or arg1." >&2
+  exit 2
+fi
 
 # Ensure OpenSSH server is installed and running.
 if ! command -v sshd >/dev/null 2>&1; then
