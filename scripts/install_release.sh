@@ -292,6 +292,7 @@ install_prepared_release_tree() {
   if [[ -n "$backup_home" ]]; then
     remove_previous_release_backup "$backup_home"
   fi
+  echo "install_status=ok version=${CHIMERA_RELEASE_VERSION:-unknown}"
 }
 
 install_from_archive() {

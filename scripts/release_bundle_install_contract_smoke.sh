@@ -29,6 +29,12 @@ case "${1:-}" in
   show-environment|daemon-reload)
     exit 0
     ;;
+  is-active)
+    if [[ "${CHIMERA_FAKE_SYSTEMCTL_NODE_INACTIVE:-0}" == "1" && "${@: -1}" == "chimera-node.service" ]]; then
+      exit 3
+    fi
+    exit 0
+    ;;
   start|stop|restart|enable|disable|is-active|list-units|list-unit-files)
     exit 0
     ;;
@@ -306,6 +312,112 @@ for executable in \
 do
   [[ -x "$executable" ]] || fail "not_executable:${executable##*/}"
 done
+
+default_autostart_failure_keeps_installation() {
+  local clean_home="$tmp_dir/default-autostart-home"
+  local clean_local_bin="$tmp_dir/default-autostart-local-bin"
+  local clean_cache="$tmp_dir/default-autostart-cache"
+  local clean_config="$tmp_dir/default-autostart-config"
+  local clean_data="$tmp_dir/default-autostart-data"
+  local clean_runtime="$tmp_dir/default-autostart-runtime"
+  local clean_log="$tmp_dir/default-autostart-install.log"
+  mkdir -p "$clean_home" "$clean_local_bin" "$clean_cache" "$clean_config" "$clean_data" "$clean_runtime"
+
+  set +e
+  PATH="$fake_bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  HOME="$home" \
+  XDG_CACHE_HOME="$clean_cache" \
+  XDG_CONFIG_HOME="$clean_config" \
+  XDG_DATA_HOME="$clean_data" \
+  XDG_RUNTIME_DIR="$clean_runtime" \
+  CHIMERA_HOME="$clean_home" \
+  CHIMERA_LOCAL_BIN="$clean_local_bin" \
+  CHIMERA_ALLOW_LOCAL_RELEASE_SOURCE=1 \
+  CHIMERA_FAKE_SYSTEMCTL_NODE_INACTIVE=1 \
+    timeout 60s bash "$ROOT_DIR/scripts/install_release.sh" "$ARCHIVE" "$CHECKSUM" >"$clean_log" 2>&1
+  local clean_rc=$?
+  set -e
+
+  [[ "$clean_rc" -eq 0 ]] || {
+    cat "$clean_log" >&2
+    fail "default_autostart_failure_rolled_back_install"
+  }
+  rg -q '^install_status=ok ' "$clean_log" || {
+    cat "$clean_log" >&2
+    fail "default_autostart_install_ok_missing"
+  }
+  rg -q 'auto_start_after_install=fail' "$clean_log" || {
+    cat "$clean_log" >&2
+    fail "default_autostart_fail_report_missing"
+  }
+  rg -q 'start_status=fail ' "$clean_log" || {
+    cat "$clean_log" >&2
+    fail "default_autostart_start_failure_missing"
+  }
+  ! rg -q 'chimera_update=' "$clean_log" || fail "default_autostart_rechecked_update_source"
+  [[ -d "$clean_home" ]] || fail "default_autostart_home_missing"
+  [[ -L "$clean_local_bin/chimera" ]] || fail "default_autostart_launcher_chimera_missing"
+  [[ -L "$clean_local_bin/chimera.sh" ]] || fail "default_autostart_launcher_chimera_sh_missing"
+  [[ -L "$clean_local_bin/chimera-sh" ]] || fail "default_autostart_launcher_chimera_dash_sh_missing"
+  [[ "$("$clean_local_bin/chimera-sh" -version)" == "chimera-runtime ${expected_version}" ]] || fail "default_autostart_version_unavailable_after_fail"
+}
+
+default_autostart_failure_keeps_installation
+
+bootstrap_default_autostart_failure_keeps_installation() {
+  local bootstrap_home="$tmp_dir/bootstrap-default-autostart-home"
+  local bootstrap_local_bin="$tmp_dir/bootstrap-default-autostart-local-bin"
+  local bootstrap_cache="$tmp_dir/bootstrap-default-autostart-cache"
+  local bootstrap_config="$tmp_dir/bootstrap-default-autostart-config"
+  local bootstrap_data="$tmp_dir/bootstrap-default-autostart-data"
+  local bootstrap_runtime="$tmp_dir/bootstrap-default-autostart-runtime"
+  local bootstrap_script="$tmp_dir/bootstrap-default-autostart.sh"
+  local bootstrap_log="$tmp_dir/bootstrap-default-autostart-install.log"
+  mkdir -p "$bootstrap_home" "$bootstrap_local_bin" "$bootstrap_cache" "$bootstrap_config" "$bootstrap_data" "$bootstrap_runtime"
+  cp "$installed_home/scripts/chimera.sh" "$bootstrap_script"
+  chmod +x "$bootstrap_script"
+
+  set +e
+  PATH="$fake_bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  HOME="$home" \
+  XDG_CACHE_HOME="$bootstrap_cache" \
+  XDG_CONFIG_HOME="$bootstrap_config" \
+  XDG_DATA_HOME="$bootstrap_data" \
+  XDG_RUNTIME_DIR="$bootstrap_runtime" \
+  CHIMERA_HOME="$bootstrap_home" \
+  CHIMERA_LOCAL_BIN="$bootstrap_local_bin" \
+  CHIMERA_FAKE_SYSTEMCTL_NODE_INACTIVE=1 \
+  CHIMERA_RELEASE_ARCHIVE_URL="file://$ARCHIVE" \
+  CHIMERA_RELEASE_CHECKSUM_URL="file://$CHECKSUM" \
+    timeout 60s bash "$bootstrap_script" -install >"$bootstrap_log" 2>&1
+  local bootstrap_rc=$?
+  set -e
+
+  [[ "$bootstrap_rc" -eq 0 ]] || {
+    cat "$bootstrap_log" >&2
+    fail "bootstrap_default_autostart_failure_rolled_back_install"
+  }
+  rg -q '^chimera_install=ok ' "$bootstrap_log" || {
+    cat "$bootstrap_log" >&2
+    fail "bootstrap_default_autostart_install_ok_missing"
+  }
+  rg -q 'auto_start_after_install=fail' "$bootstrap_log" || {
+    cat "$bootstrap_log" >&2
+    fail "bootstrap_default_autostart_fail_report_missing"
+  }
+  rg -q 'start_status=fail ' "$bootstrap_log" || {
+    cat "$bootstrap_log" >&2
+    fail "bootstrap_default_autostart_start_failure_missing"
+  }
+  ! rg -q 'chimera_update=' "$bootstrap_log" || fail "bootstrap_default_autostart_rechecked_update_source"
+  [[ -d "$bootstrap_home" ]] || fail "bootstrap_default_autostart_home_missing"
+  [[ -L "$bootstrap_local_bin/chimera" ]] || fail "bootstrap_default_autostart_launcher_chimera_missing"
+  [[ -L "$bootstrap_local_bin/chimera.sh" ]] || fail "bootstrap_default_autostart_launcher_chimera_sh_missing"
+  [[ -L "$bootstrap_local_bin/chimera-sh" ]] || fail "bootstrap_default_autostart_launcher_chimera_dash_sh_missing"
+  [[ "$("$bootstrap_local_bin/chimera-sh" -version)" == "chimera-runtime ${expected_version}" ]] || fail "bootstrap_default_autostart_version_unavailable_after_fail"
+}
+
+bootstrap_default_autostart_failure_keeps_installation
 
 bootstrap_install_version_tracks_bundle_not_script_version() {
   local bootstrap_home="$tmp_dir/bootstrap-version-home"

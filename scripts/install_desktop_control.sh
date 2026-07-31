@@ -453,7 +453,7 @@ start_installed_runtime() {
 
   local start_output="" start_rc=0 node_active=0
   set +e
-  start_output="$("$ROOT_DIR/scripts/chimera-control.sh" start 2>&1)" || start_rc=$?
+  start_output="$(CHIMERA_UPDATE_FIRST_CHECKED=1 "$ROOT_DIR/scripts/chimera-control.sh" start 2>&1)" || start_rc=$?
   set -e
   if [[ -n "$start_output" ]]; then
     printf '%s\n' "$start_output" >&2
@@ -1295,7 +1295,7 @@ if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
 fi
 
 if [[ "$SYSTEMD_USER_READY" == "1" ]]; then
-  AUTO_START_REPORT="$(start_installed_runtime)"
+  AUTO_START_REPORT="$(start_installed_runtime || true)"
 else
   AUTO_START_REPORT="auto_start_after_install=skipped reason=installer_environment_without_systemd"
 fi
